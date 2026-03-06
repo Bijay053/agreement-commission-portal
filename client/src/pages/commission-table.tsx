@@ -55,7 +55,9 @@ const bonusTypeLabels: Record<string, string> = {
 export default function CommissionTablePage() {
   const [, navigate] = useLocation();
   const { hasPermission } = useAuth();
-  const [activeTab, setActiveTab] = useState("commission");
+  const canViewCommission = hasPermission("commission.view");
+  const canViewBonus = hasPermission("bonus.view");
+  const [activeTab, setActiveTab] = useState(canViewCommission ? "commission" : "bonus");
 
   const [commSearch, setCommSearch] = useState("");
   const [commProvider, setCommProvider] = useState("all");
@@ -110,7 +112,7 @@ export default function CommissionTablePage() {
       if (!res.ok) throw new Error("Failed");
       return res.json();
     },
-    enabled: hasPermission("commission.view"),
+    enabled: hasPermission("bonus.view"),
   });
 
   const commFiltersActive = commSearch !== "" || commProvider !== "all" || commProviderCountry !== "all" || commStatus !== "all" || commMode !== "all";
@@ -187,14 +189,18 @@ export default function CommissionTablePage() {
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList data-testid="tabs-commission-bonus">
-          <TabsTrigger value="commission" data-testid="tab-commission">
-            <DollarSign className="w-4 h-4 mr-1.5" />
-            Commission ({commissionRules?.length || 0})
-          </TabsTrigger>
-          <TabsTrigger value="bonus" data-testid="tab-bonus">
-            <Award className="w-4 h-4 mr-1.5" />
-            Bonus ({bonusRules?.length || 0})
-          </TabsTrigger>
+          {canViewCommission && (
+            <TabsTrigger value="commission" data-testid="tab-commission">
+              <DollarSign className="w-4 h-4 mr-1.5" />
+              Commission ({commissionRules?.length || 0})
+            </TabsTrigger>
+          )}
+          {canViewBonus && (
+            <TabsTrigger value="bonus" data-testid="tab-bonus">
+              <Award className="w-4 h-4 mr-1.5" />
+              Bonus ({bonusRules?.length || 0})
+            </TabsTrigger>
+          )}
         </TabsList>
 
         <TabsContent value="commission" className="space-y-4 mt-4">

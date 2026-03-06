@@ -42,7 +42,7 @@ export function AppSidebar() {
     { title: "Dashboard", url: "/", icon: LayoutDashboard, show: true },
     { title: "Providers", url: "/providers", icon: Building2, show: hasPermission("providers.provider.read") },
     { title: "Contacts", url: "/contacts", icon: Contact, show: hasPermission("contacts.view") },
-    { title: "Commission Table", url: "/commission", icon: DollarSign, show: hasPermission("commission.view") },
+    { title: "Commission Table", url: "/commission", icon: DollarSign, show: hasPermission("commission.view") || hasPermission("bonus.view") },
   ];
 
   const adminNav = [

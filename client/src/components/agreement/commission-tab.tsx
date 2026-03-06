@@ -30,7 +30,9 @@ export default function CommissionTab({ agreementId }: { agreementId: number }) 
   const { hasPermission } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const canManage = hasPermission("commission.manage");
+  const canCreate = hasPermission("commission.create");
+  const canEdit = hasPermission("commission.edit");
+  const canDelete = hasPermission("commission.delete");
   const [showDialog, setShowDialog] = useState(false);
 
   const { data: rules, isLoading } = useQuery<any[]>({
@@ -93,7 +95,7 @@ export default function CommissionTab({ agreementId }: { agreementId: number }) 
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-2">
         <h3 className="font-medium">Commission Rules</h3>
-        {canManage && (
+        {canCreate && (
           <Dialog open={showDialog} onOpenChange={setShowDialog}>
             <DialogTrigger asChild>
               <Button size="sm" data-testid="button-add-commission">
@@ -217,7 +219,7 @@ export default function CommissionTab({ agreementId }: { agreementId: number }) 
                       <p className="text-xs text-muted-foreground mt-2 line-clamp-2">{rule.conditionsText}</p>
                     )}
                   </div>
-                  {canManage && (
+                  {canDelete && (
                     <Button
                       variant="ghost"
                       size="icon"

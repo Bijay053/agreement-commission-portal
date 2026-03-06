@@ -30,6 +30,8 @@ A secure internal portal for Study Info Centre — managing provider (university
 - **Sidebar Status Sub-menu** — Agreements sidebar with expandable status filters and count badges
 - **Agreement List Filters** — search, status, provider, provider country, territory country
 - **Permission-Based Access Control** — Route-level `AccessGuard` blocks pages with "Access Denied" when user lacks permission; sidebar hides nav items user can't access; action buttons (Add/Edit/Delete) hidden per permission; server-side `requirePermission` middleware on all API endpoints
+- **Granular Permissions** — Contacts: `contacts.view`, `contacts.create`, `contacts.edit`, `contacts.delete`, `contacts.export`; Commission: `commission.view`, `commission.create`, `commission.edit`, `commission.delete`, `commission.export`; Bonus: `bonus.view`, `bonus.create`, `bonus.edit`, `bonus.delete`, `bonus.export`; Targets: `targets.view`, `targets.create`, `targets.edit`, `targets.delete`, `targets.export`
+- **Specialized Roles** — Contact Viewer, Contact Manager, Commission Viewer, Commission Manager, Finance Viewer (in addition to Super Admin, Agreement Admin, Editor, Viewer, Document Viewer Only, Compliance/Auditor)
 - Fine-grained RBAC with module.resource.action permission codes
 - Audit logging for all key actions including role/permission changes
 - Confidentiality level hidden (defaults to "high" for all agreements)

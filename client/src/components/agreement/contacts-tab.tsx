@@ -25,7 +25,9 @@ export default function ContactsTab({ agreementId }: { agreementId: number }) {
   const { hasPermission } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const canManage = hasPermission("contacts.manage");
+  const canCreate = hasPermission("contacts.create");
+  const canEdit = hasPermission("contacts.edit");
+  const canDelete = hasPermission("contacts.delete");
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [editingContact, setEditingContact] = useState<any | null>(null);
   const [deletingContact, setDeletingContact] = useState<any | null>(null);
@@ -137,7 +139,7 @@ export default function ContactsTab({ agreementId }: { agreementId: number }) {
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-2">
         <h3 className="font-medium">Provider Contacts</h3>
-        {canManage && (
+        {canCreate && (
           <Button size="sm" onClick={() => setShowAddDialog(true)} data-testid="button-add-contact">
             <UserPlus className="w-4 h-4 mr-1" /> Add Contact
           </Button>
@@ -181,26 +183,30 @@ export default function ContactsTab({ agreementId }: { agreementId: number }) {
                       )}
                     </div>
                   </div>
-                  {canManage && (
+                  {(canEdit || canDelete) && (
                     <div className="flex items-center gap-1 shrink-0">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="cursor-pointer"
-                        onClick={() => openEditDialog(contact)}
-                        data-testid={`button-edit-contact-${contact.id}`}
-                      >
-                        <Pencil className="w-4 h-4 text-muted-foreground" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="cursor-pointer"
-                        onClick={() => setDeletingContact(contact)}
-                        data-testid={`button-delete-contact-${contact.id}`}
-                      >
-                        <Trash2 className="w-4 h-4 text-destructive" />
-                      </Button>
+                      {canEdit && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="cursor-pointer"
+                          onClick={() => openEditDialog(contact)}
+                          data-testid={`button-edit-contact-${contact.id}`}
+                        >
+                          <Pencil className="w-4 h-4 text-muted-foreground" />
+                        </Button>
+                      )}
+                      {canDelete && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="cursor-pointer"
+                          onClick={() => setDeletingContact(contact)}
+                          data-testid={`button-delete-contact-${contact.id}`}
+                        >
+                          <Trash2 className="w-4 h-4 text-destructive" />
+                        </Button>
+                      )}
                     </div>
                   )}
                 </div>

@@ -1,0 +1,437 @@
+Role management must support separate permissions by module.
+
+A user should be able to have access to only one specific section, such as:
+
+Contacts only
+
+Commission / Bonus only
+
+Documents only
+
+Audit only
+
+without getting access to everything else.
+
+New Permission Structure
+1. Contacts Permissions
+
+Add separate permissions for Contacts:
+
+contacts_view
+
+contacts_create
+
+contacts_edit
+
+contacts_delete
+
+Example
+
+A user with only:
+
+contacts_view
+
+can:
+
+open Contacts page
+
+search contacts
+
+filter contacts
+
+view contact details
+
+cannot:
+
+add contact
+
+edit contact
+
+delete contact
+
+2. Commission / Bonus Permissions
+
+Add separate permissions for Commission Table:
+
+commission_view
+
+commission_create
+
+commission_edit
+
+commission_delete
+
+bonus_view
+
+bonus_create
+
+bonus_edit
+
+bonus_delete
+
+Recommended simpler option
+
+If commission and bonus stay on one page, you can also use:
+
+commission_bonus_view
+
+commission_bonus_create
+
+commission_bonus_edit
+
+commission_bonus_delete
+
+But better to keep commission and bonus separate for future flexibility.
+
+Example Role Types
+Contact Viewer
+
+Can only view contact details.
+
+Permissions:
+
+contacts_view
+
+No access to:
+
+providers
+
+agreements edit
+
+commission
+
+documents download
+
+audit logs
+
+Commission Viewer
+
+Can only view commission/bonus table.
+
+Permissions:
+
+commission_view
+
+bonus_view
+
+Can:
+
+open Commission Table page
+
+search/filter/export if allowed
+
+Cannot:
+
+edit agreement
+
+edit contact
+
+upload documents
+
+Contact + Commission Viewer
+
+Permissions:
+
+contacts_view
+
+commission_view
+
+bonus_view
+
+Finance Viewer
+
+Permissions:
+
+commission_view
+
+bonus_view
+
+maybe documents_view
+
+maybe agreements_view
+
+Role Management UI Update
+Add permission matrix in Add/Edit Role page
+
+Instead of only role name and description, show grouped permissions like this:
+
+Agreements
+
+View
+
+Create
+
+Edit
+
+Delete
+
+Providers
+
+View
+
+Create
+
+Edit
+
+Delete
+
+Contacts
+
+View
+
+Create
+
+Edit
+
+Delete
+
+Commission / Bonus
+
+View Commission
+
+Edit Commission
+
+View Bonus
+
+Edit Bonus
+
+Delete Commission
+
+Delete Bonus
+
+Documents
+
+View
+
+Upload
+
+Download
+
+Delete
+
+Audit Logs
+
+View
+
+Users
+
+View
+
+Create
+
+Edit
+
+Delete
+
+Roles
+
+View
+
+Create
+
+Edit
+
+Delete
+
+Navigation Visibility Based on Permission
+
+Sidebar menu should be shown based on permission.
+
+Example
+
+If user has only:
+
+contacts_view
+
+then sidebar should show:
+
+Contacts
+
+and hide:
+
+Providers
+
+Commission Table
+
+Users
+
+Roles
+
+Audit Logs
+
+If user has only:
+
+commission_view
+
+bonus_view
+
+then sidebar should show:
+
+Commission Table
+
+only.
+
+This makes system cleaner and more secure.
+
+Page Access Control
+
+Even if a user manually types the URL, system must block access if permission is missing.
+
+Example
+
+User tries:
+
+/contacts
+
+without contacts_view
+
+Show:
+
+Access Denied
+You do not have permission to view this page.
+
+Same for:
+
+/commission-table
+
+without commission permission.
+
+Action Button Visibility
+
+Buttons should show based on action permission.
+
+Contacts page
+
+No contacts_create → hide Add Contact
+
+No contacts_edit → hide Edit
+
+No contacts_delete → hide Delete
+
+Commission page
+
+No commission_edit → hide Edit
+
+No commission_delete → hide Delete
+
+No bonus_edit → hide bonus edit actions
+
+Export Permission
+
+Since commission data can be sensitive, add separate export permission:
+
+commission_export
+
+bonus_export
+
+or commission_bonus_export
+
+Without this permission:
+
+export CSV/Excel button hidden
+
+Recommended Minimum Permission List
+Contacts
+
+contacts_view
+
+contacts_create
+
+contacts_edit
+
+contacts_delete
+
+Commission
+
+commission_view
+
+commission_create
+
+commission_edit
+
+commission_delete
+
+commission_export
+
+Bonus
+
+bonus_view
+
+bonus_create
+
+bonus_edit
+
+bonus_delete
+
+bonus_export
+
+Documents
+
+documents_view
+
+documents_upload
+
+documents_download
+
+documents_delete
+
+Agreements
+
+agreements_view
+
+agreements_create
+
+agreements_edit
+
+agreements_delete
+
+Suggested Roles to Add
+Contact Viewer
+
+contacts_view
+
+Contact Manager
+
+contacts_view
+
+contacts_create
+
+contacts_edit
+
+contacts_delete
+
+Commission Viewer
+
+commission_view
+
+bonus_view
+
+Commission Manager
+
+commission_view
+
+commission_create
+
+commission_edit
+
+commission_delete
+
+bonus_view
+
+bonus_create
+
+bonus_edit
+
+bonus_delete
+
+Document Viewer Only
+
+documents_view
+
+Agreement Viewer
+
+agreements_view
+
+contacts_view
+
+documents_view

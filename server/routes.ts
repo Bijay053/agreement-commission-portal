@@ -431,7 +431,7 @@ export async function registerRoutes(
     res.json(data);
   });
 
-  app.post("/api/agreements/:id/targets", requireAuth, requirePermission("targets.manage"), async (req, res) => {
+  app.post("/api/agreements/:id/targets", requireAuth, requirePermission("targets.create"), async (req, res) => {
     try {
       const payload = {
         ...req.body,
@@ -453,7 +453,7 @@ export async function registerRoutes(
     }
   });
 
-  app.patch("/api/targets/:id", requireAuth, requirePermission("targets.manage"), async (req, res) => {
+  app.patch("/api/targets/:id", requireAuth, requirePermission("targets.edit"), async (req, res) => {
     try {
       const parsed = insertTargetSchema.partial().safeParse(req.body);
       if (!parsed.success) return res.status(400).json({ message: "Invalid data", errors: parsed.error.flatten() });
@@ -464,7 +464,7 @@ export async function registerRoutes(
     }
   });
 
-  app.delete("/api/targets/:id", requireAuth, requirePermission("targets.manage"), async (req, res) => {
+  app.delete("/api/targets/:id", requireAuth, requirePermission("targets.delete"), async (req, res) => {
     try {
       await storage.deleteTarget(parseInt(req.params.id));
       res.json({ message: "Deleted" });
@@ -473,12 +473,12 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/targets/:id/bonus-rules", requireAuth, requirePermission("targets.view"), async (req, res) => {
+  app.get("/api/targets/:id/bonus-rules", requireAuth, requirePermission("bonus.view"), async (req, res) => {
     const data = await storage.getBonusRules(parseInt(req.params.id));
     res.json(data);
   });
 
-  app.post("/api/targets/:id/bonus-rules", requireAuth, requirePermission("targets.manage"), async (req, res) => {
+  app.post("/api/targets/:id/bonus-rules", requireAuth, requirePermission("bonus.create"), async (req, res) => {
     try {
       const targetId = parseInt(req.params.id);
       const { bonusType, currency, tiers, countryEntries } = req.body;
@@ -530,7 +530,7 @@ export async function registerRoutes(
     }
   });
 
-  app.delete("/api/bonus-rules/:id", requireAuth, requirePermission("targets.manage"), async (req, res) => {
+  app.delete("/api/bonus-rules/:id", requireAuth, requirePermission("bonus.delete"), async (req, res) => {
     try {
       await storage.deleteBonusRule(parseInt(req.params.id));
       res.json({ message: "Deleted" });
@@ -605,7 +605,7 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/bonus-rules", requireAuth, requirePermission("commission.view"), async (req, res) => {
+  app.get("/api/bonus-rules", requireAuth, requirePermission("bonus.view"), async (req, res) => {
     try {
       const filters: any = {};
       if (req.query.providerId) filters.providerId = parseInt(req.query.providerId as string);
@@ -625,7 +625,7 @@ export async function registerRoutes(
     res.json(data);
   });
 
-  app.post("/api/agreements/:id/commission-rules", requireAuth, requirePermission("commission.manage"), async (req, res) => {
+  app.post("/api/agreements/:id/commission-rules", requireAuth, requirePermission("commission.create"), async (req, res) => {
     try {
       const payload = {
         ...req.body,
@@ -640,7 +640,7 @@ export async function registerRoutes(
     }
   });
 
-  app.patch("/api/commission-rules/:id", requireAuth, requirePermission("commission.manage"), async (req, res) => {
+  app.patch("/api/commission-rules/:id", requireAuth, requirePermission("commission.edit"), async (req, res) => {
     try {
       const parsed = insertCommissionRuleSchema.partial().safeParse(req.body);
       if (!parsed.success) return res.status(400).json({ message: "Invalid data", errors: parsed.error.flatten() });
@@ -651,7 +651,7 @@ export async function registerRoutes(
     }
   });
 
-  app.delete("/api/commission-rules/:id", requireAuth, requirePermission("commission.manage"), async (req, res) => {
+  app.delete("/api/commission-rules/:id", requireAuth, requirePermission("commission.delete"), async (req, res) => {
     try {
       await storage.deleteCommissionRule(parseInt(req.params.id));
       res.json({ message: "Deleted" });
@@ -680,7 +680,7 @@ export async function registerRoutes(
     res.json(data);
   });
 
-  app.post("/api/agreements/:id/contacts", requireAuth, requirePermission("contacts.manage"), async (req, res) => {
+  app.post("/api/agreements/:id/contacts", requireAuth, requirePermission("contacts.create"), async (req, res) => {
     try {
       const payload = {
         ...req.body,
@@ -696,7 +696,7 @@ export async function registerRoutes(
     }
   });
 
-  app.patch("/api/contacts/:id", requireAuth, requirePermission("contacts.manage"), async (req, res) => {
+  app.patch("/api/contacts/:id", requireAuth, requirePermission("contacts.edit"), async (req, res) => {
     try {
       const parsed = insertContactSchema.partial().safeParse(req.body);
       if (!parsed.success) return res.status(400).json({ message: "Invalid data", errors: parsed.error.flatten() });
@@ -707,7 +707,7 @@ export async function registerRoutes(
     }
   });
 
-  app.delete("/api/contacts/:id", requireAuth, requirePermission("contacts.manage"), async (req, res) => {
+  app.delete("/api/contacts/:id", requireAuth, requirePermission("contacts.delete"), async (req, res) => {
     try {
       await storage.deleteContact(parseInt(req.params.id));
       res.json({ message: "Deleted" });

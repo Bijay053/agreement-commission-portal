@@ -53,7 +53,7 @@ function Router() {
         </AccessGuard>
       </Route>
       <Route path="/commission">
-        <AccessGuard permission="commission.view">
+        <AccessGuard permission={["commission.view", "bonus.view"]}>
           <CommissionTablePage />
         </AccessGuard>
       </Route>

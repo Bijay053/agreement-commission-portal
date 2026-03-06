@@ -73,7 +73,10 @@ export default function ContactsListPage() {
   const { hasPermission } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const canManage = hasPermission("contacts.manage");
+  const canCreate = hasPermission("contacts.create");
+  const canEdit = hasPermission("contacts.edit");
+  const canDelete = hasPermission("contacts.delete");
+  const canManage = canCreate || canEdit || canDelete;
 
   const [search, setSearch] = useState("");
   const [providerCountryFilter, setProviderCountryFilter] = useState("all");
@@ -192,7 +195,7 @@ export default function ContactsListPage() {
           <h1 className="text-2xl font-semibold" data-testid="text-contacts-title">Contacts</h1>
           <p className="text-sm text-muted-foreground mt-1">All agreement contacts across providers</p>
         </div>
-        {canManage && (
+        {canCreate && (
           <Button onClick={() => setShowAddDialog(true)} data-testid="button-add-contact">
             <UserPlus className="w-4 h-4 mr-2" />
             Add Contact
@@ -377,21 +380,25 @@ export default function ContactsListPage() {
                               <Eye className="w-4 h-4 mr-2" />
                               View Agreement
                             </DropdownMenuItem>
-                            <DropdownMenuItem
-                              onClick={() => openEditDialog(contact)}
-                              data-testid={`button-edit-contact-${contact.id}`}
-                            >
-                              <Pencil className="w-4 h-4 mr-2" />
-                              Edit
-                            </DropdownMenuItem>
-                            <DropdownMenuItem
-                              onClick={() => setDeleteContact(contact)}
-                              className="text-destructive"
-                              data-testid={`button-delete-contact-${contact.id}`}
-                            >
-                              <Trash2 className="w-4 h-4 mr-2" />
-                              Delete
-                            </DropdownMenuItem>
+                            {canEdit && (
+                              <DropdownMenuItem
+                                onClick={() => openEditDialog(contact)}
+                                data-testid={`button-edit-contact-${contact.id}`}
+                              >
+                                <Pencil className="w-4 h-4 mr-2" />
+                                Edit
+                              </DropdownMenuItem>
+                            )}
+                            {canDelete && (
+                              <DropdownMenuItem
+                                onClick={() => setDeleteContact(contact)}
+                                className="text-destructive"
+                                data-testid={`button-delete-contact-${contact.id}`}
+                              >
+                                <Trash2 className="w-4 h-4 mr-2" />
+                                Delete
+                              </DropdownMenuItem>
+                            )}
                           </DropdownMenuContent>
                         </DropdownMenu>
                       </TableCell>

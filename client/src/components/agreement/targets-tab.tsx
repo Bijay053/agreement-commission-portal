@@ -80,7 +80,7 @@ interface CountryRow {
   bonusAmount: string;
 }
 
-function BonusRulesSection({ targetId, canManage }: { targetId: number; canManage: boolean }) {
+function BonusRulesSection({ targetId, canCreate, canDelete }: { targetId: number; canCreate: boolean; canDelete: boolean }) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [showAddRule, setShowAddRule] = useState(false);
@@ -193,7 +193,7 @@ function BonusRulesSection({ targetId, canManage }: { targetId: number; canManag
                 <Badge variant="outline">{bonusTypeLabels[rule.bonusType] || rule.bonusType}</Badge>
                 <div className="flex items-center gap-1">
                   <span className="text-muted-foreground">{rule.currency}</span>
-                  {canManage && (
+                  {canDelete && (
                     <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => deleteRuleMutation.mutate(rule.id)}>
                       <Trash2 className="w-3 h-3 text-destructive" />
                     </Button>
@@ -228,7 +228,7 @@ function BonusRulesSection({ targetId, canManage }: { targetId: number; canManag
         </div>
       )}
 
-      {canManage && !showAddRule && (
+      {canCreate && !showAddRule && (
         <Button
           variant="outline"
           size="sm"
@@ -344,7 +344,13 @@ export default function TargetsTab({ agreementId }: { agreementId: number }) {
   const { hasPermission } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const canManage = hasPermission("targets.manage");
+  const canCreateTarget = hasPermission("targets.create");
+  const canEditTarget = hasPermission("targets.edit");
+  const canDeleteTarget = hasPermission("targets.delete");
+  const canViewBonus = hasPermission("bonus.view");
+  const canCreateBonus = hasPermission("bonus.create");
+  const canDeleteBonus = hasPermission("bonus.delete");
+  const canManage = canCreateTarget || canEditTarget || canDeleteTarget || canCreateBonus || canDeleteBonus;
   const [showDialog, setShowDialog] = useState(false);
   const [periodError, setPeriodError] = useState<string | null>(null);
   const [showBonusCalc, setShowBonusCalc] = useState<number | null>(null);
@@ -430,7 +436,7 @@ export default function TargetsTab({ agreementId }: { agreementId: number }) {
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-2">
         <h3 className="font-medium">Performance Targets</h3>
-        {canManage && (
+        {canCreateTarget && (
           <Dialog open={showDialog} onOpenChange={setShowDialog}>
             <DialogTrigger asChild>
               <Button size="sm" data-testid="button-add-target">
@@ -577,21 +583,23 @@ export default function TargetsTab({ agreementId }: { agreementId: number }) {
                       </div>
                     )}
 
-                    <div className="mt-2">
-                      <button
-                        className="text-xs text-primary flex items-center gap-1 hover:underline"
-                        onClick={() => setExpandedTarget(expandedTarget === target.id ? null : target.id)}
-                        data-testid={`button-toggle-bonus-rules-${target.id}`}
-                      >
-                        {expandedTarget === target.id ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
-                        Bonus Rules
-                      </button>
-                      {expandedTarget === target.id && (
-                        <div className="mt-2">
-                          <BonusRulesSection targetId={target.id} canManage={canManage} />
-                        </div>
-                      )}
-                    </div>
+                    {canViewBonus && (
+                      <div className="mt-2">
+                        <button
+                          className="text-xs text-primary flex items-center gap-1 hover:underline"
+                          onClick={() => setExpandedTarget(expandedTarget === target.id ? null : target.id)}
+                          data-testid={`button-toggle-bonus-rules-${target.id}`}
+                        >
+                          {expandedTarget === target.id ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+                          Bonus Rules
+                        </button>
+                        {expandedTarget === target.id && (
+                          <div className="mt-2">
+                            <BonusRulesSection targetId={target.id} canCreate={canCreateBonus} canDelete={canDeleteBonus} />
+                          </div>
+                        )}
+                      </div>
+                    )}
 
                     {showBonusCalc === target.id && (
                       <div className="mt-2 p-3 border rounded space-y-2">
@@ -633,7 +641,7 @@ export default function TargetsTab({ agreementId }: { agreementId: number }) {
                     >
                       <Calculator className="w-4 h-4 text-muted-foreground" />
                     </Button>
-                    {canManage && (
+                    {canDeleteTarget && (
                       <Button variant="ghost" size="icon" onClick={() => deleteMutation.mutate(target.id)} data-testid={`button-delete-target-${target.id}`}>
                         <Trash2 className="w-4 h-4 text-destructive" />
                       </Button>
