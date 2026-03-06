@@ -271,43 +271,43 @@ export default function CommissionTablePage() {
           ) : commissionRules && commissionRules.length > 0 ? (
             <Card>
               <div className="overflow-x-auto">
-                <Table>
+                <Table className="table-fixed w-full">
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Provider</TableHead>
-                      <TableHead>Agreement</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead>Territory</TableHead>
-                      <TableHead>Study Level</TableHead>
-                      <TableHead>Type</TableHead>
-                      <TableHead>Value</TableHead>
-                      <TableHead>Basis</TableHead>
-                      <TableHead>Active</TableHead>
-                      <TableHead className="w-[60px]"></TableHead>
+                      <TableHead className="w-[15%]">Provider</TableHead>
+                      <TableHead className="w-[18%]">Agreement</TableHead>
+                      <TableHead className="w-[10%]">Status</TableHead>
+                      <TableHead className="w-[10%]">Territory</TableHead>
+                      <TableHead className="w-[8%]">Level</TableHead>
+                      <TableHead className="w-[10%]">Type</TableHead>
+                      <TableHead className="w-[10%]">Value</TableHead>
+                      <TableHead className="w-[9%]">Basis</TableHead>
+                      <TableHead className="w-[6%]">Active</TableHead>
+                      <TableHead className="w-[4%]"></TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {commissionRules.map((rule: any) => (
                       <TableRow key={rule.id} data-testid={`row-commission-${rule.id}`}>
                         <TableCell>
-                          <div className="text-sm font-medium">{rule.providerName}</div>
+                          <div className="text-sm font-medium truncate">{rule.providerName}</div>
                           {rule.providerCountryName && (
-                            <div className="text-xs text-muted-foreground">{rule.providerCountryName}</div>
+                            <div className="text-xs text-muted-foreground truncate">{rule.providerCountryName}</div>
                           )}
                         </TableCell>
                         <TableCell>
                           <button
-                            className="text-left hover:underline text-primary text-sm"
+                            className="text-left hover:underline text-primary text-sm w-full"
                             onClick={() => navigate(`/agreements/${rule.agreementId}`)}
                             data-testid={`link-agreement-${rule.agreementId}`}
                           >
-                            <div className="font-medium">{rule.agreementCode}</div>
-                            <div className="text-xs text-muted-foreground truncate max-w-[180px]">{rule.agreementTitle}</div>
+                            <div className="font-medium truncate">{rule.agreementCode}</div>
+                            <div className="text-xs text-muted-foreground truncate">{rule.agreementTitle}</div>
                           </button>
                         </TableCell>
                         <TableCell>{statusBadge(rule.agreementStatus)}</TableCell>
                         <TableCell>
-                          <div className="text-xs max-w-[120px]">
+                          <div className="text-xs truncate">
                             {rule.territoryCountries?.length > 0
                               ? rule.territoryCountries.length > 2
                                 ? <Tooltip>
@@ -437,46 +437,46 @@ export default function CommissionTablePage() {
           ) : bonusRules && bonusRules.length > 0 ? (
             <Card>
               <div className="overflow-x-auto">
-                <Table>
+                <Table className="table-fixed w-full">
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Provider</TableHead>
-                      <TableHead>Agreement</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead>Target</TableHead>
-                      <TableHead>Bonus Type</TableHead>
-                      <TableHead>Currency</TableHead>
-                      <TableHead>Details</TableHead>
-                      <TableHead className="w-[60px]"></TableHead>
+                      <TableHead className="w-[15%]">Provider</TableHead>
+                      <TableHead className="w-[18%]">Agreement</TableHead>
+                      <TableHead className="w-[10%]">Status</TableHead>
+                      <TableHead className="w-[15%]">Target</TableHead>
+                      <TableHead className="w-[10%]">Bonus Type</TableHead>
+                      <TableHead className="w-[7%]">Currency</TableHead>
+                      <TableHead className="w-[21%]">Details</TableHead>
+                      <TableHead className="w-[4%]"></TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {bonusRules.map((rule: any) => (
                       <TableRow key={rule.id} data-testid={`row-bonus-${rule.id}`}>
                         <TableCell>
-                          <div className="text-sm font-medium">{rule.providerName}</div>
+                          <div className="text-sm font-medium truncate">{rule.providerName}</div>
                           {rule.providerCountryName && (
-                            <div className="text-xs text-muted-foreground">{rule.providerCountryName}</div>
+                            <div className="text-xs text-muted-foreground truncate">{rule.providerCountryName}</div>
                           )}
                         </TableCell>
                         <TableCell>
                           <button
-                            className="text-left hover:underline text-primary text-sm"
+                            className="text-left hover:underline text-primary text-sm w-full"
                             onClick={() => navigate(`/agreements/${rule.agreementId}`)}
                             data-testid={`link-bonus-agreement-${rule.agreementId}`}
                           >
-                            <div className="font-medium">{rule.agreementCode}</div>
-                            <div className="text-xs text-muted-foreground truncate max-w-[180px]">{rule.agreementTitle}</div>
+                            <div className="font-medium truncate">{rule.agreementCode}</div>
+                            <div className="text-xs text-muted-foreground truncate">{rule.agreementTitle}</div>
                           </button>
                         </TableCell>
                         <TableCell>{statusBadge(rule.agreementStatus)}</TableCell>
                         <TableCell>
-                          <div className="text-sm">
+                          <div className="text-sm truncate">
                             <span className="capitalize">{rule.targetType}</span>
                             <span className="text-muted-foreground"> · </span>
                             <span className="text-xs text-muted-foreground">{rule.metric?.replace(/_/g, " ")}</span>
                           </div>
-                          <div className="text-xs text-muted-foreground">{rule.periodKey}</div>
+                          <div className="text-xs text-muted-foreground truncate">{rule.periodKey}</div>
                         </TableCell>
                         <TableCell>
                           <Badge variant="outline" className="text-xs">{bonusTypeLabels[rule.bonusType] || rule.bonusType}</Badge>
@@ -485,16 +485,16 @@ export default function CommissionTablePage() {
                           <span className="text-sm">{rule.currency}</span>
                         </TableCell>
                         <TableCell>
-                          <div className="text-xs max-w-[280px]">
-                            {formatBonusDetails(rule).length > 80 ? (
+                          <div className="text-xs">
+                            {formatBonusDetails(rule).length > 60 ? (
                               <Tooltip>
-                                <TooltipTrigger className="text-left underline decoration-dotted cursor-help truncate block max-w-[280px]">
-                                  {formatBonusDetails(rule).slice(0, 80)}...
+                                <TooltipTrigger className="text-left underline decoration-dotted cursor-help truncate block">
+                                  {formatBonusDetails(rule).slice(0, 60)}...
                                 </TooltipTrigger>
                                 <TooltipContent className="max-w-sm whitespace-pre-wrap">{formatBonusDetails(rule)}</TooltipContent>
                               </Tooltip>
                             ) : (
-                              formatBonusDetails(rule)
+                              <span className="truncate block">{formatBonusDetails(rule)}</span>
                             )}
                           </div>
                         </TableCell>

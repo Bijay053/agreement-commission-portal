@@ -282,20 +282,19 @@ export default function ContactsListPage() {
         </div>
       ) : contacts && contacts.length > 0 ? (
         <Card>
-          <CardContent className="p-0">
-            <Table>
+          <CardContent className="p-0 overflow-x-auto">
+            <Table className="table-fixed w-full">
               <TableHeader>
                 <TableRow>
-                  <TableHead>Name</TableHead>
-                  <TableHead>Position</TableHead>
-                  <TableHead>Provider</TableHead>
-                  <TableHead>Provider Country</TableHead>
-                  <TableHead>Contact Location</TableHead>
-                  <TableHead>Email</TableHead>
-                  <TableHead>Phone</TableHead>
-                  <TableHead className="text-center">Primary</TableHead>
-                  <TableHead>Agreement Status</TableHead>
-                  {canManage && <TableHead className="w-[60px]">Actions</TableHead>}
+                  <TableHead className="w-[14%]">Name</TableHead>
+                  <TableHead className="w-[12%]">Position</TableHead>
+                  <TableHead className="w-[14%]">Provider</TableHead>
+                  <TableHead className="w-[10%]">Location</TableHead>
+                  <TableHead className="w-[18%]">Email</TableHead>
+                  <TableHead className="w-[10%]">Phone</TableHead>
+                  <TableHead className="w-[7%] text-center">Primary</TableHead>
+                  <TableHead className="w-[11%]">Status</TableHead>
+                  {canManage && <TableHead className="w-[4%]"></TableHead>}
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -307,28 +306,26 @@ export default function ContactsListPage() {
                     data-testid={`row-contact-${contact.id}`}
                   >
                     <TableCell>
-                      <span className="font-medium text-sm" data-testid={`text-contact-name-${contact.id}`}>
+                      <span className="font-medium text-sm truncate block" data-testid={`text-contact-name-${contact.id}`}>
                         {contact.fullName}
                       </span>
                     </TableCell>
                     <TableCell>
-                      <span className="text-sm text-muted-foreground">
+                      <span className="text-sm text-muted-foreground truncate block">
                         {contact.positionTitle || "-"}
                       </span>
                     </TableCell>
                     <TableCell>
-                      <div className="flex items-center gap-1.5">
+                      <div className="flex items-center gap-1.5 min-w-0">
                         <Building2 className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
-                        <span className="text-sm">{contact.providerName}</span>
+                        <span className="text-sm truncate">{contact.providerName}</span>
                       </div>
-                    </TableCell>
-                    <TableCell>
-                      <span className="text-sm text-muted-foreground">
-                        {contact.providerCountryName || "-"}
+                      <span className="text-xs text-muted-foreground truncate block">
+                        {contact.providerCountryName || ""}
                       </span>
                     </TableCell>
                     <TableCell>
-                      <span className="text-sm text-muted-foreground">
+                      <span className="text-sm text-muted-foreground truncate block">
                         {contact.contactCountryName
                           ? `${contact.contactCountryName}${contact.city ? `, ${contact.city}` : ""}`
                           : "-"}
@@ -336,9 +333,9 @@ export default function ContactsListPage() {
                     </TableCell>
                     <TableCell>
                       {contact.email ? (
-                        <span className="text-sm flex items-center gap-1.5">
+                        <span className="text-sm flex items-center gap-1.5 min-w-0">
                           <Mail className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
-                          {contact.email}
+                          <span className="truncate">{contact.email}</span>
                         </span>
                       ) : (
                         <span className="text-sm text-muted-foreground">-</span>
@@ -346,8 +343,7 @@ export default function ContactsListPage() {
                     </TableCell>
                     <TableCell>
                       {contact.phone ? (
-                        <span className="text-sm flex items-center gap-1.5">
-                          <Phone className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                        <span className="text-sm text-muted-foreground truncate block">
                           {contact.phone}
                         </span>
                       ) : (
@@ -356,8 +352,8 @@ export default function ContactsListPage() {
                     </TableCell>
                     <TableCell className="text-center">
                       {contact.isPrimary && (
-                        <Badge variant="default" data-testid={`badge-primary-${contact.id}`}>
-                          <Star className="w-3 h-3 mr-1" /> Primary
+                        <Badge variant="default" className="text-[10px] px-1.5 py-0" data-testid={`badge-primary-${contact.id}`}>
+                          <Star className="w-2.5 h-2.5 mr-0.5" /> Primary
                         </Badge>
                       )}
                     </TableCell>
