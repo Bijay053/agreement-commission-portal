@@ -88,7 +88,6 @@ export default function AgreementFormPage() {
     website: "",
     notes: "",
   });
-  const [providerSearch, setProviderSearch] = useState("");
 
   useEffect(() => {
     if (existingAgreement) {
@@ -173,9 +172,6 @@ export default function AgreementFormPage() {
     }));
   };
 
-  const filteredProviders = providers?.filter(p =>
-    !providerSearch || p.name.toLowerCase().includes(providerSearch.toLowerCase())
-  );
 
   if (isEdit && loadingExisting) {
     return (
@@ -207,15 +203,8 @@ export default function AgreementFormPage() {
           <CardContent className="p-5 space-y-5">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <Label>Provider</Label>
+                <Label>Provider <span className="text-red-500">*</span></Label>
                 <div className="space-y-2">
-                  <Input
-                    placeholder="Search providers..."
-                    value={providerSearch}
-                    onChange={e => setProviderSearch(e.target.value)}
-                    className="mb-1"
-                    data-testid="input-provider-search"
-                  />
                   <Select value={form.universityId} onValueChange={v => {
                     if (v === "__add_new__") {
                       setShowProviderModal(true);
@@ -230,7 +219,7 @@ export default function AgreementFormPage() {
                           <Plus className="w-3.5 h-3.5" /> Add new provider
                         </span>
                       </SelectItem>
-                      {filteredProviders?.map((p: any) => (
+                      {providers?.map((p: any) => (
                         <SelectItem key={p.id} value={String(p.id)}>
                           {p.name}{p.countryName ? ` — ${p.countryName}` : ""}
                         </SelectItem>
@@ -240,19 +229,19 @@ export default function AgreementFormPage() {
                 </div>
               </div>
               <div>
-                <Label>Agreement Code</Label>
+                <Label>Agreement Code <span className="text-red-500">*</span></Label>
                 <Input value={form.agreementCode} onChange={e => setForm({...form, agreementCode: e.target.value})} placeholder="UON-2026-BD-AGT-01" required data-testid="input-agreement-code" />
               </div>
             </div>
 
             <div>
-              <Label>Title</Label>
+              <Label>Title <span className="text-red-500">*</span></Label>
               <Input value={form.title} onChange={e => setForm({...form, title: e.target.value})} placeholder="2026 Agency Agreement - Bangladesh" required data-testid="input-title" />
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <Label>Type</Label>
+                <Label>Type <span className="text-red-500">*</span></Label>
                 <Select value={form.agreementType} onValueChange={v => setForm({...form, agreementType: v})}>
                   <SelectTrigger data-testid="select-type"><SelectValue /></SelectTrigger>
                   <SelectContent>
@@ -263,7 +252,7 @@ export default function AgreementFormPage() {
                 </Select>
               </div>
               <div>
-                <Label>Status</Label>
+                <Label>Status <span className="text-red-500">*</span></Label>
                 <Select value={form.status} onValueChange={v => setForm({...form, status: v})}>
                   <SelectTrigger data-testid="select-status"><SelectValue /></SelectTrigger>
                   <SelectContent>
@@ -315,11 +304,11 @@ export default function AgreementFormPage() {
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <Label>Start Date</Label>
+                <Label>Start Date <span className="text-red-500">*</span></Label>
                 <Input type="date" value={form.startDate} onChange={e => setForm({...form, startDate: e.target.value})} required data-testid="input-start-date" />
               </div>
               <div>
-                <Label>Expiry Date</Label>
+                <Label>Expiry Date <span className="text-red-500">*</span></Label>
                 <Input type="date" value={form.expiryDate} onChange={e => setForm({...form, expiryDate: e.target.value})} required data-testid="input-expiry-date" />
               </div>
             </div>
@@ -359,7 +348,7 @@ export default function AgreementFormPage() {
           </DialogHeader>
           <form onSubmit={handleProviderSubmit} className="space-y-4">
             <div>
-              <Label>Provider Name</Label>
+              <Label>Provider Name <span className="text-red-500">*</span></Label>
               <Input value={providerForm.name} onChange={e => setProviderForm({...providerForm, name: e.target.value})} placeholder="University of..." required data-testid="input-provider-name" />
             </div>
             <div className="grid grid-cols-2 gap-3">

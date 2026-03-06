@@ -372,7 +372,7 @@ export default function RolesManagementPage() {
             className="space-y-4"
           >
             <div>
-              <Label>Role Name</Label>
+              <Label>Role Name <span className="text-red-500">*</span></Label>
               <Input
                 value={createForm.name}
                 onChange={e => setCreateForm({ ...createForm, name: e.target.value })}
@@ -415,7 +415,7 @@ export default function RolesManagementPage() {
             className="space-y-4"
           >
             <div>
-              <Label>Role Name</Label>
+              <Label>Role Name <span className="text-red-500">*</span></Label>
               <Input
                 value={editForm.name}
                 onChange={e => setEditForm({ ...editForm, name: e.target.value })}
