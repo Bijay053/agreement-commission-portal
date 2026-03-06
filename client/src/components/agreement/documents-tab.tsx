@@ -11,8 +11,11 @@ import { Label } from "@/components/ui/label";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger,
 } from "@/components/ui/dialog";
-import { Upload, FileText, File, Clock, Eye, Download, X, ShieldCheck } from "lucide-react";
+import { Upload, FileText, File, Clock, Eye, Download, X, ShieldCheck, ChevronLeft, ChevronRight, ZoomIn, ZoomOut } from "lucide-react";
 import { format, parseISO } from "date-fns";
+import * as pdfjsLib from "pdfjs-dist";
+
+pdfjsLib.GlobalWorkerOptions.workerSrc = "/pdf.worker.min.mjs";
 
 function formatFileSize(bytes: number) {
   if (bytes < 1024) return `${bytes} B`;
@@ -20,37 +23,152 @@ function formatFileSize(bytes: number) {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-function SecureViewer({ doc, userEmail, onClose }: { doc: any; userEmail: string; onClose: () => void }) {
-  const isPdf = doc.mimeType === "application/pdf";
+function PdfCanvasViewer({ pdfData, userEmail }: { pdfData: ArrayBuffer; userEmail: string }) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [pdfDoc, setPdfDoc] = useState<any>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(0);
+  const [scale, setScale] = useState(1.5);
+  const [rendering, setRendering] = useState(false);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const watermarkCanvasRef = useRef<HTMLCanvasElement>(null);
   const now = format(new Date(), "dd MMM yyyy HH:mm");
-  const [blobUrl, setBlobUrl] = useState<string | null>(null);
-  const [loadError, setLoadError] = useState<string | null>(null);
 
   useEffect(() => {
-    let revoked = false;
+    const loadPdf = async () => {
+      try {
+        const doc = await pdfjsLib.getDocument({ data: pdfData }).promise;
+        setPdfDoc(doc);
+        setTotalPages(doc.numPages);
+      } catch {
+        console.error("Failed to load PDF");
+      }
+    };
+    loadPdf();
+  }, [pdfData]);
+
+  const renderPage = useCallback(async (pageNum: number, zoom: number) => {
+    if (!pdfDoc || !canvasRef.current || !watermarkCanvasRef.current) return;
+    setRendering(true);
+    try {
+      const page = await pdfDoc.getPage(pageNum);
+      const viewport = page.getViewport({ scale: zoom });
+
+      const canvas = canvasRef.current;
+      const ctx = canvas.getContext("2d")!;
+      canvas.width = viewport.width;
+      canvas.height = viewport.height;
+
+      await page.render({ canvasContext: ctx, viewport }).promise;
+
+      const wCanvas = watermarkCanvasRef.current;
+      wCanvas.width = viewport.width;
+      wCanvas.height = viewport.height;
+      const wCtx = wCanvas.getContext("2d")!;
+      wCtx.clearRect(0, 0, wCanvas.width, wCanvas.height);
+      wCtx.save();
+      wCtx.font = "14px monospace";
+      wCtx.fillStyle = "rgba(0, 0, 0, 0.06)";
+
+      const lines = ["Study Info Centre - Confidential", userEmail, now];
+      const lineHeight = 18;
+      const blockHeight = lines.length * lineHeight + 40;
+      const blockWidth = 300;
+      for (let y = -viewport.height * 0.2; y < viewport.height * 1.2; y += blockHeight + 80) {
+        for (let x = -viewport.width * 0.2; x < viewport.width * 1.2; x += blockWidth + 60) {
+          wCtx.save();
+          wCtx.translate(x, y);
+          wCtx.rotate(-0.5);
+          lines.forEach((line, i) => {
+            wCtx.fillText(line, 0, i * lineHeight);
+          });
+          wCtx.restore();
+        }
+      }
+      wCtx.restore();
+    } catch (err) {
+      console.error("Render error:", err);
+    }
+    setRendering(false);
+  }, [pdfDoc, userEmail, now]);
+
+  useEffect(() => {
+    if (pdfDoc) renderPage(currentPage, scale);
+  }, [pdfDoc, currentPage, scale, renderPage]);
+
+  const goToPage = (delta: number) => {
+    setCurrentPage(p => Math.max(1, Math.min(totalPages, p + delta)));
+  };
+
+  const changeZoom = (delta: number) => {
+    setScale(s => Math.max(0.5, Math.min(3, s + delta)));
+  };
+
+  return (
+    <div className="flex flex-col h-full">
+      <div className="flex items-center justify-center gap-2 py-1.5 bg-zinc-800 border-b border-zinc-700 shrink-0">
+        <Button size="icon" variant="ghost" className="h-7 w-7 text-white" onClick={() => goToPage(-1)} disabled={currentPage <= 1} data-testid="button-prev-page">
+          <ChevronLeft className="w-4 h-4" />
+        </Button>
+        <span className="text-xs text-zinc-300 min-w-[80px] text-center" data-testid="text-page-info">
+          Page {currentPage} of {totalPages}
+        </span>
+        <Button size="icon" variant="ghost" className="h-7 w-7 text-white" onClick={() => goToPage(1)} disabled={currentPage >= totalPages} data-testid="button-next-page">
+          <ChevronRight className="w-4 h-4" />
+        </Button>
+        <div className="w-px h-4 bg-zinc-600 mx-1" />
+        <Button size="icon" variant="ghost" className="h-7 w-7 text-white" onClick={() => changeZoom(-0.25)} disabled={scale <= 0.5} data-testid="button-zoom-out">
+          <ZoomOut className="w-4 h-4" />
+        </Button>
+        <span className="text-xs text-zinc-300 min-w-[40px] text-center">{Math.round(scale * 100)}%</span>
+        <Button size="icon" variant="ghost" className="h-7 w-7 text-white" onClick={() => changeZoom(0.25)} disabled={scale >= 3} data-testid="button-zoom-in">
+          <ZoomIn className="w-4 h-4" />
+        </Button>
+      </div>
+      <div ref={containerRef} className="flex-1 overflow-auto flex justify-center bg-zinc-700 p-4" data-testid="secure-viewer-content">
+        <div className="relative inline-block">
+          <canvas ref={canvasRef} className="block shadow-2xl" style={{ maxWidth: "100%" }} />
+          <canvas
+            ref={watermarkCanvasRef}
+            className="absolute inset-0 pointer-events-none"
+            style={{ width: "100%", height: "100%" }}
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function SecureViewer({ doc, userEmail, onClose }: { doc: any; userEmail: string; onClose: () => void }) {
+  const isPdf = doc.mimeType === "application/pdf";
+  const [pdfData, setPdfData] = useState<ArrayBuffer | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
     const loadDocument = async () => {
       try {
         const res = await fetch(`/api/documents/${doc.id}/view`, { credentials: "include" });
         if (!res.ok) {
           const err = await res.json().catch(() => ({ message: "Access denied" }));
           setLoadError(err.message || "Failed to load document");
+          setLoading(false);
           return;
         }
-        const blob = await res.blob();
-        if (!revoked) {
-          const url = URL.createObjectURL(blob);
-          setBlobUrl(url);
+        if (isPdf) {
+          const buffer = await res.arrayBuffer();
+          if (!cancelled) setPdfData(buffer);
         }
+        setLoading(false);
       } catch {
         setLoadError("Failed to load document");
+        setLoading(false);
       }
     };
     loadDocument();
-    return () => {
-      revoked = true;
-      if (blobUrl) URL.revokeObjectURL(blobUrl);
-    };
-  }, [doc.id]);
+    return () => { cancelled = true; };
+  }, [doc.id, isPdf]);
 
   useEffect(() => {
     const handleContextMenu = (e: MouseEvent) => e.preventDefault();
@@ -103,19 +221,13 @@ function SecureViewer({ doc, userEmail, onClose }: { doc: any; userEmail: string
             <p className="text-lg font-medium">Access Denied</p>
             <p className="text-sm text-zinc-400 mt-1">{loadError}</p>
           </div>
-        ) : !blobUrl ? (
+        ) : loading ? (
           <div className="flex flex-col items-center justify-center h-full text-white">
             <div className="w-8 h-8 border-2 border-white/30 border-t-white rounded-full animate-spin mb-4" />
             <p className="text-sm text-zinc-400">Loading secure document...</p>
           </div>
-        ) : isPdf ? (
-          <iframe
-            src={`${blobUrl}#toolbar=0&navpanes=0&scrollbar=1&view=FitH`}
-            className="w-full h-full border-0"
-            style={{ pointerEvents: "auto" }}
-            title={doc.originalFilename}
-            data-testid="secure-viewer-iframe"
-          />
+        ) : isPdf && pdfData ? (
+          <PdfCanvasViewer pdfData={pdfData} userEmail={userEmail} />
         ) : (
           <div className="flex flex-col items-center justify-center h-full text-white">
             <File className="w-16 h-16 text-zinc-500 mb-4" />
@@ -125,36 +237,6 @@ function SecureViewer({ doc, userEmail, onClose }: { doc: any; userEmail: string
             <p className="text-xs text-zinc-500">Use the download button if you have permission.</p>
           </div>
         )}
-
-        <div
-          className="absolute inset-0 pointer-events-none flex items-center justify-center overflow-hidden"
-          style={{ zIndex: 10 }}
-        >
-          <div className="w-full h-full relative">
-            {Array.from({ length: 6 }).map((_, row) =>
-              Array.from({ length: 4 }).map((_, col) => (
-                <div
-                  key={`${row}-${col}`}
-                  className="absolute text-white/[0.06] select-none"
-                  style={{
-                    top: `${15 + row * 16}%`,
-                    left: `${5 + col * 25}%`,
-                    transform: "rotate(-30deg)",
-                    fontSize: "11px",
-                    fontFamily: "monospace",
-                    whiteSpace: "nowrap",
-                    userSelect: "none",
-                    pointerEvents: "none",
-                  }}
-                >
-                  <div>Study Info Centre - Confidential</div>
-                  <div>{userEmail}</div>
-                  <div>{now}</div>
-                </div>
-              ))
-            )}
-          </div>
-        </div>
       </div>
     </div>
   );
