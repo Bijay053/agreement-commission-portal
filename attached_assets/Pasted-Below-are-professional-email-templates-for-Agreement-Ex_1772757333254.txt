@@ -1,0 +1,250 @@
+Below are professional email templates for Agreement Expiry Reminders for your University Agreement Management System.
+These templates are written so the system can automatically send them to:
+
+au@studyinfocentre.com
+
+info@studyinfocentre.com
+
+partners@studyinfocentre.com
+
+The system should dynamically insert agreement details using placeholders.
+
+Email Templates for Agreement Expiry Reminders
+Dynamic Fields (Placeholders)
+
+Developer should support the following variables:
+
+{university_name}
+
+{agreement_title}
+
+{territory_country}
+
+{start_date}
+
+{expiry_date}
+
+{days_remaining}
+
+{portal_link}
+
+{primary_contact_name}
+
+{primary_contact_email}
+
+{primary_contact_phone}
+
+1. 90 Days Before Expiry
+Subject
+
+Agreement Expiry Reminder – {university_name} ({days_remaining} Days Remaining)
+
+Email Body
+
+Dear Team,
+
+This is an automated reminder that the following university agreement is approaching its expiry date.
+
+Agreement Details:
+
+University: {university_name}
+Agreement Title: {agreement_title}
+Territory: {territory_country}
+Agreement Start Date: {start_date}
+Agreement Expiry Date: {expiry_date}
+Days Remaining: {days_remaining}
+
+Primary University Contact:
+
+Name: {primary_contact_name}
+Email: {primary_contact_email}
+Contact Number: {primary_contact_phone}
+
+Please review the agreement and initiate renewal discussions if required.
+
+You may review the agreement securely in the portal using the link below:
+
+{portal_link}
+
+Kindly ensure renewal discussions are initiated well before the expiry date to avoid any interruption to recruitment activities.
+
+Regards
+Agreement Management System
+Study Info Centre
+
+2. 60 Days Before Expiry
+Subject
+
+Agreement Renewal Alert – {university_name} Agreement Expiring in {days_remaining} Days
+
+Email Body
+
+Dear Team,
+
+This is a reminder that the following agreement is due to expire in {days_remaining} days.
+
+Agreement Information:
+
+University: {university_name}
+Agreement Title: {agreement_title}
+Territory: {territory_country}
+Expiry Date: {expiry_date}
+
+University Contact for Renewal:
+
+Name: {primary_contact_name}
+Email: {primary_contact_email}
+Phone: {primary_contact_phone}
+
+Please review the agreement and begin renewal discussions if necessary.
+
+Secure Portal Link:
+{portal_link}
+
+Regards
+Agreement Management System
+Study Info Centre
+
+3. 30 Days Before Expiry
+Subject
+
+Action Required: Agreement Expiring Soon – {university_name}
+
+Email Body
+
+Dear Team,
+
+The following agreement is approaching expiry and requires attention.
+
+University: {university_name}
+Agreement Title: {agreement_title}
+Territory: {territory_country}
+Expiry Date: {expiry_date}
+Days Remaining: {days_remaining}
+
+Please ensure renewal discussions are initiated immediately if the partnership is to continue.
+
+You can review the agreement in the secure portal:
+
+{portal_link}
+
+University Contact Person:
+
+Name: {primary_contact_name}
+Email: {primary_contact_email}
+Phone: {primary_contact_phone}
+
+Regards
+Agreement Management System
+Study Info Centre
+
+4. 14 Days Before Expiry (High Priority)
+Subject
+
+Urgent Reminder: Agreement Expiring in {days_remaining} Days – {university_name}
+
+Email Body
+
+Dear Team,
+
+This is an urgent reminder that the following agreement will expire in {days_remaining} days.
+
+University: {university_name}
+Agreement Title: {agreement_title}
+Territory: {territory_country}
+Expiry Date: {expiry_date}
+
+If renewal discussions have not yet begun, please contact the university immediately.
+
+University Contact:
+
+Name: {primary_contact_name}
+Email: {primary_contact_email}
+Phone: {primary_contact_phone}
+
+You may review the agreement securely in the portal below:
+
+{portal_link}
+
+Regards
+Agreement Management System
+Study Info Centre
+
+5. 7 Days Before Expiry (Critical)
+Subject
+
+Critical Notice: Agreement Expiring in {days_remaining} Days – {university_name}
+
+Email Body
+
+Dear Team,
+
+The following agreement will expire very soon.
+
+University: {university_name}
+Agreement Title: {agreement_title}
+Territory: {territory_country}
+Expiry Date: {expiry_date}
+Days Remaining: {days_remaining}
+
+Immediate action is recommended to prevent disruption to student recruitment activities.
+
+Please review the agreement using the secure portal link:
+
+{portal_link}
+
+University Contact:
+
+Name: {primary_contact_name}
+Email: {primary_contact_email}
+Phone: {primary_contact_phone}
+
+Regards
+Agreement Management System
+Study Info Centre
+
+6. On Expiry Date
+Subject
+
+Agreement Expired – {university_name}
+
+Email Body
+
+Dear Team,
+
+This is to inform you that the following agreement has now expired.
+
+University: {university_name}
+Agreement Title: {agreement_title}
+Territory: {territory_country}
+Expiry Date: {expiry_date}
+
+Please confirm whether renewal discussions are ongoing or if the agreement will be renewed.
+
+You may review the expired agreement in the portal here:
+
+{portal_link}
+
+If the agreement is renewed, please upload the updated agreement in the system immediately.
+
+Regards
+Agreement Management System
+Study Info Centre
+
+Developer Note (Important)
+
+Email reminder job should run daily cron job:
+
+Example:
+
+run every day at 08:00 AM server time
+
+check agreements where:
+
+expiry_date - today = 90
+expiry_date - today = 60
+expiry_date - today = 30
+expiry_date - today = 14
+expiry_date - today = 7
+expiry_date - today = 1
+expiry_date = today
