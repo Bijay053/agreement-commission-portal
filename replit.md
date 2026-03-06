@@ -25,7 +25,7 @@ A secure internal portal for Study Info Centre — managing provider (university
 - **Global Contacts Page** — view/filter/add/edit/delete all contacts across agreements with search, country, and status filters; Contact Location column shows country + city
 - **Searchable Dropdowns** — All Select/dropdown fields use SearchableSelect component (Popover + Command/cmdk) with type-to-filter, keyboard support, "No results found"
 - **Reset Filters** — All filter pages (Contacts, Agreements, Providers, Commission) have Reset button (RotateCcw icon) that clears all active filters; empty state shows clickable "Reset filters" link
-- **Document View/Download** — Documents tab has View (Eye icon, opens inline for PDFs) and Download buttons per document
+- **Secure Document Viewer** — View button opens documents in a secure full-screen modal (not browser tab); PDF rendered via blob URL (hides real API endpoint); watermark overlay with "Study Info Centre - Confidential", user email, and timestamp; right-click, Ctrl+S/P, and print disabled; download button only visible to users with `document.download` permission; DOC_VIEW and DOC_DOWNLOAD audit log entries with IP, user agent, and metadata
 - **Commission & Bonus Master Table** — Standalone page (`/commission`) with Commission and Bonus tabs; pulls all rules from all agreements; filters, search, reset; each row links back to source agreement
 - **Sidebar Status Sub-menu** — Agreements sidebar with expandable status filters and count badges
 - **Agreement List Filters** — search, status, provider, provider country, territory country
@@ -97,7 +97,8 @@ A secure internal portal for Study Info Centre — managing provider (university
 - `POST /api/bonus/calculate` — Bonus preview calculator
 
 ### Documents
-- `GET /api/documents/:id/download` — Download/view document (supports ?inline=true for PDF viewing)
+- `GET /api/documents/:id/view` — Secure document view (streams via blob, audit logged, permission: document.view_in_portal)
+- `GET /api/documents/:id/download` — Download document (audit logged, permission: document.download)
 
 ## Project Structure
 ```

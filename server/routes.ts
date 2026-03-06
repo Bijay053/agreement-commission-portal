@@ -751,20 +751,73 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/documents/:id/download", requireAuth, requirePermission("document.download"), async (req, res) => {
+  app.get("/api/documents/:id/view", requireAuth, requirePermission("document.view_in_portal"), async (req, res) => {
     try {
       const doc = await storage.getDocument(parseInt(req.params.id));
       if (!doc) return res.status(404).json({ message: "Document not found" });
+
+      const agreement = await storage.getAgreement(doc.agreementId);
+      if (!agreement) return res.status(404).json({ message: "Agreement not found" });
 
       const filePath = doc.storagePath;
       if (!fs.existsSync(filePath)) {
         return res.status(404).json({ message: "File not found on server" });
       }
 
-      const disposition = req.query.inline === "true" ? "inline" : "attachment";
+      await storage.createAuditLog({
+        userId: req.session.userId,
+        action: "DOC_VIEW",
+        entityType: "document",
+        entityId: doc.id,
+        ipAddress: req.ip,
+        userAgent: req.headers["user-agent"],
+        metadata: { agreementId: doc.agreementId, filename: doc.originalFilename, version: doc.versionNo },
+      });
+
       res.setHeader("Content-Type", doc.mimeType);
-      res.setHeader("Content-Disposition", `${disposition}; filename="${doc.originalFilename}"`);
+      res.setHeader("Content-Disposition", `inline; filename="${doc.originalFilename}"`);
       res.setHeader("Content-Length", doc.sizeBytes.toString());
+      res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, private");
+      res.setHeader("Pragma", "no-cache");
+      res.setHeader("Expires", "0");
+      res.setHeader("X-Content-Type-Options", "nosniff");
+      res.setHeader("X-Frame-Options", "SAMEORIGIN");
+
+      const fileStream = fs.createReadStream(filePath);
+      fileStream.pipe(res);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.get("/api/documents/:id/download", requireAuth, requirePermission("document.download"), async (req, res) => {
+    try {
+      const doc = await storage.getDocument(parseInt(req.params.id));
+      if (!doc) return res.status(404).json({ message: "Document not found" });
+
+      const agreement = await storage.getAgreement(doc.agreementId);
+      if (!agreement) return res.status(404).json({ message: "Agreement not found" });
+
+      const filePath = doc.storagePath;
+      if (!fs.existsSync(filePath)) {
+        return res.status(404).json({ message: "File not found on server" });
+      }
+
+      await storage.createAuditLog({
+        userId: req.session.userId,
+        action: "DOC_DOWNLOAD",
+        entityType: "document",
+        entityId: doc.id,
+        ipAddress: req.ip,
+        userAgent: req.headers["user-agent"],
+        metadata: { agreementId: doc.agreementId, filename: doc.originalFilename, version: doc.versionNo },
+      });
+
+      res.setHeader("Content-Type", doc.mimeType);
+      res.setHeader("Content-Disposition", `attachment; filename="${doc.originalFilename}"`);
+      res.setHeader("Content-Length", doc.sizeBytes.toString());
+      res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, private");
+      res.setHeader("Pragma", "no-cache");
 
       const fileStream = fs.createReadStream(filePath);
       fileStream.pipe(res);
