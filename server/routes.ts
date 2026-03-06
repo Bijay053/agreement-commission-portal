@@ -630,6 +630,21 @@ export async function registerRoutes(
     }
   });
 
+  app.get("/api/contacts", requireAuth, requirePermission("contacts.view"), async (req, res) => {
+    try {
+      const filters: any = {};
+      if (req.query.q) filters.q = req.query.q as string;
+      if (req.query.providerId) filters.providerId = parseInt(req.query.providerId as string);
+      if (req.query.providerCountryId) filters.providerCountryId = parseInt(req.query.providerCountryId as string);
+      if (req.query.contactCountryId) filters.contactCountryId = parseInt(req.query.contactCountryId as string);
+      if (req.query.agreementStatus) filters.agreementStatus = req.query.agreementStatus as string;
+      const data = await storage.getAllContacts(filters);
+      res.json(data);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
   app.get("/api/agreements/:id/contacts", requireAuth, requirePermission("contacts.view"), async (req, res) => {
     const data = await storage.getContacts(parseInt(req.params.id));
     res.json(data);

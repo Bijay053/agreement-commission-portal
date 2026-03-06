@@ -11,7 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
   LayoutDashboard, FileText, Users, Shield, LogOut, User, Building2,
-  ChevronDown, ChevronRight, Circle, KeyRound,
+  ChevronDown, ChevronRight, Circle, KeyRound, Contact,
 } from "lucide-react";
 
 const STATUS_ITEMS = [
@@ -41,6 +41,7 @@ export function AppSidebar() {
   const mainNav = [
     { title: "Dashboard", url: "/", icon: LayoutDashboard, show: true },
     { title: "Providers", url: "/providers", icon: Building2, show: true },
+    { title: "Contacts", url: "/contacts", icon: Contact, show: hasPermission("contacts.view") },
   ];
 
   const adminNav = [

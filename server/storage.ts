@@ -1,5 +1,5 @@
 import { db } from "./db";
-import { eq, and, desc, asc, gte, lte, ilike, sql, or, inArray } from "drizzle-orm";
+import { eq, and, desc, asc, gte, lte, ilike, sql, or, inArray, aliasedTable } from "drizzle-orm";
 import {
   users, roles, permissions, rolePermissions, userRoles, userCountryAccess,
   countries, universities, agreements, agreementTerritories, agreementTargets,
@@ -72,6 +72,7 @@ export interface IStorage {
   deleteCommissionRule(id: number): Promise<void>;
 
   getContacts(agreementId: number): Promise<AgreementContact[]>;
+  getAllContacts(filters?: { q?: string; providerId?: number; providerCountryId?: number; contactCountryId?: number; agreementStatus?: string }): Promise<any[]>;
   createContact(contact: InsertContact): Promise<AgreementContact>;
   updateContact(id: number, data: Partial<InsertContact>): Promise<AgreementContact>;
   deleteContact(id: number): Promise<void>;
@@ -553,6 +554,89 @@ export class DatabaseStorage implements IStorage {
 
   async getContacts(agreementId: number): Promise<AgreementContact[]> {
     return db.select().from(agreementContacts).where(eq(agreementContacts.agreementId, agreementId)).orderBy(desc(agreementContacts.isPrimary));
+  }
+
+  async getAllContacts(filters?: { q?: string; providerId?: number; providerCountryId?: number; contactCountryId?: number; agreementStatus?: string }): Promise<any[]> {
+    const providerCountry = aliasedTable(countries, "providerCountry");
+    const contactCountry = aliasedTable(countries, "contactCountry");
+
+    const conditions: any[] = [];
+
+    if (filters?.q) {
+      const search = `%${filters.q}%`;
+      conditions.push(or(
+        ilike(agreementContacts.fullName, search),
+        ilike(agreementContacts.email, search),
+        ilike(agreementContacts.phone, search),
+        ilike(universities.name, search),
+        ilike(agreements.title, search),
+        ilike(agreements.agreementCode, search),
+      ));
+    }
+    if (filters?.providerId) {
+      conditions.push(eq(agreements.universityId, filters.providerId));
+    }
+    if (filters?.providerCountryId) {
+      conditions.push(eq(universities.countryId, filters.providerCountryId));
+    }
+    if (filters?.contactCountryId) {
+      conditions.push(eq(agreementContacts.countryId, filters.contactCountryId));
+    }
+    if (filters?.agreementStatus) {
+      conditions.push(eq(agreements.status, filters.agreementStatus));
+    }
+
+    const rows = await db
+      .select({
+        id: agreementContacts.id,
+        fullName: agreementContacts.fullName,
+        positionTitle: agreementContacts.positionTitle,
+        email: agreementContacts.email,
+        phone: agreementContacts.phone,
+        isPrimary: agreementContacts.isPrimary,
+        notes: agreementContacts.notes,
+        contactCountryId: agreementContacts.countryId,
+        contactCountryName: contactCountry.name,
+        agreementId: agreements.id,
+        agreementCode: agreements.agreementCode,
+        agreementTitle: agreements.title,
+        agreementStatus: agreements.status,
+        providerId: universities.id,
+        providerName: universities.name,
+        providerType: universities.providerType,
+        providerCountryId: universities.countryId,
+        providerCountryName: providerCountry.name,
+        createdAt: agreementContacts.createdAt,
+      })
+      .from(agreementContacts)
+      .innerJoin(agreements, eq(agreementContacts.agreementId, agreements.id))
+      .innerJoin(universities, eq(agreements.universityId, universities.id))
+      .leftJoin(providerCountry, eq(universities.countryId, providerCountry.id))
+      .leftJoin(contactCountry, eq(agreementContacts.countryId, contactCountry.id))
+      .where(conditions.length > 0 ? and(...conditions) : undefined)
+      .orderBy(desc(agreementContacts.isPrimary), asc(agreementContacts.fullName));
+
+    const agreementIds = [...new Set(rows.map(r => r.agreementId))];
+    const territoryMap: Record<number, string[]> = {};
+    if (agreementIds.length > 0) {
+      const territories = await db
+        .select({
+          agreementId: agreementTerritories.agreementId,
+          countryName: countries.name,
+        })
+        .from(agreementTerritories)
+        .innerJoin(countries, eq(agreementTerritories.countryId, countries.id))
+        .where(inArray(agreementTerritories.agreementId, agreementIds));
+      for (const t of territories) {
+        if (!territoryMap[t.agreementId]) territoryMap[t.agreementId] = [];
+        territoryMap[t.agreementId].push(t.countryName);
+      }
+    }
+
+    return rows.map(r => ({
+      ...r,
+      territoryCountries: territoryMap[r.agreementId] || [],
+    }));
   }
 
   async createContact(contact: InsertContact): Promise<AgreementContact> {

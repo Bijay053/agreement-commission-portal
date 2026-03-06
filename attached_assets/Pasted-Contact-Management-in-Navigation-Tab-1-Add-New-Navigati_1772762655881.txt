@@ -1,0 +1,330 @@
+Contact Management in Navigation Tab
+1) Add New Navigation Menu
+
+Add a new sidebar menu under Navigation:
+
+Dashboard
+
+Providers
+
+Agreements
+
+Contacts ✅
+
+Route
+
+/contacts
+
+Purpose
+
+This page will show all agreement contact persons in one place, instead of only inside each agreement.
+
+2) Contacts List Page
+Page Title
+
+Contacts
+
+Subtitle
+
+Manage provider/university agreement contacts
+
+3) Data to Show in Contact List
+
+Each row/card should show:
+
+Contact Full Name
+
+Position
+
+Email
+
+Contact Number
+
+Country
+
+Provider Name
+
+Agreement Name / Agreement Code
+
+Territory Country
+
+Primary Contact badge (Primary)
+
+Status of agreement (Active / Draft / Renewal in Progress / Expired / Terminated)
+
+Recommended table columns
+
+Name
+
+Position
+
+Provider
+
+Provider Country
+
+Territory
+
+Email
+
+Phone
+
+Primary
+
+Agreement Status
+
+Actions
+
+4) Filters Required
+
+You asked: can be filter by university name, country based
+
+Since “University” was renamed to Provider, implement this as:
+
+Filters
+
+Search by Provider Name
+
+searchable input
+
+matches provider/university/college/B2B company name
+
+Filter by Country
+This should support both:
+
+A. Provider Country
+
+Country of the university/provider itself
+
+B. Contact Country
+
+Country saved in contact record
+
+C. Territory Country (optional but recommended)
+
+Country/territory attached to agreement
+
+Minimum required
+
+Provider Name search
+
+Country filter
+
+Recommended UI
+
+Search input: Search provider, contact name, email...
+
+Dropdown: Provider Country
+
+Dropdown: Contact Country
+
+Dropdown: Agreement Status
+
+5) Backend API Requirements
+Endpoint
+
+GET /contacts
+
+Query params
+
+q → search text
+
+provider_id
+
+provider_country_id
+
+contact_country_id
+
+agreement_status
+
+page
+
+page_size
+
+Search should match
+
+contact full name
+
+email
+
+phone
+
+provider name
+
+agreement title/code
+
+6) Database / Relationship Logic
+
+Contacts are currently attached to agreements.
+This page should pull joined data from:
+
+agreement_contacts
+
+agreements
+
+providers
+
+countries
+
+Each contact result should return:
+{
+  "id": 1,
+  "full_name": "John Smith",
+  "position": "Regional Manager",
+  "email": "john@provider.com",
+  "phone": "123456789",
+  "country": "Australia",
+  "is_primary": true,
+  "provider": {
+    "id": 10,
+    "name": "Deakin University",
+    "country": "Australia"
+  },
+  "agreement": {
+    "id": 6,
+    "title": "2026 Agency Agreement - Bangladesh",
+    "code": "UON-2026-BD-AGT-01",
+    "status": "active"
+  },
+  "territory_countries": ["Bangladesh"]
+}
+7) UI Behavior
+A. Click on contact
+
+Clicking a row/card should open:
+
+contact detail drawer, or
+
+agreement detail page on Contacts tab
+
+Recommended
+
+Open agreement detail page directly:
+
+/agreements/{agreement_id}?tab=contacts
+
+8) Actions on Contact Page
+
+Depending on permission:
+
+View
+
+Edit
+
+Delete
+
+Add Contact
+
+Button
+
+Top-right:
+
++ Add Contact
+
+Add Contact behavior
+
+Admin/editor can:
+
+add contact directly from Contacts page
+
+first select Provider / Agreement
+
+then enter contact details
+
+9) Permissions
+New permissions to support this page
+
+contacts.view_all
+
+contacts.manage_all
+
+Or reuse:
+
+contacts.view
+
+contacts.manage
+
+Rules
+
+If user has permission to agreement contacts only within certain territory/country, apply that same restriction here.
+
+10) Navigation Badge (Optional)
+
+Show count beside Contacts in sidebar:
+
+total contacts or new contacts
+
+Example:
+
+Contacts (128)
+
+11) Acceptance Criteria
+Contacts navigation
+
+New Contacts item appears in sidebar
+
+Contacts list
+
+Shows all contacts across agreements
+
+Filters
+
+Search by Provider Name works
+
+Filter by Country works
+
+Relationship
+
+Contact card/table shows linked Provider + Agreement info
+
+Permissions
+
+Only permitted users can add/edit/delete
+
+Recommended UI Layout
+Top filter bar
+
+Search input
+
+Provider Country filter
+
+Contact Country filter
+
+Agreement Status filter
+
+Add Contact button
+
+Main area
+
+Use table view instead of cards for this page because you may have many contacts.
+
+Recommended columns
+
+Name
+
+Provider
+
+Country
+
+Email
+
+Phone
+
+Primary
+
+Status
+
+Actions
+
+Small Improvement for Your Current Agreement Contact Tab
+
+In the screenshot, contact cards are taking too much space and look repeated.
+
+Better rule
+
+Inside agreement detail page:
+
+keep card view if 1–3 contacts
+
+use compact table if more than 3 contacts
+
+This will look cleaner.

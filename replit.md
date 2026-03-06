@@ -22,6 +22,7 @@ A secure internal portal for Study Info Centre — managing provider (university
 - **Password policy** — 12+ chars, uppercase, lowercase, number required
 - **Forgot Password** — token-based reset with 30-minute expiry, console-logged reset URLs
 - **Role & Permission Management** — admin UI for creating/editing/deleting/duplicating roles, dynamic permission grid by module/resource/action
+- **Global Contacts Page** — view/filter/add/edit/delete all contacts across agreements with search, country, and status filters
 - **Sidebar Status Sub-menu** — Agreements sidebar with expandable status filters and count badges
 - **Agreement List Filters** — search, status, provider, provider country, territory country
 - Fine-grained RBAC with module.resource.action permission codes
@@ -62,8 +63,13 @@ A secure internal portal for Study Info Centre — managing provider (university
 - `GET/POST /api/agreements/:id` — CRUD with territory support
 - `GET/POST /api/agreements/:id/targets` — Target CRUD with period validation + duplicate check
 - `GET/POST /api/agreements/:id/commission-rules` — Commission CRUD
-- `GET/POST /api/agreements/:id/contacts` — Contact CRUD
+- `GET/POST /api/agreements/:id/contacts` — Contact CRUD per agreement
 - `GET/POST /api/agreements/:id/documents` — Document upload
+
+### Contacts (Global)
+- `GET /api/contacts` — All contacts across agreements with filters: q, providerId, providerCountryId, contactCountryId, agreementStatus
+- `PATCH /api/contacts/:id` — Update contact
+- `DELETE /api/contacts/:id` — Delete contact
 
 ### Providers
 - `GET/POST /api/providers` — Provider CRUD with duplicate checking
@@ -99,6 +105,7 @@ client/src/
     forgot-password.tsx    # Email-based password reset request
     reset-password.tsx     # Token-based password reset with policy display
     dashboard.tsx
+    contacts-list.tsx      # Global contacts table with filters, add/edit/delete
     agreements-list.tsx    # 5 filters: search, status, provider, provider country, territory
     agreement-detail.tsx   # 6-tab detail view
     agreement-form.tsx     # Create/edit with inline provider add, multi-territory
