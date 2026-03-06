@@ -114,7 +114,6 @@ function SecureViewer({ doc, userEmail, onClose }: { doc: any; userEmail: string
             className="w-full h-full border-0"
             style={{ pointerEvents: "auto" }}
             title={doc.originalFilename}
-            sandbox="allow-same-origin"
             data-testid="secure-viewer-iframe"
           />
         ) : (
