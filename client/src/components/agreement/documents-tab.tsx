@@ -170,73 +170,126 @@ function SecureViewer({ doc, userEmail, onClose }: { doc: any; userEmail: string
     return () => { cancelled = true; };
   }, [doc.id, isPdf]);
 
+  const [blurred, setBlurred] = useState(false);
+
   useEffect(() => {
     const handleContextMenu = (e: MouseEvent) => e.preventDefault();
     const handleKeyDown = (e: KeyboardEvent) => {
       if (
         (e.ctrlKey && (e.key === "s" || e.key === "S" || e.key === "p" || e.key === "P")) ||
         (e.metaKey && (e.key === "s" || e.key === "S" || e.key === "p" || e.key === "P")) ||
-        e.key === "PrintScreen"
+        e.key === "PrintScreen" ||
+        (e.ctrlKey && e.shiftKey && (e.key === "s" || e.key === "S")) ||
+        (e.metaKey && e.shiftKey && (e.key === "3" || e.key === "4" || e.key === "5")) ||
+        (e.key === "F12") ||
+        (e.ctrlKey && e.shiftKey && (e.key === "i" || e.key === "I"))
       ) {
         e.preventDefault();
         e.stopPropagation();
       }
     };
     const handleBeforePrint = (e: Event) => e.preventDefault();
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "hidden") {
+        setBlurred(true);
+      }
+    };
+    const handleWindowBlur = () => setBlurred(true);
+    const handleWindowFocus = () => setBlurred(false);
+    const handleDragStart = (e: DragEvent) => e.preventDefault();
+    const handleCopy = (e: ClipboardEvent) => e.preventDefault();
+
+    const printBlockerStyle = document.createElement("style");
+    printBlockerStyle.id = "secure-viewer-print-blocker";
+    printBlockerStyle.textContent = `@media print { body * { display: none !important; visibility: hidden !important; } body::after { content: "Printing is disabled for confidential documents — Study Info Centre"; display: block !important; visibility: visible !important; font-size: 24px; text-align: center; padding: 100px 40px; color: #333; } }`;
+    document.head.appendChild(printBlockerStyle);
 
     document.addEventListener("contextmenu", handleContextMenu);
     document.addEventListener("keydown", handleKeyDown, true);
+    document.addEventListener("dragstart", handleDragStart);
+    document.addEventListener("copy", handleCopy);
     window.addEventListener("beforeprint", handleBeforePrint);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    window.addEventListener("blur", handleWindowBlur);
+    window.addEventListener("focus", handleWindowFocus);
 
     return () => {
       document.removeEventListener("contextmenu", handleContextMenu);
       document.removeEventListener("keydown", handleKeyDown, true);
+      document.removeEventListener("dragstart", handleDragStart);
+      document.removeEventListener("copy", handleCopy);
       window.removeEventListener("beforeprint", handleBeforePrint);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      window.removeEventListener("blur", handleWindowBlur);
+      window.removeEventListener("focus", handleWindowFocus);
+      const el = document.getElementById("secure-viewer-print-blocker");
+      if (el) el.remove();
     };
   }, []);
 
   return (
-    <div className="fixed inset-0 z-[100] bg-black/90 flex flex-col" data-testid="secure-viewer-overlay">
+    <div className="fixed inset-0 z-[100] bg-black/90 flex flex-col" data-testid="secure-viewer-overlay" style={{ WebkitUserSelect: "none", userSelect: "none", WebkitTouchCallout: "none" }}>
       <div className="flex items-center justify-between px-4 py-2 bg-zinc-900 border-b border-zinc-700 shrink-0">
         <div className="flex items-center gap-2 text-white">
           <ShieldCheck className="w-4 h-4 text-emerald-400" />
           <span className="text-sm font-medium">Secure Document Viewer</span>
           <span className="text-xs text-zinc-400 ml-2">{doc.originalFilename} (v{doc.versionNo})</span>
         </div>
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={onClose}
-          className="text-white hover:bg-zinc-700"
-          data-testid="button-close-viewer"
-        >
-          <X className="w-5 h-5" />
-        </Button>
+        <div className="flex items-center gap-2">
+          {blurred && (
+            <span className="text-xs text-amber-400 flex items-center gap-1" data-testid="text-security-warning">
+              <ShieldCheck className="w-3 h-3" /> Content hidden — click to restore
+            </span>
+          )}
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={onClose}
+            className="text-white hover:bg-zinc-700"
+            data-testid="button-close-viewer"
+          >
+            <X className="w-5 h-5" />
+          </Button>
+        </div>
       </div>
 
       <div className="flex-1 relative overflow-hidden select-none" style={{ userSelect: "none", WebkitUserSelect: "none" }}>
-        {loadError ? (
-          <div className="flex flex-col items-center justify-center h-full text-white">
-            <ShieldCheck className="w-16 h-16 text-red-500 mb-4" />
-            <p className="text-lg font-medium">Access Denied</p>
-            <p className="text-sm text-zinc-400 mt-1">{loadError}</p>
-          </div>
-        ) : loading ? (
-          <div className="flex flex-col items-center justify-center h-full text-white">
-            <div className="w-8 h-8 border-2 border-white/30 border-t-white rounded-full animate-spin mb-4" />
-            <p className="text-sm text-zinc-400">Loading secure document...</p>
-          </div>
-        ) : isPdf && pdfData ? (
-          <PdfCanvasViewer pdfData={pdfData} userEmail={userEmail} />
-        ) : (
-          <div className="flex flex-col items-center justify-center h-full text-white">
-            <File className="w-16 h-16 text-zinc-500 mb-4" />
-            <p className="text-lg font-medium">{doc.originalFilename}</p>
-            <p className="text-sm text-zinc-400 mt-1">{formatFileSize(doc.sizeBytes)}</p>
-            <p className="text-xs text-zinc-500 mt-4">This file type cannot be previewed in the browser.</p>
-            <p className="text-xs text-zinc-500">Use the download button if you have permission.</p>
+        {blurred && (
+          <div
+            className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-zinc-900/95 cursor-pointer"
+            onClick={() => setBlurred(false)}
+            data-testid="security-blur-overlay"
+          >
+            <ShieldCheck className="w-16 h-16 text-amber-400 mb-4" />
+            <p className="text-lg font-medium text-white">Content Hidden for Security</p>
+            <p className="text-sm text-zinc-400 mt-2">Document content is hidden while the window is not in focus.</p>
+            <p className="text-sm text-zinc-400 mt-1">Click anywhere to reveal the document.</p>
           </div>
         )}
+        <div style={{ filter: blurred ? "blur(30px)" : "none", transition: "filter 0.15s" }} className="h-full">
+          {loadError ? (
+            <div className="flex flex-col items-center justify-center h-full text-white">
+              <ShieldCheck className="w-16 h-16 text-red-500 mb-4" />
+              <p className="text-lg font-medium">Access Denied</p>
+              <p className="text-sm text-zinc-400 mt-1">{loadError}</p>
+            </div>
+          ) : loading ? (
+            <div className="flex flex-col items-center justify-center h-full text-white">
+              <div className="w-8 h-8 border-2 border-white/30 border-t-white rounded-full animate-spin mb-4" />
+              <p className="text-sm text-zinc-400">Loading secure document...</p>
+            </div>
+          ) : isPdf && pdfData ? (
+            <PdfCanvasViewer pdfData={pdfData} userEmail={userEmail} />
+          ) : (
+            <div className="flex flex-col items-center justify-center h-full text-white">
+              <File className="w-16 h-16 text-zinc-500 mb-4" />
+              <p className="text-lg font-medium">{doc.originalFilename}</p>
+              <p className="text-sm text-zinc-400 mt-1">{formatFileSize(doc.sizeBytes)}</p>
+              <p className="text-xs text-zinc-500 mt-4">This file type cannot be previewed in the browser.</p>
+              <p className="text-xs text-zinc-500">Use the download button if you have permission.</p>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
