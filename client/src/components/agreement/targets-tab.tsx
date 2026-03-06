@@ -11,9 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
-import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from "@/components/ui/select";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger,
 } from "@/components/ui/dialog";
@@ -247,14 +245,14 @@ function BonusRulesSection({ targetId, canManage }: { targetId: number; canManag
           <div className="grid grid-cols-2 gap-2">
             <div>
               <Label className="text-xs">Bonus Type</Label>
-              <Select value={bonusType} onValueChange={v => { setBonusType(v); resetRuleForm(); setBonusType(v); }}>
-                <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {BONUS_TYPES.map(t => (
-                    <SelectItem key={t} value={t}>{bonusTypeLabels[t]}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <SearchableSelect
+                value={bonusType}
+                onValueChange={v => { setBonusType(v); resetRuleForm(); setBonusType(v); }}
+                options={BONUS_TYPES.map(t => ({ value: t, label: bonusTypeLabels[t] }))}
+                placeholder="Select bonus type"
+                searchPlaceholder="Search..."
+                className="h-8 text-xs"
+              />
             </div>
             <div>
               <Label className="text-xs">Currency</Label>
@@ -276,13 +274,17 @@ function BonusRulesSection({ targetId, canManage }: { targetId: number; canManag
                     <Input className="h-7 text-xs w-20" type="number" placeholder="Amount" value={tier.bonusAmount}
                       onChange={e => updateTier(i, "bonusAmount", e.target.value)} />
                     {bonusType === "tier_per_student" && (
-                      <Select value={tier.calculationType} onValueChange={v => updateTier(i, "calculationType", v)}>
-                        <SelectTrigger className="h-7 text-xs w-24"><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="per_student">Per Student</SelectItem>
-                          <SelectItem value="flat">Flat</SelectItem>
-                        </SelectContent>
-                      </Select>
+                      <SearchableSelect
+                        value={tier.calculationType}
+                        onValueChange={v => updateTier(i, "calculationType", v)}
+                        options={[
+                          { value: "per_student", label: "Per Student" },
+                          { value: "flat", label: "Flat" },
+                        ]}
+                        placeholder="Type"
+                        searchPlaceholder="Search..."
+                        className="h-7 text-xs w-24"
+                      />
                     )}
                     <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={() => removeTierRow(i)}>
                       <Trash2 className="w-3 h-3" />
@@ -302,14 +304,14 @@ function BonusRulesSection({ targetId, canManage }: { targetId: number; canManag
               <div className="space-y-1">
                 {countryEntries.map((entry, i) => (
                   <div key={i} className="flex items-center gap-1.5">
-                    <Select value={entry.countryId} onValueChange={v => updateCountryEntry(i, "countryId", v)}>
-                      <SelectTrigger className="h-7 text-xs w-28"><SelectValue placeholder="Country" /></SelectTrigger>
-                      <SelectContent>
-                        {countries?.map((c: any) => (
-                          <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <SearchableSelect
+                      value={entry.countryId}
+                      onValueChange={v => updateCountryEntry(i, "countryId", v)}
+                      options={(countries || []).map((c: any) => ({ value: String(c.id), label: c.name }))}
+                      placeholder="Country"
+                      searchPlaceholder="Search countries..."
+                      className="h-7 text-xs w-28"
+                    />
                     <Input className="h-7 text-xs w-16" type="number" placeholder="Students" value={entry.studentCount}
                       onChange={e => updateCountryEntry(i, "studentCount", e.target.value)} />
                     <Input className="h-7 text-xs w-20" type="number" placeholder="Amount" value={entry.bonusAmount}
@@ -443,21 +445,25 @@ export default function TargetsTab({ agreementId }: { agreementId: number }) {
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <Label>Target Type</Label>
-                    <Select value={form.targetType} onValueChange={v => { setForm({...form, targetType: v}); setPeriodError(null); }}>
-                      <SelectTrigger data-testid="select-target-type"><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        {TARGET_TYPES.map(t => <SelectItem key={t} value={t}>{typeLabels[t]}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
+                    <SearchableSelect
+                      value={form.targetType}
+                      onValueChange={v => { setForm({...form, targetType: v}); setPeriodError(null); }}
+                      options={TARGET_TYPES.map(t => ({ value: t, label: typeLabels[t] }))}
+                      placeholder="Select type"
+                      searchPlaceholder="Search..."
+                      data-testid="select-target-type"
+                    />
                   </div>
                   <div>
                     <Label>Metric</Label>
-                    <Select value={form.metric} onValueChange={v => setForm({...form, metric: v})}>
-                      <SelectTrigger data-testid="select-target-metric"><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        {TARGET_METRICS.map(m => <SelectItem key={m} value={m}>{metricLabels[m]}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
+                    <SearchableSelect
+                      value={form.metric}
+                      onValueChange={v => setForm({...form, metric: v})}
+                      options={TARGET_METRICS.map(m => ({ value: m, label: metricLabels[m] }))}
+                      placeholder="Select metric"
+                      searchPlaceholder="Search..."
+                      data-testid="select-target-metric"
+                    />
                   </div>
                 </div>
                 <div className="grid grid-cols-2 gap-3">

@@ -22,7 +22,9 @@ A secure internal portal for Study Info Centre — managing provider (university
 - **Password policy** — 12+ chars, uppercase, lowercase, number required
 - **Forgot Password** — token-based reset with 30-minute expiry, console-logged reset URLs
 - **Role & Permission Management** — admin UI for creating/editing/deleting/duplicating roles, dynamic permission grid by module/resource/action
-- **Global Contacts Page** — view/filter/add/edit/delete all contacts across agreements with search, country, and status filters
+- **Global Contacts Page** — view/filter/add/edit/delete all contacts across agreements with search, country, and status filters; Contact Location column shows country + city
+- **Searchable Dropdowns** — All Select/dropdown fields use SearchableSelect component (Popover + Command/cmdk) with type-to-filter, keyboard support, "No results found"
+- **Reset Filters** — Contacts page has Reset button (RotateCcw icon) that clears all active filters; empty state shows clickable "Reset filters" link
 - **Sidebar Status Sub-menu** — Agreements sidebar with expandable status filters and count badges
 - **Agreement List Filters** — search, status, provider, provider country, territory country
 - Fine-grained RBAC with module.resource.action permission codes
@@ -96,7 +98,7 @@ client/src/
   components/
     agreement/        # Tab components (overview, commission, targets, contacts, docs, audit)
     app-sidebar.tsx   # Navigation with agreement status sub-menu + count badges
-    ui/               # shadcn/ui components (checkbox, dialog, etc.)
+    ui/               # shadcn/ui components (searchable-select, checkbox, dialog, etc.)
   lib/
     auth.tsx          # Auth context and hooks
     queryClient.ts    # TanStack Query setup

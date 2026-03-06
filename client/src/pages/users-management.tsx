@@ -10,9 +10,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
-import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from "@/components/ui/select";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter,
 } from "@/components/ui/dialog";
@@ -131,14 +129,14 @@ export default function UsersManagementPage() {
               </div>
               <div>
                 <Label>Initial Role</Label>
-                <Select value={createForm.roleId} onValueChange={v => setCreateForm({...createForm, roleId: v})}>
-                  <SelectTrigger data-testid="select-user-role"><SelectValue placeholder="Select role" /></SelectTrigger>
-                  <SelectContent>
-                    {roles?.map((r) => (
-                      <SelectItem key={r.id} value={String(r.id)}>{r.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <SearchableSelect
+                  value={createForm.roleId}
+                  onValueChange={v => setCreateForm({...createForm, roleId: v})}
+                  options={(roles || []).map((r) => ({ value: String(r.id), label: r.name }))}
+                  placeholder="Select role"
+                  searchPlaceholder="Search roles..."
+                  data-testid="select-user-role"
+                />
               </div>
               <Button type="submit" className="w-full" disabled={createMutation.isPending} data-testid="button-submit-user">
                 {createMutation.isPending ? "Creating..." : "Create User"}

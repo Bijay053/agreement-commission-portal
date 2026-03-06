@@ -12,9 +12,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
-import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from "@/components/ui/select";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
@@ -30,7 +28,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import {
   Search, Users, Mail, Phone, MapPin, Star, Filter, Globe, Building2,
-  MoreHorizontal, Eye, Pencil, Trash2, Plus, UserPlus,
+  MoreHorizontal, Eye, Pencil, Trash2, Plus, UserPlus, RotateCcw,
 } from "lucide-react";
 import { AGREEMENT_STATUSES } from "@shared/schema";
 
@@ -215,44 +213,60 @@ export default function ContactsListPage() {
                 data-testid="input-search-contacts"
               />
             </div>
-            <Select value={providerCountryFilter} onValueChange={setProviderCountryFilter}>
-              <SelectTrigger className="w-[180px]" data-testid="select-provider-country-filter">
-                <MapPin className="w-3.5 h-3.5 mr-2 text-muted-foreground" />
-                <SelectValue placeholder="Provider Country" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Provider Countries</SelectItem>
-                {countries?.map((c: any) => (
-                  <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Select value={contactCountryFilter} onValueChange={setContactCountryFilter}>
-              <SelectTrigger className="w-[180px]" data-testid="select-contact-country-filter">
-                <Globe className="w-3.5 h-3.5 mr-2 text-muted-foreground" />
-                <SelectValue placeholder="Contact Country" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Contact Countries</SelectItem>
-                {countries?.map((c: any) => (
-                  <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="w-[170px]" data-testid="select-status-filter">
-                <Filter className="w-3.5 h-3.5 mr-2 text-muted-foreground" />
-                <SelectValue placeholder="Agreement Status" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Statuses</SelectItem>
-                {AGREEMENT_STATUSES.map((s) => (
-                  <SelectItem key={s} value={s}>
-                    {s.replace(/_/g, " ").replace(/\b\w/g, l => l.toUpperCase())}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <SearchableSelect
+              value={providerCountryFilter}
+              onValueChange={setProviderCountryFilter}
+              options={[
+                { value: "all", label: "All Provider Countries" },
+                ...(countries?.map((c: any) => ({ value: String(c.id), label: c.name })) || []),
+              ]}
+              placeholder="Provider Country"
+              searchPlaceholder="Search countries..."
+              className="w-[180px]"
+              data-testid="select-provider-country-filter"
+            />
+            <SearchableSelect
+              value={contactCountryFilter}
+              onValueChange={setContactCountryFilter}
+              options={[
+                { value: "all", label: "All Contact Countries" },
+                ...(countries?.map((c: any) => ({ value: String(c.id), label: c.name })) || []),
+              ]}
+              placeholder="Contact Country"
+              searchPlaceholder="Search countries..."
+              className="w-[180px]"
+              data-testid="select-contact-country-filter"
+            />
+            <SearchableSelect
+              value={statusFilter}
+              onValueChange={setStatusFilter}
+              options={[
+                { value: "all", label: "All Statuses" },
+                ...AGREEMENT_STATUSES.map((s) => ({
+                  value: s,
+                  label: s.replace(/_/g, " ").replace(/\b\w/g, l => l.toUpperCase()),
+                })),
+              ]}
+              placeholder="Agreement Status"
+              searchPlaceholder="Search statuses..."
+              className="w-[170px]"
+              data-testid="select-status-filter"
+            />
+            <Button
+              variant="outline"
+              size="default"
+              onClick={() => {
+                setSearch("");
+                setProviderCountryFilter("all");
+                setContactCountryFilter("all");
+                setStatusFilter("all");
+              }}
+              disabled={!search && providerCountryFilter === "all" && contactCountryFilter === "all" && statusFilter === "all"}
+              data-testid="button-reset-filters"
+            >
+              <RotateCcw className="w-4 h-4 mr-2" />
+              Reset Filters
+            </Button>
           </div>
         </CardContent>
       </Card>
@@ -395,7 +409,7 @@ export default function ContactsListPage() {
             <h3 className="text-lg font-medium">No contacts found</h3>
             <p className="text-sm text-muted-foreground mt-1">
               {search || providerCountryFilter !== "all" || contactCountryFilter !== "all" || statusFilter !== "all"
-                ? "Try adjusting your filters"
+                ? <>Try adjusting your filters or <span className="text-foreground underline cursor-pointer" data-testid="link-reset-filters" onClick={() => { setSearch(""); setProviderCountryFilter("all"); setContactCountryFilter("all"); setStatusFilter("all"); }}>Reset filters</span></>
                 : "Contacts will appear here once added to agreements"}
             </p>
           </CardContent>
@@ -449,16 +463,14 @@ export default function ContactsListPage() {
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <Label>Contact Country <span className="text-red-500">*</span></Label>
-                <Select value={editForm.countryId} onValueChange={v => setEditForm({ ...editForm, countryId: v })}>
-                  <SelectTrigger data-testid="select-edit-contact-country">
-                    <SelectValue placeholder="Select country" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {countries?.map((c: any) => (
-                      <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <SearchableSelect
+                  value={editForm.countryId}
+                  onValueChange={v => setEditForm({ ...editForm, countryId: v })}
+                  options={countries?.map((c: any) => ({ value: String(c.id), label: c.name })) || []}
+                  placeholder="Select country"
+                  searchPlaceholder="Search countries..."
+                  data-testid="select-edit-contact-country"
+                />
               </div>
               <div>
                 <Label>City / State</Label>
@@ -538,18 +550,14 @@ export default function ContactsListPage() {
           >
             <div>
               <Label>Agreement <span className="text-red-500">*</span></Label>
-              <Select value={addForm.agreementId} onValueChange={v => setAddForm({ ...addForm, agreementId: v })}>
-                <SelectTrigger data-testid="select-add-contact-agreement">
-                  <SelectValue placeholder="Select agreement" />
-                </SelectTrigger>
-                <SelectContent>
-                  {agreementsList?.map((a: any) => (
-                    <SelectItem key={a.id} value={String(a.id)}>
-                      {a.agreementCode} — {a.title}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <SearchableSelect
+                value={addForm.agreementId}
+                onValueChange={v => setAddForm({ ...addForm, agreementId: v })}
+                options={agreementsList?.map((a: any) => ({ value: String(a.id), label: `${a.agreementCode} — ${a.title}` })) || []}
+                placeholder="Select agreement"
+                searchPlaceholder="Search agreements..."
+                data-testid="select-add-contact-agreement"
+              />
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
@@ -592,16 +600,14 @@ export default function ContactsListPage() {
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <Label>Contact Country <span className="text-red-500">*</span></Label>
-                <Select value={addForm.countryId} onValueChange={v => setAddForm({ ...addForm, countryId: v })}>
-                  <SelectTrigger data-testid="select-add-contact-country">
-                    <SelectValue placeholder="Select country" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {countries?.map((c: any) => (
-                      <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <SearchableSelect
+                  value={addForm.countryId}
+                  onValueChange={v => setAddForm({ ...addForm, countryId: v })}
+                  options={countries?.map((c: any) => ({ value: String(c.id), label: c.name })) || []}
+                  placeholder="Select country"
+                  searchPlaceholder="Search countries..."
+                  data-testid="select-add-contact-country"
+                />
               </div>
               <div>
                 <Label>City / State</Label>

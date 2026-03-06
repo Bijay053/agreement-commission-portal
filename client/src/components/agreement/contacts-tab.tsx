@@ -11,9 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
-import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from "@/components/ui/select";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
@@ -248,16 +246,14 @@ export default function ContactsTab({ agreementId }: { agreementId: number }) {
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <Label>Contact Country <span className="text-red-500">*</span></Label>
-                <Select value={addForm.countryId} onValueChange={v => setAddForm({...addForm, countryId: v})}>
-                  <SelectTrigger data-testid="select-contact-country">
-                    <SelectValue placeholder="Select country" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {countries?.map((c: any) => (
-                      <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <SearchableSelect
+                  value={addForm.countryId}
+                  onValueChange={v => setAddForm({...addForm, countryId: v})}
+                  options={(countries || []).map((c: any) => ({ value: String(c.id), label: c.name }))}
+                  placeholder="Select country"
+                  searchPlaceholder="Search countries..."
+                  data-testid="select-contact-country"
+                />
               </div>
               <div>
                 <Label>City / State</Label>
@@ -311,16 +307,14 @@ export default function ContactsTab({ agreementId }: { agreementId: number }) {
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <Label>Contact Country <span className="text-red-500">*</span></Label>
-                <Select value={editForm.countryId} onValueChange={v => setEditForm({...editForm, countryId: v})}>
-                  <SelectTrigger data-testid="select-edit-contact-country">
-                    <SelectValue placeholder="Select country" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {countries?.map((c: any) => (
-                      <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <SearchableSelect
+                  value={editForm.countryId}
+                  onValueChange={v => setEditForm({...editForm, countryId: v})}
+                  options={(countries || []).map((c: any) => ({ value: String(c.id), label: c.name }))}
+                  placeholder="Select country"
+                  searchPlaceholder="Search countries..."
+                  data-testid="select-edit-contact-country"
+                />
               </div>
               <div>
                 <Label>City / State</Label>

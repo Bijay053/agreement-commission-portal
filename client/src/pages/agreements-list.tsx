@@ -7,9 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from "@/components/ui/select";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 import {
   Search, Plus, FileText, Building2, MapPin, Calendar, Filter, Globe,
 } from "lucide-react";
@@ -122,58 +120,66 @@ export default function AgreementsListPage() {
                 data-testid="input-search-agreements"
               />
             </div>
-            <Select value={statusFilter} onValueChange={handleStatusChange}>
-              <SelectTrigger className="w-[160px]" data-testid="select-status-filter">
-                <Filter className="w-3.5 h-3.5 mr-2 text-muted-foreground" />
-                <SelectValue placeholder="Status" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Statuses</SelectItem>
-                {AGREEMENT_STATUSES.map((s) => (
-                  <SelectItem key={s} value={s}>
-                    {s.replace(/_/g, " ").replace(/\b\w/g, l => l.toUpperCase())}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Select value={providerFilter} onValueChange={setProviderFilter}>
-              <SelectTrigger className="w-[180px]" data-testid="select-provider-filter">
-                <Building2 className="w-3.5 h-3.5 mr-2 text-muted-foreground" />
-                <SelectValue placeholder="Provider" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Providers</SelectItem>
-                {providers?.map((p: any) => (
-                  <SelectItem key={p.id} value={String(p.id)}>
-                    {p.name}{p.countryName ? ` (${p.countryName})` : ""}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Select value={providerCountryFilter} onValueChange={setProviderCountryFilter}>
-              <SelectTrigger className="w-[180px]" data-testid="select-provider-country-filter">
-                <MapPin className="w-3.5 h-3.5 mr-2 text-muted-foreground" />
-                <SelectValue placeholder="Provider Country" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Provider Countries</SelectItem>
-                {countries?.map((c: any) => (
-                  <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Select value={territoryCountryFilter} onValueChange={setTerritoryCountryFilter}>
-              <SelectTrigger className="w-[180px]" data-testid="select-territory-country-filter">
-                <Globe className="w-3.5 h-3.5 mr-2 text-muted-foreground" />
-                <SelectValue placeholder="Territory" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Territories</SelectItem>
-                {countries?.map((c: any) => (
-                  <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <SearchableSelect
+              value={statusFilter}
+              onValueChange={handleStatusChange}
+              options={[
+                { value: "all", label: "All Statuses" },
+                ...AGREEMENT_STATUSES.map((s) => ({
+                  value: s,
+                  label: s.replace(/_/g, " ").replace(/\b\w/g, l => l.toUpperCase()),
+                })),
+              ]}
+              placeholder="Status"
+              searchPlaceholder="Search statuses..."
+              className="w-[160px]"
+              data-testid="select-status-filter"
+            />
+            <SearchableSelect
+              value={providerFilter}
+              onValueChange={setProviderFilter}
+              options={[
+                { value: "all", label: "All Providers" },
+                ...(providers?.map((p: any) => ({
+                  value: String(p.id),
+                  label: `${p.name}${p.countryName ? ` (${p.countryName})` : ""}`,
+                })) || []),
+              ]}
+              placeholder="Provider"
+              searchPlaceholder="Search providers..."
+              className="w-[180px]"
+              data-testid="select-provider-filter"
+            />
+            <SearchableSelect
+              value={providerCountryFilter}
+              onValueChange={setProviderCountryFilter}
+              options={[
+                { value: "all", label: "All Provider Countries" },
+                ...(countries?.map((c: any) => ({
+                  value: String(c.id),
+                  label: c.name,
+                })) || []),
+              ]}
+              placeholder="Provider Country"
+              searchPlaceholder="Search countries..."
+              className="w-[180px]"
+              data-testid="select-provider-country-filter"
+            />
+            <SearchableSelect
+              value={territoryCountryFilter}
+              onValueChange={setTerritoryCountryFilter}
+              options={[
+                { value: "all", label: "All Territories" },
+                ...(countries?.map((c: any) => ({
+                  value: String(c.id),
+                  label: c.name,
+                })) || []),
+              ]}
+              placeholder="Territory"
+              searchPlaceholder="Search territories..."
+              className="w-[180px]"
+              data-testid="select-territory-country-filter"
+            />
           </div>
         </CardContent>
       </Card>

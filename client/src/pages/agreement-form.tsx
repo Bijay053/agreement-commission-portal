@@ -11,9 +11,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
-import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from "@/components/ui/select";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
@@ -182,6 +180,29 @@ export default function AgreementFormPage() {
     );
   }
 
+  const providerOptions = [
+    { value: "__add_new__", label: "+ Add new provider" },
+    ...(providers?.map((p: any) => ({
+      value: String(p.id),
+      label: `${p.name}${p.countryName ? ` — ${p.countryName}` : ""}`,
+    })) || []),
+  ];
+
+  const typeOptions = AGREEMENT_TYPES.map(t => ({ value: t, label: typeLabels[t] }));
+  const statusOptions = AGREEMENT_STATUSES.map(s => ({ value: s, label: statusLabels[s] }));
+
+  const territoryTypeOptions = [
+    { value: "global", label: "Global (All Countries)" },
+    { value: "country_specific", label: "Country-Specific" },
+  ];
+
+  const territoryCountryOptions = countries
+    ?.filter((c: any) => !form.territoryCountryIds.includes(c.id))
+    .map((c: any) => ({ value: String(c.id), label: c.name })) || [];
+
+  const providerTypeOptions = PROVIDER_TYPES.map(t => ({ value: t, label: providerTypeLabels[t] }));
+  const countryOptions = countries?.map((c: any) => ({ value: String(c.id), label: c.name })) || [];
+
   return (
     <div className="p-6 max-w-3xl mx-auto space-y-5">
       <div className="flex items-center gap-3">
@@ -205,27 +226,20 @@ export default function AgreementFormPage() {
               <div>
                 <Label>Provider <span className="text-red-500">*</span></Label>
                 <div className="space-y-2">
-                  <Select value={form.universityId} onValueChange={v => {
-                    if (v === "__add_new__") {
-                      setShowProviderModal(true);
-                    } else {
-                      setForm({...form, universityId: v});
-                    }
-                  }}>
-                    <SelectTrigger data-testid="select-provider"><SelectValue placeholder="Select provider" /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="__add_new__">
-                        <span className="flex items-center gap-1 text-primary">
-                          <Plus className="w-3.5 h-3.5" /> Add new provider
-                        </span>
-                      </SelectItem>
-                      {providers?.map((p: any) => (
-                        <SelectItem key={p.id} value={String(p.id)}>
-                          {p.name}{p.countryName ? ` — ${p.countryName}` : ""}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <SearchableSelect
+                    value={form.universityId}
+                    onValueChange={v => {
+                      if (v === "__add_new__") {
+                        setShowProviderModal(true);
+                      } else {
+                        setForm({...form, universityId: v});
+                      }
+                    }}
+                    options={providerOptions}
+                    placeholder="Select provider"
+                    searchPlaceholder="Search providers..."
+                    data-testid="select-provider"
+                  />
                 </div>
               </div>
               <div>
@@ -242,38 +256,39 @@ export default function AgreementFormPage() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <Label>Type <span className="text-red-500">*</span></Label>
-                <Select value={form.agreementType} onValueChange={v => setForm({...form, agreementType: v})}>
-                  <SelectTrigger data-testid="select-type"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {AGREEMENT_TYPES.map(t => (
-                      <SelectItem key={t} value={t}>{typeLabels[t]}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <SearchableSelect
+                  value={form.agreementType}
+                  onValueChange={v => setForm({...form, agreementType: v})}
+                  options={typeOptions}
+                  placeholder="Select type"
+                  searchPlaceholder="Search types..."
+                  data-testid="select-type"
+                />
               </div>
               <div>
                 <Label>Status <span className="text-red-500">*</span></Label>
-                <Select value={form.status} onValueChange={v => setForm({...form, status: v})}>
-                  <SelectTrigger data-testid="select-status"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {AGREEMENT_STATUSES.map(s => (
-                      <SelectItem key={s} value={s}>{statusLabels[s]}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <SearchableSelect
+                  value={form.status}
+                  onValueChange={v => setForm({...form, status: v})}
+                  options={statusOptions}
+                  placeholder="Select status"
+                  searchPlaceholder="Search statuses..."
+                  data-testid="select-status"
+                />
               </div>
             </div>
 
             <div>
               <Label>Territory</Label>
               <div className="space-y-3">
-                <Select value={form.territoryType} onValueChange={v => setForm({...form, territoryType: v})}>
-                  <SelectTrigger data-testid="select-territory-type"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="global">Global (All Countries)</SelectItem>
-                    <SelectItem value="country_specific">Country-Specific</SelectItem>
-                  </SelectContent>
-                </Select>
+                <SearchableSelect
+                  value={form.territoryType}
+                  onValueChange={v => setForm({...form, territoryType: v})}
+                  options={territoryTypeOptions}
+                  placeholder="Select territory type"
+                  searchPlaceholder="Search..."
+                  data-testid="select-territory-type"
+                />
                 {form.territoryType === "country_specific" && (
                   <div>
                     <div className="flex flex-wrap gap-1.5 mb-2">
@@ -289,14 +304,14 @@ export default function AgreementFormPage() {
                         ) : null;
                       })}
                     </div>
-                    <Select onValueChange={v => toggleTerritoryCountry(parseInt(v))}>
-                      <SelectTrigger data-testid="select-territory-countries"><SelectValue placeholder="Add territory country..." /></SelectTrigger>
-                      <SelectContent>
-                        {countries?.filter((c: any) => !form.territoryCountryIds.includes(c.id)).map((c: any) => (
-                          <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <SearchableSelect
+                      value=""
+                      onValueChange={v => toggleTerritoryCountry(parseInt(v))}
+                      options={territoryCountryOptions}
+                      placeholder="Add territory country..."
+                      searchPlaceholder="Search countries..."
+                      data-testid="select-territory-countries"
+                    />
                   </div>
                 )}
               </div>
@@ -354,25 +369,25 @@ export default function AgreementFormPage() {
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <Label>Provider Type</Label>
-                <Select value={providerForm.providerType} onValueChange={v => setProviderForm({...providerForm, providerType: v})}>
-                  <SelectTrigger data-testid="select-provider-type"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {PROVIDER_TYPES.map(t => (
-                      <SelectItem key={t} value={t}>{providerTypeLabels[t]}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <SearchableSelect
+                  value={providerForm.providerType}
+                  onValueChange={v => setProviderForm({...providerForm, providerType: v})}
+                  options={providerTypeOptions}
+                  placeholder="Select type"
+                  searchPlaceholder="Search types..."
+                  data-testid="select-provider-type"
+                />
               </div>
               <div>
                 <Label>Country</Label>
-                <Select value={providerForm.countryId} onValueChange={v => setProviderForm({...providerForm, countryId: v})}>
-                  <SelectTrigger data-testid="select-provider-country"><SelectValue placeholder="Select country" /></SelectTrigger>
-                  <SelectContent>
-                    {countries?.map((c: any) => (
-                      <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <SearchableSelect
+                  value={providerForm.countryId}
+                  onValueChange={v => setProviderForm({...providerForm, countryId: v})}
+                  options={countryOptions}
+                  placeholder="Select country"
+                  searchPlaceholder="Search countries..."
+                  data-testid="select-provider-country"
+                />
               </div>
             </div>
             <div>

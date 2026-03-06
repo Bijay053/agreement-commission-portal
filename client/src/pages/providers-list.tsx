@@ -10,9 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from "@/components/ui/select";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
@@ -118,6 +116,27 @@ export default function ProvidersListPage() {
     });
   };
 
+  const typeFilterOptions = [
+    { value: "all", label: "All Types" },
+    ...PROVIDER_TYPES.map(t => ({ value: t, label: providerTypeLabels[t] })),
+  ];
+
+  const statusFilterOptions = [
+    { value: "all", label: "All Statuses" },
+    ...PROVIDER_STATUSES.map(s => ({ value: s, label: s.charAt(0).toUpperCase() + s.slice(1) })),
+  ];
+
+  const countryFilterOptions = [
+    { value: "all", label: "All Countries" },
+    ...(countries?.map((c: any) => ({ value: String(c.id), label: c.name })) || []),
+  ];
+
+  const formTypeOptions = PROVIDER_TYPES.map(t => ({ value: t, label: providerTypeLabels[t] }));
+
+  const formCountryOptions = countries?.map((c: any) => ({ value: String(c.id), label: c.name })) || [];
+
+  const formStatusOptions = PROVIDER_STATUSES.map(s => ({ value: s, label: s.charAt(0).toUpperCase() + s.slice(1) }));
+
   return (
     <div className="p-6 space-y-5 max-w-7xl mx-auto">
       <div className="flex items-center justify-between gap-4 flex-wrap">
@@ -146,41 +165,33 @@ export default function ProvidersListPage() {
                 data-testid="input-search-providers"
               />
             </div>
-            <Select value={typeFilter} onValueChange={setTypeFilter}>
-              <SelectTrigger className="w-[150px]" data-testid="select-type-filter">
-                <Filter className="w-3.5 h-3.5 mr-2 text-muted-foreground" />
-                <SelectValue placeholder="Type" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Types</SelectItem>
-                {PROVIDER_TYPES.map(t => (
-                  <SelectItem key={t} value={t}>{providerTypeLabels[t]}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="w-[140px]" data-testid="select-status-filter">
-                <SelectValue placeholder="Status" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Statuses</SelectItem>
-                {PROVIDER_STATUSES.map(s => (
-                  <SelectItem key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Select value={countryFilter} onValueChange={setCountryFilter}>
-              <SelectTrigger className="w-[160px]" data-testid="select-country-filter">
-                <MapPin className="w-3.5 h-3.5 mr-2 text-muted-foreground" />
-                <SelectValue placeholder="Country" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Countries</SelectItem>
-                {countries?.map((c: any) => (
-                  <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <SearchableSelect
+              value={typeFilter}
+              onValueChange={setTypeFilter}
+              options={typeFilterOptions}
+              placeholder="Type"
+              searchPlaceholder="Search types..."
+              className="w-[150px]"
+              data-testid="select-type-filter"
+            />
+            <SearchableSelect
+              value={statusFilter}
+              onValueChange={setStatusFilter}
+              options={statusFilterOptions}
+              placeholder="Status"
+              searchPlaceholder="Search statuses..."
+              className="w-[140px]"
+              data-testid="select-status-filter"
+            />
+            <SearchableSelect
+              value={countryFilter}
+              onValueChange={setCountryFilter}
+              options={countryFilterOptions}
+              placeholder="Country"
+              searchPlaceholder="Search countries..."
+              className="w-[160px]"
+              data-testid="select-country-filter"
+            />
           </div>
         </CardContent>
       </Card>
@@ -266,25 +277,25 @@ export default function ProvidersListPage() {
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <Label>Provider Type</Label>
-                <Select value={form.providerType} onValueChange={v => setForm({...form, providerType: v})}>
-                  <SelectTrigger data-testid="select-provider-type"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {PROVIDER_TYPES.map(t => (
-                      <SelectItem key={t} value={t}>{providerTypeLabels[t]}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <SearchableSelect
+                  value={form.providerType}
+                  onValueChange={v => setForm({...form, providerType: v})}
+                  options={formTypeOptions}
+                  placeholder="Select type"
+                  searchPlaceholder="Search types..."
+                  data-testid="select-provider-type"
+                />
               </div>
               <div>
                 <Label>Country</Label>
-                <Select value={form.countryId} onValueChange={v => setForm({...form, countryId: v})}>
-                  <SelectTrigger data-testid="select-provider-country"><SelectValue placeholder="Select country" /></SelectTrigger>
-                  <SelectContent>
-                    {countries?.map((c: any) => (
-                      <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <SearchableSelect
+                  value={form.countryId}
+                  onValueChange={v => setForm({...form, countryId: v})}
+                  options={formCountryOptions}
+                  placeholder="Select country"
+                  searchPlaceholder="Search countries..."
+                  data-testid="select-provider-country"
+                />
               </div>
             </div>
             <div>
@@ -293,14 +304,14 @@ export default function ProvidersListPage() {
             </div>
             <div>
               <Label>Status</Label>
-              <Select value={form.status} onValueChange={v => setForm({...form, status: v})}>
-                <SelectTrigger data-testid="select-provider-status"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {PROVIDER_STATUSES.map(s => (
-                    <SelectItem key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <SearchableSelect
+                value={form.status}
+                onValueChange={v => setForm({...form, status: v})}
+                options={formStatusOptions}
+                placeholder="Select status"
+                searchPlaceholder="Search statuses..."
+                data-testid="select-provider-status"
+              />
             </div>
             <div>
               <Label>Notes</Label>

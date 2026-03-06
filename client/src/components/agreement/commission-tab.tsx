@@ -10,9 +10,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from "@/components/ui/select";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger,
 } from "@/components/ui/dialog";
@@ -114,22 +112,26 @@ export default function CommissionTab({ agreementId }: { agreementId: number }) 
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <Label>Study Level</Label>
-                    <Select value={form.studyLevel} onValueChange={v => setForm({...form, studyLevel: v})}>
-                      <SelectTrigger><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        {STUDY_LEVELS.map(l => <SelectItem key={l} value={l}>{l}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
+                    <SearchableSelect
+                      value={form.studyLevel}
+                      onValueChange={v => setForm({...form, studyLevel: v})}
+                      options={STUDY_LEVELS.map(l => ({ value: l, label: l }))}
+                      placeholder="Select level"
+                      searchPlaceholder="Search levels..."
+                    />
                   </div>
                   <div>
                     <Label>Mode</Label>
-                    <Select value={form.commissionMode} onValueChange={v => setForm({...form, commissionMode: v})}>
-                      <SelectTrigger><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="percentage">Percentage</SelectItem>
-                        <SelectItem value="flat">Flat Amount</SelectItem>
-                      </SelectContent>
-                    </Select>
+                    <SearchableSelect
+                      value={form.commissionMode}
+                      onValueChange={v => setForm({...form, commissionMode: v})}
+                      options={[
+                        { value: "percentage", label: "Percentage" },
+                        { value: "flat", label: "Flat Amount" },
+                      ]}
+                      placeholder="Select mode"
+                      searchPlaceholder="Search..."
+                    />
                   </div>
                 </div>
                 {form.commissionMode === "percentage" ? (
@@ -152,21 +154,23 @@ export default function CommissionTab({ agreementId }: { agreementId: number }) 
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <Label>Basis</Label>
-                    <Select value={form.basis} onValueChange={v => setForm({...form, basis: v})}>
-                      <SelectTrigger><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        {COMMISSION_BASIS.map(b => <SelectItem key={b} value={b}>{basisLabels[b]}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
+                    <SearchableSelect
+                      value={form.basis}
+                      onValueChange={v => setForm({...form, basis: v})}
+                      options={COMMISSION_BASIS.map(b => ({ value: b, label: basisLabels[b] }))}
+                      placeholder="Select basis"
+                      searchPlaceholder="Search..."
+                    />
                   </div>
                   <div>
                     <Label>Pay Event</Label>
-                    <Select value={form.payEvent} onValueChange={v => setForm({...form, payEvent: v})}>
-                      <SelectTrigger><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        {PAY_EVENTS.map(p => <SelectItem key={p} value={p}>{p.charAt(0).toUpperCase() + p.slice(1)}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
+                    <SearchableSelect
+                      value={form.payEvent}
+                      onValueChange={v => setForm({...form, payEvent: v})}
+                      options={PAY_EVENTS.map(p => ({ value: p, label: p.charAt(0).toUpperCase() + p.slice(1) }))}
+                      placeholder="Select pay event"
+                      searchPlaceholder="Search..."
+                    />
                   </div>
                 </div>
                 <div>
