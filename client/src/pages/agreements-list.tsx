@@ -11,7 +11,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import {
-  Search, Plus, FileText, Building2, MapPin, Calendar, Filter,
+  Search, Plus, FileText, Building2, MapPin, Calendar, Filter, Globe,
 } from "lucide-react";
 import { format, parseISO, differenceInDays } from "date-fns";
 import { AGREEMENT_STATUSES } from "@shared/schema";
@@ -45,12 +45,14 @@ export default function AgreementsListPage() {
   const { hasPermission } = useAuth();
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
-  const [countryFilter, setCountryFilter] = useState<string>("all");
+  const [territoryCountryFilter, setTerritoryCountryFilter] = useState<string>("all");
+  const [providerCountryFilter, setProviderCountryFilter] = useState<string>("all");
 
   const queryParams = new URLSearchParams();
   if (search) queryParams.set("search", search);
   if (statusFilter && statusFilter !== "all") queryParams.set("status", statusFilter);
-  if (countryFilter && countryFilter !== "all") queryParams.set("countryId", countryFilter);
+  if (territoryCountryFilter && territoryCountryFilter !== "all") queryParams.set("countryId", territoryCountryFilter);
+  if (providerCountryFilter && providerCountryFilter !== "all") queryParams.set("providerCountryId", providerCountryFilter);
   const queryString = queryParams.toString();
 
   const { data: agreements, isLoading } = useQuery<any[]>({
@@ -69,7 +71,7 @@ export default function AgreementsListPage() {
       <div className="flex items-center justify-between gap-4 flex-wrap">
         <div>
           <h1 className="text-2xl font-semibold" data-testid="text-agreements-title">Agreements</h1>
-          <p className="text-sm text-muted-foreground mt-1">Manage university partnership agreements</p>
+          <p className="text-sm text-muted-foreground mt-1">Manage provider partnership agreements</p>
         </div>
         {hasPermission("agreement.create") && (
           <Button onClick={() => navigate("/agreements/new")} data-testid="button-create-agreement">
@@ -85,7 +87,7 @@ export default function AgreementsListPage() {
             <div className="relative flex-1 min-w-[200px]">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
               <Input
-                placeholder="Search agreements, universities..."
+                placeholder="Search agreements, providers..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 className="pl-10"
@@ -106,13 +108,25 @@ export default function AgreementsListPage() {
                 ))}
               </SelectContent>
             </Select>
-            <Select value={countryFilter} onValueChange={setCountryFilter}>
-              <SelectTrigger className="w-[160px]" data-testid="select-country-filter">
-                <MapPin className="w-3.5 h-3.5 mr-2 text-muted-foreground" />
-                <SelectValue placeholder="Country" />
+            <Select value={providerCountryFilter} onValueChange={setProviderCountryFilter}>
+              <SelectTrigger className="w-[180px]" data-testid="select-provider-country-filter">
+                <Building2 className="w-3.5 h-3.5 mr-2 text-muted-foreground" />
+                <SelectValue placeholder="Provider Country" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All Countries</SelectItem>
+                <SelectItem value="all">All Provider Countries</SelectItem>
+                {countries?.map((c: any) => (
+                  <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select value={territoryCountryFilter} onValueChange={setTerritoryCountryFilter}>
+              <SelectTrigger className="w-[180px]" data-testid="select-territory-country-filter">
+                <MapPin className="w-3.5 h-3.5 mr-2 text-muted-foreground" />
+                <SelectValue placeholder="Territory Country" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Territory Countries</SelectItem>
                 {countries?.map((c: any) => (
                   <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>
                 ))}
@@ -146,16 +160,18 @@ export default function AgreementsListPage() {
                         <span className="text-xs font-mono text-muted-foreground">{agr.agreementCode}</span>
                         {getStatusBadge(agr.status)}
                         {getTypeBadge(agr.agreementType)}
+                        {agr.territoryType === "global" && (
+                          <Badge variant="outline" className="gap-1">
+                            <Globe className="w-3 h-3" /> Global
+                          </Badge>
+                        )}
                       </div>
                       <h3 className="text-base font-medium mt-1.5 truncate">{agr.title}</h3>
                       <div className="flex items-center gap-4 mt-2 text-sm text-muted-foreground flex-wrap">
                         <span className="flex items-center gap-1.5">
                           <Building2 className="w-3.5 h-3.5" />
                           {agr.universityName}
-                        </span>
-                        <span className="flex items-center gap-1.5">
-                          <MapPin className="w-3.5 h-3.5" />
-                          {agr.territoryCountry}
+                          {agr.providerCountryName && <span className="text-xs">({agr.providerCountryName})</span>}
                         </span>
                         <span className="flex items-center gap-1.5">
                           <Calendar className="w-3.5 h-3.5" />
@@ -187,7 +203,7 @@ export default function AgreementsListPage() {
             <FileText className="w-12 h-12 mx-auto text-muted-foreground/50 mb-3" />
             <h3 className="text-lg font-medium">No agreements found</h3>
             <p className="text-sm text-muted-foreground mt-1">
-              {search || statusFilter !== "all" || countryFilter !== "all"
+              {search || statusFilter !== "all" || territoryCountryFilter !== "all" || providerCountryFilter !== "all"
                 ? "Try adjusting your filters"
                 : "Create your first agreement to get started"}
             </p>

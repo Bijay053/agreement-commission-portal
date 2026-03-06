@@ -1,14 +1,16 @@
 import { db } from "./db";
-import { eq, and, desc, asc, gte, lte, ilike, sql, or } from "drizzle-orm";
+import { eq, and, desc, asc, gte, lte, ilike, sql, or, inArray } from "drizzle-orm";
 import {
   users, roles, permissions, rolePermissions, userRoles, userCountryAccess,
-  countries, universities, agreements, agreementTargets, agreementCommissionRules,
-  agreementContacts, agreementDocuments, auditLogs,
+  countries, universities, agreements, agreementTerritories, agreementTargets,
+  agreementCommissionRules, agreementContacts, agreementDocuments, auditLogs,
+  targetBonusRules, targetBonusTiers, targetBonusCountry,
   type User, type InsertUser, type Agreement, type InsertAgreement,
   type AgreementTarget, type InsertTarget, type AgreementCommissionRule,
   type InsertCommissionRule, type AgreementContact, type InsertContact,
   type AgreementDocument, type InsertDocument, type University, type InsertUniversity,
   type Country, type Role, type Permission, type AuditLog,
+  type TargetBonusRule, type TargetBonusTier, type TargetBonusCountryEntry,
 } from "@shared/schema";
 
 export interface IStorage {
@@ -25,19 +27,32 @@ export interface IStorage {
   removeRole(userId: number, roleId: number): Promise<void>;
 
   getCountries(): Promise<Country[]>;
-  getUniversities(): Promise<University[]>;
-  createUniversity(uni: InsertUniversity): Promise<University>;
 
-  getAgreements(filters?: { status?: string; countryId?: number; search?: string }): Promise<any[]>;
+  getProviders(filters?: { status?: string; providerType?: string; countryId?: number; search?: string }): Promise<any[]>;
+  getProvider(id: number): Promise<any>;
+  createProvider(data: InsertUniversity): Promise<University>;
+  updateProvider(id: number, data: Partial<InsertUniversity>): Promise<University>;
+  checkDuplicateProvider(name: string, countryId: number | null, excludeId?: number): Promise<boolean>;
+
+  getAgreements(filters?: { status?: string; countryId?: number; providerCountryId?: number; search?: string }): Promise<any[]>;
   getAgreement(id: number): Promise<any>;
   createAgreement(agreement: InsertAgreement): Promise<Agreement>;
   updateAgreement(id: number, data: Partial<InsertAgreement>): Promise<Agreement>;
   deleteAgreement(id: number): Promise<void>;
+  setAgreementTerritories(agreementId: number, countryIds: number[]): Promise<void>;
+  getAgreementTerritories(agreementId: number): Promise<Country[]>;
 
   getTargets(agreementId: number): Promise<AgreementTarget[]>;
   createTarget(target: InsertTarget): Promise<AgreementTarget>;
   updateTarget(id: number, data: Partial<InsertTarget>): Promise<AgreementTarget>;
   deleteTarget(id: number): Promise<void>;
+  checkDuplicateTarget(agreementId: number, targetType: string, metric: string, periodKey: string, excludeId?: number): Promise<boolean>;
+
+  getBonusRules(targetId: number): Promise<any[]>;
+  createBonusRule(rule: any): Promise<TargetBonusRule>;
+  deleteBonusRule(id: number): Promise<void>;
+  createBonusTier(tier: any): Promise<TargetBonusTier>;
+  createBonusCountryEntry(entry: any): Promise<TargetBonusCountryEntry>;
 
   getCommissionRules(agreementId: number): Promise<AgreementCommissionRule[]>;
   createCommissionRule(rule: InsertCommissionRule): Promise<AgreementCommissionRule>;
@@ -119,16 +134,78 @@ export class DatabaseStorage implements IStorage {
     return db.select().from(countries).orderBy(asc(countries.name));
   }
 
-  async getUniversities(): Promise<University[]> {
-    return db.select().from(universities).orderBy(asc(universities.name));
+  async getProviders(filters?: { status?: string; providerType?: string; countryId?: number; search?: string }): Promise<any[]> {
+    let query = db
+      .select({
+        id: universities.id,
+        name: universities.name,
+        providerType: universities.providerType,
+        countryId: universities.countryId,
+        website: universities.website,
+        notes: universities.notes,
+        status: universities.status,
+        createdAt: universities.createdAt,
+        updatedAt: universities.updatedAt,
+        countryName: countries.name,
+      })
+      .from(universities)
+      .leftJoin(countries, eq(universities.countryId, countries.id));
+
+    const conditions: any[] = [];
+    if (filters?.status) conditions.push(eq(universities.status, filters.status));
+    if (filters?.providerType) conditions.push(eq(universities.providerType, filters.providerType));
+    if (filters?.countryId) conditions.push(eq(universities.countryId, filters.countryId));
+    if (filters?.search) {
+      conditions.push(
+        or(
+          ilike(universities.name, `%${filters.search}%`),
+          ilike(universities.website, `%${filters.search}%`)
+        )
+      );
+    }
+    if (conditions.length > 0) query = query.where(and(...conditions)) as any;
+    return (query as any).orderBy(asc(universities.name));
   }
 
-  async createUniversity(uni: InsertUniversity): Promise<University> {
-    const [created] = await db.insert(universities).values(uni).returning();
+  async getProvider(id: number): Promise<any> {
+    const [result] = await db
+      .select({
+        id: universities.id,
+        name: universities.name,
+        providerType: universities.providerType,
+        countryId: universities.countryId,
+        website: universities.website,
+        notes: universities.notes,
+        status: universities.status,
+        createdAt: universities.createdAt,
+        updatedAt: universities.updatedAt,
+        countryName: countries.name,
+      })
+      .from(universities)
+      .leftJoin(countries, eq(universities.countryId, countries.id))
+      .where(eq(universities.id, id));
+    return result;
+  }
+
+  async createProvider(data: InsertUniversity): Promise<University> {
+    const [created] = await db.insert(universities).values(data).returning();
     return created;
   }
 
-  async getAgreements(filters?: { status?: string; countryId?: number; search?: string }): Promise<any[]> {
+  async updateProvider(id: number, data: Partial<InsertUniversity>): Promise<University> {
+    const [updated] = await db.update(universities).set({ ...data, updatedAt: new Date() }).where(eq(universities.id, id)).returning();
+    return updated;
+  }
+
+  async checkDuplicateProvider(name: string, countryId: number | null, excludeId?: number): Promise<boolean> {
+    const conditions: any[] = [sql`lower(${universities.name}) = lower(${name})`];
+    if (countryId) conditions.push(eq(universities.countryId, countryId));
+    if (excludeId) conditions.push(sql`${universities.id} != ${excludeId}`);
+    const [result] = await db.select({ count: sql<number>`count(*)` }).from(universities).where(and(...conditions));
+    return Number(result.count) > 0;
+  }
+
+  async getAgreements(filters?: { status?: string; countryId?: number; providerCountryId?: number; search?: string }): Promise<any[]> {
     let query = db
       .select({
         id: agreements.id,
@@ -136,23 +213,31 @@ export class DatabaseStorage implements IStorage {
         title: agreements.title,
         agreementType: agreements.agreementType,
         status: agreements.status,
+        territoryType: agreements.territoryType,
         startDate: agreements.startDate,
         expiryDate: agreements.expiryDate,
         autoRenew: agreements.autoRenew,
-        confidentialityLevel: agreements.confidentialityLevel,
         createdAt: agreements.createdAt,
         universityName: universities.name,
         universityId: agreements.universityId,
-        territoryCountryId: agreements.territoryCountryId,
-        territoryCountry: countries.name,
+        providerCountryId: universities.countryId,
+        providerCountryName: countries.name,
       })
       .from(agreements)
       .innerJoin(universities, eq(agreements.universityId, universities.id))
-      .innerJoin(countries, eq(agreements.territoryCountryId, countries.id));
+      .leftJoin(countries, eq(universities.countryId, countries.id));
 
     const conditions: any[] = [];
     if (filters?.status) conditions.push(eq(agreements.status, filters.status));
-    if (filters?.countryId) conditions.push(eq(agreements.territoryCountryId, filters.countryId));
+    if (filters?.providerCountryId) conditions.push(eq(universities.countryId, filters.providerCountryId));
+    if (filters?.countryId) {
+      conditions.push(
+        or(
+          eq(agreements.territoryType, "global"),
+          sql`${agreements.id} IN (SELECT agreement_id FROM agreement_territories WHERE country_id = ${filters.countryId})`
+        )
+      );
+    }
     if (filters?.search) {
       conditions.push(
         or(
@@ -179,24 +264,51 @@ export class DatabaseStorage implements IStorage {
         title: agreements.title,
         agreementType: agreements.agreementType,
         status: agreements.status,
+        territoryType: agreements.territoryType,
         territoryCountryId: agreements.territoryCountryId,
         startDate: agreements.startDate,
         expiryDate: agreements.expiryDate,
         autoRenew: agreements.autoRenew,
-        confidentialityLevel: agreements.confidentialityLevel,
         internalNotes: agreements.internalNotes,
         createdByUserId: agreements.createdByUserId,
         updatedByUserId: agreements.updatedByUserId,
         createdAt: agreements.createdAt,
         updatedAt: agreements.updatedAt,
         universityName: universities.name,
-        territoryCountry: countries.name,
+        providerType: universities.providerType,
+        providerCountryName: countries.name,
       })
       .from(agreements)
       .innerJoin(universities, eq(agreements.universityId, universities.id))
-      .innerJoin(countries, eq(agreements.territoryCountryId, countries.id))
+      .leftJoin(countries, eq(universities.countryId, countries.id))
       .where(eq(agreements.id, id));
+
+    if (result) {
+      const territories = await this.getAgreementTerritories(id);
+      return { ...result, territories };
+    }
     return result;
+  }
+
+  async checkDuplicateAgreement(universityId: number, agreementType: string, startDate: string, territoryCountryIds: number[], excludeId?: number): Promise<boolean> {
+    const conditions: any[] = [
+      eq(agreements.universityId, universityId),
+      eq(agreements.agreementType, agreementType),
+      eq(agreements.startDate, startDate),
+      or(eq(agreements.status, "draft"), eq(agreements.status, "active"), eq(agreements.status, "renewal_in_progress")),
+    ];
+    if (excludeId) conditions.push(sql`${agreements.id} != ${excludeId}`);
+    const matches = await db.select({ id: agreements.id }).from(agreements).where(and(...conditions));
+    if (matches.length === 0) return false;
+    for (const match of matches) {
+      const existingTerritories = await this.getAgreementTerritories(match.id);
+      const existingIds = existingTerritories.map(t => t.id).sort();
+      const newIds = [...territoryCountryIds].sort();
+      if (existingIds.length === newIds.length && existingIds.every((v, i) => v === newIds[i])) {
+        return true;
+      }
+    }
+    return false;
   }
 
   async createAgreement(agreement: InsertAgreement): Promise<Agreement> {
@@ -211,6 +323,25 @@ export class DatabaseStorage implements IStorage {
 
   async deleteAgreement(id: number): Promise<void> {
     await db.delete(agreements).where(eq(agreements.id, id));
+  }
+
+  async setAgreementTerritories(agreementId: number, countryIds: number[]): Promise<void> {
+    await db.delete(agreementTerritories).where(eq(agreementTerritories.agreementId, agreementId));
+    if (countryIds.length > 0) {
+      await db.insert(agreementTerritories).values(
+        countryIds.map(countryId => ({ agreementId, countryId }))
+      );
+    }
+  }
+
+  async getAgreementTerritories(agreementId: number): Promise<Country[]> {
+    const result = await db
+      .select({ id: countries.id, iso2: countries.iso2, name: countries.name })
+      .from(agreementTerritories)
+      .innerJoin(countries, eq(agreementTerritories.countryId, countries.id))
+      .where(eq(agreementTerritories.agreementId, agreementId))
+      .orderBy(asc(countries.name));
+    return result;
   }
 
   async getTargets(agreementId: number): Promise<AgreementTarget[]> {
@@ -229,6 +360,59 @@ export class DatabaseStorage implements IStorage {
 
   async deleteTarget(id: number): Promise<void> {
     await db.delete(agreementTargets).where(eq(agreementTargets.id, id));
+  }
+
+  async checkDuplicateTarget(agreementId: number, targetType: string, metric: string, periodKey: string, excludeId?: number): Promise<boolean> {
+    const conditions: any[] = [
+      eq(agreementTargets.agreementId, agreementId),
+      eq(agreementTargets.targetType, targetType),
+      eq(agreementTargets.metric, metric),
+      eq(agreementTargets.periodKey, periodKey),
+    ];
+    if (excludeId) conditions.push(sql`${agreementTargets.id} != ${excludeId}`);
+    const [result] = await db.select({ count: sql<number>`count(*)` }).from(agreementTargets).where(and(...conditions));
+    return Number(result.count) > 0;
+  }
+
+  async getBonusRules(targetId: number): Promise<any[]> {
+    const rules = await db.select().from(targetBonusRules).where(eq(targetBonusRules.targetId, targetId));
+    const result = [];
+    for (const rule of rules) {
+      const tiers = await db.select().from(targetBonusTiers).where(eq(targetBonusTiers.bonusRuleId, rule.id)).orderBy(asc(targetBonusTiers.minStudents));
+      const countryEntries = await db
+        .select({
+          id: targetBonusCountry.id,
+          bonusRuleId: targetBonusCountry.bonusRuleId,
+          countryId: targetBonusCountry.countryId,
+          studentCount: targetBonusCountry.studentCount,
+          bonusAmount: targetBonusCountry.bonusAmount,
+          countryName: countries.name,
+        })
+        .from(targetBonusCountry)
+        .innerJoin(countries, eq(targetBonusCountry.countryId, countries.id))
+        .where(eq(targetBonusCountry.bonusRuleId, rule.id));
+      result.push({ ...rule, tiers, countryEntries });
+    }
+    return result;
+  }
+
+  async createBonusRule(rule: any): Promise<TargetBonusRule> {
+    const [created] = await db.insert(targetBonusRules).values(rule).returning();
+    return created;
+  }
+
+  async deleteBonusRule(id: number): Promise<void> {
+    await db.delete(targetBonusRules).where(eq(targetBonusRules.id, id));
+  }
+
+  async createBonusTier(tier: any): Promise<TargetBonusTier> {
+    const [created] = await db.insert(targetBonusTiers).values(tier).returning();
+    return created;
+  }
+
+  async createBonusCountryEntry(entry: any): Promise<TargetBonusCountryEntry> {
+    const [created] = await db.insert(targetBonusCountry).values(entry).returning();
+    return created;
   }
 
   async getCommissionRules(agreementId: number): Promise<AgreementCommissionRule[]> {
@@ -291,11 +475,9 @@ export class DatabaseStorage implements IStorage {
         status: agreements.status,
         expiryDate: agreements.expiryDate,
         universityName: universities.name,
-        territoryCountry: countries.name,
       })
       .from(agreements)
       .innerJoin(universities, eq(agreements.universityId, universities.id))
-      .innerJoin(countries, eq(agreements.territoryCountryId, countries.id))
       .where(
         and(
           eq(agreements.status, "active"),
@@ -316,11 +498,9 @@ export class DatabaseStorage implements IStorage {
         agreementType: agreements.agreementType,
         updatedAt: agreements.updatedAt,
         universityName: universities.name,
-        territoryCountry: countries.name,
       })
       .from(agreements)
       .innerJoin(universities, eq(agreements.universityId, universities.id))
-      .innerJoin(countries, eq(agreements.territoryCountryId, countries.id))
       .orderBy(desc(agreements.updatedAt))
       .limit(limit);
   }

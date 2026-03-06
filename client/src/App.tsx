@@ -13,6 +13,7 @@ import DashboardPage from "@/pages/dashboard";
 import AgreementsListPage from "@/pages/agreements-list";
 import AgreementDetailPage from "@/pages/agreement-detail";
 import AgreementFormPage from "@/pages/agreement-form";
+import ProvidersListPage from "@/pages/providers-list";
 import UsersManagementPage from "@/pages/users-management";
 import AuditLogsPage from "@/pages/audit-logs";
 
@@ -24,6 +25,7 @@ function Router() {
       <Route path="/agreements/new" component={AgreementFormPage} />
       <Route path="/agreements/:id/edit" component={AgreementFormPage} />
       <Route path="/agreements/:id" component={AgreementDetailPage} />
+      <Route path="/providers" component={ProvidersListPage} />
       <Route path="/users" component={UsersManagementPage} />
       <Route path="/audit-logs" component={AuditLogsPage} />
       <Route component={NotFound} />

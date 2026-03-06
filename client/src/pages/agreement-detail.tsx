@@ -1,16 +1,14 @@
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { useParams, useLocation } from "wouter";
 import { useAuth } from "@/lib/auth";
-import { apiRequest } from "@/lib/queryClient";
-import { useToast } from "@/hooks/use-toast";
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   ArrowLeft, Building2, MapPin, Calendar, Edit, FileText,
-  Target, DollarSign, Users, Shield, Clock,
+  Target, DollarSign, Users, Shield, Clock, Globe,
 } from "lucide-react";
 import { format, parseISO, differenceInDays } from "date-fns";
 import OverviewTab from "@/components/agreement/overview-tab";
@@ -70,6 +68,9 @@ export default function AgreementDetailPage() {
   }
 
   const daysLeft = differenceInDays(parseISO(agreement.expiryDate), new Date());
+  const territoryDisplay = agreement.territoryType === "global"
+    ? "Global"
+    : agreement.territories?.map((t: any) => t.name).join(", ") || "—";
 
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-5">
@@ -107,17 +108,20 @@ export default function AgreementDetailPage() {
         <Card>
           <CardContent className="p-3.5">
             <div className="flex items-center gap-2 text-muted-foreground text-xs mb-1">
-              <Building2 className="w-3.5 h-3.5" /> University
+              <Building2 className="w-3.5 h-3.5" /> Provider
             </div>
             <p className="text-sm font-medium truncate">{agreement.universityName}</p>
+            {agreement.providerCountryName && (
+              <p className="text-xs text-muted-foreground">{agreement.providerCountryName}</p>
+            )}
           </CardContent>
         </Card>
         <Card>
           <CardContent className="p-3.5">
             <div className="flex items-center gap-2 text-muted-foreground text-xs mb-1">
-              <MapPin className="w-3.5 h-3.5" /> Territory
+              {agreement.territoryType === "global" ? <Globe className="w-3.5 h-3.5" /> : <MapPin className="w-3.5 h-3.5" />} Territory
             </div>
-            <p className="text-sm font-medium">{agreement.territoryCountry}</p>
+            <p className="text-sm font-medium">{territoryDisplay}</p>
           </CardContent>
         </Card>
         <Card>

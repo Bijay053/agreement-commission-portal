@@ -1,0 +1,331 @@
+A) Terminology & Data Structure Changes
+A1) Rename “University” to “Provider”
+
+Change everywhere in UI and backend naming:
+
+“University” label → Provider
+
+Agreement field university_id → keep internally if you want, but UI must show “Provider”.
+
+✅ Acceptance
+
+Agreement create/edit page shows Provider dropdown instead of “University”.
+
+A2) Add Provider Management (New Tab + Popup Add)
+
+Add a separate navigation tab:
+
+Providers (University / College / B2B Company)
+
+Providers list page
+
+Search + filter
+
+Add Provider (button)
+
+Edit Provider
+
+View Provider (read-only)
+
+Delete Provider (optional; better: archive)
+
+Add Provider popup (from Agreement create page)
+
+In Agreement “Provider” dropdown add an option: + Add new provider
+
+Opens modal to add provider quickly without leaving page.
+
+Provider fields
+
+Provider Name (required, unique)
+
+Provider Type (dropdown): University / College / B2B Company / Other
+
+Provider Country (required) ✅ (this is needed for filtering)
+
+Website (optional)
+
+Notes (optional)
+
+Status: Active/Inactive
+
+✅ Acceptance
+
+Admin can add Provider from Providers tab AND from Agreement “Provider” dropdown modal.
+
+Provider country is saved and can be used for filtering agreements.
+
+B) Agreement Improvements
+B1) Provider Country filter (Agreement list)
+
+Add filters:
+
+Provider Country (from provider record country)
+
+Territory Country (from agreement territory)
+
+✅ Acceptance
+
+Agreement list can filter by Provider Country and Territory Country separately.
+
+B2) Territory must support multiple countries OR Global
+
+Change agreement territory field to:
+
+Territory Type: Global / Country-Specific
+
+If Country-Specific: allow selecting multiple territory countries
+
+If Global: no country selection needed
+
+Backend
+
+Replace territory_country_id with:
+
+territory_type (global / country_specific)
+
+territory_country_ids (many-to-many join table: agreement_territories)
+
+✅ Acceptance
+
+User can set territory as Global OR pick multiple countries.
+
+Filtering by territory still works.
+
+B3) Remove “Confidentiality Level”
+
+You said all are high.
+
+Action
+
+Remove Confidentiality Level dropdown from UI
+
+Remove from DB OR keep as constant default “HIGH” and hide it
+
+✅ Acceptance
+
+No confidentiality control shown in Agreement create/edit.
+
+System treats all agreements as high security by default.
+
+C) Add Target Modal Fixes + New Requirements
+C1) Fix “Old previous data shown in popup”
+
+Issue: When opening “Add Target” modal again, old values remain.
+
+Expected behavior
+
+Each time modal opens: fields must reset to defaults/empty.
+
+If editing an existing target, load that target values; otherwise empty.
+
+✅ Acceptance
+
+Click “Add Target” → always opens blank form (unless editing).
+
+C2) Metric field updates
+
+In “Add Target” metric dropdown:
+
+Add missing option: New Student Enrolments (you requested)
+
+Keep existing options if needed:
+
+Applications
+
+Enrolments
+
+Student Starts
+
+Revenue
+
+Rename rules (recommended)
+
+“Student Starts” can stay, but must also include New Student Enrolments.
+
+✅ Acceptance
+
+“New Student Enrolments” appears and saves correctly.
+
+C3) Bonus information missing in Target
+
+Add target bonus fields (optional, controlled by toggle):
+
+New fields
+
+Bonus Enabled (toggle)
+
+Bonus Amount (number)
+
+Bonus Currency (dropdown)
+
+Bonus Condition (text) e.g. “If target achieved by date / intake / volume”
+
+Bonus Notes (optional)
+
+✅ Acceptance
+
+Admin can add bonus info while creating target.
+
+Bonus is visible on target view page.
+
+C4) Period Key validation
+
+Period Key must match Target Type:
+
+If Target Type = Yearly → period key must be like 2026
+
+If Monthly → YYYY-MM like 2026-07
+
+If Intake → T1-2026 / T2-2026 / custom intake codes
+
+✅ Acceptance
+
+System blocks invalid period format with clear message.
+
+D) Prevent Duplicate Records (Validation Rules)
+D1) Agreement duplicate prevention
+
+Do not allow creating “same data again”.
+
+Define uniqueness (choose one strict rule):
+
+Recommended Unique Constraint
+Prevent duplicate active/draft agreements with same:
+
+Provider + Agreement Type + Start Date + Territory (global or same territory set)
+
+Example unique key:
+
+provider_id + agreement_type + start_date + territory_hash
+
+Also enforce:
+
+agreement_code must be unique (already)
+
+✅ Acceptance
+
+If user tries to create duplicate, show:
+“Agreement already exists for this provider, type, start date, and territory.”
+
+D2) Target duplicate prevention
+
+Prevent duplicate targets for same agreement:
+
+agreement_id + target_type + metric + period_key must be unique
+
+✅ Acceptance
+
+Cannot add same metric + period twice for same agreement.
+
+D3) Provider duplicate prevention
+
+Provider name unique (case-insensitive) + country combination (optional)
+Example:
+
+“Kaplan” in AU vs “Kaplan” in UK could be different — decide rule:
+
+Option A (strict): unique by lower(name)
+
+Option B (safer): unique by lower(name) + country
+
+✅ Acceptance
+
+System blocks duplicates with clear error.
+
+E) Admin Control (Roles, Permissions) + Password Requirements
+E1) Admin can control permissions & roles
+
+Add Admin pages:
+
+Users
+
+Roles
+
+Role permissions mapping
+
+User country scope assignment (if you use territory restrictions)
+
+✅ Acceptance
+
+Super Admin can assign roles to users and manage role permissions.
+
+E2) Password requirement (Policy)
+
+At minimum:
+
+Minimum length: 12
+
+Must include: uppercase + lowercase + number
+
+Special character recommended
+
+Block common passwords (optional)
+
+Lockout after 5 failed attempts (temporary)
+
+MFA mandatory (already in your spec)
+
+✅ Acceptance
+
+Weak passwords rejected with clear message.
+
+F) UI/UX Enhancements Requested
+F1) Provider dropdown improvements
+
+Searchable dropdown (type-to-search)
+
+Show provider country in dropdown (e.g., “University of X — Australia”)
+
+✅ Acceptance
+
+Easier to select correct provider.
+
+G) Quick Developer Task List (Frontend + Backend)
+Backend (Python/Django)
+
+Create Providers module (CRUD + country)
+
+Agreement territory refactor (global/multi-country)
+
+Validations:
+
+Agreement duplicate rules
+
+Target duplicate rules
+
+Period key validation
+
+Target bonus fields
+
+RBAC admin endpoints (roles/permissions/users)
+
+Password policy + MFA enforcement
+
+Frontend (React)
+
+Rename University → Provider across UI
+
+Providers tab UI + create/edit modal
+
+Agreement create form:
+
+provider dropdown + add provider popup
+
+remove confidentiality field
+
+territory global/multi-country UI
+
+Add Target modal:
+
+reset on open
+
+add “New Student Enrolments”
+
+bonus section
+
+Filters:
+
+provider country filter
+
+territory filter

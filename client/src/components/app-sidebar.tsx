@@ -6,9 +6,8 @@ import {
   SidebarHeader, SidebarFooter,
 } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import {
-  LayoutDashboard, FileText, Users, Shield, LogOut, User,
+  LayoutDashboard, FileText, Users, Shield, LogOut, User, Building2,
 } from "lucide-react";
 
 export function AppSidebar() {
@@ -18,6 +17,7 @@ export function AppSidebar() {
   const mainNav = [
     { title: "Dashboard", url: "/", icon: LayoutDashboard, show: true },
     { title: "Agreements", url: "/agreements", icon: FileText, show: hasPermission("agreement.view") },
+    { title: "Providers", url: "/providers", icon: Building2, show: true },
   ];
 
   const adminNav = [

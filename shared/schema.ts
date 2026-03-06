@@ -10,10 +10,6 @@ import {
   numeric,
   jsonb,
   serial,
-  bigserial,
-  smallserial,
-  index,
-  uniqueIndex,
 } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
@@ -27,8 +23,11 @@ export const countries = pgTable("countries", {
 export const universities = pgTable("universities", {
   id: serial("id").primaryKey(),
   name: varchar("name", { length: 255 }).notNull(),
+  providerType: varchar("provider_type", { length: 32 }).notNull().default("university"),
   countryId: integer("country_id").references(() => countries.id),
   website: varchar("website", { length: 255 }),
+  notes: text("notes"),
+  status: varchar("status", { length: 16 }).notNull().default("active"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -80,7 +79,8 @@ export const agreements = pgTable("agreements", {
   title: varchar("title", { length: 255 }).notNull(),
   agreementType: varchar("agreement_type", { length: 32 }).notNull(),
   status: varchar("status", { length: 24 }).notNull().default("draft"),
-  territoryCountryId: integer("territory_country_id").notNull().references(() => countries.id),
+  territoryType: varchar("territory_type", { length: 16 }).notNull().default("country_specific"),
+  territoryCountryId: integer("territory_country_id").references(() => countries.id),
   startDate: date("start_date").notNull(),
   expiryDate: date("expiry_date").notNull(),
   autoRenew: boolean("auto_renew").default(false),
@@ -92,18 +92,54 @@ export const agreements = pgTable("agreements", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
+export const agreementTerritories = pgTable("agreement_territories", {
+  id: serial("id").primaryKey(),
+  agreementId: integer("agreement_id").notNull().references(() => agreements.id, { onDelete: "cascade" }),
+  countryId: integer("country_id").notNull().references(() => countries.id),
+});
+
 export const agreementTargets = pgTable("agreement_targets", {
   id: serial("id").primaryKey(),
   agreementId: integer("agreement_id").notNull().references(() => agreements.id, { onDelete: "cascade" }),
   targetType: varchar("target_type", { length: 16 }).notNull(),
-  metric: varchar("metric", { length: 24 }).notNull(),
+  metric: varchar("metric", { length: 32 }).notNull(),
   value: numeric("value", { precision: 12, scale: 2 }).notNull(),
   currency: varchar("currency", { length: 3 }),
   periodKey: varchar("period_key", { length: 32 }).notNull(),
   notes: text("notes"),
+  bonusEnabled: boolean("bonus_enabled").default(false),
+  bonusAmount: numeric("bonus_amount", { precision: 12, scale: 2 }),
+  bonusCurrency: varchar("bonus_currency", { length: 3 }),
+  bonusCondition: text("bonus_condition"),
+  bonusNotes: text("bonus_notes"),
   createdByUserId: integer("created_by_user_id").references(() => users.id),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const targetBonusRules = pgTable("target_bonus_rules", {
+  id: serial("id").primaryKey(),
+  targetId: integer("target_id").notNull().references(() => agreementTargets.id, { onDelete: "cascade" }),
+  bonusType: varchar("bonus_type", { length: 32 }).notNull(),
+  currency: varchar("currency", { length: 3 }).notNull().default("AUD"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const targetBonusTiers = pgTable("target_bonus_tiers", {
+  id: serial("id").primaryKey(),
+  bonusRuleId: integer("bonus_rule_id").notNull().references(() => targetBonusRules.id, { onDelete: "cascade" }),
+  minStudents: integer("min_students").notNull(),
+  maxStudents: integer("max_students"),
+  bonusAmount: numeric("bonus_amount", { precision: 12, scale: 2 }).notNull(),
+  calculationType: varchar("calculation_type", { length: 16 }).notNull().default("per_student"),
+});
+
+export const targetBonusCountry = pgTable("target_bonus_country", {
+  id: serial("id").primaryKey(),
+  bonusRuleId: integer("bonus_rule_id").notNull().references(() => targetBonusRules.id, { onDelete: "cascade" }),
+  countryId: integer("country_id").notNull().references(() => countries.id),
+  studentCount: integer("student_count").notNull(),
+  bonusAmount: numeric("bonus_amount", { precision: 12, scale: 2 }).notNull(),
 });
 
 export const agreementCommissionRules = pgTable("agreement_commission_rules", {
@@ -208,6 +244,19 @@ export const insertUniversitySchema = createInsertSchema(universities).omit({
   updatedAt: true,
 });
 
+export const insertBonusRuleSchema = createInsertSchema(targetBonusRules).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertBonusTierSchema = createInsertSchema(targetBonusTiers).omit({
+  id: true,
+});
+
+export const insertBonusCountrySchema = createInsertSchema(targetBonusCountry).omit({
+  id: true,
+});
+
 export const loginSchema = z.object({
   email: z.string().email(),
   password: z.string().min(6),
@@ -215,6 +264,7 @@ export const loginSchema = z.object({
 
 export type Country = typeof countries.$inferSelect;
 export type University = typeof universities.$inferSelect;
+export type Provider = University;
 export type User = typeof users.$inferSelect;
 export type Role = typeof roles.$inferSelect;
 export type Permission = typeof permissions.$inferSelect;
@@ -224,6 +274,9 @@ export type AgreementCommissionRule = typeof agreementCommissionRules.$inferSele
 export type AgreementContact = typeof agreementContacts.$inferSelect;
 export type AgreementDocument = typeof agreementDocuments.$inferSelect;
 export type AuditLog = typeof auditLogs.$inferSelect;
+export type TargetBonusRule = typeof targetBonusRules.$inferSelect;
+export type TargetBonusTier = typeof targetBonusTiers.$inferSelect;
+export type TargetBonusCountryEntry = typeof targetBonusCountry.$inferSelect;
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type InsertAgreement = z.infer<typeof insertAgreementSchema>;
 export type InsertTarget = z.infer<typeof insertTargetSchema>;
@@ -231,13 +284,18 @@ export type InsertCommissionRule = z.infer<typeof insertCommissionRuleSchema>;
 export type InsertContact = z.infer<typeof insertContactSchema>;
 export type InsertDocument = z.infer<typeof insertDocumentSchema>;
 export type InsertUniversity = z.infer<typeof insertUniversitySchema>;
+export type InsertProvider = InsertUniversity;
 
 export const AGREEMENT_TYPES = ["agency", "commission_schedule", "addendum", "renewal", "mou", "other"] as const;
 export const AGREEMENT_STATUSES = ["draft", "active", "expired", "terminated", "renewal_in_progress"] as const;
+export const TERRITORY_TYPES = ["global", "country_specific"] as const;
 export const TARGET_TYPES = ["monthly", "intake", "yearly"] as const;
-export const TARGET_METRICS = ["applications", "enrolments", "starts", "revenue"] as const;
+export const TARGET_METRICS = ["applications", "enrolments", "new_student_enrolments", "starts", "revenue"] as const;
 export const COMMISSION_MODES = ["percentage", "flat"] as const;
 export const COMMISSION_BASIS = ["per_subject", "per_term", "first_year", "full_course", "per_intake"] as const;
 export const PAY_EVENTS = ["enrolment", "census", "completion"] as const;
 export const STUDY_LEVELS = ["UG", "PG", "Diploma", "ELICOS", "Package", "Any"] as const;
-export const CONFIDENTIALITY_LEVELS = ["low", "medium", "high"] as const;
+export const PROVIDER_TYPES = ["university", "college", "b2b_company", "other"] as const;
+export const PROVIDER_STATUSES = ["active", "inactive"] as const;
+export const BONUS_TYPES = ["tier_per_student", "flat_on_target", "country_bonus", "tiered_flat"] as const;
+export const BONUS_CALCULATION_TYPES = ["per_student", "flat"] as const;

@@ -2,7 +2,7 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/lib/auth";
 import { format, parseISO } from "date-fns";
-import { Info, Lock } from "lucide-react";
+import { Info, Lock, Globe, MapPin } from "lucide-react";
 
 const typeLabels: Record<string, string> = {
   agency: "Agency Agreement",
@@ -13,14 +13,12 @@ const typeLabels: Record<string, string> = {
   other: "Other",
 };
 
-const confidentialityColors: Record<string, string> = {
-  high: "text-red-600 dark:text-red-400 bg-red-500/10",
-  medium: "text-amber-600 dark:text-amber-400 bg-amber-500/10",
-  low: "text-emerald-600 dark:text-emerald-400 bg-emerald-500/10",
-};
-
 export default function OverviewTab({ agreement }: { agreement: any }) {
   const { hasPermission } = useAuth();
+
+  const territoryDisplay = agreement.territoryType === "global"
+    ? "Global"
+    : agreement.territories?.map((t: any) => t.name).join(", ") || "—";
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -54,12 +52,14 @@ export default function OverviewTab({ agreement }: { agreement: any }) {
               <p className="text-sm mt-0.5">{agreement.autoRenew ? "Yes" : "No"}</p>
             </div>
             <div>
-              <p className="text-xs text-muted-foreground">Confidentiality</p>
-              <div className="mt-0.5">
-                <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium ${confidentialityColors[agreement.confidentialityLevel]}`}>
-                  <Lock className="w-3 h-3" />
-                  {agreement.confidentialityLevel.toUpperCase()}
-                </span>
+              <p className="text-xs text-muted-foreground">Territory</p>
+              <div className="flex items-center gap-1 mt-0.5">
+                {agreement.territoryType === "global" ? (
+                  <Globe className="w-3.5 h-3.5 text-muted-foreground" />
+                ) : (
+                  <MapPin className="w-3.5 h-3.5 text-muted-foreground" />
+                )}
+                <p className="text-sm">{territoryDisplay}</p>
               </div>
             </div>
           </div>
