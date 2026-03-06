@@ -4,13 +4,14 @@ import {
   users, roles, permissions, rolePermissions, userRoles, userCountryAccess,
   countries, universities, agreements, agreementTerritories, agreementTargets,
   agreementCommissionRules, agreementContacts, agreementDocuments, auditLogs,
-  targetBonusRules, targetBonusTiers, targetBonusCountry,
+  targetBonusRules, targetBonusTiers, targetBonusCountry, passwordResetTokens,
   type User, type InsertUser, type Agreement, type InsertAgreement,
   type AgreementTarget, type InsertTarget, type AgreementCommissionRule,
   type InsertCommissionRule, type AgreementContact, type InsertContact,
   type AgreementDocument, type InsertDocument, type University, type InsertUniversity,
   type Country, type Role, type Permission, type AuditLog,
   type TargetBonusRule, type TargetBonusTier, type TargetBonusCountryEntry,
+  type PasswordResetToken,
 } from "@shared/schema";
 
 export interface IStorage {
@@ -20,11 +21,21 @@ export interface IStorage {
   getUsers(): Promise<User[]>;
 
   getRoles(): Promise<Role[]>;
+  getRole(id: number): Promise<Role | undefined>;
+  createRole(name: string, description?: string): Promise<Role>;
+  updateRole(id: number, data: { name?: string; description?: string }): Promise<Role>;
+  deleteRole(id: number): Promise<void>;
+  duplicateRole(id: number, newName: string): Promise<Role>;
+  getRolePermissions(roleId: number): Promise<number[]>;
+  setRolePermissions(roleId: number, permissionIds: number[]): Promise<void>;
+  getRoleUserCount(roleId: number): Promise<number>;
   getPermissions(): Promise<Permission[]>;
   getUserRoles(userId: number): Promise<Role[]>;
   getUserPermissions(userId: number): Promise<string[]>;
   assignRole(userId: number, roleId: number): Promise<void>;
   removeRole(userId: number, roleId: number): Promise<void>;
+  setUserRoles(userId: number, roleIds: number[]): Promise<void>;
+  isLastAdminRole(roleId: number): Promise<boolean>;
 
   getCountries(): Promise<Country[]>;
 
@@ -34,7 +45,8 @@ export interface IStorage {
   updateProvider(id: number, data: Partial<InsertUniversity>): Promise<University>;
   checkDuplicateProvider(name: string, countryId: number | null, excludeId?: number): Promise<boolean>;
 
-  getAgreements(filters?: { status?: string; countryId?: number; providerCountryId?: number; search?: string }): Promise<any[]>;
+  getAgreementStatusCounts(): Promise<Record<string, number>>;
+  getAgreements(filters?: { status?: string; countryId?: number; providerCountryId?: number; providerId?: number; search?: string }): Promise<any[]>;
   getAgreement(id: number): Promise<any>;
   createAgreement(agreement: InsertAgreement): Promise<Agreement>;
   updateAgreement(id: number, data: Partial<InsertAgreement>): Promise<Agreement>;
@@ -73,6 +85,13 @@ export interface IStorage {
 
   createAuditLog(log: { userId?: number; action: string; entityType: string; entityId?: number; ipAddress?: string; userAgent?: string; metadata?: any }): Promise<void>;
   getAuditLogs(filters?: { entityType?: string; entityId?: number; userId?: number; limit?: number }): Promise<AuditLog[]>;
+
+  createPasswordResetToken(data: { userId: number; tokenHash: string; expiresAt: Date; requestIp?: string; userAgent?: string }): Promise<PasswordResetToken>;
+  getPasswordResetTokenByHash(tokenHash: string): Promise<PasswordResetToken | undefined>;
+  markPasswordResetTokenUsed(id: number): Promise<void>;
+  invalidateUserPasswordResetTokens(userId: number): Promise<void>;
+  updateUserPassword(userId: number, passwordHash: string): Promise<void>;
+  invalidateUserSessions(userId: number): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -97,6 +116,95 @@ export class DatabaseStorage implements IStorage {
 
   async getRoles(): Promise<Role[]> {
     return db.select().from(roles).orderBy(asc(roles.name));
+  }
+
+  async getRole(id: number): Promise<Role | undefined> {
+    const [role] = await db.select().from(roles).where(eq(roles.id, id));
+    return role;
+  }
+
+  async createRole(name: string, description?: string): Promise<Role> {
+    const [created] = await db.insert(roles).values({ name, description: description || null }).returning();
+    return created;
+  }
+
+  async updateRole(id: number, data: { name?: string; description?: string }): Promise<Role> {
+    const [updated] = await db.update(roles).set(data).where(eq(roles.id, id)).returning();
+    return updated;
+  }
+
+  async deleteRole(id: number): Promise<void> {
+    await db.delete(roles).where(eq(roles.id, id));
+  }
+
+  async duplicateRole(id: number, newName: string): Promise<Role> {
+    const existingPerms = await this.getRolePermissions(id);
+    const newRole = await this.createRole(newName);
+    if (existingPerms.length > 0) {
+      await db.insert(rolePermissions).values(
+        existingPerms.map(permissionId => ({ roleId: newRole.id, permissionId }))
+      );
+    }
+    return newRole;
+  }
+
+  async getRolePermissions(roleId: number): Promise<number[]> {
+    const result = await db
+      .select({ permissionId: rolePermissions.permissionId })
+      .from(rolePermissions)
+      .where(eq(rolePermissions.roleId, roleId));
+    return result.map(r => r.permissionId);
+  }
+
+  async setRolePermissions(roleId: number, permissionIds: number[]): Promise<void> {
+    await db.delete(rolePermissions).where(eq(rolePermissions.roleId, roleId));
+    if (permissionIds.length > 0) {
+      await db.insert(rolePermissions).values(
+        permissionIds.map(permissionId => ({ roleId, permissionId }))
+      );
+    }
+  }
+
+  async getRoleUserCount(roleId: number): Promise<number> {
+    const [result] = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(userRoles)
+      .where(eq(userRoles.roleId, roleId));
+    return Number(result.count);
+  }
+
+  async isLastAdminRole(roleId: number): Promise<boolean> {
+    const adminPerms = await db
+      .select({ code: permissions.code, id: permissions.id })
+      .from(permissions)
+      .where(or(eq(permissions.code, "security.role.manage"), eq(permissions.code, "security.user.manage")));
+    const adminPermIds = adminPerms.map(p => p.id);
+    if (adminPermIds.length === 0) return false;
+    const roleHasAdmin = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(rolePermissions)
+      .where(and(eq(rolePermissions.roleId, roleId), inArray(rolePermissions.permissionId, adminPermIds)));
+    if (Number(roleHasAdmin[0].count) < adminPermIds.length) return false;
+    const otherRolesWithAdmin = await db
+      .select({ roleId: rolePermissions.roleId })
+      .from(rolePermissions)
+      .where(and(
+        inArray(rolePermissions.permissionId, adminPermIds),
+        sql`${rolePermissions.roleId} != ${roleId}`
+      ))
+      .groupBy(rolePermissions.roleId);
+    const fullAdminRoles = [];
+    for (const r of otherRolesWithAdmin) {
+      const permCount = await db
+        .select({ count: sql<number>`count(*)` })
+        .from(rolePermissions)
+        .where(and(eq(rolePermissions.roleId, r.roleId), inArray(rolePermissions.permissionId, adminPermIds)));
+      if (Number(permCount[0].count) >= adminPermIds.length) {
+        const userCount = await this.getRoleUserCount(r.roleId);
+        if (userCount > 0) fullAdminRoles.push(r.roleId);
+      }
+    }
+    return fullAdminRoles.length === 0;
   }
 
   async getPermissions(): Promise<Permission[]> {
@@ -128,6 +236,15 @@ export class DatabaseStorage implements IStorage {
 
   async removeRole(userId: number, roleId: number): Promise<void> {
     await db.delete(userRoles).where(and(eq(userRoles.userId, userId), eq(userRoles.roleId, roleId)));
+  }
+
+  async setUserRoles(userId: number, roleIds: number[]): Promise<void> {
+    await db.delete(userRoles).where(eq(userRoles.userId, userId));
+    if (roleIds.length > 0) {
+      await db.insert(userRoles).values(
+        roleIds.map(roleId => ({ userId, roleId }))
+      );
+    }
   }
 
   async getCountries(): Promise<Country[]> {
@@ -205,7 +322,7 @@ export class DatabaseStorage implements IStorage {
     return Number(result.count) > 0;
   }
 
-  async getAgreements(filters?: { status?: string; countryId?: number; providerCountryId?: number; search?: string }): Promise<any[]> {
+  async getAgreements(filters?: { status?: string; countryId?: number; providerCountryId?: number; providerId?: number; search?: string }): Promise<any[]> {
     let query = db
       .select({
         id: agreements.id,
@@ -230,6 +347,7 @@ export class DatabaseStorage implements IStorage {
     const conditions: any[] = [];
     if (filters?.status) conditions.push(eq(agreements.status, filters.status));
     if (filters?.providerCountryId) conditions.push(eq(universities.countryId, filters.providerCountryId));
+    if (filters?.providerId) conditions.push(eq(agreements.universityId, filters.providerId));
     if (filters?.countryId) {
       conditions.push(
         or(
@@ -505,6 +623,18 @@ export class DatabaseStorage implements IStorage {
       .limit(limit);
   }
 
+  async getAgreementStatusCounts(): Promise<Record<string, number>> {
+    const results = await db
+      .select({ status: agreements.status, count: sql<number>`count(*)` })
+      .from(agreements)
+      .groupBy(agreements.status);
+    const counts: Record<string, number> = {};
+    for (const r of results) {
+      counts[r.status] = Number(r.count);
+    }
+    return counts;
+  }
+
   async getDashboardStats(): Promise<{ total: number; active: number; expiringSoon: number; expired: number }> {
     const [totalResult] = await db.select({ count: sql<number>`count(*)` }).from(agreements);
     const [activeResult] = await db.select({ count: sql<number>`count(*)` }).from(agreements).where(eq(agreements.status, "active"));
@@ -540,6 +670,39 @@ export class DatabaseStorage implements IStorage {
     if (filters?.userId) conditions.push(eq(auditLogs.userId, filters.userId));
     if (conditions.length > 0) query = query.where(and(...conditions)) as any;
     return (query as any).orderBy(desc(auditLogs.createdAt)).limit(filters?.limit || 100);
+  }
+
+  async createPasswordResetToken(data: { userId: number; tokenHash: string; expiresAt: Date; requestIp?: string; userAgent?: string }): Promise<PasswordResetToken> {
+    const [created] = await db.insert(passwordResetTokens).values(data).returning();
+    return created;
+  }
+
+  async getPasswordResetTokenByHash(tokenHash: string): Promise<PasswordResetToken | undefined> {
+    const [token] = await db.select().from(passwordResetTokens).where(eq(passwordResetTokens.tokenHash, tokenHash));
+    return token;
+  }
+
+  async markPasswordResetTokenUsed(id: number): Promise<void> {
+    await db.update(passwordResetTokens).set({ usedAt: new Date() }).where(eq(passwordResetTokens.id, id));
+  }
+
+  async invalidateUserPasswordResetTokens(userId: number): Promise<void> {
+    await db.update(passwordResetTokens)
+      .set({ usedAt: new Date() })
+      .where(and(
+        eq(passwordResetTokens.userId, userId),
+        sql`${passwordResetTokens.usedAt} IS NULL`
+      ));
+  }
+
+  async updateUserPassword(userId: number, passwordHash: string): Promise<void> {
+    await db.update(users).set({ passwordHash, updatedAt: new Date() }).where(eq(users.id, userId));
+  }
+
+  async invalidateUserSessions(userId: number): Promise<void> {
+    await db.execute(
+      sql`DELETE FROM "session" WHERE sess->>'userId' = ${String(userId)}`
+    );
   }
 }
 

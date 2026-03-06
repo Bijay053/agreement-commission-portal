@@ -51,6 +51,9 @@ export const roles = pgTable("roles", {
 export const permissions = pgTable("permissions", {
   id: serial("id").primaryKey(),
   code: varchar("code", { length: 64 }).notNull().unique(),
+  module: varchar("module", { length: 64 }),
+  resource: varchar("resource", { length: 64 }),
+  action: varchar("action", { length: 64 }),
   description: text("description"),
 });
 
@@ -191,6 +194,17 @@ export const agreementDocuments = pgTable("agreement_documents", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+export const passwordResetTokens = pgTable("password_reset_tokens", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  tokenHash: varchar("token_hash", { length: 64 }).notNull(),
+  expiresAt: timestamp("expires_at").notNull(),
+  usedAt: timestamp("used_at"),
+  requestIp: varchar("request_ip", { length: 45 }),
+  userAgent: text("user_agent"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
 export const auditLogs = pgTable("audit_logs", {
   id: serial("id").primaryKey(),
   userId: integer("user_id").references(() => users.id),
@@ -273,6 +287,7 @@ export type AgreementTarget = typeof agreementTargets.$inferSelect;
 export type AgreementCommissionRule = typeof agreementCommissionRules.$inferSelect;
 export type AgreementContact = typeof agreementContacts.$inferSelect;
 export type AgreementDocument = typeof agreementDocuments.$inferSelect;
+export type PasswordResetToken = typeof passwordResetTokens.$inferSelect;
 export type AuditLog = typeof auditLogs.$inferSelect;
 export type TargetBonusRule = typeof targetBonusRules.$inferSelect;
 export type TargetBonusTier = typeof targetBonusTiers.$inferSelect;
@@ -299,3 +314,98 @@ export const PROVIDER_TYPES = ["university", "college", "b2b_company", "other"] 
 export const PROVIDER_STATUSES = ["active", "inactive"] as const;
 export const BONUS_TYPES = ["tier_per_student", "flat_on_target", "country_bonus", "tiered_flat"] as const;
 export const BONUS_CALCULATION_TYPES = ["per_student", "flat"] as const;
+
+export const PERMISSION_ACTIONS = ["read", "add", "update", "delete", "export"] as const;
+
+export const PERMISSION_REGISTRY = [
+  {
+    module: "agreements",
+    label: "Agreements",
+    resources: [
+      { resource: "agreement", label: "Agreements", actions: ["read", "add", "update", "delete", "export"] },
+      { resource: "notes", label: "Sensitive Notes", actions: ["read", "update"] },
+    ],
+  },
+  {
+    module: "providers",
+    label: "Providers",
+    resources: [
+      { resource: "provider", label: "Providers", actions: ["read", "add", "update", "delete", "export"] },
+    ],
+  },
+  {
+    module: "targets",
+    label: "Targets",
+    resources: [
+      { resource: "target", label: "Agreement Targets", actions: ["read", "add", "update", "delete", "export"] },
+    ],
+  },
+  {
+    module: "commission",
+    label: "Commission Rules",
+    resources: [
+      { resource: "commission_rule", label: "Commission Rules", actions: ["read", "add", "update", "delete", "export"] },
+    ],
+  },
+  {
+    module: "contacts",
+    label: "Contacts",
+    resources: [
+      { resource: "contact", label: "Agreement Contacts", actions: ["read", "add", "update", "delete", "export"] },
+    ],
+  },
+  {
+    module: "documents",
+    label: "Documents",
+    resources: [
+      { resource: "document", label: "Agreement Documents", actions: ["list", "view_in_portal", "download", "upload", "replace", "delete"] },
+    ],
+  },
+  {
+    module: "administration",
+    label: "Administration",
+    resources: [
+      { resource: "user", label: "Users", actions: ["read", "add", "update", "delete"] },
+      { resource: "role", label: "Roles", actions: ["read", "add", "update", "delete"] },
+      { resource: "country_scope", label: "Country Access", actions: ["read", "update"] },
+      { resource: "audit", label: "Audit Logs", actions: ["read"] },
+    ],
+  },
+  {
+    module: "reminders",
+    label: "Reminder Settings",
+    resources: [
+      { resource: "reminder", label: "Reminders", actions: ["read", "update"] },
+    ],
+  },
+] as const;
+
+export type PermissionModule = typeof PERMISSION_REGISTRY[number];
+export type PermissionResource = PermissionModule["resources"][number];
+
+export const LEGACY_PERMISSION_MAP: Record<string, string> = {
+  "agreement.view": "agreements.agreement.read",
+  "agreement.create": "agreements.agreement.add",
+  "agreement.edit": "agreements.agreement.update",
+  "agreement.delete": "agreements.agreement.delete",
+  "agreement.notes.view_sensitive": "agreements.notes.read",
+  "agreement.notes.edit_sensitive": "agreements.notes.update",
+  "targets.view": "targets.target.read",
+  "targets.manage": "targets.target.update",
+  "commission.view": "commission.commission_rule.read",
+  "commission.manage": "commission.commission_rule.update",
+  "contacts.view": "contacts.contact.read",
+  "contacts.manage": "contacts.contact.update",
+  "document.list": "documents.document.list",
+  "document.view_in_portal": "documents.document.view_in_portal",
+  "document.download": "documents.document.download",
+  "document.upload": "documents.document.upload",
+  "document.replace": "documents.document.replace",
+  "document.delete": "documents.document.delete",
+  "audit.view": "administration.audit.read",
+  "security.user.manage": "administration.user.update",
+  "security.role.manage": "administration.role.update",
+  "security.country_scope.manage": "administration.country_scope.update",
+  "reminders.view": "reminders.reminder.read",
+  "reminders.manage": "reminders.reminder.update",
+};

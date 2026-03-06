@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { useLocation } from "wouter";
+import { useLocation, useSearch } from "wouter";
 import { useAuth } from "@/lib/auth";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -42,17 +42,28 @@ function getTypeBadge(type: string) {
 
 export default function AgreementsListPage() {
   const [, navigate] = useLocation();
+  const searchString = useSearch();
   const { hasPermission } = useAuth();
+
+  const urlParams = new URLSearchParams(searchString);
+  const urlStatus = urlParams.get("status") || "";
+
   const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [statusFilter, setStatusFilter] = useState<string>(urlStatus || "all");
   const [territoryCountryFilter, setTerritoryCountryFilter] = useState<string>("all");
   const [providerCountryFilter, setProviderCountryFilter] = useState<string>("all");
+  const [providerFilter, setProviderFilter] = useState<string>("all");
+
+  useEffect(() => {
+    setStatusFilter(urlStatus || "all");
+  }, [urlStatus]);
 
   const queryParams = new URLSearchParams();
   if (search) queryParams.set("search", search);
   if (statusFilter && statusFilter !== "all") queryParams.set("status", statusFilter);
   if (territoryCountryFilter && territoryCountryFilter !== "all") queryParams.set("countryId", territoryCountryFilter);
   if (providerCountryFilter && providerCountryFilter !== "all") queryParams.set("providerCountryId", providerCountryFilter);
+  if (providerFilter && providerFilter !== "all") queryParams.set("providerId", providerFilter);
   const queryString = queryParams.toString();
 
   const { data: agreements, isLoading } = useQuery<any[]>({
@@ -65,6 +76,23 @@ export default function AgreementsListPage() {
   });
 
   const { data: countries } = useQuery<any[]>({ queryKey: ["/api/countries"] });
+  const { data: providers } = useQuery<any[]>({
+    queryKey: ["/api/providers"],
+    queryFn: async () => {
+      const res = await fetch("/api/providers?status=active", { credentials: "include" });
+      if (!res.ok) return [];
+      return res.json();
+    },
+  });
+
+  const handleStatusChange = (value: string) => {
+    setStatusFilter(value);
+    if (value !== "all") {
+      navigate(`/agreements?status=${value}`);
+    } else {
+      navigate("/agreements");
+    }
+  };
 
   return (
     <div className="p-6 space-y-5 max-w-7xl mx-auto">
@@ -94,7 +122,7 @@ export default function AgreementsListPage() {
                 data-testid="input-search-agreements"
               />
             </div>
-            <Select value={statusFilter} onValueChange={setStatusFilter}>
+            <Select value={statusFilter} onValueChange={handleStatusChange}>
               <SelectTrigger className="w-[160px]" data-testid="select-status-filter">
                 <Filter className="w-3.5 h-3.5 mr-2 text-muted-foreground" />
                 <SelectValue placeholder="Status" />
@@ -108,9 +136,23 @@ export default function AgreementsListPage() {
                 ))}
               </SelectContent>
             </Select>
+            <Select value={providerFilter} onValueChange={setProviderFilter}>
+              <SelectTrigger className="w-[180px]" data-testid="select-provider-filter">
+                <Building2 className="w-3.5 h-3.5 mr-2 text-muted-foreground" />
+                <SelectValue placeholder="Provider" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Providers</SelectItem>
+                {providers?.map((p: any) => (
+                  <SelectItem key={p.id} value={String(p.id)}>
+                    {p.name}{p.countryName ? ` (${p.countryName})` : ""}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
             <Select value={providerCountryFilter} onValueChange={setProviderCountryFilter}>
               <SelectTrigger className="w-[180px]" data-testid="select-provider-country-filter">
-                <Building2 className="w-3.5 h-3.5 mr-2 text-muted-foreground" />
+                <MapPin className="w-3.5 h-3.5 mr-2 text-muted-foreground" />
                 <SelectValue placeholder="Provider Country" />
               </SelectTrigger>
               <SelectContent>
@@ -122,11 +164,11 @@ export default function AgreementsListPage() {
             </Select>
             <Select value={territoryCountryFilter} onValueChange={setTerritoryCountryFilter}>
               <SelectTrigger className="w-[180px]" data-testid="select-territory-country-filter">
-                <MapPin className="w-3.5 h-3.5 mr-2 text-muted-foreground" />
-                <SelectValue placeholder="Territory Country" />
+                <Globe className="w-3.5 h-3.5 mr-2 text-muted-foreground" />
+                <SelectValue placeholder="Territory" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All Territory Countries</SelectItem>
+                <SelectItem value="all">All Territories</SelectItem>
                 {countries?.map((c: any) => (
                   <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>
                 ))}
@@ -203,7 +245,7 @@ export default function AgreementsListPage() {
             <FileText className="w-12 h-12 mx-auto text-muted-foreground/50 mb-3" />
             <h3 className="text-lg font-medium">No agreements found</h3>
             <p className="text-sm text-muted-foreground mt-1">
-              {search || statusFilter !== "all" || territoryCountryFilter !== "all" || providerCountryFilter !== "all"
+              {search || statusFilter !== "all" || territoryCountryFilter !== "all" || providerCountryFilter !== "all" || providerFilter !== "all"
                 ? "Try adjusting your filters"
                 : "Create your first agreement to get started"}
             </p>

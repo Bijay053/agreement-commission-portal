@@ -17,11 +17,15 @@ A secure internal portal for Study Info Centre — managing provider (university
 - **Multi-territory support** — agreements can be Global or Country-Specific (multiple countries)
 - **Target Bonus System** — bonus toggle + amount/condition on targets, with bonus calculation API
 - **Target Bonus Rules** — per-student tier, flat on target, country-based, tiered flat bonus structures
-- **Duplicate prevention** — providers (name+country unique), targets (type+metric+period unique)
+- **Duplicate prevention** — providers (name+country), targets (type+metric+period), agreements (provider+type+date+territory)
 - **Period key validation** — yearly=YYYY, monthly=YYYY-MM, intake=T1-YYYY
-- **Password policy** — 12+ chars, uppercase, lowercase, number required for new users
-- Fine-grained RBAC with 24 permission codes across 6 roles
-- Audit logging for all key actions
+- **Password policy** — 12+ chars, uppercase, lowercase, number required
+- **Forgot Password** — token-based reset with 30-minute expiry, console-logged reset URLs
+- **Role & Permission Management** — admin UI for creating/editing/deleting/duplicating roles, dynamic permission grid by module/resource/action
+- **Sidebar Status Sub-menu** — Agreements sidebar with expandable status filters and count badges
+- **Agreement List Filters** — search, status, provider, provider country, territory country
+- Fine-grained RBAC with module.resource.action permission codes
+- Audit logging for all key actions including role/permission changes
 - Confidentiality level hidden (defaults to "high" for all agreements)
 
 ## Data Model
@@ -29,12 +33,11 @@ A secure internal portal for Study Info Centre — managing provider (university
 - `universities` — Provider records (university/college/b2b_company/other) with type, country, status, notes
 - `users` — System users with password hashing
 - `roles`, `permissions`, `role_permissions`, `user_roles` — RBAC tables
+- `password_reset_tokens` — Forgot password token storage with hash, expiry, used_at
 - `agreements` — Core agreement records with status, dates, territory_type (global/country_specific)
 - `agreement_territories` — Many-to-many: agreement ↔ territory countries
-- `agreement_targets` — Performance targets with bonus fields (bonusEnabled, bonusAmount, bonusCurrency, bonusCondition, bonusNotes)
-- `target_bonus_rules` — Bonus rule definitions per target (tier_per_student, flat_on_target, country_bonus, tiered_flat)
-- `target_bonus_tiers` — Tier ranges for bonus rules (min/max students, amount, calculation type)
-- `target_bonus_country` — Country-specific bonus entries
+- `agreement_targets` — Performance targets with bonus fields
+- `target_bonus_rules`, `target_bonus_tiers`, `target_bonus_country` — Bonus structures
 - `agreement_commission_rules` — Flexible commission configuration
 - `agreement_contacts` — Provider contacts for renewals
 - `agreement_documents` — Versioned document uploads
@@ -46,40 +49,69 @@ A secure internal portal for Study Info Centre — managing provider (university
 - **Editor**: editor@studyinfocentre.com / editor123
 
 ## API Endpoints
+### Auth
+- `POST /api/auth/login` — Login
+- `POST /api/auth/logout` — Logout
+- `GET /api/auth/me` — Current user + permissions
+- `POST /api/auth/forgot-password` — Request password reset (generic response)
+- `POST /api/auth/reset-password` — Reset password with token
+
+### Agreements
+- `GET /api/agreements` — List with filters: status, search, providerId, countryId, providerCountryId
+- `GET /api/agreements/status-counts` — Status count badges for sidebar
+- `GET/POST /api/agreements/:id` — CRUD with territory support
+- `GET/POST /api/agreements/:id/targets` — Target CRUD with period validation + duplicate check
+- `GET/POST /api/agreements/:id/commission-rules` — Commission CRUD
+- `GET/POST /api/agreements/:id/contacts` — Contact CRUD
+- `GET/POST /api/agreements/:id/documents` — Document upload
+
+### Providers
 - `GET/POST /api/providers` — Provider CRUD with duplicate checking
 - `PATCH /api/providers/:id` — Update provider
-- `GET/POST /api/agreements` — Agreement CRUD with territory support
-- `POST /api/agreements` — accepts `territoryType` and `territoryCountryIds[]`
-- `GET/POST /api/agreements/:id/targets` — Target CRUD with period validation + duplicate check
-- `GET/POST /api/targets/:id/bonus-rules` — Bonus rule management with tier/country entries
-- `POST /api/bonus/calculate` — Bonus preview calculator (accepts targetId, studentCount)
-- `DELETE /api/bonus-rules/:id` — Delete bonus rule
+
+### Roles & Permissions (Admin)
+- `GET /api/roles` — List roles with user counts
+- `POST /api/roles` — Create role
+- `PATCH /api/roles/:id` — Update role
+- `DELETE /api/roles/:id` — Delete (with safety checks)
+- `POST /api/roles/:id/duplicate` — Duplicate role with permissions
+- `GET /api/roles/:id/permissions` — Get role permission IDs
+- `PUT /api/roles/:id/permissions` — Set role permissions
+- `PUT /api/users/:id/roles` — Set user roles (multi-role)
+- `GET /api/admin/permissions/schema` — Dynamic permission registry
+
+### Bonus
+- `GET/POST /api/targets/:id/bonus-rules` — Bonus rule management
+- `POST /api/bonus/calculate` — Bonus preview calculator
 
 ## Project Structure
 ```
 client/src/
   components/
-    agreement/        # Agreement detail tab components (overview, commission, targets, contacts, docs, audit)
-    app-sidebar.tsx   # Main navigation sidebar
-    ui/               # shadcn/ui components
+    agreement/        # Tab components (overview, commission, targets, contacts, docs, audit)
+    app-sidebar.tsx   # Navigation with agreement status sub-menu + count badges
+    ui/               # shadcn/ui components (checkbox, dialog, etc.)
   lib/
     auth.tsx          # Auth context and hooks
     queryClient.ts    # TanStack Query setup
   pages/
-    login.tsx
+    login.tsx              # Login with forgot password link
+    forgot-password.tsx    # Email-based password reset request
+    reset-password.tsx     # Token-based password reset with policy display
     dashboard.tsx
-    agreements-list.tsx    # With provider country + territory country filters
+    agreements-list.tsx    # 5 filters: search, status, provider, provider country, territory
     agreement-detail.tsx   # 6-tab detail view
-    agreement-form.tsx     # Create/edit with inline provider add modal, multi-territory
-    providers-list.tsx     # Provider management with search, filter, add/edit/view
-    users-management.tsx
+    agreement-form.tsx     # Create/edit with inline provider add, multi-territory
+    providers-list.tsx     # Provider management
+    roles-management.tsx   # Role CRUD + permission grid editor
+    users-management.tsx   # User management with multi-role assignment
     audit-logs.tsx
 server/
   auth.ts            # Auth middleware, session, password utilities
   db.ts              # Database connection
   routes.ts          # API endpoints with validation
-  seed.ts            # Database seed data
+  seed.ts            # Database seed data with permission registry
   storage.ts         # Data access layer
 shared/
-  schema.ts          # Drizzle schema, types, insert schemas, constants
+  schema.ts          # Drizzle schema, types, constants, PERMISSION_REGISTRY
 ```

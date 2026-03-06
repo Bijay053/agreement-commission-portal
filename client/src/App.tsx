@@ -16,6 +16,9 @@ import AgreementFormPage from "@/pages/agreement-form";
 import ProvidersListPage from "@/pages/providers-list";
 import UsersManagementPage from "@/pages/users-management";
 import AuditLogsPage from "@/pages/audit-logs";
+import RolesManagementPage from "@/pages/roles-management";
+import ForgotPasswordPage from "@/pages/forgot-password";
+import ResetPasswordPage from "@/pages/reset-password";
 
 function Router() {
   return (
@@ -27,6 +30,7 @@ function Router() {
       <Route path="/agreements/:id" component={AgreementDetailPage} />
       <Route path="/providers" component={ProvidersListPage} />
       <Route path="/users" component={UsersManagementPage} />
+      <Route path="/roles" component={RolesManagementPage} />
       <Route path="/audit-logs" component={AuditLogsPage} />
       <Route component={NotFound} />
     </Switch>
@@ -48,7 +52,13 @@ function AuthenticatedApp() {
   }
 
   if (!user) {
-    return <LoginPage />;
+    return (
+      <Switch>
+        <Route path="/forgot-password" component={ForgotPasswordPage} />
+        <Route path="/reset-password" component={ResetPasswordPage} />
+        <Route><LoginPage /></Route>
+      </Switch>
+    );
   }
 
   const style = {

@@ -3,10 +3,11 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { setupAuth, hashPassword, comparePassword, requireAuth, requirePermission } from "./auth";
 import { seedDatabase } from "./seed";
-import { loginSchema, insertAgreementSchema, insertTargetSchema, insertCommissionRuleSchema, insertContactSchema, insertUniversitySchema } from "@shared/schema";
+import { loginSchema, insertAgreementSchema, insertTargetSchema, insertCommissionRuleSchema, insertContactSchema, insertUniversitySchema, PERMISSION_REGISTRY, LEGACY_PERMISSION_MAP } from "@shared/schema";
 import multer from "multer";
 import path from "path";
 import fs from "fs";
+import crypto from "crypto";
 
 const uploadsDir = path.join(process.cwd(), "uploads");
 if (!fs.existsSync(uploadsDir)) {
@@ -80,6 +81,138 @@ export async function registerRoutes(
       }
       res.json({ message: "Logged out" });
     });
+  });
+
+  const forgotPasswordRateLimit = new Map<string, { count: number; resetAt: number }>();
+
+  app.post("/api/auth/forgot-password", async (req, res) => {
+    try {
+      const { email } = req.body;
+      if (!email || typeof email !== "string") {
+        return res.status(400).json({ message: "Email is required" });
+      }
+
+      const clientIp = req.ip || "unknown";
+      const now = Date.now();
+      const rateEntry = forgotPasswordRateLimit.get(clientIp);
+      if (rateEntry && rateEntry.resetAt > now && rateEntry.count >= 5) {
+        return res.json({ message: "If an account with that email exists, a password reset link has been sent." });
+      }
+      if (!rateEntry || rateEntry.resetAt <= now) {
+        forgotPasswordRateLimit.set(clientIp, { count: 1, resetAt: now + 15 * 60 * 1000 });
+      } else {
+        rateEntry.count++;
+      }
+
+      const genericResponse = { message: "If an account with that email exists, a password reset link has been sent." };
+
+      const user = await storage.getUserByEmail(email);
+      if (!user || !user.isActive) {
+        return res.json(genericResponse);
+      }
+
+      await storage.invalidateUserPasswordResetTokens(user.id);
+
+      const rawToken = crypto.randomBytes(32);
+      const tokenHex = rawToken.toString("hex");
+      const tokenHash = crypto.createHash("sha256").update(rawToken).digest("hex");
+      const expiresAt = new Date(Date.now() + 30 * 60 * 1000);
+
+      await storage.createPasswordResetToken({
+        userId: user.id,
+        tokenHash,
+        expiresAt,
+        requestIp: clientIp,
+        userAgent: req.headers["user-agent"],
+      });
+
+      await storage.createAuditLog({
+        userId: user.id,
+        action: "PASSWORD_RESET_REQUESTED",
+        entityType: "user",
+        entityId: user.id,
+        ipAddress: clientIp,
+        userAgent: req.headers["user-agent"],
+      });
+
+      const resetUrl = `${req.protocol}://${req.get("host")}/reset-password?token=${tokenHex}`;
+      console.log("\n========================================");
+      console.log("PASSWORD RESET LINK");
+      console.log("========================================");
+      console.log(`User: ${user.email}`);
+      console.log(`URL: ${resetUrl}`);
+      console.log(`Expires: ${expiresAt.toISOString()}`);
+      console.log("========================================\n");
+
+      res.json(genericResponse);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.post("/api/auth/reset-password", async (req, res) => {
+    try {
+      const { token, newPassword } = req.body;
+      if (!token || typeof token !== "string") {
+        return res.status(400).json({ message: "Reset token is required" });
+      }
+      if (!newPassword || typeof newPassword !== "string") {
+        return res.status(400).json({ message: "New password is required" });
+      }
+
+      if (newPassword.length < 12) {
+        return res.status(400).json({ message: "Password must be at least 12 characters" });
+      }
+      if (!/[A-Z]/.test(newPassword)) {
+        return res.status(400).json({ message: "Password must include at least one uppercase letter" });
+      }
+      if (!/[a-z]/.test(newPassword)) {
+        return res.status(400).json({ message: "Password must include at least one lowercase letter" });
+      }
+      if (!/\d/.test(newPassword)) {
+        return res.status(400).json({ message: "Password must include at least one number" });
+      }
+
+      const rawToken = Buffer.from(token, "hex");
+      const tokenHash = crypto.createHash("sha256").update(rawToken).digest("hex");
+
+      const resetToken = await storage.getPasswordResetTokenByHash(tokenHash);
+      if (!resetToken) {
+        return res.status(400).json({ message: "Invalid or expired reset token" });
+      }
+      if (resetToken.usedAt) {
+        return res.status(400).json({ message: "This reset token has already been used" });
+      }
+      if (new Date() > resetToken.expiresAt) {
+        return res.status(400).json({ message: "This reset token has expired" });
+      }
+
+      const user = await storage.getUser(resetToken.userId);
+      if (!user || !user.isActive) {
+        return res.status(400).json({ message: "This account is no longer active" });
+      }
+
+      const hashedPassword = await hashPassword(newPassword);
+      await storage.updateUserPassword(resetToken.userId, hashedPassword);
+
+      await storage.markPasswordResetTokenUsed(resetToken.id);
+      await storage.invalidateUserPasswordResetTokens(resetToken.userId);
+
+      await storage.invalidateUserSessions(resetToken.userId);
+
+      await storage.createAuditLog({
+        userId: resetToken.userId,
+        action: "PASSWORD_RESET_COMPLETED",
+        entityType: "user",
+        entityId: resetToken.userId,
+        ipAddress: req.ip,
+        userAgent: req.headers["user-agent"],
+      });
+
+      res.json({ message: "Password has been reset successfully. Please log in with your new password." });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
   });
 
   app.get("/api/auth/me", async (req, res) => {
@@ -180,11 +313,17 @@ export async function registerRoutes(
     res.json(data);
   });
 
+  app.get("/api/agreements/status-counts", requireAuth, requirePermission("agreement.view"), async (_req, res) => {
+    const counts = await storage.getAgreementStatusCounts();
+    res.json(counts);
+  });
+
   app.get("/api/agreements", requireAuth, requirePermission("agreement.view"), async (req, res) => {
     const filters = {
       status: req.query.status as string | undefined,
       countryId: req.query.countryId ? parseInt(req.query.countryId as string) : undefined,
       providerCountryId: req.query.providerCountryId ? parseInt(req.query.providerCountryId as string) : undefined,
+      providerId: req.query.providerId ? parseInt(req.query.providerId as string) : undefined,
       search: req.query.search as string | undefined,
     };
     const data = await storage.getAgreements(filters);
@@ -580,8 +719,13 @@ export async function registerRoutes(
 
   app.get("/api/users", requireAuth, requirePermission("security.user.manage"), async (_req, res) => {
     const data = await storage.getUsers();
-    const safeUsers = data.map(({ passwordHash, ...u }) => u);
-    res.json(safeUsers);
+    const usersWithRoles = await Promise.all(
+      data.map(async ({ passwordHash, ...u }) => {
+        const userRoles = await storage.getUserRoles(u.id);
+        return { ...u, roles: userRoles };
+      })
+    );
+    res.json(usersWithRoles);
   });
 
   app.post("/api/users", requireAuth, requirePermission("security.user.manage"), async (req, res) => {
@@ -628,9 +772,210 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/roles", requireAuth, async (_req, res) => {
-    const data = await storage.getRoles();
-    res.json(data);
+  app.get("/api/roles", requireAuth, async (req, res) => {
+    const userPerms = req.session.userPermissions || [];
+    if (!userPerms.includes("security.role.manage") && !userPerms.includes("security.user.manage")) {
+      return res.status(403).json({ message: "Forbidden" });
+    }
+    const allRoles = await storage.getRoles();
+    const rolesWithCounts = await Promise.all(allRoles.map(async (role) => {
+      const userCount = await storage.getRoleUserCount(role.id);
+      return { ...role, userCount };
+    }));
+    res.json(rolesWithCounts);
+  });
+
+  app.get("/api/roles/:id", requireAuth, requirePermission("security.role.manage"), async (req, res) => {
+    const role = await storage.getRole(parseInt(req.params.id));
+    if (!role) return res.status(404).json({ message: "Role not found" });
+    res.json(role);
+  });
+
+  app.get("/api/roles/:id/permissions", requireAuth, requirePermission("security.role.manage"), async (req, res) => {
+    const permissionIds = await storage.getRolePermissions(parseInt(req.params.id));
+    res.json(permissionIds);
+  });
+
+  app.post("/api/roles", requireAuth, requirePermission("security.role.manage"), async (req, res) => {
+    try {
+      const { name, description } = req.body;
+      if (!name || name.trim().length === 0) return res.status(400).json({ message: "Role name is required" });
+      const role = await storage.createRole(name.trim(), description);
+      await storage.createAuditLog({
+        userId: req.session.userId,
+        action: "ROLE_CREATE",
+        entityType: "role",
+        entityId: role.id,
+        ipAddress: req.ip,
+        metadata: { name: role.name },
+      });
+      res.json(role);
+    } catch (err: any) {
+      if (err.message?.includes("unique")) return res.status(409).json({ message: "A role with this name already exists" });
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.patch("/api/roles/:id", requireAuth, requirePermission("security.role.manage"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const oldRole = await storage.getRole(id);
+      if (!oldRole) return res.status(404).json({ message: "Role not found" });
+      const { name, description } = req.body;
+      const role = await storage.updateRole(id, { name, description });
+      await storage.createAuditLog({
+        userId: req.session.userId,
+        action: "ROLE_UPDATE",
+        entityType: "role",
+        entityId: id,
+        ipAddress: req.ip,
+        metadata: { oldName: oldRole.name, newName: role.name },
+      });
+      res.json(role);
+    } catch (err: any) {
+      if (err.message?.includes("unique")) return res.status(409).json({ message: "A role with this name already exists" });
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.delete("/api/roles/:id", requireAuth, requirePermission("security.role.manage"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const role = await storage.getRole(id);
+      if (!role) return res.status(404).json({ message: "Role not found" });
+      const isLast = await storage.isLastAdminRole(id);
+      if (isLast) return res.status(400).json({ message: "Cannot delete the last role with admin permissions. At least one admin role must remain." });
+      const userCount = await storage.getRoleUserCount(id);
+      if (userCount > 0) return res.status(400).json({ message: `Cannot delete role with ${userCount} active user(s). Remove users from this role first.` });
+      await storage.deleteRole(id);
+      await storage.createAuditLog({
+        userId: req.session.userId,
+        action: "ROLE_DELETE",
+        entityType: "role",
+        entityId: id,
+        ipAddress: req.ip,
+        metadata: { name: role.name },
+      });
+      res.json({ message: "Role deleted" });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.post("/api/roles/:id/duplicate", requireAuth, requirePermission("security.role.manage"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const originalRole = await storage.getRole(id);
+      if (!originalRole) return res.status(404).json({ message: "Role not found" });
+      const newName = req.body.name || `${originalRole.name} (Copy)`;
+      const newRole = await storage.duplicateRole(id, newName);
+      await storage.createAuditLog({
+        userId: req.session.userId,
+        action: "ROLE_DUPLICATE",
+        entityType: "role",
+        entityId: newRole.id,
+        ipAddress: req.ip,
+        metadata: { sourceRoleId: id, sourceName: originalRole.name, newName: newRole.name },
+      });
+      res.json(newRole);
+    } catch (err: any) {
+      if (err.message?.includes("unique")) return res.status(409).json({ message: "A role with this name already exists" });
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.put("/api/roles/:id/permissions", requireAuth, requirePermission("security.role.manage"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const role = await storage.getRole(id);
+      if (!role) return res.status(404).json({ message: "Role not found" });
+      const { permissionIds } = req.body;
+      if (!Array.isArray(permissionIds)) return res.status(400).json({ message: "permissionIds must be an array" });
+      const oldPermIds = await storage.getRolePermissions(id);
+      const isLast = await storage.isLastAdminRole(id);
+      if (isLast) {
+        const allPerms = await storage.getPermissions();
+        const adminCodes = ["security.role.manage", "security.user.manage"];
+        const adminPermIds = allPerms.filter(p => adminCodes.includes(p.code)).map(p => p.id);
+        const wouldRemoveAdmin = adminPermIds.some(apId => !permissionIds.includes(apId));
+        if (wouldRemoveAdmin) {
+          return res.status(400).json({ message: "Cannot remove admin permissions from the last admin role." });
+        }
+      }
+      await storage.setRolePermissions(id, permissionIds);
+      await storage.createAuditLog({
+        userId: req.session.userId,
+        action: "ROLE_PERMISSIONS_UPDATE",
+        entityType: "role",
+        entityId: id,
+        ipAddress: req.ip,
+        metadata: { oldPermissionCount: oldPermIds.length, newPermissionCount: permissionIds.length },
+      });
+      res.json({ message: "Permissions updated" });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.put("/api/users/:id/roles", requireAuth, requirePermission("security.role.manage"), async (req, res) => {
+    try {
+      const userId = parseInt(req.params.id);
+      const { roleIds } = req.body;
+      if (!Array.isArray(roleIds)) return res.status(400).json({ message: "roleIds must be an array" });
+      const oldRoles = await storage.getUserRoles(userId);
+      await storage.setUserRoles(userId, roleIds);
+      await storage.createAuditLog({
+        userId: req.session.userId,
+        action: "USER_ROLES_UPDATE",
+        entityType: "user",
+        entityId: userId,
+        ipAddress: req.ip,
+        metadata: { oldRoles: oldRoles.map(r => r.name), newRoleIds: roleIds },
+      });
+      res.json({ message: "User roles updated" });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.get("/api/admin/permissions/schema", requireAuth, requirePermission("security.role.manage"), async (_req, res) => {
+    try {
+      const allPermissions = await storage.getPermissions();
+      const reverseLegacy: Record<string, string> = {};
+      for (const [legacyCode, newCode] of Object.entries(LEGACY_PERMISSION_MAP)) {
+        reverseLegacy[newCode] = legacyCode;
+      }
+
+      const modules = PERMISSION_REGISTRY.map(mod => ({
+        module: mod.module,
+        label: mod.label,
+        resources: mod.resources.map(resource => {
+          const actions = resource.actions.map(action => {
+            const newCode = `${mod.module}.${resource.resource}.${action}`;
+            const legacyCode = reverseLegacy[newCode];
+            const perm = allPermissions.find(p =>
+              p.code === newCode || p.code === legacyCode ||
+              (p.module === mod.module && p.resource === resource.resource && p.action === action)
+            );
+            return {
+              action,
+              code: perm?.code || newCode,
+              permissionId: perm?.id || null,
+              description: perm?.description || `${action} ${resource.label}`,
+            };
+          });
+          return {
+            resource: resource.resource,
+            label: resource.label,
+            actions,
+          };
+        }),
+      }));
+
+      res.json({ modules });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
   });
 
   return httpServer;
