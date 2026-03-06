@@ -18,6 +18,7 @@ import UsersManagementPage from "@/pages/users-management";
 import AuditLogsPage from "@/pages/audit-logs";
 import RolesManagementPage from "@/pages/roles-management";
 import ContactsListPage from "@/pages/contacts-list";
+import CommissionTablePage from "@/pages/commission-table";
 import ForgotPasswordPage from "@/pages/forgot-password";
 import ResetPasswordPage from "@/pages/reset-password";
 
@@ -30,6 +31,7 @@ function Router() {
       <Route path="/agreements/:id/edit" component={AgreementFormPage} />
       <Route path="/agreements/:id" component={AgreementDetailPage} />
       <Route path="/contacts" component={ContactsListPage} />
+      <Route path="/commission" component={CommissionTablePage} />
       <Route path="/providers" component={ProvidersListPage} />
       <Route path="/users" component={UsersManagementPage} />
       <Route path="/roles" component={RolesManagementPage} />

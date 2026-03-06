@@ -24,7 +24,9 @@ A secure internal portal for Study Info Centre — managing provider (university
 - **Role & Permission Management** — admin UI for creating/editing/deleting/duplicating roles, dynamic permission grid by module/resource/action
 - **Global Contacts Page** — view/filter/add/edit/delete all contacts across agreements with search, country, and status filters; Contact Location column shows country + city
 - **Searchable Dropdowns** — All Select/dropdown fields use SearchableSelect component (Popover + Command/cmdk) with type-to-filter, keyboard support, "No results found"
-- **Reset Filters** — Contacts page has Reset button (RotateCcw icon) that clears all active filters; empty state shows clickable "Reset filters" link
+- **Reset Filters** — All filter pages (Contacts, Agreements, Providers, Commission) have Reset button (RotateCcw icon) that clears all active filters; empty state shows clickable "Reset filters" link
+- **Document View/Download** — Documents tab has View (Eye icon, opens inline for PDFs) and Download buttons per document
+- **Commission & Bonus Master Table** — Standalone page (`/commission`) with Commission and Bonus tabs; pulls all rules from all agreements; filters, search, reset; each row links back to source agreement
 - **Sidebar Status Sub-menu** — Agreements sidebar with expandable status filters and count badges
 - **Agreement List Filters** — search, status, provider, provider country, territory country
 - Fine-grained RBAC with module.resource.action permission codes
@@ -88,9 +90,14 @@ A secure internal portal for Study Info Centre — managing provider (university
 - `PUT /api/users/:id/roles` — Set user roles (multi-role)
 - `GET /api/admin/permissions/schema` — Dynamic permission registry
 
-### Bonus
-- `GET/POST /api/targets/:id/bonus-rules` — Bonus rule management
+### Commission & Bonus (Global)
+- `GET /api/commission-rules` — All commission rules across agreements with filters: providerId, providerCountryId, agreementStatus, commissionMode, search
+- `GET /api/bonus-rules` — All bonus rules across agreements with filters: providerId, providerCountryId, agreementStatus, bonusType, search
+- `GET/POST /api/targets/:id/bonus-rules` — Bonus rule management per target
 - `POST /api/bonus/calculate` — Bonus preview calculator
+
+### Documents
+- `GET /api/documents/:id/download` — Download/view document (supports ?inline=true for PDF viewing)
 
 ## Project Structure
 ```
@@ -108,6 +115,7 @@ client/src/
     reset-password.tsx     # Token-based password reset with policy display
     dashboard.tsx
     contacts-list.tsx      # Global contacts table with filters, add/edit/delete
+    commission-table.tsx   # Master commission & bonus view with tabs, filters, agreement links
     agreements-list.tsx    # 5 filters: search, status, provider, provider country, territory
     agreement-detail.tsx   # 6-tab detail view
     agreement-form.tsx     # Create/edit with inline provider add, multi-territory

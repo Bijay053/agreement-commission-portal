@@ -11,7 +11,7 @@ import { Label } from "@/components/ui/label";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger,
 } from "@/components/ui/dialog";
-import { Upload, FileText, File, Clock, User } from "lucide-react";
+import { Upload, FileText, File, Clock, User, Eye, Download } from "lucide-react";
 import { format, parseISO } from "date-fns";
 
 function formatFileSize(bytes: number) {
@@ -129,6 +129,32 @@ export default function DocumentsTab({ agreementId }: { agreementId: number }) {
                       </span>
                       {doc.uploadNote && <span>{doc.uploadNote}</span>}
                     </div>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      data-testid={`button-view-document-${doc.id}`}
+                      onClick={() => {
+                        const isPdf = doc.mimeType === "application/pdf";
+                        window.open(`/api/documents/${doc.id}/download?inline=${isPdf ? "true" : "false"}`, "_blank");
+                      }}
+                    >
+                      <Eye className="w-4 h-4" />
+                    </Button>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      data-testid={`button-download-document-${doc.id}`}
+                      onClick={() => {
+                        const link = document.createElement("a");
+                        link.href = `/api/documents/${doc.id}/download`;
+                        link.download = doc.originalFilename;
+                        link.click();
+                      }}
+                    >
+                      <Download className="w-4 h-4" />
+                    </Button>
                   </div>
                 </div>
               </CardContent>

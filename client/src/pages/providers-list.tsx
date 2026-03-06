@@ -15,7 +15,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
 import {
-  Search, Plus, Building2, MapPin, Globe2, Filter, Edit, Eye,
+  Search, Plus, Building2, MapPin, Globe2, Filter, Edit, Eye, RotateCcw,
 } from "lucide-react";
 import { PROVIDER_TYPES, PROVIDER_STATUSES } from "@shared/schema";
 
@@ -192,6 +192,21 @@ export default function ProvidersListPage() {
               className="w-[160px]"
               data-testid="select-country-filter"
             />
+            <Button
+              variant="outline"
+              size="default"
+              onClick={() => {
+                setSearch("");
+                setTypeFilter("all");
+                setStatusFilter("all");
+                setCountryFilter("all");
+              }}
+              disabled={!search && typeFilter === "all" && statusFilter === "all" && countryFilter === "all"}
+              data-testid="button-reset-filters"
+            >
+              <RotateCcw className="w-4 h-4 mr-2" />
+              Reset Filters
+            </Button>
           </div>
         </CardContent>
       </Card>
@@ -259,7 +274,11 @@ export default function ProvidersListPage() {
           <CardContent className="py-16 text-center">
             <Building2 className="w-12 h-12 mx-auto text-muted-foreground/50 mb-3" />
             <h3 className="text-lg font-medium">No providers found</h3>
-            <p className="text-sm text-muted-foreground mt-1">Add your first provider to get started</p>
+            <p className="text-sm text-muted-foreground mt-1">
+              {search || typeFilter !== "all" || statusFilter !== "all" || countryFilter !== "all"
+                ? <>Try adjusting your filters or <span className="text-foreground underline cursor-pointer" data-testid="link-reset-filters" onClick={() => { setSearch(""); setTypeFilter("all"); setStatusFilter("all"); setCountryFilter("all"); }}>Reset filters</span></>
+                : "Add your first provider to get started"}
+            </p>
           </CardContent>
         </Card>
       )}

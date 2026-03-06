@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import {
-  Search, Plus, FileText, Building2, MapPin, Calendar, Filter, Globe,
+  Search, Plus, FileText, Building2, MapPin, Calendar, Filter, Globe, RotateCcw,
 } from "lucide-react";
 import { format, parseISO, differenceInDays } from "date-fns";
 import { AGREEMENT_STATUSES } from "@shared/schema";
@@ -180,6 +180,23 @@ export default function AgreementsListPage() {
               className="w-[180px]"
               data-testid="select-territory-country-filter"
             />
+            <Button
+              variant="outline"
+              size="default"
+              onClick={() => {
+                setSearch("");
+                setStatusFilter("all");
+                setProviderFilter("all");
+                setProviderCountryFilter("all");
+                setTerritoryCountryFilter("all");
+                navigate("/agreements");
+              }}
+              disabled={!search && statusFilter === "all" && providerFilter === "all" && providerCountryFilter === "all" && territoryCountryFilter === "all"}
+              data-testid="button-reset-filters"
+            >
+              <RotateCcw className="w-4 h-4 mr-2" />
+              Reset Filters
+            </Button>
           </div>
         </CardContent>
       </Card>
@@ -252,7 +269,7 @@ export default function AgreementsListPage() {
             <h3 className="text-lg font-medium">No agreements found</h3>
             <p className="text-sm text-muted-foreground mt-1">
               {search || statusFilter !== "all" || territoryCountryFilter !== "all" || providerCountryFilter !== "all" || providerFilter !== "all"
-                ? "Try adjusting your filters"
+                ? <>Try adjusting your filters or <span className="text-foreground underline cursor-pointer" data-testid="link-reset-filters" onClick={() => { setSearch(""); setStatusFilter("all"); setProviderFilter("all"); setProviderCountryFilter("all"); setTerritoryCountryFilter("all"); navigate("/agreements"); }}>Reset filters</span></>
                 : "Create your first agreement to get started"}
             </p>
           </CardContent>

@@ -590,6 +590,36 @@ export async function registerRoutes(
     }
   });
 
+  app.get("/api/commission-rules", requireAuth, requirePermission("commission.view"), async (req, res) => {
+    try {
+      const filters: any = {};
+      if (req.query.providerId) filters.providerId = parseInt(req.query.providerId as string);
+      if (req.query.providerCountryId) filters.providerCountryId = parseInt(req.query.providerCountryId as string);
+      if (req.query.agreementStatus) filters.agreementStatus = req.query.agreementStatus as string;
+      if (req.query.commissionMode) filters.commissionMode = req.query.commissionMode as string;
+      if (req.query.search) filters.search = req.query.search as string;
+      const data = await storage.getAllCommissionRules(filters);
+      res.json(data);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.get("/api/bonus-rules", requireAuth, requirePermission("commission.view"), async (req, res) => {
+    try {
+      const filters: any = {};
+      if (req.query.providerId) filters.providerId = parseInt(req.query.providerId as string);
+      if (req.query.providerCountryId) filters.providerCountryId = parseInt(req.query.providerCountryId as string);
+      if (req.query.agreementStatus) filters.agreementStatus = req.query.agreementStatus as string;
+      if (req.query.bonusType) filters.bonusType = req.query.bonusType as string;
+      if (req.query.search) filters.search = req.query.search as string;
+      const data = await storage.getAllBonusRules(filters);
+      res.json(data);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
   app.get("/api/agreements/:id/commission-rules", requireAuth, requirePermission("commission.view"), async (req, res) => {
     const data = await storage.getCommissionRules(parseInt(req.params.id));
     res.json(data);
@@ -716,6 +746,28 @@ export async function registerRoutes(
         ipAddress: req.ip,
       });
       res.json(doc);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.get("/api/documents/:id/download", requireAuth, requirePermission("document.download"), async (req, res) => {
+    try {
+      const doc = await storage.getDocument(parseInt(req.params.id));
+      if (!doc) return res.status(404).json({ message: "Document not found" });
+
+      const filePath = doc.storagePath;
+      if (!fs.existsSync(filePath)) {
+        return res.status(404).json({ message: "File not found on server" });
+      }
+
+      const disposition = req.query.inline === "true" ? "inline" : "attachment";
+      res.setHeader("Content-Type", doc.mimeType);
+      res.setHeader("Content-Disposition", `${disposition}; filename="${doc.originalFilename}"`);
+      res.setHeader("Content-Length", doc.sizeBytes.toString());
+
+      const fileStream = fs.createReadStream(filePath);
+      fileStream.pipe(res);
     } catch (err: any) {
       res.status(500).json({ message: err.message });
     }

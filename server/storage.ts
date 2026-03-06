@@ -61,12 +61,14 @@ export interface IStorage {
   checkDuplicateTarget(agreementId: number, targetType: string, metric: string, periodKey: string, excludeId?: number): Promise<boolean>;
 
   getBonusRules(targetId: number): Promise<any[]>;
+  getAllBonusRules(filters?: { providerId?: number; providerCountryId?: number; agreementStatus?: string; bonusType?: string; search?: string }): Promise<any[]>;
   createBonusRule(rule: any): Promise<TargetBonusRule>;
   deleteBonusRule(id: number): Promise<void>;
   createBonusTier(tier: any): Promise<TargetBonusTier>;
   createBonusCountryEntry(entry: any): Promise<TargetBonusCountryEntry>;
 
   getCommissionRules(agreementId: number): Promise<AgreementCommissionRule[]>;
+  getAllCommissionRules(filters?: { providerId?: number; providerCountryId?: number; agreementStatus?: string; commissionMode?: string; search?: string }): Promise<any[]>;
   createCommissionRule(rule: InsertCommissionRule): Promise<AgreementCommissionRule>;
   updateCommissionRule(id: number, data: Partial<InsertCommissionRule>): Promise<AgreementCommissionRule>;
   deleteCommissionRule(id: number): Promise<void>;
@@ -78,6 +80,7 @@ export interface IStorage {
   deleteContact(id: number): Promise<void>;
 
   getDocuments(agreementId: number): Promise<AgreementDocument[]>;
+  getDocument(id: number): Promise<AgreementDocument | undefined>;
   createDocument(doc: InsertDocument): Promise<AgreementDocument>;
 
   getExpiringAgreements(daysAhead: number): Promise<any[]>;
@@ -515,6 +518,83 @@ export class DatabaseStorage implements IStorage {
     return result;
   }
 
+  async getAllBonusRules(filters?: { providerId?: number; providerCountryId?: number; agreementStatus?: string; bonusType?: string; search?: string }): Promise<any[]> {
+    const conditions: any[] = [];
+    if (filters?.providerId) conditions.push(eq(agreements.universityId, filters.providerId));
+    if (filters?.providerCountryId) conditions.push(eq(universities.countryId, filters.providerCountryId));
+    if (filters?.agreementStatus) conditions.push(eq(agreements.status, filters.agreementStatus));
+    if (filters?.bonusType) conditions.push(eq(targetBonusRules.bonusType, filters.bonusType));
+    if (filters?.search) {
+      const s = `%${filters.search}%`;
+      conditions.push(or(
+        ilike(universities.name, s),
+        ilike(agreements.title, s),
+        ilike(agreements.agreementCode, s),
+      ));
+    }
+
+    const rows = await db
+      .select({
+        id: targetBonusRules.id,
+        targetId: targetBonusRules.targetId,
+        bonusType: targetBonusRules.bonusType,
+        currency: targetBonusRules.currency,
+        ruleCreatedAt: targetBonusRules.createdAt,
+        targetType: agreementTargets.targetType,
+        metric: agreementTargets.metric,
+        targetValue: agreementTargets.value,
+        periodKey: agreementTargets.periodKey,
+        agreementId: agreements.id,
+        agreementCode: agreements.agreementCode,
+        agreementTitle: agreements.title,
+        agreementStatus: agreements.status,
+        providerId: universities.id,
+        providerName: universities.name,
+        providerCountryId: universities.countryId,
+        providerCountryName: countries.name,
+      })
+      .from(targetBonusRules)
+      .innerJoin(agreementTargets, eq(targetBonusRules.targetId, agreementTargets.id))
+      .innerJoin(agreements, eq(agreementTargets.agreementId, agreements.id))
+      .innerJoin(universities, eq(agreements.universityId, universities.id))
+      .leftJoin(countries, eq(universities.countryId, countries.id))
+      .where(conditions.length > 0 ? and(...conditions) : undefined)
+      .orderBy(desc(targetBonusRules.createdAt));
+
+    const result = [];
+    for (const row of rows) {
+      const tiers = await db.select().from(targetBonusTiers).where(eq(targetBonusTiers.bonusRuleId, row.id)).orderBy(asc(targetBonusTiers.minStudents));
+      const countryEntries = await db
+        .select({
+          id: targetBonusCountry.id,
+          bonusRuleId: targetBonusCountry.bonusRuleId,
+          countryId: targetBonusCountry.countryId,
+          studentCount: targetBonusCountry.studentCount,
+          bonusAmount: targetBonusCountry.bonusAmount,
+          countryName: countries.name,
+        })
+        .from(targetBonusCountry)
+        .innerJoin(countries, eq(targetBonusCountry.countryId, countries.id))
+        .where(eq(targetBonusCountry.bonusRuleId, row.id));
+
+      const agreementIds = [row.agreementId];
+      const territories = await db
+        .select({ countryName: countries.name })
+        .from(agreementTerritories)
+        .innerJoin(countries, eq(agreementTerritories.countryId, countries.id))
+        .where(eq(agreementTerritories.agreementId, row.agreementId));
+
+      result.push({
+        ...row,
+        tiers,
+        countryEntries,
+        territoryCountries: territories.map(t => t.countryName),
+      });
+    }
+
+    return result;
+  }
+
   async createBonusRule(rule: any): Promise<TargetBonusRule> {
     const [created] = await db.insert(targetBonusRules).values(rule).returning();
     return created;
@@ -536,6 +616,80 @@ export class DatabaseStorage implements IStorage {
 
   async getCommissionRules(agreementId: number): Promise<AgreementCommissionRule[]> {
     return db.select().from(agreementCommissionRules).where(eq(agreementCommissionRules.agreementId, agreementId)).orderBy(asc(agreementCommissionRules.priority));
+  }
+
+  async getAllCommissionRules(filters?: { providerId?: number; providerCountryId?: number; agreementStatus?: string; commissionMode?: string; search?: string }): Promise<any[]> {
+    const conditions: any[] = [];
+    if (filters?.providerId) conditions.push(eq(agreements.universityId, filters.providerId));
+    if (filters?.providerCountryId) conditions.push(eq(universities.countryId, filters.providerCountryId));
+    if (filters?.agreementStatus) conditions.push(eq(agreements.status, filters.agreementStatus));
+    if (filters?.commissionMode) conditions.push(eq(agreementCommissionRules.commissionMode, filters.commissionMode));
+    if (filters?.search) {
+      const s = `%${filters.search}%`;
+      conditions.push(or(
+        ilike(universities.name, s),
+        ilike(agreements.title, s),
+        ilike(agreements.agreementCode, s),
+        ilike(agreementCommissionRules.label, s),
+        ilike(agreementCommissionRules.studyLevel, s),
+      ));
+    }
+
+    const rows = await db
+      .select({
+        id: agreementCommissionRules.id,
+        agreementId: agreementCommissionRules.agreementId,
+        label: agreementCommissionRules.label,
+        studyLevel: agreementCommissionRules.studyLevel,
+        commissionMode: agreementCommissionRules.commissionMode,
+        percentageValue: agreementCommissionRules.percentageValue,
+        flatAmount: agreementCommissionRules.flatAmount,
+        currency: agreementCommissionRules.currency,
+        basis: agreementCommissionRules.basis,
+        payEvent: agreementCommissionRules.payEvent,
+        conditionsText: agreementCommissionRules.conditionsText,
+        effectiveFrom: agreementCommissionRules.effectiveFrom,
+        effectiveTo: agreementCommissionRules.effectiveTo,
+        priority: agreementCommissionRules.priority,
+        isActive: agreementCommissionRules.isActive,
+        createdAt: agreementCommissionRules.createdAt,
+        updatedAt: agreementCommissionRules.updatedAt,
+        agreementCode: agreements.agreementCode,
+        agreementTitle: agreements.title,
+        agreementStatus: agreements.status,
+        providerId: universities.id,
+        providerName: universities.name,
+        providerCountryId: universities.countryId,
+        providerCountryName: countries.name,
+      })
+      .from(agreementCommissionRules)
+      .innerJoin(agreements, eq(agreementCommissionRules.agreementId, agreements.id))
+      .innerJoin(universities, eq(agreements.universityId, universities.id))
+      .leftJoin(countries, eq(universities.countryId, countries.id))
+      .where(conditions.length > 0 ? and(...conditions) : undefined)
+      .orderBy(desc(agreementCommissionRules.updatedAt));
+
+    const agreementIds = [...new Set(rows.map(r => r.agreementId))];
+    const territoryMap: Record<number, string[]> = {};
+    if (agreementIds.length > 0) {
+      const territories = await db
+        .select({
+          agreementId: agreementTerritories.agreementId,
+          countryName: countries.name,
+        })
+        .from(agreementTerritories)
+        .innerJoin(countries, eq(agreementTerritories.countryId, countries.id))
+        .where(inArray(agreementTerritories.agreementId, agreementIds));
+      for (const t of territories) {
+        if (!territoryMap[t.agreementId]) territoryMap[t.agreementId] = [];
+        territoryMap[t.agreementId].push(t.countryName);
+      }
+    }
+
+    return rows.map(r => ({
+      ...r,
+      territoryCountries: territoryMap[r.agreementId] || [],
+    }));
   }
 
   async createCommissionRule(rule: InsertCommissionRule): Promise<AgreementCommissionRule> {
@@ -656,6 +810,11 @@ export class DatabaseStorage implements IStorage {
 
   async getDocuments(agreementId: number): Promise<AgreementDocument[]> {
     return db.select().from(agreementDocuments).where(eq(agreementDocuments.agreementId, agreementId)).orderBy(desc(agreementDocuments.versionNo));
+  }
+
+  async getDocument(id: number): Promise<AgreementDocument | undefined> {
+    const [doc] = await db.select().from(agreementDocuments).where(eq(agreementDocuments.id, id));
+    return doc;
   }
 
   async createDocument(doc: InsertDocument): Promise<AgreementDocument> {
