@@ -174,6 +174,7 @@ export const agreementContacts = pgTable("agreement_contacts", {
   phone: varchar("phone", { length: 64 }),
   email: varchar("email", { length: 255 }),
   countryId: integer("country_id").references(() => countries.id),
+  city: varchar("city", { length: 255 }),
   isPrimary: boolean("is_primary").default(false),
   notes: text("notes"),
   createdAt: timestamp("created_at").defaultNow(),

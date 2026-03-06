@@ -42,6 +42,7 @@ interface ContactRow {
   phone: string | null;
   isPrimary: boolean | null;
   notes: string | null;
+  city: string | null;
   contactCountryId: number | null;
   contactCountryName: string | null;
   agreementId: number;
@@ -91,6 +92,7 @@ export default function ContactsListPage() {
     phone: "",
     email: "",
     countryId: "",
+    city: "",
     isPrimary: false,
     notes: "",
   });
@@ -100,6 +102,7 @@ export default function ContactsListPage() {
     phone: "",
     email: "",
     countryId: "",
+    city: "",
     isPrimary: false,
     notes: "",
   });
@@ -127,7 +130,7 @@ export default function ContactsListPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [contactsUrl] });
       setShowAddDialog(false);
-      setAddForm({ agreementId: "", fullName: "", positionTitle: "", phone: "", email: "", countryId: "", isPrimary: false, notes: "" });
+      setAddForm({ agreementId: "", fullName: "", positionTitle: "", phone: "", email: "", countryId: "", city: "", isPrimary: false, notes: "" });
       toast({ title: "Contact added" });
     },
     onError: (err: any) => toast({ title: "Error", description: err.message, variant: "destructive" }),
@@ -165,6 +168,7 @@ export default function ContactsListPage() {
       phone: contact.phone || "",
       email: contact.email || "",
       countryId: contact.contactCountryId ? String(contact.contactCountryId) : "",
+      city: contact.city || "",
       isPrimary: contact.isPrimary || false,
       notes: contact.notes || "",
     });
@@ -173,7 +177,7 @@ export default function ContactsListPage() {
 
   const handleEditSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!editContact) return;
+    if (!editContact || !editForm.countryId) return;
     updateMutation.mutate({
       id: editContact.id,
       data: {
@@ -269,7 +273,7 @@ export default function ContactsListPage() {
                   <TableHead>Position</TableHead>
                   <TableHead>Provider</TableHead>
                   <TableHead>Provider Country</TableHead>
-                  <TableHead>Territory</TableHead>
+                  <TableHead>Contact Location</TableHead>
                   <TableHead>Email</TableHead>
                   <TableHead>Phone</TableHead>
                   <TableHead className="text-center">Primary</TableHead>
@@ -308,8 +312,8 @@ export default function ContactsListPage() {
                     </TableCell>
                     <TableCell>
                       <span className="text-sm text-muted-foreground">
-                        {contact.territoryCountries.length > 0
-                          ? contact.territoryCountries.join(", ")
+                        {contact.contactCountryName
+                          ? `${contact.contactCountryName}${contact.city ? `, ${contact.city}` : ""}`
                           : "-"}
                       </span>
                     </TableCell>
@@ -442,18 +446,29 @@ export default function ContactsListPage() {
                 />
               </div>
             </div>
-            <div>
-              <Label>Country</Label>
-              <Select value={editForm.countryId} onValueChange={v => setEditForm({ ...editForm, countryId: v })}>
-                <SelectTrigger data-testid="select-edit-contact-country">
-                  <SelectValue placeholder="Select country" />
-                </SelectTrigger>
-                <SelectContent>
-                  {countries?.map((c: any) => (
-                    <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label>Contact Country <span className="text-red-500">*</span></Label>
+                <Select value={editForm.countryId} onValueChange={v => setEditForm({ ...editForm, countryId: v })}>
+                  <SelectTrigger data-testid="select-edit-contact-country">
+                    <SelectValue placeholder="Select country" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {countries?.map((c: any) => (
+                      <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label>City / State</Label>
+                <Input
+                  value={editForm.city}
+                  onChange={e => setEditForm({ ...editForm, city: e.target.value })}
+                  placeholder="e.g. Melbourne, VIC"
+                  data-testid="input-edit-contact-city"
+                />
+              </div>
             </div>
             <div className="flex items-center gap-3">
               <Switch
@@ -475,7 +490,7 @@ export default function ContactsListPage() {
               <Button type="button" variant="outline" onClick={() => setEditContact(null)}>
                 Cancel
               </Button>
-              <Button type="submit" disabled={updateMutation.isPending} data-testid="button-submit-edit-contact">
+              <Button type="submit" disabled={updateMutation.isPending || !editForm.countryId} data-testid="button-submit-edit-contact">
                 {updateMutation.isPending ? "Saving..." : "Save Changes"}
               </Button>
             </DialogFooter>
@@ -512,7 +527,7 @@ export default function ContactsListPage() {
           <form
             onSubmit={(e) => {
               e.preventDefault();
-              if (!addForm.agreementId) return;
+              if (!addForm.agreementId || !addForm.countryId) return;
               createMutation.mutate({
                 ...addForm,
                 agreementId: parseInt(addForm.agreementId),
@@ -574,18 +589,29 @@ export default function ContactsListPage() {
                 />
               </div>
             </div>
-            <div>
-              <Label>Country</Label>
-              <Select value={addForm.countryId} onValueChange={v => setAddForm({ ...addForm, countryId: v })}>
-                <SelectTrigger data-testid="select-add-contact-country">
-                  <SelectValue placeholder="Select country" />
-                </SelectTrigger>
-                <SelectContent>
-                  {countries?.map((c: any) => (
-                    <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label>Contact Country <span className="text-red-500">*</span></Label>
+                <Select value={addForm.countryId} onValueChange={v => setAddForm({ ...addForm, countryId: v })}>
+                  <SelectTrigger data-testid="select-add-contact-country">
+                    <SelectValue placeholder="Select country" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {countries?.map((c: any) => (
+                      <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label>City / State</Label>
+                <Input
+                  value={addForm.city}
+                  onChange={e => setAddForm({ ...addForm, city: e.target.value })}
+                  placeholder="e.g. Melbourne, VIC"
+                  data-testid="input-add-contact-city"
+                />
+              </div>
             </div>
             <div className="flex items-center gap-3">
               <Switch
@@ -605,7 +631,7 @@ export default function ContactsListPage() {
             </div>
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setShowAddDialog(false)}>Cancel</Button>
-              <Button type="submit" disabled={createMutation.isPending || !addForm.agreementId} data-testid="button-submit-add-contact">
+              <Button type="submit" disabled={createMutation.isPending || !addForm.agreementId || !addForm.countryId} data-testid="button-submit-add-contact">
                 {createMutation.isPending ? "Adding..." : "Add Contact"}
               </Button>
             </DialogFooter>

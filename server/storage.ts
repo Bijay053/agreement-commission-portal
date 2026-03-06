@@ -595,6 +595,7 @@ export class DatabaseStorage implements IStorage {
         phone: agreementContacts.phone,
         isPrimary: agreementContacts.isPrimary,
         notes: agreementContacts.notes,
+        city: agreementContacts.city,
         contactCountryId: agreementContacts.countryId,
         contactCountryName: contactCountry.name,
         agreementId: agreements.id,

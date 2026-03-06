@@ -15,27 +15,44 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger,
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
-import { Plus, Users, Trash2, Mail, Phone, MapPin, Star } from "lucide-react";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Plus, Users, Trash2, Mail, Phone, MapPin, Star, Pencil, UserPlus } from "lucide-react";
 
 export default function ContactsTab({ agreementId }: { agreementId: number }) {
   const { hasPermission } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const canManage = hasPermission("contacts.manage");
-  const [showDialog, setShowDialog] = useState(false);
+  const [showAddDialog, setShowAddDialog] = useState(false);
+  const [editingContact, setEditingContact] = useState<any | null>(null);
+  const [deletingContact, setDeletingContact] = useState<any | null>(null);
+
+  const contactsQueryKey = `/api/agreements/${agreementId}/contacts`;
 
   const { data: contacts, isLoading } = useQuery<any[]>({
-    queryKey: ["/api/agreements", agreementId, "contacts"],
-    queryFn: async () => {
-      const res = await fetch(`/api/agreements/${agreementId}/contacts`, { credentials: "include" });
-      if (!res.ok) throw new Error("Failed");
-      return res.json();
-    },
+    queryKey: [contactsQueryKey],
   });
 
   const { data: countries } = useQuery<any[]>({ queryKey: ["/api/countries"] });
+
+  const emptyForm = {
+    fullName: "",
+    positionTitle: "",
+    phone: "",
+    email: "",
+    countryId: "",
+    city: "",
+    isPrimary: false,
+    notes: "",
+  };
+
+  const [addForm, setAddForm] = useState(emptyForm);
+  const [editForm, setEditForm] = useState(emptyForm);
 
   const createMutation = useMutation({
     mutationFn: async (data: any) => {
@@ -43,9 +60,23 @@ export default function ContactsTab({ agreementId }: { agreementId: number }) {
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/agreements", agreementId, "contacts"] });
-      setShowDialog(false);
+      queryClient.invalidateQueries({ queryKey: [contactsQueryKey] });
+      setShowAddDialog(false);
+      setAddForm(emptyForm);
       toast({ title: "Contact added" });
+    },
+    onError: (err: any) => toast({ title: "Error", description: err.message, variant: "destructive" }),
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: number; data: any }) => {
+      const res = await apiRequest("PATCH", `/api/contacts/${id}`, data);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [contactsQueryKey] });
+      setEditingContact(null);
+      toast({ title: "Contact updated" });
     },
     onError: (err: any) => toast({ title: "Error", description: err.message, variant: "destructive" }),
   });
@@ -55,27 +86,51 @@ export default function ContactsTab({ agreementId }: { agreementId: number }) {
       await apiRequest("DELETE", `/api/contacts/${id}`);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/agreements", agreementId, "contacts"] });
+      queryClient.invalidateQueries({ queryKey: [contactsQueryKey] });
+      setDeletingContact(null);
       toast({ title: "Contact deleted" });
     },
   });
 
-  const [form, setForm] = useState({
-    fullName: "",
-    positionTitle: "",
-    phone: "",
-    email: "",
-    countryId: "",
-    isPrimary: false,
-    notes: "",
-  });
-
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleAddSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!addForm.countryId) return;
     createMutation.mutate({
-      ...form,
-      countryId: form.countryId ? parseInt(form.countryId) : null,
+      ...addForm,
+      countryId: parseInt(addForm.countryId),
     });
+  };
+
+  const handleEditSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingContact || !editForm.countryId) return;
+    updateMutation.mutate({
+      id: editingContact.id,
+      data: {
+        ...editForm,
+        countryId: editForm.countryId ? parseInt(editForm.countryId) : null,
+      },
+    });
+  };
+
+  const openEditDialog = (contact: any) => {
+    setEditForm({
+      fullName: contact.fullName,
+      positionTitle: contact.positionTitle || "",
+      phone: contact.phone || "",
+      email: contact.email || "",
+      countryId: contact.countryId ? String(contact.countryId) : "",
+      city: contact.city || "",
+      isPrimary: contact.isPrimary || false,
+      notes: contact.notes || "",
+    });
+    setEditingContact(contact);
+  };
+
+  const getCountryName = (countryId: number | null) => {
+    if (!countryId || !countries) return null;
+    const c = countries.find((c: any) => c.id === countryId);
+    return c?.name || null;
   };
 
   if (isLoading) return <div className="space-y-3">{Array.from({length: 2}).map((_,i) => <Skeleton key={i} className="h-24" />)}</div>;
@@ -83,64 +138,11 @@ export default function ContactsTab({ agreementId }: { agreementId: number }) {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-2">
-        <h3 className="font-medium">University Contacts</h3>
+        <h3 className="font-medium">Provider Contacts</h3>
         {canManage && (
-          <Dialog open={showDialog} onOpenChange={setShowDialog}>
-            <DialogTrigger asChild>
-              <Button size="sm" data-testid="button-add-contact">
-                <Plus className="w-4 h-4 mr-1" /> Add Contact
-              </Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Add Contact</DialogTitle>
-              </DialogHeader>
-              <form onSubmit={handleSubmit} className="space-y-4">
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <Label>Full Name</Label>
-                    <Input value={form.fullName} onChange={e => setForm({...form, fullName: e.target.value})} placeholder="Dr. John Smith" required data-testid="input-contact-name" />
-                  </div>
-                  <div>
-                    <Label>Position</Label>
-                    <Input value={form.positionTitle} onChange={e => setForm({...form, positionTitle: e.target.value})} placeholder="Partnerships Manager" data-testid="input-contact-position" />
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <Label>Email</Label>
-                    <Input type="email" value={form.email} onChange={e => setForm({...form, email: e.target.value})} placeholder="john@university.edu" data-testid="input-contact-email" />
-                  </div>
-                  <div>
-                    <Label>Phone</Label>
-                    <Input value={form.phone} onChange={e => setForm({...form, phone: e.target.value})} placeholder="+61 2 1234 5678" data-testid="input-contact-phone" />
-                  </div>
-                </div>
-                <div>
-                  <Label>Country</Label>
-                  <Select value={form.countryId} onValueChange={v => setForm({...form, countryId: v})}>
-                    <SelectTrigger><SelectValue placeholder="Select country" /></SelectTrigger>
-                    <SelectContent>
-                      {countries?.map((c: any) => (
-                        <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="flex items-center gap-3">
-                  <Switch checked={form.isPrimary} onCheckedChange={v => setForm({...form, isPrimary: v})} data-testid="switch-primary-contact" />
-                  <Label>Primary Contact</Label>
-                </div>
-                <div>
-                  <Label>Notes</Label>
-                  <Textarea value={form.notes} onChange={e => setForm({...form, notes: e.target.value})} placeholder="Additional notes..." />
-                </div>
-                <Button type="submit" className="w-full" disabled={createMutation.isPending} data-testid="button-submit-contact">
-                  {createMutation.isPending ? "Adding..." : "Add Contact"}
-                </Button>
-              </form>
-            </DialogContent>
-          </Dialog>
+          <Button size="sm" onClick={() => setShowAddDialog(true)} data-testid="button-add-contact">
+            <UserPlus className="w-4 h-4 mr-1" /> Add Contact
+          </Button>
         )}
       </div>
 
@@ -151,7 +153,7 @@ export default function ContactsTab({ agreementId }: { agreementId: number }) {
               <CardContent className="p-4">
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
                       <h4 className="text-sm font-medium">{contact.fullName}</h4>
                       {contact.isPrimary && (
                         <Badge variant="default" className="text-xs">
@@ -173,12 +175,35 @@ export default function ContactsTab({ agreementId }: { agreementId: number }) {
                           <Phone className="w-3 h-3" /> {contact.phone}
                         </p>
                       )}
+                      {(contact.countryId || contact.city) && (
+                        <p className="text-xs flex items-center gap-1.5 text-muted-foreground">
+                          <MapPin className="w-3 h-3" />
+                          {[getCountryName(contact.countryId), contact.city].filter(Boolean).join(", ")}
+                        </p>
+                      )}
                     </div>
                   </div>
                   {canManage && (
-                    <Button variant="ghost" size="icon" onClick={() => deleteMutation.mutate(contact.id)} data-testid={`button-delete-contact-${contact.id}`}>
-                      <Trash2 className="w-4 h-4 text-destructive" />
-                    </Button>
+                    <div className="flex items-center gap-1 shrink-0">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="cursor-pointer"
+                        onClick={() => openEditDialog(contact)}
+                        data-testid={`button-edit-contact-${contact.id}`}
+                      >
+                        <Pencil className="w-4 h-4 text-muted-foreground" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="cursor-pointer"
+                        onClick={() => setDeletingContact(contact)}
+                        data-testid={`button-delete-contact-${contact.id}`}
+                      >
+                        <Trash2 className="w-4 h-4 text-destructive" />
+                      </Button>
+                    </div>
                   )}
                 </div>
               </CardContent>
@@ -193,6 +218,153 @@ export default function ContactsTab({ agreementId }: { agreementId: number }) {
           </CardContent>
         </Card>
       )}
+
+      <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Add Contact</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleAddSubmit} className="space-y-4">
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label>Full Name <span className="text-red-500">*</span></Label>
+                <Input value={addForm.fullName} onChange={e => setAddForm({...addForm, fullName: e.target.value})} placeholder="Dr. John Smith" required data-testid="input-contact-name" />
+              </div>
+              <div>
+                <Label>Position</Label>
+                <Input value={addForm.positionTitle} onChange={e => setAddForm({...addForm, positionTitle: e.target.value})} placeholder="Partnerships Manager" data-testid="input-contact-position" />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label>Email</Label>
+                <Input type="email" value={addForm.email} onChange={e => setAddForm({...addForm, email: e.target.value})} placeholder="john@university.edu" data-testid="input-contact-email" />
+              </div>
+              <div>
+                <Label>Phone</Label>
+                <Input value={addForm.phone} onChange={e => setAddForm({...addForm, phone: e.target.value})} placeholder="+61 2 1234 5678" data-testid="input-contact-phone" />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label>Contact Country <span className="text-red-500">*</span></Label>
+                <Select value={addForm.countryId} onValueChange={v => setAddForm({...addForm, countryId: v})}>
+                  <SelectTrigger data-testid="select-contact-country">
+                    <SelectValue placeholder="Select country" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {countries?.map((c: any) => (
+                      <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label>City / State</Label>
+                <Input value={addForm.city} onChange={e => setAddForm({...addForm, city: e.target.value})} placeholder="e.g. Melbourne, VIC" data-testid="input-contact-city" />
+              </div>
+            </div>
+            <div className="flex items-center gap-3">
+              <Switch checked={addForm.isPrimary} onCheckedChange={v => setAddForm({...addForm, isPrimary: v})} data-testid="switch-primary-contact" />
+              <Label>Primary Contact</Label>
+            </div>
+            <div>
+              <Label>Notes</Label>
+              <Textarea value={addForm.notes} onChange={e => setAddForm({...addForm, notes: e.target.value})} placeholder="Additional notes..." />
+            </div>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setShowAddDialog(false)}>Cancel</Button>
+              <Button type="submit" className="w-full" disabled={createMutation.isPending || !addForm.countryId} data-testid="button-submit-contact">
+                {createMutation.isPending ? "Adding..." : "Add Contact"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!editingContact} onOpenChange={(open) => { if (!open) setEditingContact(null); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit Contact</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleEditSubmit} className="space-y-4">
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label>Full Name <span className="text-red-500">*</span></Label>
+                <Input value={editForm.fullName} onChange={e => setEditForm({...editForm, fullName: e.target.value})} required data-testid="input-edit-contact-name" />
+              </div>
+              <div>
+                <Label>Position</Label>
+                <Input value={editForm.positionTitle} onChange={e => setEditForm({...editForm, positionTitle: e.target.value})} data-testid="input-edit-contact-position" />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label>Email</Label>
+                <Input type="email" value={editForm.email} onChange={e => setEditForm({...editForm, email: e.target.value})} data-testid="input-edit-contact-email" />
+              </div>
+              <div>
+                <Label>Phone</Label>
+                <Input value={editForm.phone} onChange={e => setEditForm({...editForm, phone: e.target.value})} data-testid="input-edit-contact-phone" />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label>Contact Country <span className="text-red-500">*</span></Label>
+                <Select value={editForm.countryId} onValueChange={v => setEditForm({...editForm, countryId: v})}>
+                  <SelectTrigger data-testid="select-edit-contact-country">
+                    <SelectValue placeholder="Select country" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {countries?.map((c: any) => (
+                      <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label>City / State</Label>
+                <Input value={editForm.city} onChange={e => setEditForm({...editForm, city: e.target.value})} placeholder="e.g. Melbourne, VIC" data-testid="input-edit-contact-city" />
+              </div>
+            </div>
+            <div className="flex items-center gap-3">
+              <Switch checked={editForm.isPrimary} onCheckedChange={v => setEditForm({...editForm, isPrimary: v})} data-testid="switch-edit-primary-contact" />
+              <Label>Primary Contact</Label>
+            </div>
+            <div>
+              <Label>Notes</Label>
+              <Textarea value={editForm.notes} onChange={e => setEditForm({...editForm, notes: e.target.value})} data-testid="input-edit-contact-notes" />
+            </div>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setEditingContact(null)}>Cancel</Button>
+              <Button type="submit" disabled={updateMutation.isPending || !editForm.countryId} data-testid="button-submit-edit-contact">
+                {updateMutation.isPending ? "Saving..." : "Save Changes"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      <AlertDialog open={!!deletingContact} onOpenChange={(open) => { if (!open) setDeletingContact(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Contact</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete "{deletingContact?.fullName}"? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => deletingContact && deleteMutation.mutate(deletingContact.id)}
+              className="bg-destructive text-destructive-foreground"
+              data-testid="button-confirm-delete-contact"
+            >
+              {deleteMutation.isPending ? "Deleting..." : "Delete"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
