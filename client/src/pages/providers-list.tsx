@@ -30,7 +30,7 @@ export default function ProvidersListPage() {
   const { hasPermission } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const canManage = hasPermission("agreement.create");
+  const canManage = hasPermission("providers.provider.add") || hasPermission("providers.provider.update");
 
   const [search, setSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState("all");

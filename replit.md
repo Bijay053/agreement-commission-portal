@@ -29,6 +29,7 @@ A secure internal portal for Study Info Centre — managing provider (university
 - **Commission & Bonus Master Table** — Standalone page (`/commission`) with Commission and Bonus tabs; pulls all rules from all agreements; filters, search, reset; each row links back to source agreement
 - **Sidebar Status Sub-menu** — Agreements sidebar with expandable status filters and count badges
 - **Agreement List Filters** — search, status, provider, provider country, territory country
+- **Permission-Based Access Control** — Route-level `AccessGuard` blocks pages with "Access Denied" when user lacks permission; sidebar hides nav items user can't access; action buttons (Add/Edit/Delete) hidden per permission; server-side `requirePermission` middleware on all API endpoints
 - Fine-grained RBAC with module.resource.action permission codes
 - Audit logging for all key actions including role/permission changes
 - Confidentiality level hidden (defaults to "high" for all agreements)

@@ -6,6 +6,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider, useAuth } from "@/lib/auth";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/app-sidebar";
+import { AccessGuard } from "@/components/access-guard";
 import { Skeleton } from "@/components/ui/skeleton";
 import NotFound from "@/pages/not-found";
 import LoginPage from "@/pages/login";
@@ -26,16 +27,56 @@ function Router() {
   return (
     <Switch>
       <Route path="/" component={DashboardPage} />
-      <Route path="/agreements" component={AgreementsListPage} />
-      <Route path="/agreements/new" component={AgreementFormPage} />
-      <Route path="/agreements/:id/edit" component={AgreementFormPage} />
-      <Route path="/agreements/:id" component={AgreementDetailPage} />
-      <Route path="/contacts" component={ContactsListPage} />
-      <Route path="/commission" component={CommissionTablePage} />
-      <Route path="/providers" component={ProvidersListPage} />
-      <Route path="/users" component={UsersManagementPage} />
-      <Route path="/roles" component={RolesManagementPage} />
-      <Route path="/audit-logs" component={AuditLogsPage} />
+      <Route path="/agreements">
+        <AccessGuard permission="agreement.view">
+          <AgreementsListPage />
+        </AccessGuard>
+      </Route>
+      <Route path="/agreements/new">
+        <AccessGuard permission="agreement.create">
+          <AgreementFormPage />
+        </AccessGuard>
+      </Route>
+      <Route path="/agreements/:id/edit">
+        <AccessGuard permission="agreement.edit">
+          <AgreementFormPage />
+        </AccessGuard>
+      </Route>
+      <Route path="/agreements/:id">
+        <AccessGuard permission="agreement.view">
+          <AgreementDetailPage />
+        </AccessGuard>
+      </Route>
+      <Route path="/contacts">
+        <AccessGuard permission="contacts.view">
+          <ContactsListPage />
+        </AccessGuard>
+      </Route>
+      <Route path="/commission">
+        <AccessGuard permission="commission.view">
+          <CommissionTablePage />
+        </AccessGuard>
+      </Route>
+      <Route path="/providers">
+        <AccessGuard permission="providers.provider.read">
+          <ProvidersListPage />
+        </AccessGuard>
+      </Route>
+      <Route path="/users">
+        <AccessGuard permission="security.user.manage">
+          <UsersManagementPage />
+        </AccessGuard>
+      </Route>
+      <Route path="/roles">
+        <AccessGuard permission="security.role.manage">
+          <RolesManagementPage />
+        </AccessGuard>
+      </Route>
+      <Route path="/audit-logs">
+        <AccessGuard permission="audit.view">
+          <AuditLogsPage />
+        </AccessGuard>
+      </Route>
       <Route component={NotFound} />
     </Switch>
   );

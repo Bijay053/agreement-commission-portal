@@ -249,7 +249,7 @@ export async function registerRoutes(
     res.json(data);
   });
 
-  app.post("/api/providers", requireAuth, requirePermission("agreement.create"), async (req, res) => {
+  app.post("/api/providers", requireAuth, requirePermission("providers.provider.add"), async (req, res) => {
     try {
       const parsed = insertUniversitySchema.safeParse(req.body);
       if (!parsed.success) return res.status(400).json({ message: "Invalid data", errors: parsed.error.flatten() });
@@ -262,7 +262,7 @@ export async function registerRoutes(
     }
   });
 
-  app.patch("/api/providers/:id", requireAuth, requirePermission("agreement.edit"), async (req, res) => {
+  app.patch("/api/providers/:id", requireAuth, requirePermission("providers.provider.update"), async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       const parsed = insertUniversitySchema.partial().safeParse(req.body);
@@ -283,7 +283,7 @@ export async function registerRoutes(
     res.json(data);
   });
 
-  app.post("/api/universities", requireAuth, requirePermission("agreement.create"), async (req, res) => {
+  app.post("/api/universities", requireAuth, requirePermission("providers.provider.add"), async (req, res) => {
     try {
       const parsed = insertUniversitySchema.safeParse(req.body);
       if (!parsed.success) return res.status(400).json({ message: "Invalid data" });
@@ -781,7 +781,6 @@ export async function registerRoutes(
       res.setHeader("Pragma", "no-cache");
       res.setHeader("Expires", "0");
       res.setHeader("X-Content-Type-Options", "nosniff");
-      res.setHeader("X-Frame-Options", "SAMEORIGIN");
 
       const fileStream = fs.createReadStream(filePath);
       fileStream.pipe(res);
