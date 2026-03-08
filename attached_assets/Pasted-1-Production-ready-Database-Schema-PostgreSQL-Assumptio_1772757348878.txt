@@ -1,0 +1,682 @@
+1) Production-ready Database Schema (PostgreSQL)
+
+Assumption: Django + DRF + PostgreSQL. This schema is normalized, supports versioned documents, flexible commission rules/targets, per-country scoping, and strong auditing.
+
+1.1 Core reference tables
+countries
+
+id (PK, smallint)
+
+iso2 (varchar(2), unique, not null)
+
+name (varchar(128), not null)
+
+universities
+
+id (PK, bigserial)
+
+name (varchar(255), unique-ish; create unique index on lower(name))
+
+country_id (FK -> countries.id, nullable)
+
+website (varchar(255), nullable)
+
+created_at, updated_at (timestamptz)
+
+Indexes
+
+idx_universities_name_lower on lower(name)
+
+1.2 Agreements
+agreements
+
+id (PK, bigserial)
+
+university_id (FK -> universities.id, not null)
+
+agreement_code (varchar(64), unique, not null) (internal code e.g., “UON-2026-BD-AGT-01”)
+
+title (varchar(255), not null)
+
+agreement_type (varchar(32), not null)
+(enum via check: ‘agency’, ‘commission_schedule’, ‘addendum’, ‘renewal’, ‘mou’, ‘other’)
+
+status (varchar(24), not null)
+(enum: ‘draft’, ‘active’, ‘expired’, ‘terminated’, ‘renewal_in_progress’)
+
+territory_country_id (FK -> countries.id, not null) (agreement territory country)
+
+start_date (date, not null)
+
+expiry_date (date, not null)
+
+auto_renew (boolean, default false)
+
+confidentiality_level (varchar(16), not null, default ‘high’)
+(enum: low/medium/high)
+
+internal_notes (text, nullable) (restricted by permission)
+
+created_by_user_id (FK -> users.id, not null)
+
+updated_by_user_id (FK -> users.id, not null)
+
+created_at, updated_at (timestamptz)
+
+Constraints
+
+expiry_date >= start_date
+
+Optionally: only 1 “active” agreement per (university_id, territory_country_id, agreement_type) (partial unique index where status='active') if your business requires it.
+
+Indexes
+
+idx_agreements_university
+
+idx_agreements_territory_country
+
+idx_agreements_expiry_date
+
+idx_agreements_status_expiry on (status, expiry_date)
+
+1.3 Targets
+agreement_targets
+
+id (PK, bigserial)
+
+agreement_id (FK -> agreements.id, not null, on delete cascade)
+
+target_type (varchar(16), not null)
+(enum: ‘monthly’, ‘intake’, ‘yearly’)
+
+metric (varchar(24), not null)
+(enum: ‘applications’, ‘enrolments’, ‘starts’, ‘revenue’)
+
+value (numeric(12,2), not null) (keep numeric to allow revenue targets too)
+
+currency (varchar(3), nullable) (only if metric=revenue)
+
+period_key (varchar(32), not null)
+Examples:
+
+monthly: 2026-07
+
+yearly: 2026
+
+intake: T2-2026 or SEP-2026
+
+notes (text, nullable)
+
+created_by_user_id (FK -> users.id)
+
+created_at, updated_at (timestamptz)
+
+Unique rule
+
+unique (agreement_id, target_type, metric, period_key)
+
+Indexes
+
+idx_targets_agreement
+
+idx_targets_period
+
+1.4 Commission Rules (Flexible)
+agreement_commission_rules
+
+id (PK, bigserial)
+
+agreement_id (FK -> agreements.id, not null, on delete cascade)
+
+label (varchar(255), not null) (“UG Standard”, “PG 1st Year”, etc.)
+
+study_level (varchar(32), nullable) (UG/PG/Diploma/ELICOS/Any)
+
+commission_mode (varchar(16), not null)
+(enum: ‘percentage’, ‘flat’)
+
+percentage_value (numeric(6,3), nullable) (e.g., 12.500)
+
+flat_amount (numeric(12,2), nullable)
+
+currency (varchar(3), nullable)
+
+basis (varchar(24), not null)
+(enum: ‘per_subject’, ‘per_term’, ‘first_year’, ‘full_course’, ‘per_intake’)
+
+pay_event (varchar(24), not null, default ‘enrolment’)
+(enum: ‘enrolment’, ‘census’, ‘completion’)
+
+subject_rules (jsonb, nullable)
+Example:
+
+{
+  "subjects_per_block": 2,
+  "max_subjects_per_year": 8,
+  "pay_on": "enrolled_subjects"
+}
+
+conditions_text (text, nullable) (clawback, withdrawal rules, etc.)
+
+effective_from (date, nullable)
+
+effective_to (date, nullable)
+
+priority (int, not null, default 100) (lower = higher priority)
+
+is_active (boolean, not null, default true)
+
+created_at, updated_at (timestamptz)
+
+Constraints
+
+If commission_mode='percentage' then percentage_value is not null and flat fields null.
+
+If commission_mode='flat' then flat_amount and currency not null and percentage null.
+
+Indexes
+
+idx_commission_rules_agreement
+
+idx_commission_rules_active
+
+gin_subject_rules on subject_rules (GIN)
+
+1.5 Contacts (Multiple)
+agreement_contacts
+
+id (PK, bigserial)
+
+agreement_id (FK -> agreements.id, not null, on delete cascade)
+
+full_name (varchar(255), not null)
+
+position_title (varchar(255), nullable)
+
+phone (varchar(64), nullable)
+
+email (varchar(255), nullable)
+
+country_id (FK -> countries.id, nullable)
+
+is_primary (boolean, default false)
+
+notes (text, nullable)
+
+created_at, updated_at (timestamptz)
+
+Indexes
+
+idx_contacts_agreement
+
+idx_contacts_email_lower on lower(email)
+
+Rule
+
+Allow multiple primary? Usually no. Enforce max 1 primary per agreement using partial unique:
+
+unique (agreement_id) where is_primary=true
+
+1.6 Documents (Versioned + Secure metadata)
+agreement_documents
+
+id (PK, bigserial)
+
+agreement_id (FK -> agreements.id, not null, on delete cascade)
+
+version_no (int, not null)
+
+original_filename (varchar(255), not null)
+
+mime_type (varchar(64), not null) (prefer application/pdf)
+
+size_bytes (bigint, not null)
+
+storage_provider (varchar(16), not null) (‘s3’, ‘local’, etc.)
+
+storage_key (varchar(512), not null) (path/key in object store)
+
+sha256 (char(64), not null)
+
+encryption_key_id (varchar(128), nullable) (if using KMS envelope keys)
+
+status (varchar(16), not null, default ‘active’) (active/archived)
+
+uploaded_by_user_id (FK -> users.id, not null)
+
+upload_note (text, nullable)
+
+created_at (timestamptz)
+
+Unique
+
+unique (agreement_id, version_no)
+
+Indexes
+
+idx_docs_agreement
+
+idx_docs_sha256
+
+1.7 Reminder scheduling + delivery logs
+agreement_reminder_rules
+
+(global config; admin-managed)
+
+id (PK)
+
+days_before_expiry (int, not null) (90,60,30,14,7,1,0)
+
+is_enabled (boolean, default true)
+
+agreement_reminder_events
+
+(what should be sent for each agreement + rule day; created by daily job to ensure “exactly once” sends)
+
+id (PK, bigserial)
+
+agreement_id (FK -> agreements.id, not null)
+
+rule_id (FK -> agreement_reminder_rules.id, not null)
+
+scheduled_for (date, not null) (date it should send)
+
+status (varchar(16), not null, default ‘pending’) (pending/sent/failed/skipped)
+
+last_error (text, nullable)
+
+sent_at (timestamptz, nullable)
+
+created_at (timestamptz)
+
+Unique
+
+unique (agreement_id, rule_id, scheduled_for)
+
+email_delivery_logs
+
+id (PK, bigserial)
+
+message_type (varchar(32)) (agreement_expiry_reminder)
+
+agreement_id (FK -> agreements.id, nullable)
+
+to_emails (text, not null) (store as JSON/text)
+
+subject (varchar(255))
+
+provider_message_id (varchar(255), nullable)
+
+status (varchar(16)) (queued/sent/failed)
+
+error (text, nullable)
+
+created_at (timestamptz)
+
+1.8 Users, Roles, Permissions (RBAC + country scoping)
+
+If you already have users/roles, integrate. If not:
+
+users
+
+id (PK)
+
+email (unique, not null)
+
+full_name
+
+password_hash
+
+mfa_enabled (boolean)
+
+mfa_secret_encrypted (text, nullable)
+
+is_active (boolean)
+
+created_at, updated_at
+
+roles
+
+id (PK)
+
+name (unique) (Super Admin, Agreement Admin, Viewer, etc.)
+
+description
+
+permissions
+
+id (PK)
+
+code (unique) (agreement.view, document.download, …)
+
+description
+
+role_permissions
+
+role_id (FK)
+
+permission_id (FK)
+
+unique(role_id, permission_id)
+
+user_roles
+
+user_id (FK)
+
+role_id (FK)
+
+unique(user_id, role_id)
+
+user_country_access
+
+(optional but recommended)
+
+id (PK)
+
+user_id (FK)
+
+country_id (FK)
+
+unique(user_id, country_id)
+
+Access logic: user must have permission + (if country restrictions exist) the agreement territory country must be allowed.
+
+1.9 Audit logs (must-have)
+audit_logs
+
+id (PK, bigserial)
+
+user_id (FK -> users.id, nullable) (nullable for system jobs)
+
+action (varchar(64), not null)
+Examples: LOGIN_SUCCESS, DOC_VIEW, DOC_DOWNLOAD, AGREEMENT_EDIT, ROLE_CHANGE
+
+entity_type (varchar(32), not null) (agreement/document/user)
+
+entity_id (bigint, not null)
+
+ip_address (inet, nullable)
+
+user_agent (text, nullable)
+
+metadata (jsonb, nullable) (e.g., pages viewed, token id, etc.)
+
+created_at (timestamptz, not null)
+
+Indexes
+
+idx_audit_entity on (entity_type, entity_id, created_at desc)
+
+idx_audit_user on (user_id, created_at desc)
+
+gin_audit_metadata on metadata
+
+2) Security Design: “View Document but Cannot Download”
+
+Important truth: you cannot guarantee 100% prevention (screenshots/phone cameras exist). The goal is:
+
+prevent easy download & direct link access
+
+minimize leakage
+
+strong deterrence (watermark)
+
+traceability (audit logs)
+
+Below is a proven approach that works well in production.
+
+2.1 Threat Model (What we must stop)
+
+✅ Must stop:
+
+“Download” button and “Save as”
+
+Copying a direct file link and opening it outside portal
+
+Sharing a long-lived URL
+
+Fetching the PDF from browser cache easily
+
+Unauthorized users accessing documents
+
+⚠️ Cannot fully stop (but deter + track):
+
+Screenshots / screen recordings
+
+Photos from another device
+
+2.2 Secure Architecture (Recommended)
+A) Store documents privately in object storage
+
+S3 bucket private (or equivalent)
+
+No public ACL
+
+Access only from backend service role
+
+B) Never serve raw document URLs directly
+
+Instead:
+
+User requests document view: POST /documents/{id}/view-token
+
+Backend checks:
+
+user authenticated + MFA session valid
+
+has document.view_in_portal
+
+country access allowed
+
+document belongs to agreement user can view
+
+Backend generates short-lived signed token (JWT) for viewing:
+
+expires in 2–5 minutes
+
+includes user_id, doc_id, permitted_action=view, nonce
+
+Frontend loads secure viewer using this token.
+
+C) Stream pages (not whole PDF download)
+
+Best practice:
+
+Convert PDF into page images (tiles) or per-page rendering server-side.
+
+Serve as image streams or chunked responses.
+
+This prevents a single “download PDF” network call.
+
+Two common patterns:
+
+Pattern 1 (Strongest): Pre-render PDF pages to images
+
+On upload: backend renders PDF pages into PNG/WebP images stored privately
+
+Viewer loads:
+
+GET /documents/{id}/pages/{pageNo}?token=...
+
+Pros: very hard to reconstruct a clean PDF
+
+Cons: extra storage + processing, but worth it for “high security”
+
+Pattern 2 (Medium): PDF streaming proxy with range requests blocked
+
+Backend proxies PDF bytes but:
+
+uses signed URL short TTL
+
+disables Content-Disposition: attachment
+
+sets Cache-Control: no-store
+
+Pros: easier
+
+Cons: user can still capture full PDF from network tools if skilled
+
+Recommendation: Pattern 1 for your “very sensitive” requirement.
+
+2.3 Watermarking (Deterrence)
+Visible watermark overlay (frontend)
+
+Always show watermark layer on top of pages:
+
+{user_full_name} | {user_email} | {timestamp} | CONFIDENTIAL
+
+repeated diagonally
+
+Burned-in watermark (backend, stronger)
+
+If using Pattern 2 (PDF streaming), apply watermark into the PDF pages server-side for each view session (expensive).
+If using Pattern 1 (images), watermark can be burned into images during rendering (best).
+
+2.4 Disable Download / Print (UI Controls)
+
+Frontend viewer should:
+
+Hide download/print buttons
+
+Block right-click save (basic)
+
+Disable text selection (optional)
+
+Fullscreen viewer support
+
+Detect devtools? (optional; not reliable)
+
+But enforcement must be backend, not UI.
+
+2.5 Prevent Direct Access, Sharing, and Caching
+Token rules
+
+Token tied to:
+
+user_id
+
+doc_id
+
+device/session_id (optional)
+
+Token expires quickly (2–5 min)
+
+One-time nonce stored in Redis to prevent reuse (optional but strong)
+
+Headers
+
+For all viewer endpoints:
+
+Cache-Control: no-store, no-cache, must-revalidate, private
+
+Pragma: no-cache
+
+Expires: 0
+
+X-Content-Type-Options: nosniff
+
+Content-Security-Policy locked down
+
+Referrer-Policy: no-referrer
+
+X-Frame-Options: DENY (or allow same-origin if embedded)
+
+Block “attachment”
+
+Always serve with Content-Disposition: inline; filename="..." (never attachment)
+
+For images: normal image response
+
+2.6 Re-authentication for Sensitive View
+
+Even after login:
+
+Require recent MFA to view documents:
+
+Example: if MFA verification older than 10 minutes, prompt OTP again before document opens.
+This matches your “verify before login every time” intent, and also protects sensitive actions.
+
+2.7 Logging & Audit (Very Important)
+
+Log every sensitive action:
+
+DOC_VIEW_START (user, doc, agreement, timestamp, ip/device)
+
+DOC_VIEW_PAGE (optional aggregate: pages viewed + duration)
+
+DOC_VIEW_END
+
+DOC_DOWNLOAD (if allowed)
+
+TOKEN_ISSUED (doc view token)
+
+Include:
+
+IP address
+
+user agent
+
+country (optional)
+
+session id
+
+Add alert rules:
+
+Too many doc views quickly
+
+Access from new country / suspicious IP
+
+Multiple failed MFA attempts
+
+2.8 Optional “Highest Security” Add-ons (If you want)
+
+Device binding (register trusted devices)
+
+IP allowlist for admin roles
+
+Session concurrency limits (1–2 active sessions max)
+
+DLP: block copy/paste; not fully reliable in browser
+
+Signed viewer player (custom viewer that never requests whole PDF)
+
+3) Implementation Notes (React + Python)
+Backend (Django)
+
+Store documents in S3 private bucket
+
+On upload:
+
+validate PDF
+
+compute sha256
+
+render pages -> store /docs/{doc_id}/pages/{n}.webp
+
+store page count in DB (add page_count column in agreement_documents)
+
+Endpoint:
+
+POST /documents/{id}/view-token returns token + page_count
+
+GET /documents/{id}/pages/{n} streams a single image if token valid
+
+Enforce:
+
+permission checks
+
+country access checks
+
+token expiry
+
+no-store headers
+
+Frontend (React)
+
+Viewer loads page images sequentially (lazy load)
+
+Watermark overlay always on
+
+No download controls unless permission exists
+
+Re-auth modal if required

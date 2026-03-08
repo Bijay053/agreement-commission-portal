@@ -1,0 +1,213 @@
+Since agreement documents are highly confidential, you should not allow users to open the file in a normal browser tab. Opening normally allows:
+
+Right-click Save As
+
+Copy link
+
+Screenshot easily
+
+Share URL
+
+Instead implement Secure Document Viewer + Download Control.
+
+Below is the developer requirement.
+
+Secure Agreement Document Viewing
+Problem
+
+Currently the eye icon (view) likely opens the PDF normally.
+Users can:
+
+copy URL
+
+download directly
+
+share file link
+
+This is not secure for agreements.
+
+Required Solution
+1. Open Document in Secure Viewer (Not Direct Link)
+
+When user clicks View 👁
+
+Instead of:
+
+open(pdf_url)
+
+Use:
+
+open secure viewer modal
+
+Example:
+
+/secure-viewer/{document_id}
+
+The system loads the file through backend authentication.
+
+2. Disable Direct Download From Viewer
+
+Inside viewer disable:
+
+Right click
+
+Save
+
+Print
+
+Copy
+
+Example:
+
+disable context menu
+disable keyboard shortcuts
+disable PDF toolbar download
+
+Example JS:
+
+document.addEventListener("contextmenu", (e) => e.preventDefault());
+3. Disable Browser PDF Toolbar
+
+When embedding PDF:
+
+?toolbar=0&navpanes=0&scrollbar=0
+
+Example embed:
+
+<iframe src="/secure-viewer/123?toolbar=0" />
+4. Hide Real File URL
+
+Never expose:
+
+s3.amazonaws.com/agreement.pdf
+
+Instead load via API:
+
+GET /api/secure-document/{id}
+
+Backend checks:
+
+user logged in
+
+user permission
+
+agreement access
+
+Then streams file.
+
+5. Optional: Screenshot Protection
+
+Screenshots cannot be fully prevented, but you can reduce risk:
+
+Add watermark
+
+Overlay watermark like:
+
+Study Info Centre
+Confidential
+User: bijay@studyinfocentre.com
+Viewed: 06 Mar 2026
+
+Watermark should appear across the document.
+
+This discourages sharing screenshots.
+
+6. Optional: Session-based viewing
+
+Viewer should expire.
+
+Example:
+
+Secure link valid for 60 seconds
+
+Backend generates:
+
+temporary signed URL
+7. Restrict Download Permission
+
+Add role permission:
+
+agreement_document_download
+
+Roles:
+
+Role	Download
+Admin	Allowed
+Manager	Optional
+Staff	View Only
+Agent	Not allowed
+8. UI Icons
+
+Change document actions to:
+
+Icon	Function
+👁	Secure View
+⬇	Download (permission based)
+
+If user has no download permission:
+
+Hide download icon
+
+9. Audit Log
+
+Every document view should log:
+
+user
+
+date
+
+IP
+
+agreement
+
+document version
+
+Example log:
+
+Bijay viewed Deakin Agreement v1
+06 Mar 2026 12:05
+IP: 192.168.1.2
+10. Version Control
+
+Documents already show:
+
+v1 active
+
+System should support:
+
+v1
+
+v2
+
+v3
+
+When new version uploaded:
+
+old version → archived
+
+Recommended Architecture
+User clicks View
+      ↓
+Frontend → /secure-viewer/{doc_id}
+      ↓
+Backend verifies permission
+      ↓
+File streamed to viewer
+      ↓
+Watermark applied
+      ↓
+Download disabled
+Important Note
+
+No system can 100% stop screenshots.
+But with:
+
+watermark
+
+disabled download
+
+hidden file URL
+
+audit logs
+
+You greatly reduce leaks.

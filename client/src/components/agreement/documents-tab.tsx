@@ -1,0 +1,467 @@
+import { useState, useRef, useEffect, useCallback } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useAuth } from "@/lib/auth";
+import { useToast } from "@/hooks/use-toast";
+import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger,
+} from "@/components/ui/dialog";
+import { Upload, FileText, File, Clock, Eye, Download, X, ShieldCheck, ChevronLeft, ChevronRight, ZoomIn, ZoomOut } from "lucide-react";
+import { format, parseISO } from "date-fns";
+import * as pdfjsLib from "pdfjs-dist";
+
+pdfjsLib.GlobalWorkerOptions.workerSrc = "/pdf.worker.min.mjs";
+
+function formatFileSize(bytes: number) {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function PdfCanvasViewer({ pdfData, userEmail }: { pdfData: ArrayBuffer; userEmail: string }) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [pdfDoc, setPdfDoc] = useState<any>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(0);
+  const [scale, setScale] = useState(1.5);
+  const [rendering, setRendering] = useState(false);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const watermarkCanvasRef = useRef<HTMLCanvasElement>(null);
+  const now = format(new Date(), "dd MMM yyyy HH:mm");
+
+  useEffect(() => {
+    const loadPdf = async () => {
+      try {
+        const doc = await pdfjsLib.getDocument({ data: pdfData }).promise;
+        setPdfDoc(doc);
+        setTotalPages(doc.numPages);
+      } catch {
+        console.error("Failed to load PDF");
+      }
+    };
+    loadPdf();
+  }, [pdfData]);
+
+  const renderPage = useCallback(async (pageNum: number, zoom: number) => {
+    if (!pdfDoc || !canvasRef.current || !watermarkCanvasRef.current) return;
+    setRendering(true);
+    try {
+      const page = await pdfDoc.getPage(pageNum);
+      const viewport = page.getViewport({ scale: zoom });
+
+      const canvas = canvasRef.current;
+      const ctx = canvas.getContext("2d")!;
+      canvas.width = viewport.width;
+      canvas.height = viewport.height;
+
+      await page.render({ canvasContext: ctx, viewport }).promise;
+
+      const wCanvas = watermarkCanvasRef.current;
+      wCanvas.width = viewport.width;
+      wCanvas.height = viewport.height;
+      const wCtx = wCanvas.getContext("2d")!;
+      wCtx.clearRect(0, 0, wCanvas.width, wCanvas.height);
+      wCtx.save();
+      wCtx.font = "14px monospace";
+      wCtx.fillStyle = "rgba(0, 0, 0, 0.06)";
+
+      const lines = ["Study Info Centre - Confidential", userEmail, now];
+      const lineHeight = 18;
+      const blockHeight = lines.length * lineHeight + 40;
+      const blockWidth = 300;
+      for (let y = -viewport.height * 0.2; y < viewport.height * 1.2; y += blockHeight + 80) {
+        for (let x = -viewport.width * 0.2; x < viewport.width * 1.2; x += blockWidth + 60) {
+          wCtx.save();
+          wCtx.translate(x, y);
+          wCtx.rotate(-0.5);
+          lines.forEach((line, i) => {
+            wCtx.fillText(line, 0, i * lineHeight);
+          });
+          wCtx.restore();
+        }
+      }
+      wCtx.restore();
+    } catch (err) {
+      console.error("Render error:", err);
+    }
+    setRendering(false);
+  }, [pdfDoc, userEmail, now]);
+
+  useEffect(() => {
+    if (pdfDoc) renderPage(currentPage, scale);
+  }, [pdfDoc, currentPage, scale, renderPage]);
+
+  const goToPage = (delta: number) => {
+    setCurrentPage(p => Math.max(1, Math.min(totalPages, p + delta)));
+  };
+
+  const changeZoom = (delta: number) => {
+    setScale(s => Math.max(0.5, Math.min(3, s + delta)));
+  };
+
+  return (
+    <div className="flex flex-col h-full">
+      <div className="flex items-center justify-center gap-2 py-1.5 bg-zinc-800 border-b border-zinc-700 shrink-0">
+        <Button size="icon" variant="ghost" className="h-7 w-7 text-white" onClick={() => goToPage(-1)} disabled={currentPage <= 1} data-testid="button-prev-page">
+          <ChevronLeft className="w-4 h-4" />
+        </Button>
+        <span className="text-xs text-zinc-300 min-w-[80px] text-center" data-testid="text-page-info">
+          Page {currentPage} of {totalPages}
+        </span>
+        <Button size="icon" variant="ghost" className="h-7 w-7 text-white" onClick={() => goToPage(1)} disabled={currentPage >= totalPages} data-testid="button-next-page">
+          <ChevronRight className="w-4 h-4" />
+        </Button>
+        <div className="w-px h-4 bg-zinc-600 mx-1" />
+        <Button size="icon" variant="ghost" className="h-7 w-7 text-white" onClick={() => changeZoom(-0.25)} disabled={scale <= 0.5} data-testid="button-zoom-out">
+          <ZoomOut className="w-4 h-4" />
+        </Button>
+        <span className="text-xs text-zinc-300 min-w-[40px] text-center">{Math.round(scale * 100)}%</span>
+        <Button size="icon" variant="ghost" className="h-7 w-7 text-white" onClick={() => changeZoom(0.25)} disabled={scale >= 3} data-testid="button-zoom-in">
+          <ZoomIn className="w-4 h-4" />
+        </Button>
+      </div>
+      <div ref={containerRef} className="flex-1 overflow-auto flex justify-center bg-zinc-700 p-4" data-testid="secure-viewer-content">
+        <div className="relative inline-block">
+          <canvas ref={canvasRef} className="block shadow-2xl" style={{ maxWidth: "100%" }} />
+          <canvas
+            ref={watermarkCanvasRef}
+            className="absolute inset-0 pointer-events-none"
+            style={{ width: "100%", height: "100%" }}
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function SecureViewer({ doc, userEmail, onClose }: { doc: any; userEmail: string; onClose: () => void }) {
+  const isPdf = doc.mimeType === "application/pdf";
+  const [pdfData, setPdfData] = useState<ArrayBuffer | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    const loadDocument = async () => {
+      try {
+        const res = await fetch(`/api/documents/${doc.id}/view`, { credentials: "include" });
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({ message: "Access denied" }));
+          setLoadError(err.message || "Failed to load document");
+          setLoading(false);
+          return;
+        }
+        if (isPdf) {
+          const buffer = await res.arrayBuffer();
+          if (!cancelled) setPdfData(buffer);
+        }
+        setLoading(false);
+      } catch {
+        setLoadError("Failed to load document");
+        setLoading(false);
+      }
+    };
+    loadDocument();
+    return () => { cancelled = true; };
+  }, [doc.id, isPdf]);
+
+  const [blurred, setBlurred] = useState(false);
+
+  useEffect(() => {
+    const handleContextMenu = (e: MouseEvent) => e.preventDefault();
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (
+        (e.ctrlKey && (e.key === "s" || e.key === "S" || e.key === "p" || e.key === "P")) ||
+        (e.metaKey && (e.key === "s" || e.key === "S" || e.key === "p" || e.key === "P")) ||
+        e.key === "PrintScreen" ||
+        (e.ctrlKey && e.shiftKey && (e.key === "s" || e.key === "S")) ||
+        (e.metaKey && e.shiftKey && (e.key === "3" || e.key === "4" || e.key === "5")) ||
+        (e.key === "F12") ||
+        (e.ctrlKey && e.shiftKey && (e.key === "i" || e.key === "I"))
+      ) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
+    };
+    const handleBeforePrint = (e: Event) => e.preventDefault();
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "hidden") {
+        setBlurred(true);
+      }
+    };
+    const handleWindowBlur = () => setBlurred(true);
+    const handleWindowFocus = () => setBlurred(false);
+    const handleDragStart = (e: DragEvent) => e.preventDefault();
+    const handleCopy = (e: ClipboardEvent) => e.preventDefault();
+
+    const printBlockerStyle = document.createElement("style");
+    printBlockerStyle.id = "secure-viewer-print-blocker";
+    printBlockerStyle.textContent = `@media print { body * { display: none !important; visibility: hidden !important; } body::after { content: "Printing is disabled for confidential documents — Study Info Centre"; display: block !important; visibility: visible !important; font-size: 24px; text-align: center; padding: 100px 40px; color: #333; } }`;
+    document.head.appendChild(printBlockerStyle);
+
+    document.addEventListener("contextmenu", handleContextMenu);
+    document.addEventListener("keydown", handleKeyDown, true);
+    document.addEventListener("dragstart", handleDragStart);
+    document.addEventListener("copy", handleCopy);
+    window.addEventListener("beforeprint", handleBeforePrint);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    window.addEventListener("blur", handleWindowBlur);
+    window.addEventListener("focus", handleWindowFocus);
+
+    return () => {
+      document.removeEventListener("contextmenu", handleContextMenu);
+      document.removeEventListener("keydown", handleKeyDown, true);
+      document.removeEventListener("dragstart", handleDragStart);
+      document.removeEventListener("copy", handleCopy);
+      window.removeEventListener("beforeprint", handleBeforePrint);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      window.removeEventListener("blur", handleWindowBlur);
+      window.removeEventListener("focus", handleWindowFocus);
+      const el = document.getElementById("secure-viewer-print-blocker");
+      if (el) el.remove();
+    };
+  }, []);
+
+  return (
+    <div className="fixed inset-0 z-[100] bg-black/90 flex flex-col" data-testid="secure-viewer-overlay" style={{ WebkitUserSelect: "none", userSelect: "none", WebkitTouchCallout: "none" }}>
+      <div className="flex items-center justify-between px-4 py-2 bg-zinc-900 border-b border-zinc-700 shrink-0">
+        <div className="flex items-center gap-2 text-white">
+          <ShieldCheck className="w-4 h-4 text-emerald-400" />
+          <span className="text-sm font-medium">Secure Document Viewer</span>
+          <span className="text-xs text-zinc-400 ml-2">{doc.originalFilename} (v{doc.versionNo})</span>
+        </div>
+        <div className="flex items-center gap-2">
+          {blurred && (
+            <span className="text-xs text-amber-400 flex items-center gap-1" data-testid="text-security-warning">
+              <ShieldCheck className="w-3 h-3" /> Content hidden — click to restore
+            </span>
+          )}
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={onClose}
+            className="text-white hover:bg-zinc-700"
+            data-testid="button-close-viewer"
+          >
+            <X className="w-5 h-5" />
+          </Button>
+        </div>
+      </div>
+
+      <div className="flex-1 relative overflow-hidden select-none" style={{ userSelect: "none", WebkitUserSelect: "none" }}>
+        {blurred && (
+          <div
+            className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-zinc-900/95 cursor-pointer"
+            onClick={() => setBlurred(false)}
+            data-testid="security-blur-overlay"
+          >
+            <ShieldCheck className="w-16 h-16 text-amber-400 mb-4" />
+            <p className="text-lg font-medium text-white">Content Hidden for Security</p>
+            <p className="text-sm text-zinc-400 mt-2">Document content is hidden while the window is not in focus.</p>
+            <p className="text-sm text-zinc-400 mt-1">Click anywhere to reveal the document.</p>
+          </div>
+        )}
+        <div style={{ filter: blurred ? "blur(30px)" : "none", transition: "filter 0.15s" }} className="h-full">
+          {loadError ? (
+            <div className="flex flex-col items-center justify-center h-full text-white">
+              <ShieldCheck className="w-16 h-16 text-red-500 mb-4" />
+              <p className="text-lg font-medium">Access Denied</p>
+              <p className="text-sm text-zinc-400 mt-1">{loadError}</p>
+            </div>
+          ) : loading ? (
+            <div className="flex flex-col items-center justify-center h-full text-white">
+              <div className="w-8 h-8 border-2 border-white/30 border-t-white rounded-full animate-spin mb-4" />
+              <p className="text-sm text-zinc-400">Loading secure document...</p>
+            </div>
+          ) : isPdf && pdfData ? (
+            <PdfCanvasViewer pdfData={pdfData} userEmail={userEmail} />
+          ) : (
+            <div className="flex flex-col items-center justify-center h-full text-white">
+              <File className="w-16 h-16 text-zinc-500 mb-4" />
+              <p className="text-lg font-medium">{doc.originalFilename}</p>
+              <p className="text-sm text-zinc-400 mt-1">{formatFileSize(doc.sizeBytes)}</p>
+              <p className="text-xs text-zinc-500 mt-4">This file type cannot be previewed in the browser.</p>
+              <p className="text-xs text-zinc-500">Use the download button if you have permission.</p>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export default function DocumentsTab({ agreementId }: { agreementId: number }) {
+  const { hasPermission, user } = useAuth();
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const canUpload = hasPermission("document.upload");
+  const canView = hasPermission("document.view_in_portal");
+  const canDownload = hasPermission("document.download");
+  const [showDialog, setShowDialog] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [note, setNote] = useState("");
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [viewingDoc, setViewingDoc] = useState<any>(null);
+
+  const { data: documents, isLoading } = useQuery<any[]>({
+    queryKey: ["/api/agreements", agreementId, "documents"],
+    queryFn: async () => {
+      const res = await fetch(`/api/agreements/${agreementId}/documents`, { credentials: "include" });
+      if (!res.ok) throw new Error("Failed");
+      return res.json();
+    },
+  });
+
+  const handleUpload = async () => {
+    const file = fileRef.current?.files?.[0];
+    if (!file) return;
+
+    setUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      if (note) formData.append("note", note);
+
+      const res = await fetch(`/api/agreements/${agreementId}/documents`, {
+        method: "POST",
+        body: formData,
+        credentials: "include",
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.message);
+      }
+      queryClient.invalidateQueries({ queryKey: ["/api/agreements", agreementId, "documents"] });
+      setShowDialog(false);
+      setNote("");
+      toast({ title: "Document uploaded" });
+    } catch (err: any) {
+      toast({ title: "Upload failed", description: err.message, variant: "destructive" });
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleDownload = (doc: any) => {
+    const link = document.createElement("a");
+    link.href = `/api/documents/${doc.id}/download`;
+    link.download = doc.originalFilename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  if (isLoading) return <div className="space-y-3">{Array.from({length: 2}).map((_,i) => <Skeleton key={i} className="h-20" />)}</div>;
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between gap-2">
+        <h3 className="font-medium">Agreement Documents</h3>
+        {canUpload && (
+          <Dialog open={showDialog} onOpenChange={setShowDialog}>
+            <DialogTrigger asChild>
+              <Button size="sm" data-testid="button-upload-document">
+                <Upload className="w-4 h-4 mr-1" /> Upload
+              </Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Upload Document</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-4">
+                <div>
+                  <Label>File (PDF or DOCX, max 50MB)</Label>
+                  <Input type="file" ref={fileRef} accept=".pdf,.doc,.docx" className="mt-1" data-testid="input-file-upload" />
+                </div>
+                <div>
+                  <Label>Upload Note</Label>
+                  <Input value={note} onChange={e => setNote(e.target.value)} placeholder="e.g., Updated commission schedule" data-testid="input-upload-note" />
+                </div>
+                <Button onClick={handleUpload} className="w-full" disabled={uploading} data-testid="button-submit-upload">
+                  {uploading ? "Uploading..." : "Upload Document"}
+                </Button>
+              </div>
+            </DialogContent>
+          </Dialog>
+        )}
+      </div>
+
+      {documents && documents.length > 0 ? (
+        <div className="space-y-2">
+          {documents.map((doc: any) => (
+            <Card key={doc.id} data-testid={`card-document-${doc.id}`}>
+              <CardContent className="p-4">
+                <div className="flex items-center gap-3">
+                  <div className="p-2.5 rounded-md bg-primary/10">
+                    <File className="w-5 h-5 text-primary" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <p className="text-sm font-medium truncate">{doc.originalFilename}</p>
+                      <Badge variant="outline">v{doc.versionNo}</Badge>
+                      <Badge variant={doc.status === "active" ? "default" : "secondary"}>
+                        {doc.status}
+                      </Badge>
+                    </div>
+                    <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground flex-wrap">
+                      <span>{formatFileSize(doc.sizeBytes)}</span>
+                      <span className="flex items-center gap-1">
+                        <Clock className="w-3 h-3" />
+                        {doc.createdAt ? format(parseISO(doc.createdAt), "dd MMM yyyy HH:mm") : "Unknown"}
+                      </span>
+                      {doc.uploadNote && <span>{doc.uploadNote}</span>}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    {canView && (
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        title="Secure View"
+                        data-testid={`button-view-document-${doc.id}`}
+                        onClick={() => setViewingDoc(doc)}
+                      >
+                        <Eye className="w-4 h-4" />
+                      </Button>
+                    )}
+                    {canDownload && (
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        title="Download"
+                        data-testid={`button-download-document-${doc.id}`}
+                        onClick={() => handleDownload(doc)}
+                      >
+                        <Download className="w-4 h-4" />
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      ) : (
+        <Card>
+          <CardContent className="py-12 text-center">
+            <FileText className="w-8 h-8 mx-auto text-muted-foreground/50 mb-2" />
+            <p className="text-sm text-muted-foreground">No documents uploaded</p>
+          </CardContent>
+        </Card>
+      )}
+
+      {viewingDoc && (
+        <SecureViewer
+          doc={viewingDoc}
+          userEmail={user?.user?.email || "Unknown"}
+          onClose={() => setViewingDoc(null)}
+        />
+      )}
+    </div>
+  );
+}

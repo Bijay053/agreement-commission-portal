@@ -1,0 +1,326 @@
+Role & Permission Management Module (Admin Controlled)
+1) Goal
+
+Provide an Admin UI where admins can:
+
+Create / edit / delete roles
+
+Assign permissions per role manually
+
+Customize permissions at module level and action level
+
+Assign roles to users
+
+(Optional) add extra custom permissions later without code changes
+
+2) Admin Screens (Frontend)
+2.1 Roles List Page
+
+Menu: Administration → Roles
+
+Table columns
+
+Role Name
+
+Total Users
+
+Last Updated
+
+Actions: Edit / Duplicate / Delete
+
+Buttons
+
+Create Role
+
+Duplicate Role (copies all permissions)
+
+✅ Acceptance
+
+Admin can create new roles anytime.
+
+2.2 Role Edit Page (Like your screenshot)
+
+Header:
+
+Role name input (required)
+
+Left sidebar:
+
+Modules list (scroll):
+
+Agreements
+
+Providers
+
+Targets
+
+Commission Rules
+
+Contacts
+
+Documents
+
+Users
+
+Audit Logs
+
+Reminder Settings
+
+(and any existing system modules you have)
+
+Main panel (Permission grid):
+Columns:
+
+READ
+
+UPDATE
+
+ADD
+
+DELETE
+
+EXPORT
+
+ALL (checks all above)
+
+Rows:
+
+Each row is a resource inside module, example:
+
+Agreements (main)
+
+Agreement Targets
+
+Agreement Commission Rules
+
+Agreement Contacts
+
+Agreement Documents
+
+Providers
+
+Controls:
+
+Checkboxes like your design
+
+Bulk actions:
+
+“Select All in Module”
+
+“Clear All in Module”
+
+“Read Only preset”
+
+“Full Access preset”
+
+✅ Acceptance
+
+Toggling “ALL” auto selects Read/Update/Add/Delete/Export.
+
+Admin can customize any combination.
+
+2.3 Users → Role Assignment Page
+
+Admin can:
+
+assign one or multiple roles to a user
+
+(optional) set country scope restrictions for that user
+
+✅ Acceptance
+
+User permissions update immediately after saving.
+
+3) Permission Design (Backend)
+3.1 Permission Structure (Module + Action)
+
+Use:
+
+module (string)
+
+resource (string)
+
+action (enum)
+
+Actions:
+
+read
+
+add
+
+update
+
+delete
+
+export
+
+all (virtual UI only)
+
+Example permission codes auto-generated:
+
+agreements.agreement.read
+
+agreements.agreement.add
+
+agreements.agreement.update
+
+agreements.agreement.delete
+
+agreements.agreement.export
+
+agreements.documents.view_in_portal
+
+agreements.documents.download
+
+agreements.documents.upload
+
+agreements.documents.replace
+
+agreements.documents.delete
+
+Note: documents need extra permissions beyond CRUD (secure viewer/download), so treat those as actions too.
+
+3.2 Database Tables (RBAC)
+roles
+
+id
+
+name (unique)
+
+description
+
+created_at, updated_at
+
+permissions
+
+id
+
+module
+
+resource
+
+action
+
+code (unique string)
+
+description
+
+role_permissions
+
+role_id
+
+permission_id
+
+unique(role_id, permission_id)
+
+user_roles
+
+user_id
+
+role_id
+
+unique(user_id, role_id)
+
+✅ Acceptance
+
+Admin edits role permissions → role_permissions table updates.
+
+4) “Admin can customize anything they want” (Key Requirements)
+4.1 Dynamic Modules/Permissions
+
+Admin should be able to manage roles even if modules expand later.
+
+Developer must build:
+
+Permission registry in backend that exposes available modules/resources/actions:
+
+GET /admin/permissions/schema
+returns:
+
+{
+  "modules": [
+    {
+      "module": "agreements",
+      "resources": [
+        {"resource": "agreement", "actions": ["read","add","update","delete","export"]},
+        {"resource": "documents", "actions": ["list","view_in_portal","download","upload","replace","delete"]}
+      ]
+    }
+  ]
+}
+
+Frontend uses this to render the grid dynamically.
+
+✅ Acceptance
+
+Adding a new module in backend automatically appears in role editor UI.
+
+4.2 Super Admin Safety Rule (Must)
+
+Even if admin can customize, the system must enforce:
+
+At least one role must always have:
+
+security.role.manage
+
+security.user.manage
+
+And at least one active user must have that role.
+
+✅ Acceptance
+
+System prevents “locking out admin”.
+
+5) Special Permissions (High Security Document)
+
+In Documents module, include:
+
+documents.view_in_portal
+
+documents.download
+
+documents.upload
+
+documents.replace
+
+documents.delete
+
+✅ Acceptance
+
+Viewer role can have view_in_portal but not download.
+
+6) Audit Logs for Permission Changes
+
+Every time roles or permissions change, log:
+
+who changed
+
+what role
+
+old permissions vs new
+
+timestamp
+
+IP address
+
+✅ Acceptance
+
+Permission changes are traceable.
+
+7) Suggested Default Role Presets (Optional)
+
+Admin can start from template:
+
+Super Admin
+
+Agreement Admin
+
+Agreement Editor
+
+Agreement Viewer (High Security)
+
+Compliance Viewer
+
+Document Viewer Only
+
+But admin can change anytime.
