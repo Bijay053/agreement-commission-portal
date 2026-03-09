@@ -1762,6 +1762,27 @@ export async function registerRoutes(
       const existing = await storage.getCommissionStudent(id);
       if (!existing) return res.status(404).json({ message: "Student not found" });
       if (!req.body.provider?.trim()) return res.status(400).json({ message: "Provider is required" });
+
+      const providerName = req.body.provider.trim().toLowerCase();
+      const courseName = (req.body.courseName || "").trim().toLowerCase();
+      const intake = (req.body.startIntake || "").trim().toLowerCase();
+
+      const existingProviders = await storage.getStudentProviders(id);
+      const duplicate = existingProviders.find(p =>
+        p.provider.trim().toLowerCase() === providerName &&
+        (p.courseName || "").trim().toLowerCase() === courseName &&
+        (p.startIntake || "").trim().toLowerCase() === intake
+      );
+      if (duplicate) {
+        return res.status(400).json({ message: "This provider + course + intake combination already exists for this student" });
+      }
+
+      if (existing.provider.trim().toLowerCase() === providerName &&
+        (existing.courseName || "").trim().toLowerCase() === courseName &&
+        (existing.startIntake || "").trim().toLowerCase() === intake) {
+        return res.status(400).json({ message: "This provider + course + intake combination matches the primary provider" });
+      }
+
       const provider = await storage.addStudentProvider({
         commissionStudentId: id,
         provider: req.body.provider.trim(),
@@ -1791,6 +1812,38 @@ export async function registerRoutes(
     try {
       const providers = await storage.getAllStudentProviders();
       res.json(providers);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.patch("/api/commission-tracker/student-providers/:id", requireAuth, requirePermission("commission_tracker.edit"), async (req, res) => {
+    try {
+      const id = Number(req.params.id);
+      const updated = await storage.updateStudentProvider(id, req.body);
+      if (!updated) return res.status(404).json({ message: "Provider not found" });
+
+      if (updated.commissionRatePct !== undefined || updated.gstApplicable !== undefined || updated.scholarshipType !== undefined || updated.scholarshipValue !== undefined) {
+        const entries = await storage.getCommissionEntries(updated.commissionStudentId);
+        const providerEntries = entries.filter(e => e.studentProviderId === id);
+        const student = await storage.getCommissionStudent(updated.commissionStudentId);
+        if (student && providerEntries.length > 0) {
+          const pConfig: import("./commission-calc").ProviderConfig = {
+            commissionRatePct: updated.commissionRatePct,
+            gstApplicable: updated.gstApplicable,
+            gstRatePct: updated.gstRatePct,
+            scholarshipType: updated.scholarshipType,
+            scholarshipValue: updated.scholarshipValue,
+            country: updated.country,
+          };
+          for (const pe of providerEntries) {
+            const calc = calculateEntry(student, pe, pConfig);
+            await storage.updateCommissionEntry(pe.id, calc);
+          }
+        }
+      }
+
+      res.json(updated);
     } catch (err: any) {
       res.status(500).json({ message: err.message });
     }
@@ -1827,8 +1880,23 @@ export async function registerRoutes(
       const student = await storage.updateCommissionStudent(id, updateData);
 
       const entries = await storage.getCommissionEntries(id);
+      const studentProviders = await storage.getStudentProviders(id);
       for (const entry of entries) {
-        const calc = calculateEntry(student, entry);
+        let pCfg: import("./commission-calc").ProviderConfig | undefined;
+        if (entry.studentProviderId) {
+          const prov = studentProviders.find(p => p.id === entry.studentProviderId);
+          if (prov) {
+            pCfg = {
+              commissionRatePct: prov.commissionRatePct,
+              gstApplicable: prov.gstApplicable,
+              gstRatePct: prov.gstRatePct,
+              scholarshipType: prov.scholarshipType,
+              scholarshipValue: prov.scholarshipValue,
+              country: prov.country,
+            };
+          }
+        }
+        const calc = calculateEntry(student, entry, pCfg);
         await storage.updateCommissionEntry(entry.id, calc as any);
       }
 
@@ -1879,14 +1947,18 @@ export async function registerRoutes(
         return res.status(400).json({ message: `Invalid term: ${termName}. Must be one of: ${termNames.join(", ")}` });
       }
 
+      const studentProviderId = req.body.studentProviderId ? Number(req.body.studentProviderId) : null;
+
       const existingEntries = await storage.getCommissionEntries(studentId);
-      if (existingEntries.find(e => e.termName === termName)) {
-        return res.status(400).json({ message: `Entry for ${termName} already exists` });
+      const dupCheck = existingEntries.find(e => e.termName === termName && (e.studentProviderId || null) === studentProviderId);
+      if (dupCheck) {
+        return res.status(400).json({ message: `Entry for ${termName} already exists for this provider` });
       }
 
       const termIdx = termNames.indexOf(termName);
+      const providerEntries = existingEntries.filter(e => (e.studentProviderId || null) === studentProviderId);
       for (let i = 0; i < termIdx; i++) {
-        const prevEntry = existingEntries.find(e => e.termName === termNames[i]);
+        const prevEntry = providerEntries.find(e => e.termName === termNames[i]);
         if (prevEntry) {
           const st = prevEntry.studentStatus || "";
           if (st === "Withdrawn" || st === "Complete") {
@@ -1895,9 +1967,27 @@ export async function registerRoutes(
         }
       }
 
-      const calc = calculateEntry(student, req.body);
+      let providerConfig: import("./commission-calc").ProviderConfig | undefined;
+      if (studentProviderId) {
+        const providers = await storage.getStudentProviders(studentId);
+        const prov = providers.find(p => p.id === studentProviderId);
+        if (!prov) {
+          return res.status(400).json({ message: "Provider not found for this student" });
+        }
+        providerConfig = {
+          commissionRatePct: prov.commissionRatePct,
+          gstApplicable: prov.gstApplicable,
+          gstRatePct: prov.gstRatePct,
+          scholarshipType: prov.scholarshipType,
+          scholarshipValue: prov.scholarshipValue,
+          country: prov.country,
+        };
+      }
+
+      const calc = calculateEntry(student, req.body, providerConfig);
       const entryData = {
         commissionStudentId: studentId,
+        studentProviderId,
         termName,
         academicYear: req.body.academicYear || null,
         feeGross: req.body.feeGross || "0",
@@ -1947,7 +2037,24 @@ export async function registerRoutes(
       if (body.scholarshipValueOverride === "") body.scholarshipValueOverride = null;
 
       const merged = { ...existing, ...body };
-      const calc = calculateEntry(student, merged);
+
+      let providerConfig2: import("./commission-calc").ProviderConfig | undefined;
+      if (existing.studentProviderId) {
+        const providers = await storage.getStudentProviders(existing.commissionStudentId);
+        const prov = providers.find(p => p.id === existing.studentProviderId);
+        if (prov) {
+          providerConfig2 = {
+            commissionRatePct: prov.commissionRatePct,
+            gstApplicable: prov.gstApplicable,
+            gstRatePct: prov.gstRatePct,
+            scholarshipType: prov.scholarshipType,
+            scholarshipValue: prov.scholarshipValue,
+            country: prov.country,
+          };
+        }
+      }
+
+      const calc = calculateEntry(student, merged, providerConfig2);
 
       const updateData = {
         academicYear: merged.academicYear,
@@ -2013,8 +2120,23 @@ export async function registerRoutes(
       if (!student) return res.status(404).json({ message: "Student not found" });
 
       const entries = await storage.getCommissionEntries(studentId);
+      const allProviders = await storage.getStudentProviders(studentId);
       for (const entry of entries) {
-        const calc = calculateEntry(student, entry);
+        let pConfig: import("./commission-calc").ProviderConfig | undefined;
+        if (entry.studentProviderId) {
+          const prov = allProviders.find(p => p.id === entry.studentProviderId);
+          if (prov) {
+            pConfig = {
+              commissionRatePct: prov.commissionRatePct,
+              gstApplicable: prov.gstApplicable,
+              gstRatePct: prov.gstRatePct,
+              scholarshipType: prov.scholarshipType,
+              scholarshipValue: prov.scholarshipValue,
+              country: prov.country,
+            };
+          }
+        }
+        const calc = calculateEntry(student, entry, pConfig);
         await storage.updateCommissionEntry(entry.id, calc as any);
       }
 

@@ -237,6 +237,7 @@ export const commissionStudents = pgTable("commission_students", {
 export const commissionEntries = pgTable("commission_entries", {
   id: serial("id").primaryKey(),
   commissionStudentId: integer("commission_student_id").notNull().references(() => commissionStudents.id, { onDelete: "cascade" }),
+  studentProviderId: integer("student_provider_id").references(() => studentProviders.id, { onDelete: "cascade" }),
   termName: varchar("term_name", { length: 16 }).notNull(),
   academicYear: varchar("academic_year", { length: 16 }),
   feeGross: numeric("fee_gross", { precision: 12, scale: 2 }).default("0"),
@@ -277,6 +278,13 @@ export const studentProviders = pgTable("student_providers", {
   courseName: varchar("course_name", { length: 500 }),
   courseDurationYears: numeric("course_duration_years", { precision: 4, scale: 1 }),
   startIntake: varchar("start_intake", { length: 32 }),
+  commissionRatePct: numeric("commission_rate_pct", { precision: 8, scale: 4 }),
+  gstRatePct: numeric("gst_rate_pct", { precision: 5, scale: 2 }).default("10"),
+  gstApplicable: varchar("gst_applicable", { length: 3 }).default("Yes"),
+  scholarshipType: varchar("scholarship_type", { length: 16 }).default("None"),
+  scholarshipValue: numeric("scholarship_value", { precision: 12, scale: 2 }).default("0"),
+  status: varchar("status", { length: 32 }).default("Under Enquiry"),
+  notes: text("notes"),
   createdAt: timestamp("created_at").defaultNow(),
 });
 

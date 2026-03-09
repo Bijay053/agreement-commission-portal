@@ -62,14 +62,25 @@ export interface CalculatedEntry {
   feeAfterScholarship: string;
 }
 
+export interface ProviderConfig {
+  commissionRatePct?: string | null;
+  gstApplicable?: string | null;
+  gstRatePct?: string | null;
+  scholarshipType?: string | null;
+  scholarshipValue?: string | null;
+  country?: string | null;
+}
+
 export function calculateEntry(
   student: CommissionStudent,
-  entry: Partial<CommissionEntry> & { feeGross?: string | null; bonus?: string | null; commissionRateOverridePct?: string | null; scholarshipTypeOverride?: string | null; scholarshipValueOverride?: string | null }
+  entry: Partial<CommissionEntry> & { feeGross?: string | null; bonus?: string | null; commissionRateOverridePct?: string | null; scholarshipTypeOverride?: string | null; scholarshipValueOverride?: string | null },
+  providerConfig?: ProviderConfig
 ): CalculatedEntry {
   const fee = num(entry.feeGross, 0);
 
-  const masterSchType = normSch(student.scholarshipType);
-  const masterSchVal = num(student.scholarshipValue, 0);
+  const src = providerConfig || student;
+  const masterSchType = normSch(src.scholarshipType);
+  const masterSchVal = num(src.scholarshipValue, 0);
 
   const overrideTypeRaw = (entry.scholarshipTypeOverride || "").trim();
   const overrideType = overrideTypeRaw ? normSch(overrideTypeRaw) : "";
@@ -92,7 +103,7 @@ export function calculateEntry(
   const schChanged = !!overrideType &&
     (usedSchType !== masterSchType || Math.abs(usedSchVal - masterSchVal) > 0.000001);
 
-  const agreedPct = num(student.commissionRatePct, 0);
+  const agreedPct = num(src.commissionRatePct ?? student.commissionRatePct, 0);
   const commissionRateAuto = agreedPct;
 
   const overridePct = num(entry.commissionRateOverridePct, 0);
@@ -103,8 +114,11 @@ export function calculateEntry(
   const commission = round2(fee * (usedPct / 100));
   const bonus = num(entry.bonus, 0);
 
+  const entryCountry = providerConfig?.country || student.country;
+  const entryGstApplicable = src.gstApplicable ?? student.gstApplicable;
+
   let gstRateDec = 0;
-  if (isAustralia(student.country) && student.gstApplicable === "Yes") {
+  if (isAustralia(entryCountry) && entryGstApplicable === "Yes") {
     gstRateDec = 0.10;
   }
 

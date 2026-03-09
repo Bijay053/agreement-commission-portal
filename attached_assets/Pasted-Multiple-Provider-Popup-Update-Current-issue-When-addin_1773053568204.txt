@@ -1,0 +1,185 @@
+Multiple Provider Popup Update
+Current issue
+
+When adding a multiple provider from the sheet/master page, the popup is only asking for:
+
+Provider
+
+Student ID
+
+This is not enough, because each multiple-provider record may have different academic details.
+
+Required Update
+
+When user clicks Add Provider for an existing student, the popup must ask for these fields:
+
+Provider *
+
+Student ID
+
+Course Name *
+
+Course Level *
+
+Duration
+
+Intake *
+
+Optional depending on setup:
+
+Academic Year
+
+Country
+
+Notes
+
+Field details
+Provider *
+
+Dropdown/searchable select
+
+Allow selecting existing provider
+
+If provider is not found, allow manual entry if permitted by role
+
+Student ID
+
+Text field
+
+Can be different for each provider row
+
+Course Name *
+
+Text field or searchable dropdown
+
+Must be saved separately for that provider row
+
+Course Level *
+
+Dropdown
+Examples:
+
+Diploma
+
+Advanced Diploma
+
+Bachelor
+
+Master
+
+MBA
+
+PhD
+
+EAP
+
+Foundation
+
+Certificate
+
+Other
+
+Duration
+
+Text field or dropdown
+Examples:
+
+6 months
+
+1 year
+
+2 years
+
+3 years
+
+4 years
+
+Intake *
+
+Dropdown/select
+Examples:
+
+T1 2025
+
+T2 2025
+
+T3 2025
+or based on configured intake list
+
+Validation Rules
+
+Before adding the multiple provider row, validate duplicates properly.
+
+Do not allow exact duplicate when these match:
+
+Student / Agentsic ID
+
+Provider
+
+Course Name
+
+Course Level
+
+Intake
+
+Student ID can also be included in duplicate check when available.
+
+This should still allow:
+
+same student + different provider
+
+same student + same provider + different course
+
+same student + same provider + different intake
+
+Save Logic
+
+When a new multiple provider row is added, create a separate provider-level record with its own values for:
+
+Provider
+
+Student ID
+
+Course Name
+
+Course Level
+
+Duration
+
+Intake
+
+And this row must sync properly to:
+
+Master page
+
+Relevant intake sheet
+
+Sub-Agent Commission
+
+Dashboard totals where applicable
+
+UI/UX Update for Popup
+Popup title:
+
+Add Provider / Course for [Student Name]
+
+Popup helper text:
+
+Add another provider and academic record for this student.
+Each provider entry can have a different student ID, course, level, duration, and intake.
+
+Buttons:
+
+Cancel
+
+Add Provider
+
+Button behavior:
+
+Disable Add Provider until required fields are completed
+
+Show inline error if duplicate record detected
+
+Expected Result
+
+After update, when adding a multiple provider from sheet/master page, the form should collect enough provider-specific academic information so the system can correctly store and sync each provider row separately.

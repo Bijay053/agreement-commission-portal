@@ -249,6 +249,18 @@ export default function CommissionTrackerPage() {
     },
   });
 
+  const updateProviderMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: number; data: Record<string, any> }) => {
+      const res = await apiRequest("PATCH", `/api/commission-tracker/student-providers/${id}`, data);
+      return res.json();
+    },
+    onSuccess: () => {
+      invalidateAll();
+      queryClient.invalidateQueries({ queryKey: ["/api/commission-tracker/all-student-providers"] });
+    },
+    onError: (err: Error) => toast({ title: "Error", description: err.message, variant: "destructive" }),
+  });
+
   const createEntryMutation = useMutation({
     mutationFn: async ({ studentId, data }: { studentId: number; data: Record<string, any> }) => {
       const res = await apiRequest("POST", `/api/commission-tracker/students/${studentId}/entries`, data);
@@ -426,6 +438,7 @@ export default function CommissionTrackerPage() {
               providersByStudent={providersByStudent}
               onRemoveProvider={(studentId, providerId) => removeProviderMutation.mutate({ studentId, providerId })}
               onUpdateStudent={(id, data) => updateStudentMutation.mutate({ id, data })}
+              onUpdateProvider={(id, data) => updateProviderMutation.mutate({ id, data })}
               onDeleteStudent={(id) => deleteStudentMutation.mutate(id)}
             />
           ) : (
@@ -758,7 +771,7 @@ function DashboardView({ dashboard, year, intakeFilter, onIntakeChange, provider
   );
 }
 
-function MasterTable({ students, allEntries, year, isLoading, canEdit, canDeleteMaster, isDeleting, providersByStudent, onRemoveProvider, onUpdateStudent, onDeleteStudent }: {
+function MasterTable({ students, allEntries, year, isLoading, canEdit, canDeleteMaster, isDeleting, providersByStudent, onRemoveProvider, onUpdateStudent, onUpdateProvider, onDeleteStudent }: {
   students: CommissionStudent[];
   allEntries: Record<number, CommissionEntry[]>;
   year: number | null;
@@ -769,14 +782,20 @@ function MasterTable({ students, allEntries, year, isLoading, canEdit, canDelete
   providersByStudent: Record<number, any[]>;
   onRemoveProvider: (studentId: number, providerId: number) => void;
   onUpdateStudent: (id: number, data: Record<string, any>) => void;
+  onUpdateProvider: (id: number, data: Record<string, any>) => void;
   onDeleteStudent: (id: number) => void;
 }) {
   const [deleteTarget, setDeleteTarget] = useState<CommissionStudent | null>(null);
+  const [deleteProviderTarget, setDeleteProviderTarget] = useState<{ studentId: number; provider: any; isLast: boolean } | null>(null);
 
-  const getTotalForStudent = (studentId: number) => {
+  const getTotalForProvider = (studentId: number, providerId: number | null) => {
     const entries = allEntries[studentId] || [];
-    return entries.reduce((sum, e) => sum + Number(e.totalAmount || 0), 0);
+    return entries
+      .filter(e => (e.studentProviderId || null) === providerId)
+      .reduce((sum, e) => sum + Number(e.totalAmount || 0), 0);
   };
+
+  const colCount = canDeleteMaster ? 18 : 17;
 
   return (
     <div className="p-4 space-y-4" data-testid="master-table-view">
@@ -793,6 +812,8 @@ function MasterTable({ students, allEntries, year, isLoading, canEdit, canDelete
               <th className="px-2 py-1.5 text-left font-medium border border-[#2060a0] min-w-[120px]">Provider</th>
               <th className="px-2 py-1.5 text-left font-medium border border-[#2060a0] min-w-[60px]">Country</th>
               <th className="px-2 py-1.5 text-left font-medium border border-[#2060a0] min-w-[80px]">Intake</th>
+              <th className="px-2 py-1.5 text-left font-medium border border-[#2060a0] min-w-[80px]">Course Level</th>
+              <th className="px-2 py-1.5 text-left font-medium border border-[#2060a0] min-w-[120px]">Course Name</th>
               <th className="px-2 py-1.5 text-left font-medium border border-[#2060a0] min-w-[70px]">Status</th>
               <th className="px-2 py-1.5 text-right font-medium border border-[#2060a0] min-w-[70px]">Comm. %</th>
               <th className="px-2 py-1.5 text-center font-medium border border-[#2060a0] min-w-[50px]">GST</th>
@@ -806,7 +827,7 @@ function MasterTable({ students, allEntries, year, isLoading, canEdit, canDelete
             {isLoading ? (
               Array.from({ length: 5 }).map((_, i) => (
                 <tr key={i}>
-                  {Array.from({ length: canDeleteMaster ? 15 : 14 }).map((_, j) => (
+                  {Array.from({ length: colCount }).map((_, j) => (
                     <td key={j} className="px-2 py-1 border border-gray-200"><Skeleton className="h-3 w-full" /></td>
                   ))}
                 </tr>
@@ -836,29 +857,16 @@ function MasterTable({ students, allEntries, year, isLoading, canEdit, canDelete
                       </td>
                       <td className="px-2 py-1 border border-gray-200">{s.country}</td>
                       <td className="px-2 py-1 border border-gray-200">{s.startIntake || "-"}</td>
+                      <EditableCell value={s.courseLevel || ""} readOnly={!canEdit} onSave={(v) => onUpdateStudent(s.id, { courseLevel: v })} type="select" options={COURSE_LEVELS} width="80px" />
+                      <EditableCell value={s.courseName || ""} readOnly={!canEdit} onSave={(v) => onUpdateStudent(s.id, { courseName: v })} width="120px" />
                       <td className="px-2 py-1 border border-gray-200">
                         <Badge className={`${STATUS_COLORS[s.status || ""] || "bg-gray-100 text-gray-800"} text-[10px] px-1.5 py-0`}>{s.status}</Badge>
                       </td>
                       <EditableCell value={s.commissionRatePct?.toString() || ""} readOnly={!canEdit} onSave={(v) => onUpdateStudent(s.id, { commissionRatePct: v })} type="number" align="right" mono width="70px" />
                       <EditableCell value={s.gstApplicable || "Yes"} readOnly={!canEdit} onSave={(v) => onUpdateStudent(s.id, { gstApplicable: v })} type="select" options={["Yes", "No"]} width="50px" />
                       <EditableCell value={s.scholarshipType || "None"} readOnly={!canEdit} onSave={(v) => onUpdateStudent(s.id, { scholarshipType: v })} type="select" options={["None", "Percent", "Fixed"]} width="80px" />
-                      <td className="px-2 py-1 border border-gray-200 text-right font-mono">${getTotalForStudent(s.id).toFixed(2)}</td>
-                      <td className="px-2 py-1 border border-gray-200 max-w-[200px]">
-                        {s.notes ? (
-                          <TooltipProvider delayDuration={200}>
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <span className="block truncate cursor-help" data-testid={`text-notes-${s.id}`}>{s.notes}</span>
-                              </TooltipTrigger>
-                              <TooltipContent side="top" className="max-w-[400px] whitespace-pre-wrap text-xs p-3">
-                                {s.notes.split(" | ").map((part, i) => (
-                                  <div key={i}>{part}</div>
-                                ))}
-                              </TooltipContent>
-                            </Tooltip>
-                          </TooltipProvider>
-                        ) : "-"}
-                      </td>
+                      <td className="px-2 py-1 border border-gray-200 text-right font-mono">${getTotalForProvider(s.id, null).toFixed(2)}</td>
+                      <EditableCell value={s.notes || ""} readOnly={!canEdit} onSave={(v) => onUpdateStudent(s.id, { notes: v || null })} width="120px" />
                       {canDeleteMaster && (
                         <td className="px-1 py-1 border border-gray-200 text-center" rowSpan={totalRows > 1 ? totalRows : undefined}>
                           <button className="text-red-500 hover:text-red-700 p-0.5" onClick={() => setDeleteTarget(s)} data-testid={`button-delete-master-${s.id}`}>
@@ -871,12 +879,16 @@ function MasterTable({ students, allEntries, year, isLoading, canEdit, canDelete
 
                   for (const ap of additionalProviders) {
                     rows.push(
-                      <tr key={`${s.id}-ap-${ap.id}`} style={{ backgroundColor: statusBg }}>
+                      <tr key={`${s.id}-ap-${ap.id}`} style={{ backgroundColor: STATUS_ROW_BG[ap.status || ""] || statusBg }}>
                         <td className="px-2 py-1 border border-gray-200">
                           <div className="flex items-center gap-1 text-blue-600">
                             <span>{ap.provider}{ap.studentId ? ` (${ap.studentId})` : ""}</span>
                             {canEdit && (
-                              <button onClick={() => onRemoveProvider(s.id, ap.id)} className="text-red-400 hover:text-red-600" data-testid={`button-remove-provider-${ap.id}`}>
+                              <button
+                                onClick={() => setDeleteProviderTarget({ studentId: s.id, provider: ap, isLast: additionalProviders.length === 1 && !s.provider })}
+                                className="text-red-400 hover:text-red-600"
+                                data-testid={`button-remove-provider-${ap.id}`}
+                              >
                                 <X className="h-2.5 w-2.5" />
                               </button>
                             )}
@@ -884,12 +896,14 @@ function MasterTable({ students, allEntries, year, isLoading, canEdit, canDelete
                         </td>
                         <td className="px-2 py-1 border border-gray-200 text-blue-600">{ap.country || s.country}</td>
                         <td className="px-2 py-1 border border-gray-200 text-blue-600">{ap.startIntake || "-"}</td>
-                        <td className="px-2 py-1 border border-gray-200"></td>
-                        <td className="px-2 py-1 border border-gray-200"></td>
-                        <td className="px-2 py-1 border border-gray-200"></td>
-                        <td className="px-2 py-1 border border-gray-200"></td>
-                        <td className="px-2 py-1 border border-gray-200"></td>
-                        <td className="px-2 py-1 border border-gray-200"></td>
+                        <EditableCell value={ap.courseLevel || ""} readOnly={!canEdit} onSave={(v) => onUpdateProvider(ap.id, { courseLevel: v })} type="select" options={COURSE_LEVELS} width="80px" />
+                        <EditableCell value={ap.courseName || ""} readOnly={!canEdit} onSave={(v) => onUpdateProvider(ap.id, { courseName: v })} width="120px" />
+                        <EditableCell value={ap.status || "Under Enquiry"} readOnly={!canEdit} onSave={(v) => onUpdateProvider(ap.id, { status: v })} type="select" options={STUDENT_STATUSES} width="80px" />
+                        <EditableCell value={ap.commissionRatePct?.toString() || ""} readOnly={!canEdit} onSave={(v) => onUpdateProvider(ap.id, { commissionRatePct: v })} type="number" align="right" mono width="70px" />
+                        <EditableCell value={ap.gstApplicable || "Yes"} readOnly={!canEdit} onSave={(v) => onUpdateProvider(ap.id, { gstApplicable: v })} type="select" options={["Yes", "No"]} width="50px" />
+                        <EditableCell value={ap.scholarshipType || "None"} readOnly={!canEdit} onSave={(v) => onUpdateProvider(ap.id, { scholarshipType: v })} type="select" options={["None", "Percent", "Fixed"]} width="80px" />
+                        <td className="px-2 py-1 border border-gray-200 text-right font-mono text-blue-600">${getTotalForProvider(s.id, ap.id).toFixed(2)}</td>
+                        <EditableCell value={ap.notes || ""} readOnly={!canEdit} onSave={(v) => onUpdateProvider(ap.id, { notes: v || null })} width="120px" />
                       </tr>
                     );
                   }
@@ -898,7 +912,7 @@ function MasterTable({ students, allEntries, year, isLoading, canEdit, canDelete
               })()
             ) : (
               <tr>
-                <td colSpan={canDeleteMaster ? 15 : 14} className="px-3 py-6 text-center text-muted-foreground text-sm">
+                <td colSpan={colCount} className="px-3 py-6 text-center text-muted-foreground text-sm">
                   No students found.
                 </td>
               </tr>
@@ -939,6 +953,50 @@ function MasterTable({ students, allEntries, year, isLoading, canEdit, canDelete
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <Dialog open={!!deleteProviderTarget} onOpenChange={(open) => { if (!open) setDeleteProviderTarget(null); }}>
+        <DialogContent className="sm:max-w-[440px]" data-testid="dialog-delete-provider">
+          <DialogHeader>
+            <div className="flex items-center gap-2">
+              <div className="flex items-center justify-center w-10 h-10 rounded-full bg-red-100 dark:bg-red-900/30">
+                <AlertTriangle className="w-5 h-5 text-red-600 dark:text-red-400" />
+              </div>
+              <DialogTitle className="text-lg">Remove Provider?</DialogTitle>
+            </div>
+            <DialogDescription className="sr-only">Confirm removal of provider</DialogDescription>
+          </DialogHeader>
+          {deleteProviderTarget && (
+            <div className="space-y-4 pt-1">
+              <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-3 space-y-1.5 text-sm">
+                <div className="flex gap-2"><span className="text-muted-foreground min-w-[80px]">Provider:</span><span className="font-medium">{deleteProviderTarget.provider.provider}</span></div>
+                {deleteProviderTarget.provider.courseName && (
+                  <div className="flex gap-2"><span className="text-muted-foreground min-w-[80px]">Course:</span><span>{deleteProviderTarget.provider.courseName}</span></div>
+                )}
+              </div>
+              <p className="text-sm text-muted-foreground leading-relaxed">
+                This will permanently remove this provider and all its linked commission entries. This action cannot be undone.
+              </p>
+              {deleteProviderTarget.isLast && (
+                <div className="flex items-start gap-2 p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg">
+                  <AlertTriangle className="w-4 h-4 text-amber-600 mt-0.5 flex-shrink-0" />
+                  <p className="text-sm text-amber-700 dark:text-amber-300">This is the last additional provider. Removing it will leave only the primary provider.</p>
+                </div>
+              )}
+            </div>
+          )}
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="outline" onClick={() => setDeleteProviderTarget(null)} data-testid="button-cancel-delete-provider">Cancel</Button>
+            <Button variant="destructive" data-testid="button-confirm-delete-provider" onClick={() => {
+              if (deleteProviderTarget) {
+                onRemoveProvider(deleteProviderTarget.studentId, deleteProviderTarget.provider.id);
+                setDeleteProviderTarget(null);
+              }
+            }}>
+              Remove Provider
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -958,12 +1016,12 @@ function TermTable({ termName, students, allEntries, terms, isLoading, canEdit, 
   onUpdateEntry: (id: number, data: Record<string, any>) => void;
   onDeleteEntry: (id: number) => void;
 }) {
-  const getEntry = (studentId: number): CommissionEntry | undefined => {
-    return (allEntries[studentId] || []).find(e => e.termName === termName);
+  const getEntry = (studentId: number, studentProviderId: number | null): CommissionEntry | undefined => {
+    return (allEntries[studentId] || []).find(e => e.termName === termName && (e.studentProviderId || null) === studentProviderId);
   };
 
-  const isBlocked = (studentId: number): boolean => {
-    const entries = allEntries[studentId] || [];
+  const isBlocked = (studentId: number, studentProviderId: number | null): boolean => {
+    const entries = (allEntries[studentId] || []).filter(e => (e.studentProviderId || null) === studentProviderId);
     const termOrder = terms.map(t => t.termName);
     const currentIdx = termOrder.indexOf(termName);
     for (let i = 0; i < currentIdx; i++) {
@@ -974,6 +1032,116 @@ function TermTable({ termName, students, allEntries, terms, isLoading, canEdit, 
     }
     return false;
   };
+
+  const renderEntryRow = (
+    s: CommissionStudent,
+    providerLabel: string,
+    providerCountry: string,
+    providerCourseLevel: string,
+    providerCourseName: string,
+    studentProviderId: number | null,
+    rowKey: string,
+    sn: number | null,
+    totalProviderRows: number,
+    isAdditional: boolean,
+  ) => {
+    const entry = getEntry(s.id, studentProviderId);
+    const blocked = isBlocked(s.id, studentProviderId);
+
+    const commonCells = (textClass: string) => (
+      <>
+        {sn !== null && (
+          <td className={`px-2 py-1 border border-gray-200 text-center ${textClass}`} rowSpan={totalProviderRows > 1 ? totalProviderRows : undefined}>{sn}</td>
+        )}
+        {sn !== null && (
+          <>
+            <td className={`px-2 py-1 border border-gray-200 ${textClass}`} rowSpan={totalProviderRows > 1 ? totalProviderRows : undefined}>{s.agentName}</td>
+            <td className={`px-2 py-1 border border-gray-200 ${textClass} font-mono`} rowSpan={totalProviderRows > 1 ? totalProviderRows : undefined}>{s.agentsicId || "-"}</td>
+            <td className={`px-2 py-1 border border-gray-200 ${textClass} font-mono`} rowSpan={totalProviderRows > 1 ? totalProviderRows : undefined}>{s.studentId || "-"}</td>
+            <td className={`px-2 py-1 border border-gray-200 ${textClass}`} rowSpan={totalProviderRows > 1 ? totalProviderRows : undefined}>{s.studentName}</td>
+          </>
+        )}
+        <td className={`px-2 py-1 border border-gray-200 ${isAdditional ? "text-blue-600" : textClass}`}>{providerLabel}</td>
+        <td className={`px-2 py-1 border border-gray-200 ${isAdditional ? "text-blue-600" : textClass}`}>{providerCountry}</td>
+        <td className={`px-2 py-1 border border-gray-200 ${isAdditional ? "text-blue-600" : textClass}`}>{providerCourseLevel || "-"}</td>
+        <td className={`px-2 py-1 border border-gray-200 ${isAdditional ? "text-blue-600" : textClass}`}>{providerCourseName || "-"}</td>
+      </>
+    );
+
+    if (blocked) {
+      return (
+        <tr key={rowKey} className="bg-gray-100 dark:bg-gray-800 opacity-50" data-testid={`row-term-${rowKey}`}>
+          {commonCells("text-gray-400")}
+          <td colSpan={24} className="px-2 py-1 border border-gray-200 text-center text-gray-400 italic">
+            Blocked (previous term Withdrawn/Complete)
+          </td>
+        </tr>
+      );
+    }
+
+    if (!entry) {
+      return (
+        <tr key={rowKey} className="bg-gray-50 dark:bg-gray-900" data-testid={`row-term-${rowKey}`}>
+          {commonCells("text-gray-500")}
+          <td colSpan={24} className="px-2 py-1 border border-gray-200 text-center">
+            {canEdit ? (
+              <button
+                className="text-blue-600 hover:text-blue-800 text-xs font-medium underline"
+                onClick={() => onCreateEntry(s.id, {
+                  termName,
+                  academicYear: "Year 1",
+                  feeGross: "0",
+                  bonus: "0",
+                  studentStatus: s.status || "Under Enquiry",
+                  paymentStatus: "Pending",
+                  studentProviderId,
+                })}
+                data-testid={`button-add-entry-${rowKey}`}
+              >
+                + Add Entry for {termName.replace("_", " ")}
+              </button>
+            ) : (
+              <span className="text-gray-400 text-xs">No entry</span>
+            )}
+          </td>
+        </tr>
+      );
+    }
+
+    const statusBg = STATUS_ROW_BG[entry.studentStatus || ""] || "transparent";
+
+    return (
+      <tr key={rowKey} style={{ backgroundColor: statusBg }} data-testid={`row-term-${rowKey}`}>
+        {commonCells("text-xs")}
+        <EditableCell value={entry.academicYear || ""} readOnly={!canEdit} onSave={(v) => onUpdateEntry(entry.id, { academicYear: v })} type="select" options={ACADEMIC_YEARS} width="80px" />
+        <EditableCell value={entry.feeGross || "0"} readOnly={!canEdit} onSave={(v) => onUpdateEntry(entry.id, { feeGross: v || "0" })} type="number" width="80px" align="right" mono />
+        <td className="px-2 py-1 border border-gray-200 text-right font-mono text-xs bg-gray-50">{`${Number(entry.commissionRateAuto || 0)}%`}</td>
+        <EditableCell value={entry.commissionRateOverridePct || ""} readOnly={!canEdit} onSave={(v) => onUpdateEntry(entry.id, { commissionRateOverridePct: v || "" })} type="number" width="70px" align="right" mono />
+        <td className="px-2 py-1 border border-gray-200 text-right font-mono text-xs bg-gray-50">{`${Number(entry.commissionRateUsedPct || 0)}%`}</td>
+        <td className="px-2 py-1 border border-gray-200 text-right font-mono text-xs bg-gray-50">${Number(entry.commissionAmount || 0).toFixed(2)}</td>
+        <td className="px-2 py-1 border border-gray-200 text-center text-xs">{entry.rateChangeWarning ? <span className="text-amber-600 whitespace-nowrap" title={entry.rateChangeWarning}>⚠ Changed</span> : ""}</td>
+        <EditableCell value={entry.bonus || "0"} readOnly={!canEdit} onSave={(v) => onUpdateEntry(entry.id, { bonus: v || "0" })} type="number" width="60px" align="right" mono />
+        <td className="px-2 py-1 border border-gray-200 text-left text-xs bg-gray-50">{entry.scholarshipTypeAuto || "None"}</td>
+        <td className="px-2 py-1 border border-gray-200 text-right font-mono text-xs bg-gray-50">{entry.scholarshipTypeAuto === "Percent" ? `${Number(entry.scholarshipValueAuto || 0)}%` : Number(entry.scholarshipValueAuto || 0)}</td>
+        <EditableCell value={entry.scholarshipTypeOverride || ""} readOnly={!canEdit} onSave={(v) => onUpdateEntry(entry.id, { scholarshipTypeOverride: v || null })} type="select" options={["", "None", "Percent", "Fixed"]} width="70px" />
+        <EditableCell value={entry.scholarshipValueOverride?.toString() || ""} readOnly={!canEdit} onSave={(v) => onUpdateEntry(entry.id, { scholarshipValueOverride: v || null })} type="number" width="70px" align="right" mono />
+        <td className="px-2 py-1 border border-gray-200 text-left text-xs bg-gray-50">{entry.scholarshipTypeUsed || "None"} {Number(entry.scholarshipValueUsed || 0) > 0 && entry.scholarshipTypeUsed !== "None" ? `(${entry.scholarshipTypeUsed === "Percent" ? `${Number(entry.scholarshipValueUsed)}%` : `$${Number(entry.scholarshipValueUsed)}`})` : ""}</td>
+        <td className="px-2 py-1 border border-gray-200 text-right font-mono text-xs bg-gray-50">${Number(entry.scholarshipAmount || 0).toFixed(2)}</td>
+        <td className="px-2 py-1 border border-gray-200 text-right font-mono text-xs bg-gray-50">${Number(entry.feeAfterScholarship || 0).toFixed(2)}</td>
+        <td className="px-2 py-1 border border-gray-200 text-center text-xs">{entry.scholarshipChangeWarning ? <span className="text-amber-600 whitespace-nowrap" title={entry.scholarshipChangeWarning}>⚠ Changed</span> : ""}</td>
+        <td className="px-2 py-1 border border-gray-200 text-right font-mono text-xs">${Number(entry.gstAmount || 0).toFixed(2)}</td>
+        <td className="px-2 py-1 border border-gray-200 text-right font-mono text-xs font-semibold">${Number(entry.totalAmount || 0).toFixed(2)}</td>
+        <EditableCell value={entry.paymentStatus || "Pending"} readOnly={!canEdit} onSave={(v) => onUpdateEntry(entry.id, { paymentStatus: v })} type="select" options={PAYMENT_STATUSES} width="80px" />
+        <EditableCell value={entry.paidDate || ""} readOnly={!canEdit} onSave={(v) => onUpdateEntry(entry.id, { paidDate: v || null })} type="date" width="80px" />
+        <EditableCell value={entry.invoiceNo || ""} readOnly={!canEdit} onSave={(v) => onUpdateEntry(entry.id, { invoiceNo: v || null })} width="80px" />
+        <EditableCell value={entry.paymentRef || ""} readOnly={!canEdit} onSave={(v) => onUpdateEntry(entry.id, { paymentRef: v || null })} width="80px" />
+        <EditableCell value={entry.studentStatus || "Under Enquiry"} readOnly={!canEdit} onSave={(v) => onUpdateEntry(entry.id, { studentStatus: v })} type="select" options={STUDENT_STATUSES} width="80px" />
+        <EditableCell value={entry.notes || ""} readOnly={!canEdit} onSave={(v) => onUpdateEntry(entry.id, { notes: v || null })} width="120px" />
+      </tr>
+    );
+  };
+
+  const allTermEntries: CommissionEntry[] = [];
 
   return (
     <div className="overflow-auto h-full">
@@ -1025,109 +1193,42 @@ function TermTable({ termName, students, allEntries, terms, isLoading, canEdit, 
               </tr>
             ))
           ) : students.length > 0 ? (
-            students.map((s, idx) => {
-              const entry = getEntry(s.id);
-              const blocked = isBlocked(s.id);
+            (() => {
+              const rows: any[] = [];
+              let sn = 0;
+              for (const s of students) {
+                const additionalProviders = providersByStudent?.[s.id] || [];
+                const totalProviderRows = 1 + additionalProviders.length;
+                sn++;
 
-              if (blocked) {
-                return (
-                  <tr key={s.id} className="bg-gray-100 dark:bg-gray-800 opacity-50" data-testid={`row-term-${s.id}`}>
-                    <td className="px-2 py-1 border border-gray-200 text-center text-gray-400">{idx + 1}</td>
-                    <td className="px-2 py-1 border border-gray-200 text-gray-400">{s.agentName}</td>
-                    <td className="px-2 py-1 border border-gray-200 text-gray-400 font-mono">{s.agentsicId || "-"}</td>
-                    <td className="px-2 py-1 border border-gray-200 text-gray-400 font-mono">{s.studentId || "-"}</td>
-                    <td className="px-2 py-1 border border-gray-200 text-gray-400">{s.studentName}</td>
-                    <td className="px-2 py-1 border border-gray-200 text-gray-400">
-                      <div>{s.provider}</div>
-                      {providersByStudent?.[s.id]?.map((ap: any) => (
-                        <div key={ap.id} className="text-[10px] text-blue-400 mt-0.5">{ap.provider}{ap.studentId ? ` (${ap.studentId})` : ""}</div>
-                      ))}
-                    </td>
-                    <td className="px-2 py-1 border border-gray-200 text-gray-400">{s.country}</td>
-                    <td colSpan={26} className="px-2 py-1 border border-gray-200 text-center text-gray-400 italic">
-                      Blocked (previous term Withdrawn/Complete)
-                    </td>
-                  </tr>
-                );
+                const primaryEntry = getEntry(s.id, null);
+                if (primaryEntry) allTermEntries.push(primaryEntry);
+
+                rows.push(renderEntryRow(
+                  s, s.provider, s.country, s.courseLevel || "", s.courseName || "",
+                  null, `${s.id}`, sn, totalProviderRows, false,
+                ));
+
+                for (const ap of additionalProviders) {
+                  const apEntry = getEntry(s.id, ap.id);
+                  if (apEntry) allTermEntries.push(apEntry);
+
+                  rows.push(renderEntryRow(
+                    s,
+                    `${ap.provider}${ap.studentId ? ` (${ap.studentId})` : ""}`,
+                    ap.country || s.country,
+                    ap.courseLevel || "",
+                    ap.courseName || "",
+                    ap.id,
+                    `${s.id}-ap-${ap.id}`,
+                    null,
+                    0,
+                    true,
+                  ));
+                }
               }
-
-              if (!entry) {
-                return (
-                  <tr key={s.id} className="bg-gray-50 dark:bg-gray-900" data-testid={`row-term-${s.id}`}>
-                    <td className="px-2 py-1 border border-gray-200 text-center text-gray-500">{idx + 1}</td>
-                    <td className="px-2 py-1 border border-gray-200 text-gray-500">{s.agentName}</td>
-                    <td className="px-2 py-1 border border-gray-200 text-gray-500 font-mono">{s.agentsicId || "-"}</td>
-                    <td className="px-2 py-1 border border-gray-200 text-gray-500 font-mono">{s.studentId || "-"}</td>
-                    <td className="px-2 py-1 border border-gray-200 text-gray-500">{s.studentName}</td>
-                    <td className="px-2 py-1 border border-gray-200 text-gray-500">
-                      <div>{s.provider}</div>
-                      {providersByStudent?.[s.id]?.map((ap: any) => (
-                        <div key={ap.id} className="text-[10px] text-blue-400 mt-0.5">{ap.provider}{ap.studentId ? ` (${ap.studentId})` : ""}</div>
-                      ))}
-                    </td>
-                    <td className="px-2 py-1 border border-gray-200 text-gray-500">{s.country}</td>
-                    <td colSpan={26} className="px-2 py-1 border border-gray-200 text-center">
-                      {canEdit ? (
-                        <button
-                          className="text-blue-600 hover:text-blue-800 text-xs font-medium underline"
-                          onClick={() => onCreateEntry(s.id, { termName, academicYear: "Year 1", feeGross: "0", bonus: "0", studentStatus: s.status || "Under Enquiry", paymentStatus: "Pending" })}
-                          data-testid={`button-add-entry-${s.id}`}
-                        >
-                          + Add Entry for {termName.replace("_", " ")}
-                        </button>
-                      ) : (
-                        <span className="text-gray-400 text-xs">No entry</span>
-                      )}
-                    </td>
-                  </tr>
-                );
-              }
-
-              const statusBg = STATUS_ROW_BG[entry.studentStatus || ""] || "transparent";
-
-              return (
-                <tr key={s.id} style={{ backgroundColor: statusBg }} data-testid={`row-term-${s.id}`}>
-                  <td className="px-2 py-1 border border-gray-200 text-center text-gray-500">{idx + 1}</td>
-                  <td className="px-2 py-1 border border-gray-200 text-xs">{s.agentName}</td>
-                  <td className="px-2 py-1 border border-gray-200 text-xs font-mono">{s.agentsicId || "-"}</td>
-                  <td className="px-2 py-1 border border-gray-200 text-xs font-mono">{s.studentId || "-"}</td>
-                  <td className="px-2 py-1 border border-gray-200 text-xs">{s.studentName}</td>
-                  <td className="px-2 py-1 border border-gray-200 text-xs">
-                    <div>{s.provider}</div>
-                    {providersByStudent?.[s.id]?.map((ap: any) => (
-                      <div key={ap.id} className="text-[10px] text-blue-600 mt-0.5">{ap.provider}{ap.studentId ? ` (${ap.studentId})` : ""}</div>
-                    ))}
-                  </td>
-                  <td className="px-2 py-1 border border-gray-200 text-xs">{s.country}</td>
-                  <EditableCell value={s.courseLevel || ""} readOnly={!canEdit} onSave={(v) => onUpdateStudent(s.id, { courseLevel: v })} type="select" options={COURSE_LEVELS} width="80px" />
-                  <EditableCell value={s.courseName || ""} readOnly={!canEdit} onSave={(v) => onUpdateStudent(s.id, { courseName: v })} width="120px" />
-                  <EditableCell value={entry.academicYear || ""} readOnly={!canEdit} onSave={(v) => onUpdateEntry(entry.id, { academicYear: v })} type="select" options={ACADEMIC_YEARS} width="80px" />
-                  <EditableCell value={entry.feeGross || "0"} readOnly={!canEdit} onSave={(v) => onUpdateEntry(entry.id, { feeGross: v || "0" })} type="number" width="80px" align="right" mono />
-                  <td className="px-2 py-1 border border-gray-200 text-right font-mono text-xs bg-gray-50">{`${Number(entry.commissionRateAuto || 0)}%`}</td>
-                  <EditableCell value={entry.commissionRateOverridePct || ""} readOnly={!canEdit} onSave={(v) => onUpdateEntry(entry.id, { commissionRateOverridePct: v || "" })} type="number" width="70px" align="right" mono />
-                  <td className="px-2 py-1 border border-gray-200 text-right font-mono text-xs bg-gray-50">{`${Number(entry.commissionRateUsedPct || 0)}%`}</td>
-                  <td className="px-2 py-1 border border-gray-200 text-right font-mono text-xs bg-gray-50">${Number(entry.commissionAmount || 0).toFixed(2)}</td>
-                  <td className="px-2 py-1 border border-gray-200 text-center text-xs">{entry.rateChangeWarning ? <span className="text-amber-600 whitespace-nowrap" title={entry.rateChangeWarning}>⚠ Commission rate changed</span> : ""}</td>
-                  <EditableCell value={entry.bonus || "0"} readOnly={!canEdit} onSave={(v) => onUpdateEntry(entry.id, { bonus: v || "0" })} type="number" width="60px" align="right" mono />
-                  <td className="px-2 py-1 border border-gray-200 text-left text-xs bg-gray-50">{entry.scholarshipTypeAuto || "None"}</td>
-                  <td className="px-2 py-1 border border-gray-200 text-right font-mono text-xs bg-gray-50">{entry.scholarshipTypeAuto === "Percent" ? `${Number(entry.scholarshipValueAuto || 0)}%` : Number(entry.scholarshipValueAuto || 0)}</td>
-                  <EditableCell value={entry.scholarshipTypeOverride || ""} readOnly={!canEdit} onSave={(v) => onUpdateEntry(entry.id, { scholarshipTypeOverride: v || null })} type="select" options={["", "None", "Percent", "Fixed"]} width="70px" />
-                  <EditableCell value={entry.scholarshipValueOverride?.toString() || ""} readOnly={!canEdit} onSave={(v) => onUpdateEntry(entry.id, { scholarshipValueOverride: v || null })} type="number" width="70px" align="right" mono />
-                  <td className="px-2 py-1 border border-gray-200 text-left text-xs bg-gray-50">{entry.scholarshipTypeUsed || "None"} {Number(entry.scholarshipValueUsed || 0) > 0 && entry.scholarshipTypeUsed !== "None" ? `(${entry.scholarshipTypeUsed === "Percent" ? `${Number(entry.scholarshipValueUsed)}%` : `$${Number(entry.scholarshipValueUsed)}`})` : ""}</td>
-                  <td className="px-2 py-1 border border-gray-200 text-right font-mono text-xs bg-gray-50">${Number(entry.scholarshipAmount || 0).toFixed(2)}</td>
-                  <td className="px-2 py-1 border border-gray-200 text-right font-mono text-xs bg-gray-50">${Number(entry.feeAfterScholarship || 0).toFixed(2)}</td>
-                  <td className="px-2 py-1 border border-gray-200 text-center text-xs">{entry.scholarshipChangeWarning ? <span className="text-amber-600 whitespace-nowrap" title={entry.scholarshipChangeWarning}>⚠ Scholarship changed</span> : ""}</td>
-                  <td className="px-2 py-1 border border-gray-200 text-right font-mono text-xs">${Number(entry.gstAmount || 0).toFixed(2)}</td>
-                  <td className="px-2 py-1 border border-gray-200 text-right font-mono text-xs font-semibold">${Number(entry.totalAmount || 0).toFixed(2)}</td>
-                  <EditableCell value={entry.paymentStatus || "Pending"} readOnly={!canEdit} onSave={(v) => onUpdateEntry(entry.id, { paymentStatus: v })} type="select" options={PAYMENT_STATUSES} width="80px" />
-                  <EditableCell value={entry.paidDate || ""} readOnly={!canEdit} onSave={(v) => onUpdateEntry(entry.id, { paidDate: v || null })} type="date" width="80px" />
-                  <EditableCell value={entry.invoiceNo || ""} readOnly={!canEdit} onSave={(v) => onUpdateEntry(entry.id, { invoiceNo: v || null })} width="80px" />
-                  <EditableCell value={entry.paymentRef || ""} readOnly={!canEdit} onSave={(v) => onUpdateEntry(entry.id, { paymentRef: v || null })} width="80px" />
-                  <EditableCell value={entry.studentStatus || "Under Enquiry"} readOnly={!canEdit} onSave={(v) => onUpdateEntry(entry.id, { studentStatus: v })} type="select" options={STUDENT_STATUSES} width="80px" />
-                  <EditableCell value={entry.notes || ""} readOnly={!canEdit} onSave={(v) => onUpdateEntry(entry.id, { notes: v || null })} width="120px" />
-                </tr>
-              );
-            })
+              return rows;
+            })()
           ) : (
             <tr>
               <td colSpan={33} className="px-3 py-8 text-center text-muted-foreground text-sm">
@@ -1137,7 +1238,7 @@ function TermTable({ termName, students, allEntries, terms, isLoading, canEdit, 
           )}
         </tbody>
         {(() => {
-          const entries = students.map(s => getEntry(s.id)).filter((e): e is CommissionEntry => !!e);
+          const entries = allTermEntries;
           const totalCommission = entries.reduce((sum, e) => sum + Number(e.commissionAmount || 0), 0);
           const totalBonus = entries.reduce((sum, e) => sum + Number(e.bonus || 0), 0);
           const totalGst = entries.reduce((sum, e) => sum + Number(e.gstAmount || 0), 0);
@@ -1146,23 +1247,16 @@ function TermTable({ termName, students, allEntries, terms, isLoading, canEdit, 
           return (
             <tfoot className="sticky bottom-0 z-10">
               <tr className="bg-[#1a4971] text-white font-semibold text-xs" data-testid={`row-totals-${termName}`}>
-                {/* 1-10: S.No, Agent, AgentsicID, StudentID, Name, Provider, Country, CourseLevel, CourseName, AcademicYear */}
                 <td className="px-2 py-2 border border-[#2060a0]" colSpan={10}>
-                  <span className="text-white/80">Entries: {entries.length} / {students.length}</span>
+                  <span className="text-white/80">Entries: {entries.length}</span>
                 </td>
-                {/* 11: Fee Gross */}
-                <td className="px-2 py-2 border border-[#2060a0]"></td>
-                {/* 12-14: Comm Rate Auto, Override, Used */}
                 <td className="px-2 py-2 border border-[#2060a0]"></td>
                 <td className="px-2 py-2 border border-[#2060a0]"></td>
                 <td className="px-2 py-2 border border-[#2060a0]"></td>
-                {/* 15: Commission */}
+                <td className="px-2 py-2 border border-[#2060a0]"></td>
                 <td className="px-2 py-2 border border-[#2060a0] text-right font-mono" data-testid={`total-commission-${termName}`}>${totalCommission.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                {/* 16: Rate Change Warning */}
                 <td className="px-2 py-2 border border-[#2060a0]"></td>
-                {/* 17: Bonus */}
                 <td className="px-2 py-2 border border-[#2060a0] text-right font-mono" data-testid={`total-bonus-${termName}`}>${totalBonus.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                {/* 18-25: Scholarship Type Auto, Value Auto, Override Type, Override Value, Used, Amt, Fee After Scholarship, Warning */}
                 <td className="px-2 py-2 border border-[#2060a0]"></td>
                 <td className="px-2 py-2 border border-[#2060a0]"></td>
                 <td className="px-2 py-2 border border-[#2060a0]"></td>
@@ -1171,11 +1265,8 @@ function TermTable({ termName, students, allEntries, terms, isLoading, canEdit, 
                 <td className="px-2 py-2 border border-[#2060a0]"></td>
                 <td className="px-2 py-2 border border-[#2060a0]"></td>
                 <td className="px-2 py-2 border border-[#2060a0]"></td>
-                {/* 26: GST */}
                 <td className="px-2 py-2 border border-[#2060a0] text-right font-mono" data-testid={`total-gst-${termName}`}>${totalGst.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                {/* 27: Total */}
                 <td className="px-2 py-2 border border-[#2060a0] text-right font-mono" data-testid={`total-amount-${termName}`}>${totalAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                {/* 28-33: Payment, Paid Date, Invoice No, Payment Ref, Student Status, Notes */}
                 <td className="px-2 py-2 border border-[#2060a0]"></td>
                 <td className="px-2 py-2 border border-[#2060a0]"></td>
                 <td className="px-2 py-2 border border-[#2060a0]"></td>

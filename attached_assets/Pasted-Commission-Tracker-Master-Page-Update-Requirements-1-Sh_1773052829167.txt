@@ -1,0 +1,307 @@
+Commission Tracker – Master Page Update Requirements
+1) Show Course Name in Master Page
+
+Currently, the Master page does not show the Course Name for students with multiple providers/courses.
+
+Required update:
+
+Add these fields to the Master page table so each provider/course entry is fully visible:
+
+Course Level
+
+Course Name
+
+Academic Year
+
+This is important because when a student has multiple providers or multiple course records, the course information may be different for each row.
+
+2) Multiple Provider Logic
+
+When adding multiple providers for the same student, the system must allow these fields to be different for each provider row:
+
+Student ID
+
+Intake
+
+Course Level
+
+Course Name
+
+Academic Year
+
+Fee (Gross)
+
+Commission %
+
+GST
+
+Scholarship details
+
+Payment details
+
+Notes
+
+Student Status
+
+That means one student can have:
+
+Different provider
+
+Different course
+
+Different intake
+
+Different student ID for that provider if applicable
+
+3) Fields Required for Each Multiple Provider Entry
+
+For each provider row under the same student, maintain separate values for the following fields:
+
+Course Level
+
+Course Name
+
+Academic Year
+
+Fee (Gross)
+
+Comm Rate (Auto)
+
+Comm Rate Override (%)
+
+Comm Rate Used (Auto)
+
+Commission (Auto)
+
+Rate Change Warning
+
+Bonus
+
+Scholarship Type (Auto)
+
+Scholarship Value (Auto)
+
+Scholarship Override Type
+
+Scholarship Override Value
+
+Scholarship Used
+
+Scholarship Amt
+
+Fee After Scholarship
+
+Scholarship Warning
+
+GST
+
+Total
+
+Payment
+
+Paid Date
+
+Invoice No
+
+Payment Ref
+
+Student Status
+
+Notes
+
+These fields must be stored and edited per provider row, not shared across all provider rows for the same student.
+
+4) Editable in Master Page
+
+In the Master page, users must be able to edit the following fields for each multiple-provider row directly:
+
+Course Level
+
+Course Name
+
+Academic Year
+
+Comm Rate Override (%)
+
+GST
+
+Scholarship Override Type
+
+Scholarship Override Value
+
+Student Status
+
+Notes
+
+Also ensure all auto-calculated fields update correctly after edit:
+
+Comm Rate Used (Auto)
+
+Commission (Auto)
+
+Scholarship Used
+
+Scholarship Amt
+
+Fee After Scholarship
+
+Total
+
+Rate Change Warning
+
+Scholarship Warning
+
+5) Remove Provider Row – Warning Confirmation
+
+When removing a provider row from a student record in the sheet/system, show a confirmation warning popup before deletion.
+
+Confirmation popup text:
+
+Title: Remove Provider Record?
+Message:
+Are you sure you want to remove this provider/course entry for this student?
+This action may affect commission, scholarship, payment, and total calculations.
+This record will be removed only from this provider entry, not the full student unless no provider rows remain.
+
+Buttons:
+
+Cancel
+
+Remove
+
+Additional logic:
+
+If this is the last remaining provider row for the student, show stronger warning:
+
+“This is the last provider record for this student. Removing it may remove the student from the Master page and related intake records.”
+
+6) Master Page Display Logic for Multiple Providers
+
+For students with multiple providers:
+
+Show separate row for each provider/course record
+
+Common student details can remain repeated or merged based on current UI design
+
+But provider-specific fields must always display correctly per row
+
+Common student fields:
+
+Agent
+
+Agentsic ID
+
+Student Name
+
+Provider-specific fields:
+
+Student ID
+
+Provider
+
+Country
+
+Intake
+
+Course Level
+
+Course Name
+
+Academic Year
+
+Commission / Scholarship / GST / Total / Payment / Status / Notes
+
+7) Validation
+
+When multiple providers are added, do not block valid cases where the same student has more than one provider/course.
+
+But validation should still prevent exact duplicate provider-course entries.
+
+Do not allow duplicate if all below match:
+
+Student Name
+
+Agentsic ID
+
+Provider
+
+Course Name
+
+Intake
+
+Optional stronger validation:
+
+If Student ID is present, also include Student ID in duplicate check
+
+This should allow:
+
+Same student + different provider
+
+Same student + same provider + different course
+
+Same student + same provider + different intake
+
+But should block:
+
+Same student + same provider + same course + same intake entered twice
+
+8) Calculation Logic
+
+All calculations must work independently for each multiple-provider row:
+
+Comm Rate (Auto)
+
+Comm Rate Override (%)
+
+Comm Rate Used (Auto)
+
+Commission (Auto)
+
+Bonus
+
+Scholarship Type/Value
+
+Scholarship Override Type/Value
+
+Scholarship Used
+
+Scholarship Amt
+
+Fee After Scholarship
+
+GST
+
+Total
+
+Payment balance if applicable
+
+Rate Change Warning
+
+Scholarship Warning
+
+9) Notes
+
+Notes should also be maintained separately per provider row.
+Example:
+
+Provider A may have one note
+
+Provider B may have another note
+
+Do not merge all provider notes into one shared note field.
+
+10) Expected Result
+
+After update:
+
+Master page clearly shows course information
+
+Multiple provider rows can hold different academic and financial data
+
+Users can edit provider-specific fields directly from Master page
+
+Removing a provider row always asks for confirmation
+
+Duplicate protection works correctly
+
+Commission and scholarship calculations remain accurate per row
