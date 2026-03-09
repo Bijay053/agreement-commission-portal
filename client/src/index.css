@@ -286,3 +286,46 @@
     inset: -1px;
   }
 }
+
+@layer base {
+  button:not(:disabled),
+  [role="button"]:not(:disabled),
+  [role="tab"],
+  [role="menuitem"],
+  [role="menuitemcheckbox"],
+  [role="menuitemradio"],
+  [role="option"],
+  [role="switch"],
+  [role="checkbox"],
+  [role="radio"],
+  [role="link"],
+  [role="treeitem"],
+  a[href],
+  a[role="button"],
+  label[for],
+  summary,
+  select:not(:disabled),
+  [data-testid^="button-"],
+  [data-testid^="link-"],
+  [data-testid^="tab-"],
+  [data-radix-collection-item],
+  [data-state][role="combobox"],
+  [cmdk-item] {
+    cursor: pointer !important;
+  }
+
+  button:disabled,
+  [role="button"][aria-disabled="true"],
+  [role="button"][disabled],
+  input:disabled,
+  select:disabled,
+  textarea:disabled,
+  [aria-disabled="true"] {
+    cursor: not-allowed !important;
+  }
+
+  input:not(:disabled),
+  textarea:not(:disabled) {
+    cursor: text;
+  }
+}
