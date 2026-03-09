@@ -877,6 +877,39 @@ function TermTable({ termName, students, allEntries, terms, isLoading, canEdit, 
             </tr>
           )}
         </tbody>
+        {(() => {
+          const entries = students.map(s => getEntry(s.id)).filter((e): e is CommissionEntry => !!e);
+          const totalFeeGross = entries.reduce((sum, e) => sum + Number(e.feeGross || 0), 0);
+          const totalCommission = entries.reduce((sum, e) => sum + Number(e.commissionAmount || 0), 0);
+          const totalBonus = entries.reduce((sum, e) => sum + Number(e.bonus || 0), 0);
+          const totalScholarshipAmt = entries.reduce((sum, e) => sum + Number(e.scholarshipAmount || 0), 0);
+          const totalFeeAfterScholarship = entries.reduce((sum, e) => sum + Number(e.feeAfterScholarship || 0), 0);
+          const totalGst = entries.reduce((sum, e) => sum + Number(e.gstAmount || 0), 0);
+          const totalAmount = entries.reduce((sum, e) => sum + Number(e.totalAmount || 0), 0);
+          if (entries.length === 0) return null;
+          return (
+            <tfoot className="sticky bottom-0 z-10">
+              <tr className="bg-[#1a4971] text-white font-semibold text-xs" data-testid={`row-totals-${termName}`}>
+                <td className="px-2 py-2 border border-[#2060a0]" colSpan={7}></td>
+                <td className="px-2 py-2 border border-[#2060a0]" colSpan={3} >
+                  <span className="text-white/80">Entries: {entries.length} / {students.length}</span>
+                </td>
+                <td className="px-2 py-2 border border-[#2060a0] text-right font-mono">${totalFeeGross.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                <td className="px-2 py-2 border border-[#2060a0]" colSpan={3}></td>
+                <td className="px-2 py-2 border border-[#2060a0] text-right font-mono" data-testid={`total-commission-${termName}`}>${totalCommission.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                <td className="px-2 py-2 border border-[#2060a0]"></td>
+                <td className="px-2 py-2 border border-[#2060a0] text-right font-mono">${totalBonus.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                <td className="px-2 py-2 border border-[#2060a0]" colSpan={4}></td>
+                <td className="px-2 py-2 border border-[#2060a0] text-right font-mono">${totalScholarshipAmt.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                <td className="px-2 py-2 border border-[#2060a0] text-right font-mono">${totalFeeAfterScholarship.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                <td className="px-2 py-2 border border-[#2060a0]"></td>
+                <td className="px-2 py-2 border border-[#2060a0] text-right font-mono" data-testid={`total-gst-${termName}`}>${totalGst.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                <td className="px-2 py-2 border border-[#2060a0] text-right font-mono" data-testid={`total-amount-${termName}`}>${totalAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                <td className="px-2 py-2 border border-[#2060a0]" colSpan={5}></td>
+              </tr>
+            </tfoot>
+          );
+        })()}
       </table>
     </div>
   );
