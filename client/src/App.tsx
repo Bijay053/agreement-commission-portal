@@ -25,6 +25,7 @@ import ContactsListPage from "@/pages/contacts-list";
 import CommissionTablePage from "@/pages/commission-table";
 import CommissionTrackerPage from "@/pages/commission-tracker";
 import CommissionTrackerDetailPage from "@/pages/commission-tracker-detail";
+import SubAgentCommissionPage from "@/pages/sub-agent-commission";
 import ForgotPasswordPage from "@/pages/forgot-password";
 import ResetPasswordPage from "@/pages/reset-password";
 import VerifyOtpPage from "@/pages/verify-otp";
@@ -90,6 +91,11 @@ function Router() {
       <Route path="/commission-tracker/:id">
         <AccessGuard permission="commission_tracker.view">
           <CommissionTrackerDetailPage />
+        </AccessGuard>
+      </Route>
+      <Route path="/sub-agent-commission">
+        <AccessGuard permission="sub_agent_commission.view">
+          <SubAgentCommissionPage />
         </AccessGuard>
       </Route>
       <Route path="/audit-logs">
