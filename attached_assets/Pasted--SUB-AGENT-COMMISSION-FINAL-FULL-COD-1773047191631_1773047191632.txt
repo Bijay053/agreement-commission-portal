@@ -1,0 +1,1304 @@
+/************************************************************
+ SUB AGENT COMMISSION – FINAL FULL CODE (MANUAL FEE NET)
+
+✅ Agentsic ID auto-filled from MAIN (no Student ID anywhere)
+✅ Fee (Net) (Auto) is MANUAL in Sub-Agent term sheets (T1/T2/T3)
+   - Sync will NOT overwrite Fee (Net)
+✅ Start Intake rule + Stop cascade (Withdrawn/Complete) to hide in next terms
+✅ Repack term sheets: no gaps; excluded rows archived (hidden), never deleted
+✅ Sub Agent Commission default rate from SUB MASTER + per-term override
+✅ HARD RULE per term:
+   Sub Agent Commission (Auto) <= MAIN Commission (Auto) (same term)
+   If not => ❌ Exceeds Main Commission
+✅ No SIC/Received numbers shown in T1/T2/T3 (avoid confusion)
+✅ MASTER keeps SIC Received Total (Auto) for margin checks only
+✅ Auto-recalc commission on edit (Fee/Rate/Bonus/GST/etc.)
+✅ Highlight rows based on Student Status (Auto) with colors (conditional formatting)
+✅ NEW: Payment Status highlight in T1/T2/T3 (ONLY Payment Status column, so it shows):
+      - Invoice Waiting: none
+      - PO Send: light yellow
+      - Payment Made: light green
+      - Hold: light red
+✅ NEW: When MASTER "Sub Agent Commission Rate (%)" is edited,
+        T1/T2/T3 "Commission Rate (Auto)" updates + row recalculates automatically
+✅ NEW: Duplicate warning if Internal ID or Agentsic ID repeats in same sheet
+✅ NEW: If student is deleted from MAIN MASTER, it is also removed from:
+        SUB MASTER + T1/T2/T3 (no archive for deleted-from-main rows)
+✅ SAFE: If your existing file is missing new columns, code auto-adds them (no clearing)
+
+IMPORTANT:
+- Run setupSheets() only once (CLEARS sub-agent file)
+************************************************************/
+
+const MAIN_FILE_ID = "13g07ES-HATEWx4ulETR6VpUhw0N6uqQBR6s-I1LvtM4";
+
+const CFG = {
+  MASTER: "MASTER",
+  TERMS: ["T1_2025", "T2_2025", "T3_2025"],
+  DASHBOARD: "Dashboard",
+  INTERNAL_ID: "Internal ID (Auto)",
+  AGENTSIC_ID: "Agentsic ID",
+  MAX: 5000,
+  VALUES: {
+    GST: ["Yes", "No"],
+    YEAR: ["Year 1", "Year 2", "Year 3"],
+    PAYMENT: ["PO Send", "Invoice Waiting", "Payment Made", "Hold"]
+  },
+  STOP_STATUS: new Set(["Withdrawn", "Complete"])
+};
+
+const DUP_WARN_HEADER = "Duplicate Entry Warning (Auto)";
+
+/* ===================== HEADERS ===================== */
+
+const MASTER_HEADERS = [
+  "S.No",
+  CFG.INTERNAL_ID,
+  CFG.AGENTSIC_ID,
+  "Agent Name (Auto)",
+  "Student Name (Auto)",
+  "Provider (Auto)",
+  "Country (Auto)",
+  "Start Intake (Auto)",
+  "Course Name (Auto)",
+
+  "SIC Received Total (Auto)",
+  "Sub Agent Commission Rate (%)",
+  "GST Applicable",
+
+  "Sub Agent Paid Total (Auto)",
+  "Margin (Auto)",
+  "Overpay Warning (Auto)",
+  "Status (Auto)",
+
+  DUP_WARN_HEADER
+];
+
+const TERM_HEADERS = [
+  "S.No",
+  CFG.INTERNAL_ID,
+  CFG.AGENTSIC_ID,
+  "Agent Name (Auto)",
+  "Student Name (Auto)",
+  "Provider (Auto)",
+  "Country (Auto)",
+  "Start Intake (Auto)",
+  "Course Name (Auto)",
+
+  "Academic Year",
+
+  "Fee (Net) (Auto)",
+
+  "Main Commission (Auto)",
+
+  "Commission Rate (Auto)",
+  "Commission Rate Override (%)",
+  "Commission Rate Used (Auto)",
+  "Sub Agent Commission (Auto)",
+
+  "Bonus Paid",
+  "GST %",
+  "GST (Auto)",
+  "Total Paid (Auto)",
+
+  "Payment Status",
+  "Student Status (Auto)",
+
+  "Rate Override Warning (Auto)",
+  "Exceeds Main Warning (Auto)",
+
+  DUP_WARN_HEADER
+];
+
+/* ===================== MENU ===================== */
+
+function onOpen() {
+  SpreadsheetApp.getUi()
+    .createMenu("Sub Agent Commission")
+    .addItem("Setup Sheets (CLEARS this file)", "setupSheets")
+    .addItem("Sync All (Safe)", "syncAll")
+    .addItem("Build Dashboard", "buildDashboard")
+    .addSeparator()
+    .addItem("Fix Missing Duplicate Column (No Clear)", "fixMissingDuplicateHeader_")
+    .addItem("Debug: Find Internal ID (shows/unhides)", "debugFindStudent_")
+    .addToUi();
+}
+
+/* ===================== MASTER CACHE (GST) ===================== */
+
+let __MASTER_GST_CACHE = null; // {map:{key:"Yes"/"No"}, ts:Date.now()}
+
+function getGstFlagFromMaster_(key) {
+  key = norm_(key);
+  if (!key) return false;
+
+  const now = Date.now();
+  if (__MASTER_GST_CACHE && (now - __MASTER_GST_CACHE.ts) < 15000) {
+    return __MASTER_GST_CACHE.map[key] === "Yes";
+  }
+
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const master = ss.getSheetByName(CFG.MASTER);
+  if (!master) return false;
+
+  ensureHeaderColumn_(master, DUP_WARN_HEADER);
+
+  const td = readSheet_(master);
+  const m = td.map;
+  const keyCol = m[CFG.INTERNAL_ID];
+  const gstCol = m["GST Applicable"];
+  if (!keyCol || !gstCol) return false;
+
+  const last = master.getLastRow();
+  const n = Math.min(CFG.MAX, Math.max(0, last - 1));
+  const map = {};
+
+  if (n > 0) {
+    const keys = master.getRange(2, keyCol, n, 1).getValues().flat();
+    const gsts = master.getRange(2, gstCol, n, 1).getValues().flat();
+    for (let i = 0; i < n; i++) {
+      const k = norm_(keys[i]);
+      if (!k) continue;
+      map[k] = (norm_(gsts[i]) === "Yes") ? "Yes" : "No";
+    }
+  }
+
+  __MASTER_GST_CACHE = { map, ts: now };
+  return map[key] === "Yes";
+}
+
+/* ===================== AUTO RECALC ON EDIT ===================== */
+
+function onEdit(e) {
+  try {
+    if (!e || !e.range) return;
+
+    const sh = e.range.getSheet();
+    const name = sh.getName();
+    if (e.range.getRow() === 1) return;
+
+    // Ensure new column exists (old files)
+    ensureHeaderColumn_(sh, DUP_WARN_HEADER);
+
+    // MASTER edit
+    if (name === CFG.MASTER) {
+      handleMasterRateEdit_(e);
+      refreshDuplicateWarnings_(sh);
+      return;
+    }
+
+    // Term-sheet row recalc on edit
+    if (!CFG.TERMS.includes(name)) return;
+
+    const td = readSheet_(sh);
+    requireHeaders_(td.headers, TERM_HEADERS, name);
+    const m = td.map;
+
+    const row = e.range.getRow();
+    const col = e.range.getColumn();
+
+    const triggerHeaders = new Set([
+      "Fee (Net) (Auto)",
+      "Commission Rate Override (%)",
+      "Bonus Paid",
+      "GST %",
+      "Academic Year",
+      "Payment Status"
+    ]);
+
+    const editedHeader = td.headers[col - 1];
+
+    // If user edited IDs, only refresh duplicates
+    if (editedHeader === CFG.AGENTSIC_ID || editedHeader === CFG.INTERNAL_ID) {
+      refreshDuplicateWarnings_(sh);
+      return;
+    }
+
+    if (!triggerHeaders.has(editedHeader)) return;
+
+    recalcTermRow_(sh, row, m);
+
+    // Re-apply formatting (safe)
+    applyStatusHighlighting_();
+    applyPaymentStatusHighlighting_();
+
+    refreshDuplicateWarnings_(sh);
+  } catch (err) {
+    SpreadsheetApp.getActive().toast("❌ Recalc error: " + err.message, "Sub Agent Commission", 6);
+  }
+}
+
+/* ✅ MASTER rate edit handler */
+function handleMasterRateEdit_(e) {
+  const master = e.range.getSheet();
+  ensureHeaderColumn_(master, DUP_WARN_HEADER);
+
+  const td = readSheet_(master);
+  requireHeaders_(td.headers, MASTER_HEADERS, master.getName());
+  const m = td.map;
+
+  const editedHeader = td.headers[e.range.getColumn() - 1];
+  if (editedHeader !== "Sub Agent Commission Rate (%)") return;
+
+  const row = e.range.getRow();
+  const key = norm_(master.getRange(row, m[CFG.INTERNAL_ID]).getValue());
+  if (!key) return;
+
+  const newRate = num_(master.getRange(row, m["Sub Agent Commission Rate (%)"]).getValue(), 0);
+
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+
+  CFG.TERMS.forEach(termName => {
+    const termSh = ss.getSheetByName(termName);
+    if (!termSh) return;
+
+    ensureHeaderColumn_(termSh, DUP_WARN_HEADER);
+
+    const t = readSheet_(termSh);
+    requireHeaders_(t.headers, TERM_HEADERS, termName);
+    const tm = t.map;
+
+    const last = termSh.getLastRow();
+    if (last < 2) return;
+
+    const keys = termSh.getRange(2, tm[CFG.INTERNAL_ID], last - 1, 1).getValues().flat();
+
+    for (let i = 0; i < keys.length; i++) {
+      if (norm_(keys[i]) !== key) continue;
+
+      const r = i + 2;
+      termSh.getRange(r, tm["Commission Rate (Auto)"]).setValue(newRate);
+      recalcTermRow_(termSh, r, tm); // Fee Net stays manual
+    }
+  });
+
+  applyStatusHighlighting_();
+  applyPaymentStatusHighlighting_();
+  refreshDuplicateWarningsAll_();
+}
+
+/* ===================== RECALC LOGIC ===================== */
+
+function recalcTermRow_(sheet, rowNum, m) {
+  const key = norm_(sheet.getRange(rowNum, m[CFG.INTERNAL_ID]).getValue());
+  if (!key) return;
+
+  const feeNet = num_(sheet.getRange(rowNum, m["Fee (Net) (Auto)"]).getValue(), 0);
+  const mainComm = num_(sheet.getRange(rowNum, m["Main Commission (Auto)"]).getValue(), 0);
+
+  const defaultRate = num_(sheet.getRange(rowNum, m["Commission Rate (Auto)"]).getValue(), 0);
+  const overrideRate = num_(sheet.getRange(rowNum, m["Commission Rate Override (%)"]).getValue(), 0);
+  const usedRate = (overrideRate > 0) ? overrideRate : defaultRate;
+
+  const subComm = round2_(feeNet * (usedRate / 100));
+
+  const rateWarn =
+    (overrideRate > 0 && Math.abs(overrideRate - defaultRate) > 0.000001)
+      ? "⚠ Rate overridden"
+      : "";
+
+  const exceedsWarn =
+    (mainComm > 0 && subComm > mainComm)
+      ? "❌ Exceeds Main Commission"
+      : "";
+
+  const bonus = num_(sheet.getRange(rowNum, m["Bonus Paid"]).getValue(), 0);
+  const gstPct = num_(sheet.getRange(rowNum, m["GST %"]).getValue(), 0);
+
+  // ✅ Apply GST only if MASTER says GST Applicable = Yes
+  const gstAllowed = getGstFlagFromMaster_(key);
+  const gst = (gstAllowed && gstPct > 0) ? round2_((subComm + bonus) * (gstPct / 100)) : 0;
+
+  const totalPaid = round2_(subComm + bonus + gst);
+
+  sheet.getRange(rowNum, m["Commission Rate Used (Auto)"]).setValue(usedRate);
+  sheet.getRange(rowNum, m["Sub Agent Commission (Auto)"]).setValue(subComm);
+  sheet.getRange(rowNum, m["GST (Auto)"]).setValue(gst);
+  sheet.getRange(rowNum, m["Total Paid (Auto)"]).setValue(totalPaid);
+  sheet.getRange(rowNum, m["Rate Override Warning (Auto)"]).setValue(rateWarn);
+  sheet.getRange(rowNum, m["Exceeds Main Warning (Auto)"]).setValue(exceedsWarn);
+}
+
+/* ===================== SETUP ===================== */
+
+function setupSheets() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  createOrReset_(ss, CFG.MASTER, MASTER_HEADERS);
+  CFG.TERMS.forEach(t => createOrReset_(ss, t, TERM_HEADERS));
+
+  let dash = ss.getSheetByName(CFG.DASHBOARD);
+  if (!dash) dash = ss.insertSheet(CFG.DASHBOARD);
+  dash.clear();
+
+  applyDropdowns_();
+  applyStatusHighlighting_();
+  applyPaymentStatusHighlighting_();
+  refreshDuplicateWarningsAll_();
+
+  SpreadsheetApp.getUi().alert("✅ Created sheets. Now run: Sync All (Safe).");
+}
+
+function createOrReset_(ss, name, headers) {
+  let sh = ss.getSheetByName(name);
+  if (!sh) sh = ss.insertSheet(name);
+  sh.clear();
+  sh.getRange(1, 1, 1, headers.length).setValues([headers]);
+  styleHeader_(sh, headers.length);
+}
+
+function styleHeader_(sh, cols) {
+  sh.getRange(1, 1, 1, cols)
+    .setFontWeight("bold")
+    .setBackground("#1F4E79")
+    .setFontColor("#ffffff");
+  sh.setFrozenRows(1);
+}
+
+/* ===================== SYNC ALL ===================== */
+
+function syncAll() {
+  const lock = LockService.getDocumentLock();
+  if (!lock.tryLock(25000)) return;
+
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const subMaster = ss.getSheetByName(CFG.MASTER);
+    if (!subMaster) throw new Error("MASTER not found. Run setupSheets().");
+
+    ensureHeaderColumn_(subMaster, DUP_WARN_HEADER);
+    CFG.TERMS.forEach(t => {
+      const sh = ss.getSheetByName(t);
+      if (sh) ensureHeaderColumn_(sh, DUP_WARN_HEADER);
+    });
+
+    const mainSS = SpreadsheetApp.openById(MAIN_FILE_ID);
+
+    const mainMaster = mainSS.getSheetByName("MASTER");
+    if (!mainMaster) throw new Error("MAIN MASTER not found.");
+
+    const mainData = mainMaster.getDataRange().getValues();
+    if (mainData.length < 2) throw new Error("MAIN MASTER has no data.");
+
+    const mm = mapCols_(mainData[0]);
+
+    requireCols_(mm, [
+      CFG.INTERNAL_ID,
+      CFG.AGENTSIC_ID,
+      "Agent Name",
+      "Student Name",
+      "Provider",
+      "Country",
+      "Start Intake",
+      "Course Name",
+      "Total Received (Auto)",
+      "Status"
+    ]);
+
+    const students = [];
+    const studentByKey = {};
+
+    const limit = Math.min(CFG.MAX, mainData.length - 1);
+    for (let i = 1; i <= limit; i++) {
+      const r = mainData[i];
+      const key = norm_(r[mm[CFG.INTERNAL_ID]]);
+      if (!key) continue;
+
+      const intake = norm_(r[mm["Start Intake"]]);
+
+      const s = {
+        key,
+        agentsic: norm_(r[mm[CFG.AGENTSIC_ID]]),
+        agent: norm_(r[mm["Agent Name"]]),
+        name: norm_(r[mm["Student Name"]]),
+        provider: norm_(r[mm["Provider"]]),
+        country: norm_(r[mm["Country"]]),
+        intake,
+        course: norm_(r[mm["Course Name"]]),
+        received: num_(r[mm["Total Received (Auto)"]], 0),
+        status: norm_(r[mm["Status"]]),
+        startIdx: startIdxFromIntake_(intake)
+      };
+
+      students.push(s);
+      studentByKey[key] = s;
+    }
+
+    const mainTermLookup = buildMainTermLookup_(mainSS);
+
+    const stopSetT1 = stopSetFromLookup_(mainTermLookup["T1_2025"]);
+    const stopSetT2 = stopSetFromLookup_(mainTermLookup["T2_2025"]);
+
+    // ✅ SUB MASTER mirrors MAIN MASTER (deletions in MAIN remove here too)
+    syncSubMaster_(subMaster, students);
+
+    const gstMap = buildGstMap_(subMaster);
+    const rateMap = buildRateMap_(subMaster);
+
+    CFG.TERMS.forEach((termName, termIdx) => {
+      const sh = ss.getSheetByName(termName);
+      if (!sh) throw new Error(`Missing ${termName}. Run setupSheets().`);
+
+      ensureHeaderColumn_(sh, DUP_WARN_HEADER);
+
+      const eligibleKeys = students
+        .filter(s => isEligible_(s, termIdx, stopSetT1, stopSetT2))
+        .map(s => s.key);
+
+      repackTermSheet_({
+        sheet: sh,
+        studentByKey,
+        eligibleKeys,
+        mainLookup: mainTermLookup[termName] || {},
+        gstMap,
+        rateMap
+      });
+
+      renumberSNo_(sh);
+      refreshDuplicateWarnings_(sh);
+    });
+
+    updateMasterTotals_(subMaster, ss, studentByKey);
+
+    applyDropdowns_();
+    applyStatusHighlighting_();
+    applyPaymentStatusHighlighting_();
+    renumberSNo_(subMaster);
+    refreshDuplicateWarnings_(subMaster);
+
+    SpreadsheetApp.getActive().toast("✅ Sync completed.", "Sub Agent Commission", 4);
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+/* ===================== Eligibility ===================== */
+
+function isEligible_(s, termIdx, stopSetT1, stopSetT2) {
+  if (s.startIdx > termIdx) return false;
+  if (termIdx >= 1 && stopSetT1.has(s.key)) return false;
+  if (termIdx >= 2 && stopSetT2.has(s.key)) return false;
+  return true;
+}
+
+/* ===================== MAIN TERM LOOKUP ===================== */
+
+function buildMainTermLookup_(mainSS) {
+  const out = {};
+
+  CFG.TERMS.forEach(term => {
+    const sh = mainSS.getSheetByName(term);
+    if (!sh) { out[term] = {}; return; }
+
+    const data = sh.getDataRange().getValues();
+    if (data.length < 2) { out[term] = {}; return; }
+
+    const m = mapCols_(data[0]);
+
+    if (m[CFG.INTERNAL_ID] === undefined) throw new Error(`MAIN ${term} missing ${CFG.INTERNAL_ID}`);
+
+    const mainCommCol =
+      m["Commission (Auto)"] !== undefined ? m["Commission (Auto)"] :
+      (m["Total (Auto)"] !== undefined ? m["Total (Auto)"] : undefined);
+
+    const stCol = m["Student Status"] !== undefined ? m["Student Status"] : undefined;
+
+    const map = {};
+    const limit = Math.min(CFG.MAX, data.length - 1);
+
+    for (let i = 1; i <= limit; i++) {
+      const r = data[i];
+      const key = norm_(r[m[CFG.INTERNAL_ID]]);
+      if (!key) continue;
+
+      map[key] = {
+        mainComm: mainCommCol !== undefined ? num_(r[mainCommCol], 0) : 0,
+        status: stCol !== undefined ? norm_(r[stCol]) : ""
+      };
+    }
+
+    out[term] = map;
+  });
+
+  return out;
+}
+
+function stopSetFromLookup_(lookup) {
+  const set = new Set();
+  if (!lookup) return set;
+  Object.keys(lookup).forEach(k => {
+    const st = norm_(lookup[k]?.status);
+    if (CFG.STOP_STATUS.has(st)) set.add(k);
+  });
+  return set;
+}
+
+/* ===================== SUB MASTER SYNC (MIRROR MAIN + DELETE REMOVED) ===================== */
+
+function syncSubMaster_(sheet, students) {
+  ensureHeaderColumn_(sheet, DUP_WARN_HEADER);
+
+  const td = readSheet_(sheet);
+  requireHeaders_(td.headers, MASTER_HEADERS, sheet.getName());
+  const m = td.map;
+  const colCount = td.headers.length;
+
+  // Preserve manual fields from existing SUB MASTER
+  const existing = {};
+  const limit = Math.min(CFG.MAX, td.rows.length);
+
+  for (let i = 0; i < limit; i++) {
+    const r = td.rows[i];
+    const key = norm_(r[m[CFG.INTERNAL_ID] - 1]);
+    if (!key) continue;
+
+    existing[key] = {
+      rate: r[m["Sub Agent Commission Rate (%)"] - 1],
+      gst: r[m["GST Applicable"] - 1]
+    };
+  }
+
+  const safeGst = (v) => (norm_(v) === "Yes") ? "Yes" : "No";
+
+  // Build a fully synced output in MAIN order
+  const out = [];
+  for (const s of students) {
+    const row = new Array(colCount).fill("");
+
+    row[m[CFG.INTERNAL_ID] - 1] = s.key;
+    row[m[CFG.AGENTSIC_ID] - 1] = s.agentsic;
+    row[m["Agent Name (Auto)"] - 1] = s.agent;
+    row[m["Student Name (Auto)"] - 1] = s.name;
+    row[m["Provider (Auto)"] - 1] = s.provider;
+    row[m["Country (Auto)"] - 1] = s.country;
+    row[m["Start Intake (Auto)"] - 1] = s.intake;
+    row[m["Course Name (Auto)"] - 1] = s.course;
+
+    row[m["SIC Received Total (Auto)"] - 1] = s.received;
+    row[m["Status (Auto)"] - 1] = s.status;
+
+    // Preserve manual fields if present
+    const prev = existing[s.key] || {};
+    row[m["Sub Agent Commission Rate (%)"] - 1] =
+      (prev.rate !== undefined && prev.rate !== "") ? prev.rate : 0;
+
+    row[m["GST Applicable"] - 1] =
+      (prev.gst !== undefined && prev.gst !== "") ? safeGst(prev.gst) : "No";
+
+    out.push(row);
+  }
+
+  // Ensure rows + write
+  ensureRows_(sheet, out.length + 1);
+
+  // Unhide all data rows first
+  const curLast = sheet.getLastRow();
+  if (curLast > 1) sheet.showRows(2, curLast - 1);
+
+  if (out.length) {
+    const wr = sheet.getRange(2, 1, out.length, colCount);
+    wr.clearDataValidations();
+    wr.setValues(out);
+  }
+
+  // ✅ Delete extra old rows (so deletions in MAIN are deletions here too)
+  const totalNeeded = out.length + 1;
+  const maxRows = sheet.getMaxRows();
+  if (maxRows > totalNeeded) {
+    const start = totalNeeded + 1;
+    const count = maxRows - totalNeeded;
+    if (count > 0 && start >= 2) sheet.deleteRows(start, count);
+  }
+
+  styleHeader_(sheet, colCount);
+  renumberSNo_(sheet);
+  refreshDuplicateWarnings_(sheet);
+}
+
+/* ===================== SUB MASTER MAPS ===================== */
+
+function buildGstMap_(master) {
+  ensureHeaderColumn_(master, DUP_WARN_HEADER);
+
+  const td = readSheet_(master);
+  const m = td.map;
+  const out = {};
+
+  const limit = Math.min(CFG.MAX, td.rows.length);
+  for (let i = 0; i < limit; i++) {
+    const r = td.rows[i];
+    const key = norm_(r[m[CFG.INTERNAL_ID] - 1]);
+    if (!key) continue;
+    const gst = norm_(r[m["GST Applicable"] - 1]);
+    out[key] = (gst === "Yes") ? "Yes" : "No";
+  }
+  return out;
+}
+
+function buildRateMap_(master) {
+  ensureHeaderColumn_(master, DUP_WARN_HEADER);
+
+  const td = readSheet_(master);
+  const m = td.map;
+  const out = {};
+
+  const limit = Math.min(CFG.MAX, td.rows.length);
+  for (let i = 0; i < limit; i++) {
+    const r = td.rows[i];
+    const key = norm_(r[m[CFG.INTERNAL_ID] - 1]);
+    if (!key) continue;
+    out[key] = num_(r[m["Sub Agent Commission Rate (%)"] - 1], 0);
+  }
+  return out;
+}
+
+/* ===================== TERM REPACK + CALC ===================== */
+
+function repackTermSheet_(p) {
+  const sheet = p.sheet;
+  ensureHeaderColumn_(sheet, DUP_WARN_HEADER);
+
+  const studentByKey = p.studentByKey;
+  const eligibleKeys = p.eligibleKeys;
+  const mainLookup = p.mainLookup;
+  const gstMap = p.gstMap;
+  const rateMap = p.rateMap;
+
+  const td = readSheet_(sheet);
+  requireHeaders_(td.headers, TERM_HEADERS, sheet.getName());
+
+  const m = td.map;
+  const colCount = td.headers.length;
+
+  const existingMap = {};
+  const existingOrder = [];
+
+  const limit0 = Math.min(CFG.MAX, td.rows.length);
+  for (let i = 0; i < limit0; i++) {
+    const row = td.rows[i];
+    const key = norm_(row[m[CFG.INTERNAL_ID] - 1]);
+    if (!key) continue;
+    existingMap[key] = row.slice();
+    existingOrder.push(key);
+  }
+
+  const outVisible = [];
+  const used = new Set();
+
+  for (const key of eligibleKeys) {
+    const s = studentByKey[key];
+    if (!s) continue;
+
+    const row = existingMap[key] ? existingMap[key].slice() : new Array(colCount).fill("");
+    used.add(key);
+
+    row[m[CFG.INTERNAL_ID] - 1] = key;
+    row[m[CFG.AGENTSIC_ID] - 1] = s.agentsic;
+    row[m["Agent Name (Auto)"] - 1] = s.agent;
+    row[m["Student Name (Auto)"] - 1] = s.name;
+    row[m["Provider (Auto)"] - 1] = s.provider;
+    row[m["Country (Auto)"] - 1] = s.country;
+    row[m["Start Intake (Auto)"] - 1] = s.intake;
+    row[m["Course Name (Auto)"] - 1] = s.course;
+
+    const lu = mainLookup[key] || { mainComm: 0, status: "" };
+    const mainComm = num_(lu.mainComm, 0);
+    row[m["Main Commission (Auto)"] - 1] = mainComm;
+
+    const st = norm_(lu.status) || s.status || "";
+    row[m["Student Status (Auto)"] - 1] = st;
+
+    const yr = norm_(row[m["Academic Year"] - 1]);
+    if (!CFG.VALUES.YEAR.includes(yr)) row[m["Academic Year"] - 1] = "Year 1";
+
+    const pay = norm_(row[m["Payment Status"] - 1]);
+    if (!CFG.VALUES.PAYMENT.includes(pay)) row[m["Payment Status"] - 1] = "Invoice Waiting";
+
+    if (row[m["Bonus Paid"] - 1] === "") row[m["Bonus Paid"] - 1] = 0;
+    if (row[m["GST %"] - 1] === "") row[m["GST %"] - 1] = 0;
+
+    // Fee Net is MANUAL
+    const feeNet = num_(row[m["Fee (Net) (Auto)"] - 1], 0);
+
+    // Default rate from MASTER
+    const defaultRate = num_(rateMap[key], 0);
+    row[m["Commission Rate (Auto)"] - 1] = defaultRate;
+
+    // Per-term override
+    const overrideRate = num_(row[m["Commission Rate Override (%)"] - 1], 0);
+    const usedRate = (overrideRate > 0) ? overrideRate : defaultRate;
+    row[m["Commission Rate Used (Auto)"] - 1] = usedRate;
+
+    row[m["Rate Override Warning (Auto)"] - 1] =
+      (overrideRate > 0 && Math.abs(overrideRate - defaultRate) > 0.000001)
+        ? "⚠ Rate overridden"
+        : "";
+
+    const subComm = round2_(feeNet * (usedRate / 100));
+    row[m["Sub Agent Commission (Auto)"] - 1] = subComm;
+
+    const bonus = num_(row[m["Bonus Paid"] - 1], 0);
+    const gstPct = num_(row[m["GST %"] - 1], 0);
+
+    const gstFlag = (gstMap[key] === "Yes");
+    const gst = (gstFlag && gstPct > 0) ? round2_((subComm + bonus) * (gstPct / 100)) : 0;
+    row[m["GST (Auto)"] - 1] = gst;
+
+    const totalPaid = round2_(subComm + bonus + gst);
+    row[m["Total Paid (Auto)"] - 1] = totalPaid;
+
+    row[m["Exceeds Main Warning (Auto)"] - 1] =
+      (mainComm > 0 && subComm > mainComm) ? "❌ Exceeds Main Commission" : "";
+
+    outVisible.push(row);
+  }
+
+  // ✅ Archive ONLY if student still exists in MAIN; if deleted from MAIN => remove (no archive)
+  const archive = [];
+  for (const key of existingOrder) {
+    if (used.has(key)) continue;
+    if (!studentByKey[key]) continue; // deleted from MAIN => drop it fully
+    archive.push(existingMap[key].slice());
+  }
+
+  const finalRows = outVisible.concat(archive);
+
+  ensureRows_(sheet, finalRows.length + 1);
+
+  const curLast = sheet.getLastRow();
+  if (curLast > 1) sheet.showRows(2, curLast - 1);
+
+  if (finalRows.length) {
+    const wr = sheet.getRange(2, 1, finalRows.length, colCount);
+    wr.clearDataValidations();
+    wr.setValues(finalRows);
+  }
+
+  const leftover = (sheet.getLastRow() - 1) - finalRows.length;
+  if (leftover > 0) {
+    sheet.getRange(2 + finalRows.length, 1, leftover, colCount).clearContent();
+    sheet.hideRows(2 + finalRows.length, leftover);
+  }
+
+  if (archive.length > 0) {
+    const startArchive = 2 + outVisible.length;
+    sheet.hideRows(startArchive, archive.length);
+  }
+
+  styleHeader_(sheet, colCount);
+}
+
+/* ===================== MASTER TOTALS ===================== */
+
+function updateMasterTotals_(master, ss, studentByKey) {
+  ensureHeaderColumn_(master, DUP_WARN_HEADER);
+
+  const td = readSheet_(master);
+  const m = td.map;
+
+  const paidByKey = {};
+
+  CFG.TERMS.forEach(term => {
+    const sh = ss.getSheetByName(term);
+    if (!sh) return;
+
+    ensureHeaderColumn_(sh, DUP_WARN_HEADER);
+
+    const t = readSheet_(sh);
+    const tm = t.map;
+
+    const keyC = tm[CFG.INTERNAL_ID];
+    const totalC = tm["Total Paid (Auto)"];
+
+    const limit = Math.min(CFG.MAX, t.rows.length);
+    for (let i = 0; i < limit; i++) {
+      const row = t.rows[i];
+      const key = norm_(row[keyC - 1]);
+      if (!key) continue;
+      paidByKey[key] = (paidByKey[key] || 0) + num_(row[totalC - 1], 0);
+    }
+  });
+
+  const out = [];
+  const limit = Math.min(CFG.MAX, td.rows.length);
+
+  for (let i = 0; i < limit; i++) {
+    const r = td.rows[i].slice();
+    const key = norm_(r[m[CFG.INTERNAL_ID] - 1]);
+    const s = studentByKey[key];
+    if (!s) { out.push(r); continue; }
+
+    const paid = round2_(paidByKey[key] || 0);
+
+    r[m["Sub Agent Paid Total (Auto)"] - 1] = paid;
+    r[m["Margin (Auto)"] - 1] = round2_(s.received - paid);
+    r[m["Overpay Warning (Auto)"] - 1] = (s.received > 0 && paid > s.received) ? "❌ Overpaid" : "";
+
+    out.push(r);
+  }
+
+  if (out.length) {
+    const wr = master.getRange(2, 1, out.length, td.headers.length);
+    wr.clearDataValidations();
+    wr.setValues(out);
+  }
+}
+
+/* ===================== DROPDOWNS ===================== */
+
+function applyDropdowns_() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+
+  const master = ss.getSheetByName(CFG.MASTER);
+  if (master) {
+    ensureHeaderColumn_(master, DUP_WARN_HEADER);
+
+    const td = readSheet_(master);
+    const m = td.map;
+    const col = m["GST Applicable"];
+    if (col) {
+      const rule = SpreadsheetApp.newDataValidation()
+        .requireValueInList(CFG.VALUES.GST, true)
+        .setAllowInvalid(false)
+        .build();
+      const last = Math.max(2, master.getLastRow());
+      master.getRange(2, col, last - 1, 1).setDataValidation(rule);
+    }
+  }
+
+  CFG.TERMS.forEach(name => {
+    const sh = ss.getSheetByName(name);
+    if (!sh) return;
+
+    ensureHeaderColumn_(sh, DUP_WARN_HEADER);
+
+    const td = readSheet_(sh);
+    const m = td.map;
+    const last = Math.max(2, sh.getLastRow());
+    const n = last - 1;
+
+    const yearCol = m["Academic Year"];
+    if (yearCol) {
+      const rule = SpreadsheetApp.newDataValidation()
+        .requireValueInList(CFG.VALUES.YEAR, true)
+        .setAllowInvalid(false)
+        .build();
+      sh.getRange(2, yearCol, n, 1).setDataValidation(rule);
+    }
+
+    const payCol = m["Payment Status"];
+    if (payCol) {
+      const rule = SpreadsheetApp.newDataValidation()
+        .requireValueInList(CFG.VALUES.PAYMENT, true)
+        .setAllowInvalid(false)
+        .build();
+      sh.getRange(2, payCol, n, 1).setDataValidation(rule);
+    }
+  });
+}
+
+/* ===================== ROW HIGHLIGHTING BY STUDENT STATUS ===================== */
+
+function applyStatusHighlighting_() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+
+  CFG.TERMS.forEach(term => {
+    const sh = ss.getSheetByName(term);
+    if (!sh) return;
+
+    ensureHeaderColumn_(sh, DUP_WARN_HEADER);
+
+    const td = readSheet_(sh);
+    requireHeaders_(td.headers, TERM_HEADERS, term);
+    const m = td.map;
+
+    const statusCol = m["Student Status (Auto)"];
+    if (!statusCol) return;
+
+    const lastRow = Math.max(2, sh.getLastRow());
+    const lastCol = sh.getLastColumn();
+    const range = sh.getRange(2, 1, lastRow - 1, lastCol);
+
+    const existing = sh.getConditionalFormatRules() || [];
+    const kept = existing.filter(r => {
+      try {
+        const b = r.getBooleanCondition();
+        if (!b) return true;
+        const f = b.getCriteriaValues && b.getCriteriaValues();
+        const formula = (f && f[0]) ? String(f[0]) : "";
+        return formula.indexOf("__SAC_STATUS__") === -1;
+      } catch (e) {
+        return true;
+      }
+    });
+
+    const STATUS_COLOR_RULES = [
+      { statuses: ["Complete"], bg: "#C6EFCE", fg: "#006100" },
+      { statuses: ["Withdrawn"], bg: "#FFC7CE", fg: "#9C0006" },
+      { statuses: ["Active", "In Progress"], bg: "#CFE2F3", fg: "#0B5394" },
+      { statuses: ["Hold", "On Hold", "Deferred"], bg: "#FFEB9C", fg: "#9C5700" },
+      { statuses: ["Lodged", "Submitted", "Applied"], bg: "#D9E1F2", fg: "#1F4E79" },
+      { statuses: ["Visa Granted", "Granted"], bg: "#E2F0D9", fg: "#375623" }
+    ];
+
+    const newRules = [];
+
+    STATUS_COLOR_RULES.forEach(ruleDef => {
+      const colL = colLetter_(statusCol);
+      const orParts = ruleDef.statuses.map(s => `LOWER(TRIM($${colL}2))=LOWER("${escapeForFormula_(s)}")`);
+      const realFormula = `=OR(${orParts.join(",")})+N("__SAC_STATUS__")`;
+
+      const r = SpreadsheetApp.newConditionalFormatRule()
+        .whenFormulaSatisfied(realFormula)
+        .setBackground(ruleDef.bg)
+        .setFontColor(ruleDef.fg)
+        .setRanges([range])
+        .build();
+
+      newRules.push(r);
+    });
+
+    sh.setConditionalFormatRules(kept.concat(newRules));
+  });
+}
+
+/* ===================== PAYMENT STATUS HIGHLIGHTING (LIGHT) ===================== */
+/* ✅ IMPORTANT: Applies ONLY to Payment Status column so it is visible even when row colors exist */
+
+function applyPaymentStatusHighlighting_() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+
+  CFG.TERMS.forEach(term => {
+    const sh = ss.getSheetByName(term);
+    if (!sh) return;
+
+    ensureHeaderColumn_(sh, DUP_WARN_HEADER);
+
+    const td = readSheet_(sh);
+    requireHeaders_(td.headers, TERM_HEADERS, term);
+    const m = td.map;
+
+    const payCol = m["Payment Status"];
+    if (!payCol) return;
+
+    const lastRow = Math.max(2, sh.getLastRow());
+    const n = lastRow - 1;
+    if (n <= 0) return;
+
+    // ✅ Only Payment Status column range
+    const payRange = sh.getRange(2, payCol, n, 1);
+
+    // Keep rules except old payment rules
+    const existing = sh.getConditionalFormatRules() || [];
+    const kept = existing.filter(r => {
+      try {
+        const b = r.getBooleanCondition();
+        if (!b) return true;
+        const f = b.getCriteriaValues && b.getCriteriaValues();
+        const formula = (f && f[0]) ? String(f[0]) : "";
+        return formula.indexOf("__SAC_PAY__") === -1;
+      } catch (e) {
+        return true;
+      }
+    });
+
+    const colL = colLetter_(payCol);
+
+    // Invoice Waiting = no rule => no color
+    const defs = [
+      { val: "PO Send",      bg: "#FFF2CC", fg: "#7F6000" }, // light yellow
+      { val: "Payment Made", bg: "#D9EAD3", fg: "#274E13" }, // light green
+      { val: "Hold",         bg: "#F4CCCC", fg: "#990000" }  // light red
+    ];
+
+    const newRules = defs.map(d => {
+      const formula = `=(LOWER(TRIM($${colL}2))=LOWER("${escapeForFormula_(d.val)}"))+N("__SAC_PAY__")`;
+      return SpreadsheetApp.newConditionalFormatRule()
+        .whenFormulaSatisfied(formula)
+        .setBackground(d.bg)
+        .setFontColor(d.fg)
+        .setRanges([payRange])
+        .build();
+    });
+
+    // ✅ Put payment rules FIRST (higher priority)
+    sh.setConditionalFormatRules(newRules.concat(kept));
+  });
+}
+
+/* ===================== DUPLICATE WARNING (AUTO) ===================== */
+
+function refreshDuplicateWarningsAll_() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const names = [CFG.MASTER].concat(CFG.TERMS);
+  names.forEach(n => {
+    const sh = ss.getSheetByName(n);
+    if (sh) {
+      ensureHeaderColumn_(sh, DUP_WARN_HEADER);
+      refreshDuplicateWarnings_(sh);
+    }
+  });
+}
+
+function refreshDuplicateWarnings_(sheet) {
+  ensureHeaderColumn_(sheet, DUP_WARN_HEADER);
+
+  const td = readSheet_(sheet);
+  const m = td.map;
+
+  const warnCol = m[DUP_WARN_HEADER];
+  const internalCol = m[CFG.INTERNAL_ID];
+  const agentsicCol = m[CFG.AGENTSIC_ID];
+
+  if (!warnCol || !internalCol || !agentsicCol) return;
+
+  const last = sheet.getLastRow();
+  const n = Math.min(CFG.MAX, Math.max(0, last - 1));
+  if (n <= 0) return;
+
+  const internalVals = sheet.getRange(2, internalCol, n, 1).getValues().flat().map(norm_);
+  const agentsicVals = sheet.getRange(2, agentsicCol, n, 1).getValues().flat().map(norm_);
+
+  const internalCount = {};
+  const agentsicCount = {};
+
+  for (let i = 0; i < n; i++) {
+    const a = internalVals[i];
+    const b = agentsicVals[i];
+    if (a) internalCount[a] = (internalCount[a] || 0) + 1;
+    if (b) agentsicCount[b] = (agentsicCount[b] || 0) + 1;
+  }
+
+  const out = [];
+  for (let i = 0; i < n; i++) {
+    const a = internalVals[i];
+    const b = agentsicVals[i];
+
+    const dupInternal = a && internalCount[a] > 1;
+    const dupAgentsic = b && agentsicCount[b] > 1;
+
+    let msg = "";
+    if (dupInternal && dupAgentsic) msg = "⚠ Possible double entry (duplicate Internal ID + Agentsic ID)";
+    else if (dupInternal) msg = "⚠ Possible double entry (duplicate Internal ID)";
+    else if (dupAgentsic) msg = "⚠ Possible double entry (duplicate Agentsic ID)";
+
+    out.push([msg]);
+  }
+
+  sheet.getRange(2, warnCol, n, 1).setValues(out);
+}
+
+/* ===================== DASHBOARD (simple) ===================== */
+
+function buildDashboard() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const master = ss.getSheetByName(CFG.MASTER);
+  if (!master) return;
+
+  ensureHeaderColumn_(master, DUP_WARN_HEADER);
+
+  let dash = ss.getSheetByName(CFG.DASHBOARD);
+  if (!dash) dash = ss.insertSheet(CFG.DASHBOARD);
+  dash.clear();
+
+  const data = master.getDataRange().getValues();
+  if (data.length < 2) return;
+
+  const m = mapCols_(data[0]);
+  const stCol = m["Status (Auto)"];
+
+  const counts = {};
+  let total = 0;
+  const limit = Math.min(CFG.MAX, data.length - 1);
+
+  for (let i = 1; i <= limit; i++) {
+    const st = norm_(data[i][stCol]) || "Under Enquiry";
+    counts[st] = (counts[st] || 0) + 1;
+    total++;
+  }
+
+  const table = [["Status", "Count", "%"]];
+  Object.keys(counts).sort().forEach(k => table.push([k, counts[k], total ? counts[k] / total : 0]));
+
+  dash.getRange(1, 1).setValue("Dashboard – Sub Agent Commission");
+  dash.getRange(3, 1, table.length, 3).setValues(table);
+  if (table.length > 1) dash.getRange(4, 3, table.length - 1, 1).setNumberFormat("0.00%");
+}
+
+/* ===================== S.No ===================== */
+
+function renumberSNo_(sheet) {
+  const td = readSheet_(sheet);
+  const m = td.map;
+  const sn = m["S.No"];
+  const keyC = m[CFG.INTERNAL_ID];
+  if (!sn || !keyC) return;
+
+  const last = sheet.getLastRow();
+  const n = Math.min(CFG.MAX, Math.max(0, last - 1));
+  if (n <= 0) return;
+
+  const keys = sheet.getRange(2, keyC, n, 1).getValues().flat();
+
+  const out = [];
+  let counter = 0;
+  for (let i = 0; i < n; i++) {
+    const rowNum = i + 2;
+    const hidden = sheet.isRowHiddenByUser(rowNum);
+    const hasKey = !!norm_(keys[i]);
+    if (!hidden && hasKey) { counter++; out.push([counter]); }
+    else out.push([""]);
+  }
+
+  sheet.getRange(2, sn, n, 1).setValues(out);
+}
+
+/* ===================== DEBUG: FIND STUDENT ===================== */
+
+function debugFindStudent_() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const keyToFind = "2543462972"; // 👈 change this
+
+  const sheets = [CFG.MASTER].concat(CFG.TERMS);
+  const results = [];
+
+  sheets.forEach(name => {
+    const sh = ss.getSheetByName(name);
+    if (!sh) return;
+
+    ensureHeaderColumn_(sh, DUP_WARN_HEADER);
+
+    const td = readSheet_(sh);
+    const m = td.map;
+    const keyCol = m[CFG.INTERNAL_ID];
+    if (!keyCol) return;
+
+    const last = sh.getLastRow();
+    if (last < 2) return;
+
+    const keys = sh.getRange(2, keyCol, last - 1, 1).getValues().flat();
+
+    for (let i = 0; i < keys.length; i++) {
+      if (norm_(keys[i]) === keyToFind) {
+        const row = i + 2;
+        if (sh.isRowHiddenByUser(row)) sh.showRows(row);
+        results.push(`${name}: found at row ${row} (unhid if hidden)`);
+      }
+    }
+  });
+
+  if (!results.length) SpreadsheetApp.getUi().alert(`Not found anywhere for Internal ID: ${keyToFind}`);
+  else SpreadsheetApp.getUi().alert(results.join("\n"));
+}
+
+/* ===================== FIX MISSING HEADER (NO CLEAR) ===================== */
+
+function fixMissingDuplicateHeader_() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const targets = [CFG.MASTER].concat(CFG.TERMS);
+
+  targets.forEach(name => {
+    const sh = ss.getSheetByName(name);
+    if (!sh) return;
+    ensureHeaderColumn_(sh, DUP_WARN_HEADER);
+  });
+
+  SpreadsheetApp.getUi().alert("✅ Ensured column exists: " + DUP_WARN_HEADER + " (MASTER + Terms). Now run Sync All.");
+}
+
+/* ===================== HELPERS ===================== */
+
+function ensureHeaderColumn_(sheet, headerName) {
+  const lastCol = Math.max(1, sheet.getLastColumn());
+  const headers = sheet.getRange(1, 1, 1, lastCol).getValues()[0].map(h => normHeader_(h));
+  if (headers.includes(normHeader_(headerName))) return;
+
+  sheet.getRange(1, lastCol + 1).setValue(headerName);
+  sheet.getRange(1, lastCol + 1)
+    .setFontWeight("bold")
+    .setBackground("#1F4E79")
+    .setFontColor("#ffffff");
+}
+
+function startIdxFromIntake_(intakeStr) {
+  const s = norm_(intakeStr).toUpperCase();
+  if (!s) return 0;
+
+  const termMatch = s.match(/T\s*([123])/i);
+  const yearMatch = s.match(/(20\d{2})/);
+
+  const term = termMatch ? parseInt(termMatch[1], 10) : 1;
+  const year = yearMatch ? parseInt(yearMatch[1], 10) : 2025;
+
+  if (year <= 2024) return 0;
+  if (year === 2025) return Math.max(0, Math.min(2, term - 1));
+  return 2;
+}
+
+function readSheet_(sheet) {
+  const lastRow = Math.max(1, sheet.getLastRow());
+  const lastCol = Math.max(1, sheet.getLastColumn());
+  const values = sheet.getRange(1, 1, lastRow, lastCol).getValues();
+
+  const headers = values[0].map(normHeader_);
+  const map = {};
+  headers.forEach((h, i) => { if (h) map[h] = i + 1; });
+
+  return { headers, map, rows: values.slice(1) };
+}
+
+function requireHeaders_(headers, required, sheetName) {
+  const set = new Set(headers.map(normHeader_));
+  const missing = required.map(normHeader_).filter(h => !set.has(h));
+  if (missing.length) throw new Error(`Sheet "${sheetName}" missing headers: ${missing.join(", ")}`);
+}
+
+function ensureRows_(sheet, totalRows) {
+  const have = sheet.getMaxRows();
+  if (have < totalRows) sheet.insertRowsAfter(have, totalRows - have);
+}
+
+function mapCols_(headers) {
+  const m = {};
+  headers.forEach((h, i) => { m[String(h || "").trim()] = i; });
+  return m;
+}
+
+function requireCols_(map, cols) {
+  cols.forEach(c => {
+    if (map[c] === undefined) throw new Error(`MAIN MASTER missing column: ${c}`);
+  });
+}
+
+function normHeader_(h) { return String(h || "").trim().replace(/\s+/g, " "); }
+function norm_(v) { return (v === null || v === undefined) ? "" : String(v).trim(); }
+
+function colLetter_(col) {
+  let temp = col;
+  let letter = "";
+  while (temp > 0) {
+    let mod = (temp - 1) % 26;
+    letter = String.fromCharCode(65 + mod) + letter;
+    temp = Math.floor((temp - 1) / 26);
+  }
+  return letter;
+}
+
+function escapeForFormula_(s) {
+  return String(s).replace(/"/g, '""');
+}
+
+// supports "10,000", "$10,000", "AUD 10000"
+function num_(v, fallback) {
+  if (v === null || v === undefined || v === "") return (fallback ?? 0);
+  if (typeof v === "number") return Number.isFinite(v) ? v : (fallback ?? 0);
+
+  const s = String(v)
+    .trim()
+    .replace(/[, ]+/g, "")
+    .replace(/[^\d.\-]/g, "");
+
+  const n = Number(s);
+  return Number.isFinite(n) ? n : (fallback ?? 0);
+}
+
+function round2_(n) { return Math.round((n + Number.EPSILON) * 100) / 100; }
