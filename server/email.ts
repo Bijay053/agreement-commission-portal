@@ -112,6 +112,44 @@ export async function sendAgreementReminderEmail(
   });
 }
 
+export async function sendLoginOtpEmail(to: string, code: string, expiresInMinutes: number) {
+  await transporter.sendMail({
+    from: `"${FROM_NAME}" <${FROM_EMAIL}>`,
+    to,
+    subject: "Login Verification Code - Agreement Portal",
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+        <div style="text-align: center; padding: 20px 0; border-bottom: 2px solid #3b82f6;">
+          <h1 style="color: #1e40af; margin: 0;">Agreement Portal</h1>
+          <p style="color: #6b7280; margin: 5px 0 0;">Study Info Centre</p>
+        </div>
+        <div style="padding: 30px 0;">
+          <h2 style="color: #111827;">Login Verification Code</h2>
+          <p style="color: #4b5563; line-height: 1.6;">
+            Your verification code for logging into the Agreement Portal is:
+          </p>
+          <div style="text-align: center; padding: 20px 0;">
+            <div style="display: inline-block; background-color: #f3f4f6; border: 2px solid #3b82f6; border-radius: 8px; padding: 16px 40px; letter-spacing: 8px; font-size: 32px; font-weight: bold; color: #1e40af; font-family: monospace;">
+              ${code}
+            </div>
+          </div>
+          <p style="color: #6b7280; font-size: 14px; line-height: 1.6;">
+            This code will expire in <strong>${expiresInMinutes} minutes</strong>. It can only be used once.
+          </p>
+          <p style="color: #9ca3af; font-size: 13px; margin-top: 20px; padding: 12px; background-color: #fef3c7; border-radius: 6px;">
+            ⚠️ If you did not attempt to log in, please ignore this email and consider changing your password.
+          </p>
+        </div>
+        <div style="border-top: 1px solid #e5e7eb; padding-top: 15px; text-align: center;">
+          <p style="color: #9ca3af; font-size: 12px;">
+            &copy; ${new Date().getFullYear()} Study Info Centre. All rights reserved.
+          </p>
+        </div>
+      </div>
+    `,
+  });
+}
+
 export async function verifyEmailConnection(): Promise<boolean> {
   try {
     if (!process.env.SMTP_USER || !process.env.SMTP_PASS) {

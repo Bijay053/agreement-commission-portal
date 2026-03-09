@@ -1,14 +1,17 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { setupAuth, hashPassword, comparePassword, requireAuth, requirePermission } from "./auth";
+import { setupAuth, hashPassword, comparePassword, requireAuth, requirePermission, requireActivePassword } from "./auth";
 import { seedDatabase } from "./seed";
 import { loginSchema, insertAgreementSchema, insertTargetSchema, insertCommissionRuleSchema, insertContactSchema, insertUniversitySchema, PERMISSION_REGISTRY, LEGACY_PERMISSION_MAP } from "@shared/schema";
-import { sendPasswordResetEmail, verifyEmailConnection } from "./email";
+import { sendPasswordResetEmail, sendLoginOtpEmail, verifyEmailConnection } from "./email";
+import { calculateEntry, computeMasterFromEntries, STUDENT_STATUSES, PAYMENT_STATUSES } from "./commission-calc";
 import multer from "multer";
 import path from "path";
 import fs from "fs";
 import crypto from "crypto";
+import * as UAParserModule from "ua-parser-js";
+const UAParser = (UAParserModule as any).UAParser || (UAParserModule as any).default || UAParserModule;
 
 const uploadsDir = path.join(process.cwd(), "uploads");
 if (!fs.existsSync(uploadsDir)) {
@@ -39,12 +42,64 @@ function validatePeriodKey(targetType: string, periodKey: string): string | null
   return null;
 }
 
+function parseDeviceInfo(userAgent: string) {
+  const result = UAParser(userAgent);
+  const browser = result.browser;
+  const os = result.os;
+  const device = result.device;
+  return {
+    browser: `${browser.name || "Unknown"} ${browser.version || ""}`.trim(),
+    os: `${os.name || "Unknown"} ${os.version || ""}`.trim(),
+    deviceType: device.type || "desktop",
+  };
+}
+
+function getUA(req: any): string {
+  const ua = req.headers["user-agent"];
+  if (Array.isArray(ua)) return ua[0] || "";
+  return ua || "";
+}
+
+function generateOtp(): string {
+  return crypto.randomInt(100000, 999999).toString();
+}
+
+function hashOtp(code: string): string {
+  return crypto.createHash("sha256").update(code).digest("hex");
+}
+
+const PASSWORD_POLICY = {
+  minLength: 8,
+  requireUppercase: true,
+  requireLowercase: true,
+  requireNumber: true,
+  requireSpecial: true,
+};
+
+function validatePasswordPolicy(password: string): string | null {
+  if (password.length < PASSWORD_POLICY.minLength) return `Password must be at least ${PASSWORD_POLICY.minLength} characters`;
+  if (PASSWORD_POLICY.requireUppercase && !/[A-Z]/.test(password)) return "Password must contain at least one uppercase letter";
+  if (PASSWORD_POLICY.requireLowercase && !/[a-z]/.test(password)) return "Password must contain at least one lowercase letter";
+  if (PASSWORD_POLICY.requireNumber && !/[0-9]/.test(password)) return "Password must contain at least one number";
+  if (PASSWORD_POLICY.requireSpecial && !/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(password)) return "Password must contain at least one special character";
+  return null;
+}
+
+const loginAttemptTracker = new Map<string, { count: number; lockedUntil: number }>();
+const OTP_EXPIRY_MINUTES = 5;
+const MAX_OTP_ATTEMPTS = 5;
+const MAX_OTP_RESENDS = 3;
+const PASSWORD_EXPIRY_DAYS = 90;
+const PASSWORD_WARNING_DAYS = 14;
+
 export async function registerRoutes(
   httpServer: Server,
   app: Express
 ): Promise<Server> {
   setupAuth(app);
   await seedDatabase();
+
+  app.use("/api", requireActivePassword);
 
   app.post("/api/auth/login", async (req, res) => {
     try {
@@ -53,33 +108,215 @@ export async function registerRoutes(
         return res.status(400).json({ message: "Invalid credentials format" });
       }
       const { email, password } = parsed.data;
+      const clientIp = req.ip || "unknown";
+
+      const tracker = loginAttemptTracker.get(email);
+      if (tracker && tracker.lockedUntil > Date.now()) {
+        const remainSec = Math.ceil((tracker.lockedUntil - Date.now()) / 1000);
+        await storage.createSecurityAuditLog({ eventType: "LOGIN_LOCKED", ipAddress: clientIp, metadata: { email, remainSec } });
+        return res.status(429).json({ message: `Too many failed attempts. Try again in ${remainSec} seconds.` });
+      }
+
       const user = await storage.getUserByEmail(email);
       if (!user || !user.isActive) {
         return res.status(401).json({ message: "Invalid email or password" });
       }
       const valid = await comparePassword(password, user.passwordHash);
       if (!valid) {
-        await storage.createAuditLog({ userId: user.id, action: "LOGIN_FAILED", entityType: "user", entityId: user.id, ipAddress: req.ip });
+        const entry = loginAttemptTracker.get(email) || { count: 0, lockedUntil: 0 };
+        entry.count++;
+        if (entry.count >= 5) {
+          entry.lockedUntil = Date.now() + 15 * 60 * 1000;
+          entry.count = 0;
+        }
+        loginAttemptTracker.set(email, entry);
+        await storage.createAuditLog({ userId: user.id, action: "LOGIN_FAILED", entityType: "user", entityId: user.id, ipAddress: clientIp });
+        await storage.createSecurityAuditLog({ userId: user.id, eventType: "LOGIN_FAILED", ipAddress: clientIp, deviceInfo: getUA(req) });
         return res.status(401).json({ message: "Invalid email or password" });
       }
-      const perms = await storage.getUserPermissions(user.id);
-      const userRoles = await storage.getUserRoles(user.id);
-      req.session.userId = user.id;
-      req.session.userPermissions = perms;
-      await storage.createAuditLog({ userId: user.id, action: "LOGIN_SUCCESS", entityType: "user", entityId: user.id, ipAddress: req.ip });
-      const { passwordHash, ...safeUser } = user;
-      res.json({ user: safeUser, permissions: perms, roles: userRoles });
+
+      loginAttemptTracker.delete(email);
+
+      const otpCode = generateOtp();
+      const otpHash = hashOtp(otpCode);
+      const expiresAt = new Date(Date.now() + OTP_EXPIRY_MINUTES * 60 * 1000);
+
+      await storage.createLoginVerificationCode({ userId: user.id, codeHash: otpHash, expiresAt });
+
+      let otpSent = false;
+      try {
+        await sendLoginOtpEmail(user.email, otpCode, OTP_EXPIRY_MINUTES);
+        await storage.createSecurityAuditLog({ userId: user.id, eventType: "OTP_SENT", ipAddress: clientIp, deviceInfo: getUA(req) });
+        otpSent = true;
+        console.log(`[OTP] Code for ${user.email}: ${otpCode} (expires in ${OTP_EXPIRY_MINUTES} min)`);
+      } catch (emailErr: any) {
+        console.error("Failed to send OTP email:", emailErr.message);
+        await storage.createSecurityAuditLog({ userId: user.id, eventType: "OTP_SEND_FAILED", ipAddress: clientIp, metadata: { error: emailErr.message } });
+        console.log(`[OTP FALLBACK] Code for ${user.email}: ${otpCode} (email delivery failed)`);
+      }
+
+      req.session.pendingUserId = user.id;
+      req.session.otpRequired = true;
+
+      if (!otpSent) {
+        return res.status(500).json({
+          message: "Failed to send verification email. Please try again or contact an administrator.",
+        });
+      }
+
+      res.json({
+        requiresOtp: true,
+        message: "Verification code sent to your email",
+        email: user.email.replace(/(.{2})(.*)(@.*)/, "$1***$3"),
+      });
     } catch (err: any) {
       res.status(500).json({ message: err.message });
     }
   });
 
-  app.post("/api/auth/logout", (req, res) => {
-    const userId = req.session.userId;
-    req.session.destroy(() => {
-      if (userId) {
-        storage.createAuditLog({ userId, action: "LOGOUT", entityType: "user", entityId: userId });
+  app.post("/api/auth/verify-otp", async (req, res) => {
+    try {
+      const { code } = req.body;
+      const userId = req.session.pendingUserId;
+      if (!userId || !req.session.otpRequired) {
+        return res.status(400).json({ message: "No pending verification. Please login again." });
       }
+
+      const clientIp = req.ip || "unknown";
+      const activeCode = await storage.getActiveVerificationCode(userId);
+
+      if (!activeCode) {
+        return res.status(400).json({ message: "Verification code expired. Please login again." });
+      }
+
+      if (activeCode.attempts >= MAX_OTP_ATTEMPTS) {
+        await storage.updateVerificationCode(activeCode.id, { status: "exhausted" });
+        await storage.createSecurityAuditLog({ userId, eventType: "OTP_EXHAUSTED", ipAddress: clientIp });
+        delete req.session.pendingUserId;
+        delete req.session.otpRequired;
+        return res.status(400).json({ message: "Too many attempts. Please login again." });
+      }
+
+      await storage.updateVerificationCode(activeCode.id, { attempts: activeCode.attempts + 1 });
+
+      if (hashOtp(code) !== activeCode.codeHash) {
+        await storage.createSecurityAuditLog({ userId, eventType: "OTP_FAILED", ipAddress: clientIp });
+        const remaining = MAX_OTP_ATTEMPTS - activeCode.attempts - 1;
+        return res.status(401).json({ message: `Invalid code. ${remaining} attempt(s) remaining.` });
+      }
+
+      await storage.updateVerificationCode(activeCode.id, { status: "used", usedAt: new Date() });
+      await storage.createSecurityAuditLog({ userId, eventType: "OTP_VERIFIED", ipAddress: clientIp, deviceInfo: getUA(req) });
+
+      const user = await storage.getUser(userId);
+      if (!user) return res.status(401).json({ message: "User not found" });
+
+      const perms = await storage.getUserPermissions(user.id);
+      const userRolesData = await storage.getUserRoles(user.id);
+      req.session.userId = user.id;
+      req.session.userPermissions = perms;
+      delete req.session.pendingUserId;
+      delete req.session.otpRequired;
+
+      const deviceInfo = parseDeviceInfo(getUA(req));
+      await storage.createUserSession({
+        userId: user.id,
+        sessionToken: req.sessionID,
+        ipAddress: clientIp,
+        browser: deviceInfo.browser,
+        os: deviceInfo.os,
+        deviceType: deviceInfo.deviceType,
+        otpVerified: true,
+      });
+
+      await storage.updateUserLoginInfo(user.id, clientIp);
+      await storage.createAuditLog({ userId: user.id, action: "LOGIN_SUCCESS", entityType: "user", entityId: user.id, ipAddress: clientIp });
+
+      let passwordExpired = false;
+      let passwordWarning = false;
+      let daysUntilExpiry: number | null = null;
+      if (user.forcePasswordChange) {
+        passwordExpired = true;
+      } else if (user.passwordChangedAt) {
+        const daysSinceChange = Math.floor((Date.now() - new Date(user.passwordChangedAt).getTime()) / (1000 * 60 * 60 * 24));
+        daysUntilExpiry = PASSWORD_EXPIRY_DAYS - daysSinceChange;
+        if (daysUntilExpiry <= 0) {
+          passwordExpired = true;
+        } else if (daysUntilExpiry <= PASSWORD_WARNING_DAYS) {
+          passwordWarning = true;
+        }
+      }
+
+      req.session.passwordExpired = passwordExpired;
+
+      const { passwordHash, ...safeUser } = user;
+      res.json({
+        user: safeUser,
+        permissions: perms,
+        roles: userRolesData,
+        passwordExpired,
+        passwordWarning,
+        daysUntilExpiry,
+      });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.post("/api/auth/resend-otp", async (req, res) => {
+    try {
+      const userId = req.session.pendingUserId;
+      if (!userId || !req.session.otpRequired) {
+        return res.status(400).json({ message: "No pending verification. Please login again." });
+      }
+
+      const clientIp = req.ip || "unknown";
+      const existingCode = await storage.getActiveVerificationCode(userId);
+      if (existingCode && existingCode.resendCount >= MAX_OTP_RESENDS) {
+        return res.status(429).json({ message: "Maximum resend limit reached. Please login again." });
+      }
+
+      const user = await storage.getUser(userId);
+      if (!user) return res.status(400).json({ message: "User not found" });
+
+      const otpCode = generateOtp();
+      const otpHash = hashOtp(otpCode);
+      const expiresAt = new Date(Date.now() + OTP_EXPIRY_MINUTES * 60 * 1000);
+
+      const newCode = await storage.createLoginVerificationCode({ userId, codeHash: otpHash, expiresAt });
+      if (existingCode) {
+        await storage.updateVerificationCode(newCode.id, { resendCount: (existingCode.resendCount || 0) + 1 });
+      }
+
+      try {
+        await sendLoginOtpEmail(user.email, otpCode, OTP_EXPIRY_MINUTES);
+        await storage.createSecurityAuditLog({ userId, eventType: "OTP_RESENT", ipAddress: clientIp });
+        console.log(`[OTP] Resend code for ${user.email}: ${otpCode} (expires in ${OTP_EXPIRY_MINUTES} min)`);
+      } catch (emailErr: any) {
+        console.error("Failed to resend OTP:", emailErr.message);
+        console.log(`[OTP FALLBACK] Resend code for ${user.email}: ${otpCode} (email delivery failed)`);
+        return res.status(500).json({ message: "Failed to send verification email. Please try again." });
+      }
+
+      res.json({ message: "New verification code sent" });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.post("/api/auth/logout", async (req, res) => {
+    const userId = req.session.userId;
+    const sessionId = req.sessionID;
+    if (userId) {
+      const sessions = await storage.getUserSessions(userId, true);
+      const matchingSession = sessions.find(s => s.sessionToken === sessionId);
+      if (matchingSession) {
+        await storage.updateUserSession(matchingSession.id, { isActive: false, logoutAt: new Date(), logoutReason: "manual" });
+      }
+      await storage.createAuditLog({ userId, action: "LOGOUT", entityType: "user", entityId: userId });
+      await storage.createSecurityAuditLog({ userId, eventType: "LOGOUT", ipAddress: req.ip });
+    }
+    req.session.destroy(() => {
       res.json({ message: "Logged out" });
     });
   });
@@ -164,18 +401,8 @@ export async function registerRoutes(
         return res.status(400).json({ message: "New password is required" });
       }
 
-      if (newPassword.length < 12) {
-        return res.status(400).json({ message: "Password must be at least 12 characters" });
-      }
-      if (!/[A-Z]/.test(newPassword)) {
-        return res.status(400).json({ message: "Password must include at least one uppercase letter" });
-      }
-      if (!/[a-z]/.test(newPassword)) {
-        return res.status(400).json({ message: "Password must include at least one lowercase letter" });
-      }
-      if (!/\d/.test(newPassword)) {
-        return res.status(400).json({ message: "Password must include at least one number" });
-      }
+      const policyError = validatePasswordPolicy(newPassword);
+      if (policyError) return res.status(400).json({ message: policyError });
 
       const rawToken = Buffer.from(token, "hex");
       const tokenHash = crypto.createHash("sha256").update(rawToken).digest("hex");
@@ -196,6 +423,17 @@ export async function registerRoutes(
         return res.status(400).json({ message: "This account is no longer active" });
       }
 
+      const history = await storage.getPasswordHistory(resetToken.userId, 3);
+      for (const h of history) {
+        if (await comparePassword(newPassword, h.passwordHash)) {
+          return res.status(400).json({ message: "Cannot reuse a recent password. Please choose a different password." });
+        }
+      }
+      if (await comparePassword(newPassword, user.passwordHash)) {
+        return res.status(400).json({ message: "New password must be different from current password." });
+      }
+
+      await storage.addPasswordToHistory(resetToken.userId, user.passwordHash);
       const hashedPassword = await hashPassword(newPassword);
       await storage.updateUserPassword(resetToken.userId, hashedPassword);
 
@@ -226,9 +464,167 @@ export async function registerRoutes(
     const user = await storage.getUser(req.session.userId);
     if (!user) return res.status(401).json({ message: "User not found" });
     const perms = await storage.getUserPermissions(user.id);
-    const userRoles = await storage.getUserRoles(user.id);
+    const userRolesData = await storage.getUserRoles(user.id);
+    req.session.userPermissions = perms;
+
+    let passwordExpired = false;
+    let passwordWarning = false;
+    let daysUntilExpiry: number | null = null;
+    if (user.forcePasswordChange) {
+      passwordExpired = true;
+    } else if (user.passwordChangedAt) {
+      const daysSinceChange = Math.floor((Date.now() - new Date(user.passwordChangedAt).getTime()) / (1000 * 60 * 60 * 24));
+      daysUntilExpiry = PASSWORD_EXPIRY_DAYS - daysSinceChange;
+      if (daysUntilExpiry <= 0) {
+        passwordExpired = true;
+      } else if (daysUntilExpiry <= PASSWORD_WARNING_DAYS) {
+        passwordWarning = true;
+      }
+    }
+
     const { passwordHash, ...safeUser } = user;
-    res.json({ user: safeUser, permissions: perms, roles: userRoles });
+    res.json({ user: safeUser, permissions: perms, roles: userRolesData, passwordExpired, passwordWarning, daysUntilExpiry });
+  });
+
+  app.post("/api/auth/change-password", requireAuth, async (req, res) => {
+    try {
+      const { currentPassword, newPassword, confirmPassword } = req.body;
+      const userId = req.session.userId!;
+      const clientIp = req.ip || "unknown";
+
+      if (!currentPassword || !newPassword || !confirmPassword) {
+        return res.status(400).json({ message: "All fields are required" });
+      }
+      if (newPassword !== confirmPassword) {
+        return res.status(400).json({ message: "New password and confirmation do not match" });
+      }
+
+      const policyError = validatePasswordPolicy(newPassword);
+      if (policyError) return res.status(400).json({ message: policyError });
+
+      const user = await storage.getUser(userId);
+      if (!user) return res.status(404).json({ message: "User not found" });
+
+      const validCurrent = await comparePassword(currentPassword, user.passwordHash);
+      if (!validCurrent) {
+        await storage.createSecurityAuditLog({ userId, eventType: "PASSWORD_CHANGE_FAILED", ipAddress: clientIp, metadata: { reason: "wrong_current" } });
+        return res.status(401).json({ message: "Current password is incorrect" });
+      }
+
+      const history = await storage.getPasswordHistory(userId, 3);
+      for (const h of history) {
+        if (await comparePassword(newPassword, h.passwordHash)) {
+          return res.status(400).json({ message: "Cannot reuse a recent password. Please choose a different password." });
+        }
+      }
+      if (await comparePassword(newPassword, user.passwordHash)) {
+        return res.status(400).json({ message: "New password must be different from current password." });
+      }
+
+      await storage.addPasswordToHistory(userId, user.passwordHash);
+      const newHash = await hashPassword(newPassword);
+      await storage.updateUserPassword(userId, newHash);
+      await storage.createSecurityAuditLog({ userId, eventType: "PASSWORD_CHANGED", ipAddress: clientIp });
+      await storage.createAuditLog({ userId, action: "PASSWORD_CHANGED", entityType: "user", entityId: userId, ipAddress: clientIp });
+
+      req.session.passwordExpired = false;
+
+      res.json({ message: "Password changed successfully" });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.post("/api/auth/heartbeat", requireAuth, async (req, res) => {
+    try {
+      const userId = req.session.userId!;
+      const sessionId = req.sessionID;
+      const sessions = await storage.getUserSessions(userId, true);
+      const match = sessions.find(s => s.sessionToken === sessionId);
+      if (match) {
+        await storage.updateUserSession(match.id, { lastActivityAt: new Date() });
+      }
+      res.json({ active: true });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.get("/api/auth/sessions", requireAuth, async (req, res) => {
+    try {
+      const userId = req.session.userId!;
+      const sessions = await storage.getUserSessions(userId);
+      const currentToken = req.sessionID;
+      const result = sessions.map(s => ({
+        ...s,
+        isCurrent: s.sessionToken === currentToken,
+        sessionToken: undefined,
+      }));
+      res.json(result);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.post("/api/auth/sessions/:id/logout", requireAuth, async (req, res) => {
+    try {
+      const sessionDbId = Number(req.params.id);
+      const session = await storage.getUserSession(sessionDbId);
+      if (!session || session.userId !== req.session.userId!) {
+        return res.status(404).json({ message: "Session not found" });
+      }
+      await storage.updateUserSession(sessionDbId, { isActive: false, logoutAt: new Date(), logoutReason: "remote_logout" });
+      await storage.createSecurityAuditLog({ userId: req.session.userId!, eventType: "REMOTE_LOGOUT", ipAddress: req.ip, metadata: { targetSessionId: sessionDbId } });
+      res.json({ message: "Session logged out" });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.post("/api/auth/logout-others", requireAuth, async (req, res) => {
+    try {
+      const userId = req.session.userId!;
+      const currentToken = req.sessionID;
+      const sessions = await storage.getUserSessions(userId, true);
+      const currentSession = sessions.find(s => s.sessionToken === currentToken);
+      if (currentSession) {
+        await storage.deactivateUserSessions(userId, "logout_others", currentSession.id);
+      }
+      await storage.createSecurityAuditLog({ userId, eventType: "LOGOUT_ALL_OTHERS", ipAddress: req.ip });
+      res.json({ message: "All other sessions logged out" });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.get("/api/auth/security-logs", requireAuth, async (req, res) => {
+    try {
+      const userId = req.session.userId!;
+      const logs = await storage.getSecurityAuditLogs(userId, 50);
+      res.json(logs);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.get("/api/admin/users/:id/sessions", requireAuth, requirePermission("security.user.manage"), async (req, res) => {
+    try {
+      const userId = Number(req.params.id);
+      const sessions = await storage.getUserSessions(userId);
+      res.json(sessions.map(s => ({ ...s, sessionToken: undefined })));
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.get("/api/admin/users/:id/security-logs", requireAuth, requirePermission("security.user.manage"), async (req, res) => {
+    try {
+      const userId = Number(req.params.id);
+      const logs = await storage.getSecurityAuditLogs(userId, 100);
+      res.json(logs);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
   });
 
   app.get("/api/countries", requireAuth, async (_req, res) => {
@@ -1096,6 +1492,632 @@ export async function registerRoutes(
       }));
 
       res.json({ modules });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.get("/api/commission-tracker/students", requireAuth, requirePermission("commission_tracker.view"), async (req, res) => {
+    try {
+      const filters: any = {};
+      if (req.query.search) filters.search = String(req.query.search);
+      if (req.query.agent) filters.agent = String(req.query.agent);
+      if (req.query.provider) filters.provider = String(req.query.provider);
+      if (req.query.country) filters.country = String(req.query.country);
+      if (req.query.status) filters.status = String(req.query.status);
+      const students = await storage.getCommissionStudents(filters);
+      res.json(students);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.get("/api/commission-tracker/students/:id", requireAuth, requirePermission("commission_tracker.view"), async (req, res) => {
+    try {
+      const student = await storage.getCommissionStudent(Number(req.params.id));
+      if (!student) return res.status(404).json({ message: "Student not found" });
+      const entries = await storage.getCommissionEntries(student.id);
+      res.json({ ...student, entries });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.post("/api/commission-tracker/students", requireAuth, requirePermission("commission_tracker.create"), async (req, res) => {
+    try {
+      const { studentName, agentsicId, provider, studentId } = req.body;
+      if (!studentName || !(studentName || "").trim()) {
+        return res.status(400).json({ message: "Student Name is required" });
+      }
+      if (!agentsicId || !(agentsicId || "").trim()) {
+        return res.status(400).json({ message: "Agentsic ID is required" });
+      }
+      if (!provider || !(provider || "").trim()) {
+        return res.status(400).json({ message: "Provider is required" });
+      }
+
+      const dupMsg = await storage.checkCommissionStudentDuplicates(studentName, agentsicId, provider, studentId || "");
+      if (dupMsg) {
+        return res.status(409).json({ message: dupMsg });
+      }
+
+      const country = (req.body.country || "AU").trim();
+      const isAU = country.toLowerCase() === "au" || country.toLowerCase() === "australia";
+      const data = {
+        ...req.body,
+        gstRatePct: isAU ? "10" : "0",
+        gstApplicable: req.body.gstApplicable || (isAU ? "Yes" : "No"),
+      };
+      const student = await storage.createCommissionStudent(data);
+
+      const clientIp = req.headers["x-forwarded-for"] || req.socket.remoteAddress || "unknown";
+      await storage.createAuditLog({
+        userId: req.session.userId!,
+        action: "create",
+        entityType: "commission_student",
+        entityId: student.id,
+        ipAddress: String(clientIp),
+        userAgent: req.headers["user-agent"],
+      });
+
+      res.status(201).json(student);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.patch("/api/commission-tracker/students/:id", requireAuth, requirePermission("commission_tracker.edit"), async (req, res) => {
+    try {
+      const id = Number(req.params.id);
+      const existing = await storage.getCommissionStudent(id);
+      if (!existing) return res.status(404).json({ message: "Student not found" });
+
+      if (req.body.agentsicId !== undefined && !req.body.agentsicId?.trim()) {
+        return res.status(400).json({ message: "Agentsic ID cannot be empty" });
+      }
+
+      const mergedName = (req.body.studentName || existing.studentName).trim();
+      const mergedAgentsicId = (req.body.agentsicId || existing.agentsicId || "").trim();
+      const mergedProvider = (req.body.provider || existing.provider).trim();
+      const mergedStudentId = (req.body.studentId !== undefined ? req.body.studentId : existing.studentId || "").trim();
+
+      const dupMsg = await storage.checkCommissionStudentDuplicates(mergedName, mergedAgentsicId, mergedProvider, mergedStudentId, id);
+      if (dupMsg) {
+        return res.status(409).json({ message: dupMsg });
+      }
+
+      const country = (req.body.country || existing.country).trim();
+      const isAU = country.toLowerCase() === "au" || country.toLowerCase() === "australia";
+      const updateData = { ...req.body };
+      if (req.body.country) {
+        updateData.gstRatePct = isAU ? "10" : "0";
+        if (!req.body.gstApplicable) updateData.gstApplicable = isAU ? "Yes" : "No";
+      }
+
+      const student = await storage.updateCommissionStudent(id, updateData);
+
+      const entries = await storage.getCommissionEntries(id);
+      for (const entry of entries) {
+        const calc = calculateEntry(student, entry);
+        await storage.updateCommissionEntry(entry.id, calc as any);
+      }
+
+      const updatedEntries = await storage.getCommissionEntries(id);
+      const tms = await storage.getCommissionTerms();
+      const master = computeMasterFromEntries(updatedEntries, tms.map(t => t.termName));
+      await storage.updateCommissionStudent(id, {
+        status: master.status,
+        notes: master.notes,
+        totalReceived: master.totalReceived,
+      });
+
+      const final = await storage.getCommissionStudent(id);
+      res.json(final);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.delete("/api/commission-tracker/students/:id", requireAuth, requirePermission("commission_tracker.student.delete_master"), async (req, res) => {
+    try {
+      await storage.deleteCommissionStudent(Number(req.params.id));
+      res.json({ message: "Student deleted" });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.get("/api/commission-tracker/students/:id/entries", requireAuth, requirePermission("commission_tracker.entry.view"), async (req, res) => {
+    try {
+      const entries = await storage.getCommissionEntries(Number(req.params.id));
+      res.json(entries);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.post("/api/commission-tracker/students/:id/entries", requireAuth, requirePermission("commission_tracker.entry.create"), async (req, res) => {
+    try {
+      const studentId = Number(req.params.id);
+      const student = await storage.getCommissionStudent(studentId);
+      if (!student) return res.status(404).json({ message: "Student not found" });
+
+      const termName = req.body.termName;
+      const allTerms = await storage.getCommissionTerms();
+      const termNames = allTerms.map(t => t.termName);
+      if (!termNames.includes(termName)) {
+        return res.status(400).json({ message: `Invalid term: ${termName}. Must be one of: ${termNames.join(", ")}` });
+      }
+
+      const existingEntries = await storage.getCommissionEntries(studentId);
+      if (existingEntries.find(e => e.termName === termName)) {
+        return res.status(400).json({ message: `Entry for ${termName} already exists` });
+      }
+
+      const termIdx = termNames.indexOf(termName);
+      for (let i = 0; i < termIdx; i++) {
+        const prevEntry = existingEntries.find(e => e.termName === termNames[i]);
+        if (prevEntry) {
+          const st = prevEntry.studentStatus || "";
+          if (st === "Withdrawn" || st === "Complete") {
+            return res.status(400).json({ message: `Cannot add ${termName} entry: previous term ${termNames[i]} has status "${st}" which blocks downstream terms` });
+          }
+        }
+      }
+
+      const calc = calculateEntry(student, req.body);
+      const entryData = {
+        commissionStudentId: studentId,
+        termName,
+        academicYear: req.body.academicYear || null,
+        feeGross: req.body.feeGross || "0",
+        bonus: req.body.bonus || "0",
+        commissionRateOverridePct: req.body.commissionRateOverridePct || null,
+        paymentStatus: req.body.paymentStatus || "Pending",
+        paidDate: req.body.paidDate || null,
+        invoiceNo: req.body.invoiceNo || null,
+        paymentRef: req.body.paymentRef || null,
+        notes: req.body.notes || null,
+        studentStatus: req.body.studentStatus || "Under Enquiry",
+        scholarshipTypeOverride: req.body.scholarshipTypeOverride || null,
+        scholarshipValueOverride: req.body.scholarshipValueOverride || null,
+        ...calc,
+      };
+
+      const entry = await storage.createCommissionEntry(entryData);
+
+      const allEntries = await storage.getCommissionEntries(studentId);
+      const master = computeMasterFromEntries(allEntries, termNames);
+      await storage.updateCommissionStudent(studentId, {
+        status: master.status,
+        notes: master.notes,
+        totalReceived: master.totalReceived,
+      });
+
+      res.status(201).json(entry);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.patch("/api/commission-tracker/entries/:id", requireAuth, requirePermission("commission_tracker.entry.edit"), async (req, res) => {
+    try {
+      const entryId = Number(req.params.id);
+      const existing = await storage.getCommissionEntry(entryId);
+      if (!existing) return res.status(404).json({ message: "Entry not found" });
+
+      const student = await storage.getCommissionStudent(existing.commissionStudentId);
+      if (!student) return res.status(404).json({ message: "Student not found" });
+
+      const body = { ...req.body };
+      if (body.feeGross === "" || body.feeGross === null) body.feeGross = "0";
+      if (body.bonus === "" || body.bonus === null) body.bonus = "0";
+      if (body.commissionRateOverridePct === "") body.commissionRateOverridePct = null;
+      if (body.scholarshipTypeOverride === "") body.scholarshipTypeOverride = null;
+      if (body.scholarshipValueOverride === "") body.scholarshipValueOverride = null;
+
+      const merged = { ...existing, ...body };
+      const calc = calculateEntry(student, merged);
+
+      const updateData = {
+        academicYear: merged.academicYear,
+        feeGross: merged.feeGross || "0",
+        bonus: merged.bonus || "0",
+        commissionRateOverridePct: merged.commissionRateOverridePct || null,
+        paymentStatus: merged.paymentStatus,
+        paidDate: merged.paidDate || null,
+        invoiceNo: merged.invoiceNo || null,
+        paymentRef: merged.paymentRef || null,
+        notes: merged.notes || null,
+        studentStatus: merged.studentStatus,
+        scholarshipTypeOverride: merged.scholarshipTypeOverride || null,
+        scholarshipValueOverride: merged.scholarshipValueOverride || null,
+        ...calc,
+      };
+
+      const entry = await storage.updateCommissionEntry(entryId, updateData);
+
+      const allEntries = await storage.getCommissionEntries(student.id);
+      const tms3 = await storage.getCommissionTerms();
+      const master = computeMasterFromEntries(allEntries, tms3.map(t => t.termName));
+      await storage.updateCommissionStudent(student.id, {
+        status: master.status,
+        notes: master.notes,
+        totalReceived: master.totalReceived,
+      });
+
+      res.json(entry);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.delete("/api/commission-tracker/entries/:id", requireAuth, requirePermission("commission_tracker.entry.delete"), async (req, res) => {
+    try {
+      const entryId = Number(req.params.id);
+      const existing = await storage.getCommissionEntry(entryId);
+      if (!existing) return res.status(404).json({ message: "Entry not found" });
+
+      const studentId = existing.commissionStudentId;
+      await storage.deleteCommissionEntry(entryId);
+
+      const allEntries = await storage.getCommissionEntries(studentId);
+      const tms2 = await storage.getCommissionTerms();
+      const master = computeMasterFromEntries(allEntries, tms2.map(t => t.termName));
+      await storage.updateCommissionStudent(studentId, {
+        status: master.status,
+        notes: master.notes,
+        totalReceived: master.totalReceived,
+      });
+
+      res.json({ message: "Entry deleted" });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.post("/api/commission-tracker/students/:id/recalculate", requireAuth, requirePermission("commission_tracker.edit"), async (req, res) => {
+    try {
+      const studentId = Number(req.params.id);
+      const student = await storage.getCommissionStudent(studentId);
+      if (!student) return res.status(404).json({ message: "Student not found" });
+
+      const entries = await storage.getCommissionEntries(studentId);
+      for (const entry of entries) {
+        const calc = calculateEntry(student, entry);
+        await storage.updateCommissionEntry(entry.id, calc as any);
+      }
+
+      const updatedEntries = await storage.getCommissionEntries(studentId);
+      const terms = await storage.getCommissionTerms();
+      const termOrder = terms.map(t => t.termName);
+      const master = computeMasterFromEntries(updatedEntries, termOrder);
+      const updated = await storage.updateCommissionStudent(studentId, {
+        status: master.status,
+        notes: master.notes,
+        totalReceived: master.totalReceived,
+      });
+
+      res.json({ ...updated, entries: updatedEntries });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.get("/api/commission-tracker/dashboard", requireAuth, requirePermission("commission_tracker.view"), async (_req, res) => {
+    try {
+      const dashboard = await storage.getCommissionTrackerDashboard();
+      res.json(dashboard);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.get("/api/commission-tracker/filters", requireAuth, requirePermission("commission_tracker.view"), async (_req, res) => {
+    try {
+      const students = await storage.getCommissionStudents();
+      const terms = await storage.getCommissionTerms();
+      const agents = [...new Set(students.map(s => s.agentName))].sort();
+      const providers = [...new Set(students.map(s => s.provider))].sort();
+      const countries = [...new Set(students.map(s => s.country))].sort();
+      res.json({
+        agents,
+        providers,
+        countries,
+        statuses: [...STUDENT_STATUSES],
+        paymentStatuses: [...PAYMENT_STATUSES],
+        termNames: terms.map(t => t.termName),
+      });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.get("/api/commission-tracker/terms", requireAuth, requirePermission("commission_tracker.view"), async (_req, res) => {
+    try {
+      const terms = await storage.getCommissionTerms();
+      res.json(terms);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.post("/api/commission-tracker/terms", requireAuth, requirePermission("commission_tracker.create"), async (req, res) => {
+    try {
+      const { termName, termLabel, year, termNumber, sortOrder } = req.body;
+      if (!termName || !termLabel || !year || !termNumber || sortOrder === undefined) {
+        return res.status(400).json({ message: "termName, termLabel, year, termNumber, and sortOrder are required" });
+      }
+      const term = await storage.createCommissionTerm({ termName, termLabel, year, termNumber, sortOrder });
+      res.status(201).json(term);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.delete("/api/commission-tracker/terms/:id", requireAuth, requirePermission("commission_tracker.delete"), async (req, res) => {
+    try {
+      const id = Number(req.params.id);
+      const allTerms = await storage.getCommissionTerms();
+      const term = allTerms.find(t => t.id === id);
+      if (!term) return res.status(404).json({ message: "Term not found" });
+
+      const entries = await storage.getCommissionEntriesByTerm(term.termName);
+      if (entries.length > 0) {
+        return res.status(400).json({ message: `Cannot delete term ${term.termLabel}: ${entries.length} entries exist. Remove entries first.` });
+      }
+
+      await storage.deleteCommissionTerm(id);
+      res.json({ message: "Term deleted" });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.get("/api/commission-tracker/all-entries", requireAuth, requirePermission("commission_tracker.view"), async (req, res) => {
+    try {
+      const year = req.query.year ? Number(req.query.year) : undefined;
+      const students = await storage.getCommissionStudents();
+      const terms = await storage.getCommissionTerms();
+      const yearTermNames = year ? terms.filter(t => t.year === year).map(t => t.termName) : null;
+
+      const result: Record<number, any[]> = {};
+      for (const s of students) {
+        const entries = await storage.getCommissionEntries(s.id);
+        result[s.id] = yearTermNames ? entries.filter(e => yearTermNames.includes(e.termName)) : entries;
+      }
+      res.json(result);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.get("/api/commission-tracker/years", requireAuth, requirePermission("commission_tracker.view"), async (_req, res) => {
+    try {
+      const terms = await storage.getCommissionTerms();
+      const years = [...new Set(terms.map(t => t.year))].sort((a, b) => a - b);
+      res.json(years);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.get("/api/commission-tracker/dashboard/:year", requireAuth, requirePermission("commission_tracker.view"), async (req, res) => {
+    try {
+      const year = Number(req.params.year);
+      const terms = await storage.getCommissionTerms();
+      const yearTermNames = terms.filter(t => t.year === year).map(t => t.termName);
+
+      const students = await storage.getCommissionStudents();
+      let totalStudents = 0;
+      let totalCommission = 0;
+      let totalReceived = 0;
+      let activeCount = 0;
+      let pendingPayments = 0;
+      let paidPayments = 0;
+      const byStatus: Record<string, number> = {};
+      const byAgent: Record<string, { count: number; total: number }> = {};
+      const byProvider: Record<string, { count: number; total: number }> = {};
+
+      for (const s of students) {
+        const entries = await storage.getCommissionEntries(s.id);
+        const yearEntries = entries.filter(e => yearTermNames.includes(e.termName));
+        if (yearEntries.length === 0) continue;
+
+        totalStudents++;
+        for (const e of yearEntries) {
+          const amt = Number(e.totalAmount || 0);
+          totalCommission += amt;
+          if (e.paymentStatus === "Received") {
+            totalReceived += amt;
+            paidPayments++;
+          }
+          if (e.paymentStatus === "Pending") pendingPayments++;
+          const st = e.studentStatus || "Under Enquiry";
+          byStatus[st] = (byStatus[st] || 0) + 1;
+          if (st === "Active") activeCount++;
+        }
+
+        if (!byAgent[s.agentName]) byAgent[s.agentName] = { count: 0, total: 0 };
+        byAgent[s.agentName].count++;
+        byAgent[s.agentName].total += yearEntries.reduce((sum, e) => sum + Number(e.totalAmount || 0), 0);
+
+        if (!byProvider[s.provider]) byProvider[s.provider] = { count: 0, total: 0 };
+        byProvider[s.provider].count++;
+        byProvider[s.provider].total += yearEntries.reduce((sum, e) => sum + Number(e.totalAmount || 0), 0);
+      }
+
+      res.json({
+        totalStudents,
+        totalCommission: Math.round(totalCommission * 100) / 100,
+        totalReceived: Math.round(totalReceived * 100) / 100,
+        activeCount,
+        pendingPayments,
+        paidPayments,
+        byStatus,
+        byAgent: Object.entries(byAgent).map(([agent, v]) => ({ agent, ...v })),
+        byProvider: Object.entries(byProvider).map(([provider, v]) => ({ provider, ...v })),
+      });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.get("/api/commission-tracker/sample-sheet", requireAuth, requirePermission("commission_tracker.view"), async (_req, res) => {
+    try {
+      const headers = [
+        "Agent Name", "Agentsic ID (mandatory)", "Student ID", "Student Name",
+        "Provider", "Country", "Start Intake", "Course Level", "Course Name",
+        "Duration (Years)", "Commission Rate (%)", "GST Applicable (Yes/No)",
+        "Scholarship Type (None/Percent/Fixed)", "Scholarship Value"
+      ];
+      const sampleRow = [
+        "Sample Agent", "AG-001", "STU-001", "John Doe",
+        "University of Newcastle", "Australia", "T1 2025", "Bachelor", "Computer Science",
+        "3", "15", "Yes", "None", "0"
+      ];
+      const csv = [headers.join(","), sampleRow.join(",")].join("\n");
+      res.setHeader("Content-Type", "text/csv");
+      res.setHeader("Content-Disposition", "attachment; filename=commission_tracker_sample.csv");
+      res.send(csv);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  const csvUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } }).single("file");
+  app.post("/api/commission-tracker/bulk-upload/preview", requireAuth, requirePermission("commission_tracker.create"), csvUpload, async (req, res) => {
+    try {
+      if (!req.file) return res.status(400).json({ message: "No file uploaded" });
+
+      const { parse } = await import("csv-parse/sync");
+      const content = req.file.buffer.toString("utf-8");
+      const records = parse(content, { columns: true, skip_empty_lines: true, trim: true });
+
+      const valid: any[] = [];
+      const invalid: any[] = [];
+      const duplicates: any[] = [];
+
+      const seenInFile: Array<{ studentName: string; agentsicId: string; provider: string; studentId: string }> = [];
+
+      for (let i = 0; i < records.length; i++) {
+        const row = records[i];
+        const rowNum = i + 2;
+        const studentName = (row["Student Name"] || "").trim();
+        const agentsicId = (row["Agentsic ID (mandatory)"] || row["Agentsic ID"] || "").trim();
+        const provider = (row["Provider"] || "").trim();
+        const studentId = (row["Student ID"] || "").trim();
+        const agentName = (row["Agent Name"] || "").trim();
+
+        const errors: string[] = [];
+        if (!agentsicId) errors.push("Agentsic ID is required");
+        if (!studentName) errors.push("Student Name is required");
+        if (!provider) errors.push("Provider is required");
+        if (!agentName) errors.push("Agent Name is required");
+
+        if (errors.length > 0) {
+          invalid.push({ row: rowNum, data: row, errors });
+          continue;
+        }
+
+        const norm = (s: string) => s.toLowerCase().replace(/\s+/g, " ").trim();
+        const filedup = seenInFile.find(s => {
+          if (norm(s.studentName) === norm(studentName) && norm(s.agentsicId) === norm(agentsicId)) return true;
+          if (norm(s.studentName) === norm(studentName) && norm(s.provider) === norm(provider) && s.studentId && norm(s.studentId) === norm(studentId)) return true;
+          if (norm(s.provider) === norm(provider) && s.studentId && norm(s.studentId) === norm(studentId)) return true;
+          return false;
+        });
+        if (filedup) {
+          duplicates.push({ row: rowNum, data: row, errors: ["Duplicate within uploaded file"] });
+          continue;
+        }
+
+        const dbDup = await storage.checkCommissionStudentDuplicates(studentName, agentsicId, provider, studentId);
+        if (dbDup) {
+          duplicates.push({ row: rowNum, data: row, errors: [dbDup] });
+          continue;
+        }
+
+        seenInFile.push({ studentName, agentsicId, provider, studentId });
+        valid.push({
+          row: rowNum,
+          data: {
+            agentName,
+            agentsicId,
+            studentId,
+            studentName,
+            provider,
+            country: (row["Country"] || "Australia").trim(),
+            startIntake: (row["Start Intake"] || "").trim(),
+            courseLevel: (row["Course Level"] || "").trim(),
+            courseName: (row["Course Name"] || "").trim(),
+            courseDurationYears: (row["Duration (Years)"] || "").trim(),
+            commissionRatePct: (row["Commission Rate (%)"] || "").trim(),
+            gstApplicable: (row["GST Applicable (Yes/No)"] || "Yes").trim(),
+            scholarshipType: (row["Scholarship Type (None/Percent/Fixed)"] || "None").trim(),
+            scholarshipValue: (row["Scholarship Value"] || "0").trim(),
+          },
+        });
+      }
+
+      res.json({ valid, invalid, duplicates, totalRows: records.length });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.post("/api/commission-tracker/bulk-upload/confirm", requireAuth, requirePermission("commission_tracker.create"), async (req, res) => {
+    try {
+      const { rows } = req.body;
+      if (!rows || !Array.isArray(rows) || rows.length === 0) {
+        return res.status(400).json({ message: "No rows to import" });
+      }
+
+      const results = { imported: 0, failed: 0, errors: [] as string[] };
+      const importedSoFar: Array<{ studentName: string; agentsicId: string; provider: string; studentId: string }> = [];
+      const norm = (s: string) => s.toLowerCase().replace(/\s+/g, " ").trim();
+
+      for (const item of rows) {
+        try {
+          const data = item.data || item;
+          const studentName = (data.studentName || "").trim();
+          const agentsicId = (data.agentsicId || "").trim();
+          const provider = (data.provider || "").trim();
+          const agentName = (data.agentName || "").trim();
+          const studentId = (data.studentId || "").trim();
+
+          if (!agentsicId) throw new Error("Agentsic ID is required");
+          if (!studentName) throw new Error("Student Name is required");
+          if (!provider) throw new Error("Provider is required");
+          if (!agentName) throw new Error("Agent Name is required");
+
+          const batchDup = importedSoFar.find(s => {
+            if (norm(s.studentName) === norm(studentName) && norm(s.agentsicId) === norm(agentsicId)) return true;
+            if (norm(s.studentName) === norm(studentName) && norm(s.provider) === norm(provider) && s.studentId && norm(s.studentId) === norm(studentId)) return true;
+            if (norm(s.provider) === norm(provider) && s.studentId && norm(s.studentId) === norm(studentId)) return true;
+            return false;
+          });
+          if (batchDup) throw new Error("Duplicate within import batch");
+
+          const dbDup = await storage.checkCommissionStudentDuplicates(studentName, agentsicId, provider, studentId);
+          if (dbDup) throw new Error(dbDup);
+
+          const country = (data.country || "Australia").trim();
+          const isAU = country.toLowerCase() === "au" || country.toLowerCase() === "australia";
+          await storage.createCommissionStudent({
+            ...data,
+            gstRatePct: isAU ? "10" : "0",
+            gstApplicable: data.gstApplicable || (isAU ? "Yes" : "No"),
+          });
+          importedSoFar.push({ studentName, agentsicId, provider, studentId });
+          results.imported++;
+        } catch (e: any) {
+          results.failed++;
+          results.errors.push(`Row ${item.row || "?"}: ${e.message}`);
+        }
+      }
+
+      res.json(results);
     } catch (err: any) {
       res.status(500).json({ message: err.message });
     }

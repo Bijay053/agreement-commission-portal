@@ -3,7 +3,7 @@ import { hashPassword } from "./auth";
 import {
   countries, universities, users, roles, permissions,
   rolePermissions, userRoles, agreements, agreementTargets,
-  agreementCommissionRules, agreementContacts,
+  agreementCommissionRules, agreementContacts, commissionTerms,
 } from "@shared/schema";
 import { eq, sql } from "drizzle-orm";
 
@@ -70,6 +70,16 @@ const PERMISSION_CODES = [
   { code: "security.country_scope.manage", module: "administration", resource: "country_scope", action: "update", description: "Manage country access" },
   { code: "reminders.view", module: "reminders", resource: "reminder", action: "read", description: "View reminders" },
   { code: "reminders.manage", module: "reminders", resource: "reminder", action: "update", description: "Manage reminders" },
+  { code: "commission_tracker.student.read", module: "commission_tracker", resource: "student", action: "read", description: "View commission students" },
+  { code: "commission_tracker.student.add", module: "commission_tracker", resource: "student", action: "add", description: "Add commission students" },
+  { code: "commission_tracker.student.update", module: "commission_tracker", resource: "student", action: "update", description: "Edit commission students" },
+  { code: "commission_tracker.student.delete", module: "commission_tracker", resource: "student", action: "delete", description: "Delete commission students" },
+  { code: "commission_tracker.student.delete_master", module: "commission_tracker", resource: "student", action: "delete_master", description: "Delete students from dashboard (admin only)" },
+  { code: "commission_tracker.student.export", module: "commission_tracker", resource: "student", action: "export", description: "Export commission students" },
+  { code: "commission_tracker.entry.read", module: "commission_tracker", resource: "entry", action: "read", description: "View term entries" },
+  { code: "commission_tracker.entry.add", module: "commission_tracker", resource: "entry", action: "add", description: "Add term entries" },
+  { code: "commission_tracker.entry.update", module: "commission_tracker", resource: "entry", action: "update", description: "Edit term entries" },
+  { code: "commission_tracker.entry.delete", module: "commission_tracker", resource: "entry", action: "delete", description: "Delete term entries" },
 ];
 
 const ROLES_DATA = [
@@ -390,6 +400,12 @@ export async function seedDatabase() {
       countryId: countryMap["AU"],
       isPrimary: true,
     },
+  ]);
+
+  await db.insert(commissionTerms).values([
+    { termName: "T1_2025", termLabel: "T1 2025", year: 2025, termNumber: 1, sortOrder: 1 },
+    { termName: "T2_2025", termLabel: "T2 2025", year: 2025, termNumber: 2, sortOrder: 2 },
+    { termName: "T3_2025", termLabel: "T3 2025", year: 2025, termNumber: 3, sortOrder: 3 },
   ]);
 
   console.log("Database seeded successfully!");

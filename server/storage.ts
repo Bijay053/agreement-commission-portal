@@ -5,6 +5,8 @@ import {
   countries, universities, agreements, agreementTerritories, agreementTargets,
   agreementCommissionRules, agreementContacts, agreementDocuments, auditLogs,
   targetBonusRules, targetBonusTiers, targetBonusCountry, passwordResetTokens,
+  commissionStudents, commissionEntries, commissionTerms,
+  userSessions, loginVerificationCodes, securityAuditLogs, passwordHistory,
   type User, type InsertUser, type Agreement, type InsertAgreement,
   type AgreementTarget, type InsertTarget, type AgreementCommissionRule,
   type InsertCommissionRule, type AgreementContact, type InsertContact,
@@ -12,6 +14,10 @@ import {
   type Country, type Role, type Permission, type AuditLog,
   type TargetBonusRule, type TargetBonusTier, type TargetBonusCountryEntry,
   type PasswordResetToken,
+  type CommissionStudent, type InsertCommissionStudent,
+  type CommissionEntry, type InsertCommissionEntry,
+  type CommissionTerm,
+  type UserSession, type LoginVerificationCode, type SecurityAuditLog,
 } from "@shared/schema";
 
 export interface IStorage {
@@ -96,6 +102,32 @@ export interface IStorage {
   invalidateUserPasswordResetTokens(userId: number): Promise<void>;
   updateUserPassword(userId: number, passwordHash: string): Promise<void>;
   invalidateUserSessions(userId: number): Promise<void>;
+
+  getCommissionTerms(): Promise<CommissionTerm[]>;
+  createCommissionTerm(data: { termName: string; termLabel: string; year: number; termNumber: number; sortOrder: number }): Promise<CommissionTerm>;
+  deleteCommissionTerm(id: number): Promise<void>;
+
+  getCommissionStudents(filters?: { search?: string; agent?: string; provider?: string; country?: string; status?: string }): Promise<CommissionStudent[]>;
+  getCommissionStudent(id: number): Promise<CommissionStudent | undefined>;
+  createCommissionStudent(data: InsertCommissionStudent): Promise<CommissionStudent>;
+  updateCommissionStudent(id: number, data: Partial<InsertCommissionStudent>): Promise<CommissionStudent>;
+  deleteCommissionStudent(id: number): Promise<void>;
+
+  getCommissionEntries(studentId: number): Promise<CommissionEntry[]>;
+  getCommissionEntry(id: number): Promise<CommissionEntry | undefined>;
+  createCommissionEntry(data: InsertCommissionEntry): Promise<CommissionEntry>;
+  updateCommissionEntry(id: number, data: Partial<InsertCommissionEntry>): Promise<CommissionEntry>;
+  deleteCommissionEntry(id: number): Promise<void>;
+  getCommissionEntriesByTerm(termName: string): Promise<CommissionEntry[]>;
+
+  getCommissionTrackerDashboard(): Promise<{
+    totalStudents: number;
+    totalCommission: number;
+    totalReceived: number;
+    byStatus: Record<string, number>;
+    byAgent: { agent: string; count: number; total: number }[];
+    byProvider: { provider: string; count: number; total: number }[];
+  }>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -231,7 +263,23 @@ export class DatabaseStorage implements IStorage {
       .innerJoin(rolePermissions, eq(userRoles.roleId, rolePermissions.roleId))
       .innerJoin(permissions, eq(rolePermissions.permissionId, permissions.id))
       .where(eq(userRoles.userId, userId));
-    return [...new Set(result.map(r => r.code))];
+    const dbCodes = [...new Set(result.map(r => r.code))];
+    const { LEGACY_PERMISSION_MAP } = await import("@shared/schema");
+    const reverseLegacy: Record<string, string> = {};
+    for (const [legacyCode, newCode] of Object.entries(LEGACY_PERMISSION_MAP)) {
+      reverseLegacy[newCode] = legacyCode;
+    }
+    const allCodes = new Set(dbCodes);
+    for (const code of dbCodes) {
+      if (reverseLegacy[code]) {
+        allCodes.add(reverseLegacy[code]);
+      }
+      const legacyTarget = LEGACY_PERMISSION_MAP[code];
+      if (legacyTarget) {
+        allCodes.add(legacyTarget);
+      }
+    }
+    return [...allCodes];
   }
 
   async assignRole(userId: number, roleId: number): Promise<void> {
@@ -947,6 +995,297 @@ export class DatabaseStorage implements IStorage {
     await db.execute(
       sql`DELETE FROM "session" WHERE sess->>'userId' = ${String(userId)}`
     );
+  }
+
+  async getCommissionStudents(filters?: { search?: string; agent?: string; provider?: string; country?: string; status?: string }): Promise<CommissionStudent[]> {
+    const conditions = [];
+    if (filters?.search) {
+      conditions.push(or(
+        ilike(commissionStudents.studentName, `%${filters.search}%`),
+        ilike(commissionStudents.studentId, `%${filters.search}%`),
+        ilike(commissionStudents.agentsicId, `%${filters.search}%`),
+        ilike(commissionStudents.agentName, `%${filters.search}%`)
+      ));
+    }
+    if (filters?.agent) conditions.push(eq(commissionStudents.agentName, filters.agent));
+    if (filters?.provider) conditions.push(eq(commissionStudents.provider, filters.provider));
+    if (filters?.country) conditions.push(eq(commissionStudents.country, filters.country));
+    if (filters?.status) conditions.push(eq(commissionStudents.status, filters.status));
+
+    if (conditions.length > 0) {
+      return db.select().from(commissionStudents)
+        .where(and(...conditions))
+        .orderBy(asc(commissionStudents.id));
+    }
+    return db.select().from(commissionStudents).orderBy(asc(commissionStudents.id));
+  }
+
+  async getCommissionTerms(): Promise<CommissionTerm[]> {
+    return db.select().from(commissionTerms).orderBy(asc(commissionTerms.sortOrder));
+  }
+
+  async createCommissionTerm(data: { termName: string; termLabel: string; year: number; termNumber: number; sortOrder: number }): Promise<CommissionTerm> {
+    const [term] = await db.insert(commissionTerms).values(data).returning();
+    return term;
+  }
+
+  async deleteCommissionTerm(id: number): Promise<void> {
+    await db.delete(commissionTerms).where(eq(commissionTerms.id, id));
+  }
+
+  async checkCommissionStudentDuplicates(studentName: string, agentsicId: string, provider: string, studentId: string, excludeId?: number): Promise<string | null> {
+    const norm = (s: string) => (s || "").trim().toLowerCase().replace(/\s+/g, " ");
+    const nameN = norm(studentName);
+    const agentsicN = norm(agentsicId);
+    const providerN = norm(provider);
+    const studentIdN = norm(studentId);
+
+    const allStudents = await this.getCommissionStudents();
+    for (const s of allStudents) {
+      if (excludeId && s.id === excludeId) continue;
+      const sName = norm(s.studentName);
+      const sAgentsic = norm(s.agentsicId || "");
+      const sProvider = norm(s.provider);
+      const sStudentId = norm(s.studentId || "");
+
+      if (nameN && agentsicN && sName === nameN && sAgentsic === agentsicN) {
+        return `Duplicate blocked: Student Name + Agentsic ID already exists (${s.studentName}, ${s.agentsicId})`;
+      }
+      if (nameN && providerN && studentIdN && sName === nameN && sProvider === providerN && sStudentId === studentIdN) {
+        return `Duplicate blocked: Student Name + Provider + Student ID already exists (${s.studentName}, ${s.provider}, ${s.studentId})`;
+      }
+      if (providerN && studentIdN && sProvider === providerN && sStudentId === studentIdN) {
+        return `Duplicate blocked: Provider + Student ID already exists (${s.provider}, ${s.studentId})`;
+      }
+    }
+    return null;
+  }
+
+  async getCommissionStudent(id: number): Promise<CommissionStudent | undefined> {
+    const [student] = await db.select().from(commissionStudents).where(eq(commissionStudents.id, id));
+    return student;
+  }
+
+  async createCommissionStudent(data: InsertCommissionStudent): Promise<CommissionStudent> {
+    const [created] = await db.insert(commissionStudents).values(data).returning();
+    return created;
+  }
+
+  async updateCommissionStudent(id: number, data: Partial<InsertCommissionStudent>): Promise<CommissionStudent> {
+    const [updated] = await db.update(commissionStudents)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(commissionStudents.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteCommissionStudent(id: number): Promise<void> {
+    await db.delete(commissionStudents).where(eq(commissionStudents.id, id));
+  }
+
+  async getCommissionEntries(studentId: number): Promise<CommissionEntry[]> {
+    return db.select().from(commissionEntries)
+      .where(eq(commissionEntries.commissionStudentId, studentId))
+      .orderBy(asc(commissionEntries.termName));
+  }
+
+  async getCommissionEntry(id: number): Promise<CommissionEntry | undefined> {
+    const [entry] = await db.select().from(commissionEntries).where(eq(commissionEntries.id, id));
+    return entry;
+  }
+
+  async createCommissionEntry(data: InsertCommissionEntry): Promise<CommissionEntry> {
+    const [created] = await db.insert(commissionEntries).values(data).returning();
+    return created;
+  }
+
+  async updateCommissionEntry(id: number, data: Partial<InsertCommissionEntry>): Promise<CommissionEntry> {
+    const [updated] = await db.update(commissionEntries)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(commissionEntries.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteCommissionEntry(id: number): Promise<void> {
+    await db.delete(commissionEntries).where(eq(commissionEntries.id, id));
+  }
+
+  async getCommissionEntriesByTerm(termName: string): Promise<CommissionEntry[]> {
+    return db.select().from(commissionEntries)
+      .where(eq(commissionEntries.termName, termName))
+      .orderBy(asc(commissionEntries.id));
+  }
+
+  async getCommissionTrackerDashboard(): Promise<{
+    totalStudents: number;
+    totalCommission: number;
+    totalReceived: number;
+    byStatus: Record<string, number>;
+    byAgent: { agent: string; count: number; total: number }[];
+    byProvider: { provider: string; count: number; total: number }[];
+  }> {
+    const students = await db.select().from(commissionStudents);
+
+    const byStatus: Record<string, number> = {};
+    let totalCommission = 0;
+    let totalReceived = 0;
+    const agentMap: Record<string, { count: number; total: number }> = {};
+    const providerMap: Record<string, { count: number; total: number }> = {};
+
+    for (const s of students) {
+      const st = s.status || "Under Enquiry";
+      byStatus[st] = (byStatus[st] || 0) + 1;
+
+      const tr = Number(s.totalReceived) || 0;
+      totalCommission += tr;
+
+      const entries = await db.select().from(commissionEntries)
+        .where(eq(commissionEntries.commissionStudentId, s.id));
+
+      let received = 0;
+      for (const e of entries) {
+        if (e.paymentStatus === "Received") {
+          received += Number(e.totalAmount) || 0;
+        }
+      }
+      totalReceived += received;
+
+      if (!agentMap[s.agentName]) agentMap[s.agentName] = { count: 0, total: 0 };
+      agentMap[s.agentName].count++;
+      agentMap[s.agentName].total += tr;
+
+      if (!providerMap[s.provider]) providerMap[s.provider] = { count: 0, total: 0 };
+      providerMap[s.provider].count++;
+      providerMap[s.provider].total += tr;
+    }
+
+    return {
+      totalStudents: students.length,
+      totalCommission,
+      totalReceived,
+      byStatus,
+      byAgent: Object.entries(agentMap).map(([agent, v]) => ({ agent, ...v })).sort((a, b) => b.total - a.total),
+      byProvider: Object.entries(providerMap).map(([provider, v]) => ({ provider, ...v })).sort((a, b) => b.total - a.total),
+    };
+  }
+
+  async createUserSession(data: {
+    userId: number;
+    sessionToken?: string;
+    ipAddress?: string;
+    browser?: string;
+    os?: string;
+    deviceType?: string;
+    location?: string;
+    otpVerified?: boolean;
+  }): Promise<UserSession> {
+    const [session] = await db.insert(userSessions).values(data).returning();
+    return session;
+  }
+
+  async getUserSessions(userId: number, activeOnly = false): Promise<UserSession[]> {
+    const conditions = [eq(userSessions.userId, userId)];
+    if (activeOnly) conditions.push(eq(userSessions.isActive, true));
+    return db.select().from(userSessions).where(and(...conditions)).orderBy(desc(userSessions.loginAt));
+  }
+
+  async getUserSession(id: number): Promise<UserSession | undefined> {
+    const [session] = await db.select().from(userSessions).where(eq(userSessions.id, id));
+    return session;
+  }
+
+  async updateUserSession(id: number, data: Partial<UserSession>): Promise<UserSession> {
+    const [session] = await db.update(userSessions).set(data).where(eq(userSessions.id, id)).returning();
+    return session;
+  }
+
+  async deactivateUserSessions(userId: number, reason: string, exceptSessionId?: number): Promise<void> {
+    const conditions = [eq(userSessions.userId, userId), eq(userSessions.isActive, true)];
+    if (exceptSessionId) {
+      await db.update(userSessions)
+        .set({ isActive: false, logoutAt: new Date(), logoutReason: reason })
+        .where(and(...conditions, sql`${userSessions.id} != ${exceptSessionId}`));
+    } else {
+      await db.update(userSessions)
+        .set({ isActive: false, logoutAt: new Date(), logoutReason: reason })
+        .where(and(...conditions));
+    }
+  }
+
+  async createLoginVerificationCode(data: {
+    userId: number;
+    codeHash: string;
+    expiresAt: Date;
+  }): Promise<LoginVerificationCode> {
+    await db.update(loginVerificationCodes)
+      .set({ status: "invalidated" })
+      .where(and(eq(loginVerificationCodes.userId, data.userId), eq(loginVerificationCodes.status, "pending")));
+    const [code] = await db.insert(loginVerificationCodes).values(data).returning();
+    return code;
+  }
+
+  async getActiveVerificationCode(userId: number): Promise<LoginVerificationCode | undefined> {
+    const [code] = await db.select().from(loginVerificationCodes)
+      .where(and(
+        eq(loginVerificationCodes.userId, userId),
+        eq(loginVerificationCodes.status, "pending"),
+        sql`${loginVerificationCodes.expiresAt} > NOW()`
+      ))
+      .orderBy(desc(loginVerificationCodes.createdAt))
+      .limit(1);
+    return code;
+  }
+
+  async updateVerificationCode(id: number, data: Partial<LoginVerificationCode>): Promise<void> {
+    await db.update(loginVerificationCodes).set(data).where(eq(loginVerificationCodes.id, id));
+  }
+
+  async createSecurityAuditLog(data: {
+    userId?: number;
+    eventType: string;
+    ipAddress?: string;
+    deviceInfo?: string;
+    metadata?: any;
+  }): Promise<SecurityAuditLog> {
+    const [log] = await db.insert(securityAuditLogs).values(data).returning();
+    return log;
+  }
+
+  async getSecurityAuditLogs(userId?: number, limit = 50): Promise<SecurityAuditLog[]> {
+    const conditions = userId ? [eq(securityAuditLogs.userId, userId)] : [];
+    return db.select().from(securityAuditLogs)
+      .where(conditions.length > 0 ? and(...conditions) : undefined)
+      .orderBy(desc(securityAuditLogs.createdAt))
+      .limit(limit);
+  }
+
+  async addPasswordToHistory(userId: number, hash: string): Promise<void> {
+    await db.insert(passwordHistory).values({ userId, passwordHash: hash });
+  }
+
+  async getPasswordHistory(userId: number, limit = 5): Promise<{ passwordHash: string }[]> {
+    return db.select({ passwordHash: passwordHistory.passwordHash })
+      .from(passwordHistory)
+      .where(eq(passwordHistory.userId, userId))
+      .orderBy(desc(passwordHistory.createdAt))
+      .limit(limit);
+  }
+
+  async updateUserPassword(userId: number, newPasswordHash: string): Promise<void> {
+    await db.update(users).set({
+      passwordHash: newPasswordHash,
+      passwordChangedAt: new Date(),
+      forcePasswordChange: false,
+      updatedAt: new Date(),
+    }).where(eq(users.id, userId));
+  }
+
+  async updateUserLoginInfo(userId: number, ip: string): Promise<void> {
+    await db.update(users).set({
+      lastLoginAt: new Date(),
+      lastLoginIp: ip,
+    }).where(eq(users.id, userId));
   }
 }
 

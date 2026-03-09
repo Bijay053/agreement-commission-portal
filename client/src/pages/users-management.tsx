@@ -14,7 +14,7 @@ import { SearchableSelect } from "@/components/ui/searchable-select";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter,
 } from "@/components/ui/dialog";
-import { Plus, Users, Mail, User, Pencil, Shield } from "lucide-react";
+import { Plus, Users, Mail, User, Pencil, Shield, Monitor, Smartphone, Tablet, Clock, Globe, LogOut } from "lucide-react";
 import type { Role } from "@shared/schema";
 
 interface UserWithRoles {
@@ -32,6 +32,7 @@ export default function UsersManagementPage() {
   const qc = useQueryClient();
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [editingUser, setEditingUser] = useState<UserWithRoles | null>(null);
+  const [viewingSessionsUser, setViewingSessionsUser] = useState<UserWithRoles | null>(null);
 
   const { data: users, isLoading } = useQuery<UserWithRoles[]>({ queryKey: ["/api/users"] });
   const { data: roles } = useQuery<Role[]>({ queryKey: ["/api/roles"] });
@@ -186,6 +187,15 @@ export default function UsersManagementPage() {
                     <Button
                       size="icon"
                       variant="ghost"
+                      onClick={() => setViewingSessionsUser(user)}
+                      title="View sessions"
+                      data-testid={`button-sessions-${user.id}`}
+                    >
+                      <Monitor className="w-4 h-4" />
+                    </Button>
+                    <Button
+                      size="icon"
+                      variant="ghost"
                       onClick={() => openEditDialog(user)}
                       data-testid={`button-edit-user-${user.id}`}
                     >
@@ -266,6 +276,126 @@ export default function UsersManagementPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <Dialog open={!!viewingSessionsUser} onOpenChange={(open) => { if (!open) setViewingSessionsUser(null); }}>
+        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Session History - {viewingSessionsUser?.fullName}</DialogTitle>
+          </DialogHeader>
+          {viewingSessionsUser && <UserSessionsPanel userId={viewingSessionsUser.id} />}
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
+function UserSessionsPanel({ userId }: { userId: number }) {
+  const { toast } = useToast();
+
+  const { data: sessions, isLoading } = useQuery<any[]>({
+    queryKey: ["/api/admin/users", userId, "sessions"],
+    queryFn: async () => {
+      const res = await fetch(`/api/admin/users/${userId}/sessions`, { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to fetch sessions");
+      return res.json();
+    },
+  });
+
+  const { data: securityLogs } = useQuery<any[]>({
+    queryKey: ["/api/admin/users", userId, "security-logs"],
+    queryFn: async () => {
+      const res = await fetch(`/api/admin/users/${userId}/security-logs`, { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to fetch logs");
+      return res.json();
+    },
+  });
+
+  const getDeviceIcon = (type: string) => {
+    if (type === "mobile") return <Smartphone className="w-4 h-4" />;
+    if (type === "tablet") return <Tablet className="w-4 h-4" />;
+    return <Monitor className="w-4 h-4" />;
+  };
+
+  const formatDate = (d: string) => new Date(d).toLocaleString();
+
+  if (isLoading) {
+    return (
+      <div className="space-y-3">
+        <Skeleton className="h-16 w-full" />
+        <Skeleton className="h-16 w-full" />
+      </div>
+    );
+  }
+
+  const activeSessions = sessions?.filter(s => s.isActive) || [];
+  const recentSessions = sessions?.filter(s => !s.isActive).slice(0, 15) || [];
+
+  return (
+    <div className="space-y-4" data-testid="admin-sessions-panel">
+      <div>
+        <h3 className="text-sm font-medium mb-2">Active Sessions ({activeSessions.length})</h3>
+        {activeSessions.length === 0 ? (
+          <p className="text-xs text-muted-foreground">No active sessions</p>
+        ) : (
+          <div className="space-y-2">
+            {activeSessions.map((session: any) => (
+              <div key={session.id} className="flex items-center justify-between p-2 border rounded text-sm" data-testid={`admin-session-${session.id}`}>
+                <div className="flex items-center gap-2">
+                  {getDeviceIcon(session.deviceType)}
+                  <div>
+                    <span className="text-xs font-medium">{session.browser} on {session.os}</span>
+                    <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
+                      <span className="flex items-center gap-0.5"><Globe className="w-2.5 h-2.5" />{session.ipAddress}</span>
+                      <span className="flex items-center gap-0.5"><Clock className="w-2.5 h-2.5" />{formatDate(session.lastActivityAt)}</span>
+                    </div>
+                  </div>
+                </div>
+                <Badge variant="default" className="text-[10px]">Active</Badge>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {recentSessions.length > 0 && (
+        <div>
+          <h3 className="text-sm font-medium mb-2">Recent Sessions</h3>
+          <div className="space-y-1">
+            {recentSessions.map((session: any) => (
+              <div key={session.id} className="flex items-center justify-between p-1.5 border rounded text-xs opacity-70">
+                <div className="flex items-center gap-2">
+                  {getDeviceIcon(session.deviceType)}
+                  <span>{session.browser} on {session.os}</span>
+                  <span className="text-muted-foreground">{session.ipAddress}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  {session.logoutReason && (
+                    <Badge variant="outline" className="text-[10px]">{session.logoutReason}</Badge>
+                  )}
+                  <span className="text-muted-foreground">{formatDate(session.loginAt)}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {securityLogs && securityLogs.length > 0 && (
+        <div>
+          <h3 className="text-sm font-medium mb-2">Security Activity</h3>
+          <div className="space-y-0.5 max-h-48 overflow-y-auto">
+            {securityLogs.slice(0, 30).map((log: any) => (
+              <div key={log.id} className="flex items-center justify-between py-1 px-2 text-[11px] border-b last:border-0">
+                <span className="font-medium">{log.eventType}</span>
+                <div className="flex items-center gap-2 text-muted-foreground">
+                  {log.ipAddress && <span>{log.ipAddress}</span>}
+                  <span>{formatDate(log.createdAt)}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

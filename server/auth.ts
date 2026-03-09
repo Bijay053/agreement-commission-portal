@@ -31,6 +31,9 @@ declare module "express-session" {
   interface SessionData {
     userId: number;
     userPermissions: string[];
+    pendingUserId: number;
+    otpRequired: boolean;
+    passwordExpired: boolean;
   }
 }
 
@@ -45,6 +48,23 @@ export async function comparePassword(password: string, hash: string): Promise<b
 export function requireAuth(req: Request, res: Response, next: NextFunction) {
   if (!req.session.userId) {
     return res.status(401).json({ message: "Authentication required" });
+  }
+  next();
+}
+
+const PASSWORD_EXPIRY_EXEMPT_PATHS = [
+  "/api/auth/me",
+  "/api/auth/change-password",
+  "/api/auth/logout",
+  "/api/auth/heartbeat",
+  "/api/auth/sessions",
+];
+
+export function requireActivePassword(req: Request, res: Response, next: NextFunction) {
+  if (!req.session.userId) return next();
+  if (PASSWORD_EXPIRY_EXEMPT_PATHS.some(p => req.path === p || req.path.startsWith(p + "/"))) return next();
+  if (req.session.passwordExpired) {
+    return res.status(403).json({ message: "Password expired. Please change your password before continuing." });
   }
   next();
 }
