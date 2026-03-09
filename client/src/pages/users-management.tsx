@@ -246,13 +246,13 @@ export default function UsersManagementPage() {
       )}
 
       <Dialog open={!!editingUser} onOpenChange={(open) => { if (!open) setEditingUser(null); }}>
-        <DialogContent>
+        <DialogContent className="max-w-md max-h-[85vh] flex flex-col">
           <DialogHeader>
             <DialogTitle>Edit User Roles</DialogTitle>
           </DialogHeader>
           {editingUser && (
-            <div className="space-y-4">
-              <div className="flex items-center gap-3">
+            <div className="space-y-4 flex-1 min-h-0 flex flex-col">
+              <div className="flex items-center gap-3 shrink-0">
                 <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
                   <User className="w-5 h-5 text-primary" />
                 </div>
@@ -262,9 +262,9 @@ export default function UsersManagementPage() {
                 </div>
               </div>
 
-              <div>
-                <Label className="mb-2 block">Assign Roles</Label>
-                <div className="space-y-2">
+              <div className="flex-1 min-h-0 flex flex-col">
+                <Label className="mb-2 block shrink-0">Assign Roles</Label>
+                <div className="space-y-2 overflow-y-auto flex-1 min-h-0 max-h-[50vh] pr-1">
                   {roles?.map((role) => (
                     <div
                       key={role.id}
