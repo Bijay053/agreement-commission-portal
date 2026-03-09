@@ -1,0 +1,198 @@
+Welcome to Ubuntu 24.04.3 LTS (GNU/Linux 6.14.0-1018-aws x86_64)
+
+ * Documentation:  https://help.ubuntu.com
+ * Management:     https://landscape.canonical.com
+ * Support:        https://ubuntu.com/pro
+
+ System information as of Mon Mar  9 04:35:59 UTC 2026
+
+  System load:  0.09               Temperature:           -273.1 C
+  Usage of /:   51.3% of 18.33GB   Processes:             134
+  Memory usage: 50%                Users logged in:       0
+  Swap usage:   8%                 IPv4 address for ens5: 172.31.41.234
+
+
+Expanded Security Maintenance for Applications is not enabled.
+
+106 updates can be applied immediately.
+55 of these updates are standard security updates.
+To see these additional updates run: apt list --upgradable
+
+Enable ESM Apps to receive additional future security updates.
+See https://ubuntu.com/esm or run: sudo pro status
+
+
+Last login: Mon Mar  9 04:32:32 2026 from 13.233.177.3
+ubuntu@ip-172-31-41-234:~$ cd ~/agreement-commission-portal
+git pull origin main
+remote: Enumerating objects: 60, done.
+remote: Counting objects: 100% (60/60), done.
+remote: Compressing objects: 100% (35/35), done.
+remote: Total 38 (delta 17), reused 0 (delta 0), pack-reused 0 (from 0)
+Unpacking objects: 100% (38/38), 176.84 KiB | 3.21 MiB/s, done.
+From https://github.com/Bijay053/agreement-commission-portal
+ * branch            main       -> FETCH_HEAD
+   79f3168..5225849  main       -> origin/main
+Updating 79f3168..5225849
+Fast-forward
+ .replit                                                                                          |   42 ++++
+ attached_assets/Pasted-1-Forgot-Password-System-Requirements-1-1-Entry-points-_1772760657709.txt |  211 ------------------
+ attached_assets/Pasted-1-Most-Common-Cause-X-Frame-Options-Blocking-the-PDF-If_1772766157958.txt |  142 ------------
+ attached_assets/Pasted-1-Production-ready-Database-Schema-PostgreSQL-Assumptio_1772757348878.txt |  682 ----------------------------------------------------------
+ attached_assets/Pasted-1-Sidebar-Navigation-Agreement-Status-Menu-Requirement-_1772760403144.txt |  169 ---------------
+ attached_assets/Pasted-A-Terminology-Data-Structure-Changes-A1-Rename-Universi_1772759477805.txt |  331 ----------------------------
+ attached_assets/Pasted-Below-are-professional-email-templates-for-Agreement-Ex_1772757333254.txt |  250 ----------------------
+ attached_assets/Pasted-Below-is-a-developer-ready-requirement-PRD-technical-sp_1772757320914.txt |  674 ---------------------------------------------------------
+ attached_assets/Pasted-Commission-Bonus-Master-Table-Purpose-Create-a-new-page_1772764977567.txt |  450 --------------------------------------
+ attached_assets/Pasted-Contact-Edit-Feature-Requirement-1-Add-Edit-Option-on-C_1772763427859.txt |  141 ------------
+ attached_assets/Pasted-Contact-Management-in-Navigation-Tab-1-Add-New-Navigati_1772762655881.txt |  330 ----------------------------
+ attached_assets/Pasted-Granular-Role-Permission-Update-Requirement-Role-manage_1772766137747.txt |  444 --------------------------------------
+ attached_assets/Pasted-Permission-Codes-System-Standard-Agreement-agreement-vi_1772757365887.txt |  246 ---------------------
+ attached_assets/Pasted-Role-Permission-Management-Module-Admin-Controlled-1-Go_1772760452207.txt |  326 ----------------------------
+ attached_assets/Pasted-Role-management-must-support-separate-permissions-by-mo_1772767777867.txt |  437 -------------------------------------
+ attached_assets/Pasted-Since-agreement-documents-are-highly-confidential-you-s_1772765669826.txt |  213 ------------------
+ attached_assets/Pasted-Target-Bonus-System-Full-Specification-1-Purpose-Allow-_1772759464649.txt |  257 ----------------------
+ attached_assets/image_1772761131403.png                                                          |  Bin 55470 -> 0 bytes
+ attached_assets/image_1772764668455.png                                                          |  Bin 78707 -> 0 bytes
+ attached_assets/image_1772765675316.png                                                          |  Bin 86952 -> 0 bytes
+ attached_assets/image_1772766840213.png                                                          |  Bin 56837 -> 0 bytes
+ attached_assets/image_1772767535783.png                                                          |  Bin 37821 -> 0 bytes
+ attached_assets/image_1772768017437.png                                                          |  Bin 186484 -> 0 bytes
+ client/src/App.tsx                                                                               |   75 ++++++-
+ client/src/components/app-sidebar.tsx                                                            |   19 +-
+ client/src/components/inactivity-monitor.tsx                                                     |  127 +++++++++++
+ client/src/lib/auth.tsx                                                                          |   74 ++++++-
+ client/src/pages/account-security.tsx                                                            |  258 ++++++++++++++++++++++
+ client/src/pages/change-password.tsx                                                             |  144 +++++++++++++
+ client/src/pages/commission-tracker-detail.tsx                                                   |  697 +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+ client/src/pages/commission-tracker.tsx                                                          | 1236 +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+ client/src/pages/login.tsx                                                                       |   22 +-
+ client/src/pages/users-management.tsx                                                            |  132 +++++++++++-
+ client/src/pages/verify-otp.tsx                                                                  |  155 ++++++++++++++
+ dist/public/assets/index-MxQ0SYtM.css                                                            |    1 +
+ dist/public/favicon.png                                                                          |  Bin 0 -> 1145 bytes
+ dist/public/index.html                                                                           |   18 ++
+ docker-entrypoint.sh                                                                             |    0
+ final-term-table-override-verify.png                                                             |  Bin 0 -> 118698 bytes
+ final-term-table-verify.png                                                                      |  Bin 0 -> 118698 bytes
+ package-lock.json                                                                                |  220 +++++++++++++++++++
+ package.json                                                                                     |    4 +
+ replit.md                                                                                        |  176 ++++-----------
+ server/auth.ts                                                                                   |   20 ++
+ server/commission-calc.ts                                                                        |  193 +++++++++++++++++
+ server/email.ts                                                                                  |   38 ++++
+ server/routes.ts                                                                                 | 1070 ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++---
+ server/seed.ts                                                                                   |   18 +-
+ server/storage.ts                                                                                |  341 ++++++++++++++++++++++++++++-
+ shared/schema.ts                                                                                 |  157 ++++++++++++++
+ 50 files changed, 5065 insertions(+), 5475 deletions(-)
+ create mode 100644 .replit
+ delete mode 100644 attached_assets/Pasted-1-Forgot-Password-System-Requirements-1-1-Entry-points-_1772760657709.txt
+ delete mode 100644 attached_assets/Pasted-1-Most-Common-Cause-X-Frame-Options-Blocking-the-PDF-If_1772766157958.txt
+ delete mode 100644 attached_assets/Pasted-1-Production-ready-Database-Schema-PostgreSQL-Assumptio_1772757348878.txt
+ delete mode 100644 attached_assets/Pasted-1-Sidebar-Navigation-Agreement-Status-Menu-Requirement-_1772760403144.txt
+ delete mode 100644 attached_assets/Pasted-A-Terminology-Data-Structure-Changes-A1-Rename-Universi_1772759477805.txt
+ delete mode 100644 attached_assets/Pasted-Below-are-professional-email-templates-for-Agreement-Ex_1772757333254.txt
+ delete mode 100644 attached_assets/Pasted-Below-is-a-developer-ready-requirement-PRD-technical-sp_1772757320914.txt
+ delete mode 100644 attached_assets/Pasted-Commission-Bonus-Master-Table-Purpose-Create-a-new-page_1772764977567.txt
+ delete mode 100644 attached_assets/Pasted-Contact-Edit-Feature-Requirement-1-Add-Edit-Option-on-C_1772763427859.txt
+ delete mode 100644 attached_assets/Pasted-Contact-Management-in-Navigation-Tab-1-Add-New-Navigati_1772762655881.txt
+ delete mode 100644 attached_assets/Pasted-Granular-Role-Permission-Update-Requirement-Role-manage_1772766137747.txt
+ delete mode 100644 attached_assets/Pasted-Permission-Codes-System-Standard-Agreement-agreement-vi_1772757365887.txt
+ delete mode 100644 attached_assets/Pasted-Role-Permission-Management-Module-Admin-Controlled-1-Go_1772760452207.txt
+ delete mode 100644 attached_assets/Pasted-Role-management-must-support-separate-permissions-by-mo_1772767777867.txt
+ delete mode 100644 attached_assets/Pasted-Since-agreement-documents-are-highly-confidential-you-s_1772765669826.txt
+ delete mode 100644 attached_assets/Pasted-Target-Bonus-System-Full-Specification-1-Purpose-Allow-_1772759464649.txt
+ delete mode 100644 attached_assets/image_1772761131403.png
+ delete mode 100644 attached_assets/image_1772764668455.png
+ delete mode 100644 attached_assets/image_1772765675316.png
+ delete mode 100644 attached_assets/image_1772766840213.png
+ delete mode 100644 attached_assets/image_1772767535783.png
+ delete mode 100644 attached_assets/image_1772768017437.png
+ create mode 100644 client/src/components/inactivity-monitor.tsx
+ create mode 100644 client/src/pages/account-security.tsx
+ create mode 100644 client/src/pages/change-password.tsx
+ create mode 100644 client/src/pages/commission-tracker-detail.tsx
+ create mode 100644 client/src/pages/commission-tracker.tsx
+ create mode 100644 client/src/pages/verify-otp.tsx
+ create mode 100644 dist/public/assets/index-MxQ0SYtM.css
+ create mode 100644 dist/public/favicon.png
+ create mode 100644 dist/public/index.html
+ mode change 100755 => 100644 docker-entrypoint.sh
+ create mode 100644 final-term-table-override-verify.png
+ create mode 100644 final-term-table-verify.png
+ create mode 100644 server/commission-calc.ts
+ubuntu@ip-172-31-41-234:~/agreement-commission-portal$ find /home/ubuntu -name "package.json" -not -path "*/node_modules/*" 2>/dev/null
+/home/ubuntu/agreement-commission-portal/package.json
+ubuntu@ip-172-31-41-234:~/agreement-commission-portal$ npm install
+npm run build
+pm2 restart all
+Command 'npm' not found, but can be installed with:
+sudo apt install npm
+Command 'npm' not found, but can be installed with:
+sudo apt install npm
+Command 'pm2' not found, did you mean:
+  command 'pmc' from deb linuxptp (4.0-1ubuntu1.1)
+  command 'pms' from deb pms (0.42-1.1)
+  command 'pom2' from deb libpod-pom-perl (2.01-4)
+  command 'tpm2' from deb tpm2-tools (5.4-1)
+  command 'pm' from deb powerman (2.3.27-4)
+  command 'pmg' from deb python3-pymatgen (2023.06.23+dfsg1-2build1)
+  command 'gm2' from deb gm2 (4:13.2.0-2ubuntu1)
+  command 'wm2' from deb wm2 (4+svn20090216-4build1)
+  command 'pmw' from deb pmw (1:5.22-1)
+Try: sudo apt install <deb name>
+ubuntu@ip-172-31-41-234:~/agreement-commission-portal$ docker ps
+CONTAINER ID   IMAGE                             COMMAND                  CREATED       STATUS                 PORTS                                         NAMES
+58f8a01f23a7   agreement-commission-portal-app   "./docker-entrypoint…"   3 hours ago   Up 3 hours             0.0.0.0:5000->5000/tcp, [::]:5000->5000/tcp   agreement-commission-portal-app-1
+2a5d7ee2e4bd   postgres:16-alpine                "docker-entrypoint.s…"   3 hours ago   Up 3 hours (healthy)   0.0.0.0:5432->5432/tcp, [::]:5432->5432/tcp   agreement-commission-portal-db-1
+ubuntu@ip-172-31-41-234:~/agreement-commission-portal$ docker compose down
+docker compose build --no-cache
+docker compose up -d
+WARN[0000] /home/ubuntu/agreement-commission-portal/docker-compose.yml: the attribute `version` is obsolete, it will be ignored, please remove it to avoid potential confusion 
+[+] down 3/3
+ ✔ Container agreement-commission-portal-app-1 Removed                                                                                                                                                        10.5s
+ ✔ Container agreement-commission-portal-db-1  Removed                                                                                                                                                        0.3s
+ ✔ Network agreement-commission-portal_default Removed                                                                                                                                                        0.1s
+WARN[0000] /home/ubuntu/agreement-commission-portal/docker-compose.yml: the attribute `version` is obsolete, it will be ignored, please remove it to avoid potential confusion 
+[+] Building 229.3s (19/20)                                                                                                                                                                                        
+ => [internal] load local bake definitions                                                                                                                                                                    0.0s
+ => => reading from stdin 584B                                                                                                                                                                                0.0s
+ => [internal] load build definition from Dockerfile                                                                                                                                                          0.1s
+ => => transferring dockerfile: 669B                                                                                                                                                                          0.0s
+ => [internal] load metadata for docker.io/library/node:20-alpine                                                                                                                                             0.1s
+ => [internal] load .dockerignore                                                                                                                                                                             0.0s
+ => => transferring context: 121B                                                                                                                                                                             0.0s
+ => [base 1/2] FROM docker.io/library/node:20-alpine@sha256:b88333c42c23fbd91596ebd7fd10de239cedab9617de04142dde7315e3bc0afa                                                                                  0.1s
+ => => resolve docker.io/library/node:20-alpine@sha256:b88333c42c23fbd91596ebd7fd10de239cedab9617de04142dde7315e3bc0afa                                                                                       0.1s
+ => [internal] load build context                                                                                                                                                                             0.1s
+ => => transferring context: 967.96kB                                                                                                                                                                         0.1s
+ => CACHED [base 2/2] WORKDIR /app                                                                                                                                                                            0.0s
+ => [deps 1/2] COPY package.json ./                                                                                                                                                                           0.1s
+ => [deps 2/2] RUN npm install                                                                                                                                                                              133.5s
+ => [production 2/8] RUN npm install && npm cache clean --force                                                                                                                                             162.1s
+ => [build 1/2] COPY . .                                                                                                                                                                                      2.0s 
+ => [build 2/2] RUN mkdir -p uploads && npm run build                                                                                                                                                        34.2s 
+ => [production 3/8] COPY --from=build /app/dist ./dist                                                                                                                                                       3.2s 
+ => [production 4/8] COPY --from=build /app/drizzle.config.ts ./drizzle.config.ts                                                                                                                             0.3s 
+ => [production 5/8] COPY --from=build /app/shared ./shared                                                                                                                                                   0.1s 
+ => [production 6/8] COPY --from=build /app/tsconfig.json ./tsconfig.json                                                                                                                                     0.1s 
+ => [production 7/8] COPY docker-entrypoint.sh ./                                                                                                                                                             0.1s 
+ => [production 8/8] RUN mkdir -p uploads && chmod +x docker-entrypoint.sh                                                                                                                                    0.7s 
+ => exporting to image                                                                                                                                                                                       39.4s 
+ => => exporting layers                                                                                                                                                                                      31.0s 
+ => => exporting manifest sha256:fe1e5a2228811dcde15fb3308b1aa2ae305f5d41983fcf98f79c10dda837cea8                                                                                                             0.0s 
+ => => exporting config sha256:5d018562c6394e221eca28e4bc040f01ec099e4c66873bc81a189aa090629e48                                                                                                               0.0s 
+ => => exporting attestation manifest sha256:7e443283cae641acfdce465230c6a5a527e831d35dd6e6682a16f13d77951f71                                                                                                 0.1s 
+ => => exporting manifest list sha256:0aa77a90a2af88edad26d827a6e7057e1f90c0e16313cbd22915c172c867716f                                                                                                        0.0s
+ => => naming to docker.io/library/agreement-commission-portal-app:latest                                                                                                                                     0.0s
+ => => unpacking to docker.io/library/agreement-commission-portal-app:latest                                                                                                                                  7.6s
+ => resolving provenance for metadata file                                                                                                                                                                    5.1s
+[+] build 1/1
+ ✔ Image agreement-commission-portal-app Built                                                                                                                                                               229.4s
+WARN[0000] /home/ubuntu/agreement-commission-portal/docker-compose.yml: the attribute `version` is obsolete, it will be ignored, please remove it to avoid potential confusion 
+[+] up 3/3
+ ✔ Network agreement-commission-portal_default Created                                                                                                                                                         0.4s
+ ✔ Container agreement-commission-portal-db-1  Healthy                                                                                                                                                         6.9s
+ ✔ Container agreement-commission-portal-app-1 Started                                                                                                                                                         6.8s
+ubuntu@ip-172-31-41-234:~/agreement-commission-portal$ 
