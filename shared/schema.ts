@@ -267,6 +267,44 @@ export const commissionEntries = pgTable("commission_entries", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
+export const subAgentEntries = pgTable("sub_agent_entries", {
+  id: serial("id").primaryKey(),
+  commissionStudentId: integer("commission_student_id").notNull().references(() => commissionStudents.id, { onDelete: "cascade" }),
+  subAgentCommissionRatePct: numeric("sub_agent_commission_rate_pct", { precision: 8, scale: 4 }).default("0"),
+  gstApplicable: varchar("gst_applicable", { length: 3 }).notNull().default("No"),
+  sicReceivedTotal: numeric("sic_received_total", { precision: 14, scale: 2 }).default("0"),
+  subAgentPaidTotal: numeric("sub_agent_paid_total", { precision: 14, scale: 2 }).default("0"),
+  margin: numeric("margin", { precision: 14, scale: 2 }).default("0"),
+  overpayWarning: varchar("overpay_warning", { length: 128 }),
+  status: varchar("status", { length: 32 }).default("Under Enquiry"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const subAgentTermEntries = pgTable("sub_agent_term_entries", {
+  id: serial("id").primaryKey(),
+  commissionStudentId: integer("commission_student_id").notNull().references(() => commissionStudents.id, { onDelete: "cascade" }),
+  termName: varchar("term_name", { length: 16 }).notNull(),
+  academicYear: varchar("academic_year", { length: 16 }).default("Year 1"),
+  feeNet: numeric("fee_net", { precision: 12, scale: 2 }).default("0"),
+  mainCommission: numeric("main_commission", { precision: 12, scale: 2 }).default("0"),
+  commissionRateAuto: numeric("commission_rate_auto", { precision: 8, scale: 4 }).default("0"),
+  commissionRateOverridePct: numeric("commission_rate_override_pct", { precision: 8, scale: 4 }),
+  commissionRateUsedPct: numeric("commission_rate_used_pct", { precision: 8, scale: 4 }).default("0"),
+  subAgentCommission: numeric("sub_agent_commission", { precision: 12, scale: 2 }).default("0"),
+  bonusPaid: numeric("bonus_paid", { precision: 12, scale: 2 }).default("0"),
+  gstPct: numeric("gst_pct", { precision: 5, scale: 2 }).default("0"),
+  gstAmount: numeric("gst_amount", { precision: 12, scale: 2 }).default("0"),
+  totalPaid: numeric("total_paid", { precision: 12, scale: 2 }).default("0"),
+  paymentStatus: varchar("payment_status", { length: 32 }).default("Invoice Waiting"),
+  studentStatus: varchar("student_status", { length: 32 }).default("Under Enquiry"),
+  rateOverrideWarning: varchar("rate_override_warning", { length: 128 }),
+  exceedsMainWarning: varchar("exceeds_main_warning", { length: 128 }),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
 export const passwordResetTokens = pgTable("password_reset_tokens", {
   id: serial("id").primaryKey(),
   userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
@@ -402,6 +440,18 @@ export const insertCommissionEntrySchema = createInsertSchema(commissionEntries)
   updatedAt: true,
 });
 
+export const insertSubAgentEntrySchema = createInsertSchema(subAgentEntries).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertSubAgentTermEntrySchema = createInsertSchema(subAgentTermEntries).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
 export const loginSchema = z.object({
   email: z.string().email(),
   password: z.string().min(6),
@@ -426,12 +476,16 @@ export type TargetBonusCountryEntry = typeof targetBonusCountry.$inferSelect;
 export type CommissionTerm = typeof commissionTerms.$inferSelect;
 export type CommissionStudent = typeof commissionStudents.$inferSelect;
 export type CommissionEntry = typeof commissionEntries.$inferSelect;
+export type SubAgentEntry = typeof subAgentEntries.$inferSelect;
+export type SubAgentTermEntry = typeof subAgentTermEntries.$inferSelect;
 export type UserSession = typeof userSessions.$inferSelect;
 export type LoginVerificationCode = typeof loginVerificationCodes.$inferSelect;
 export type SecurityAuditLog = typeof securityAuditLogs.$inferSelect;
 export type PasswordHistoryEntry = typeof passwordHistory.$inferSelect;
 export type InsertCommissionStudent = z.infer<typeof insertCommissionStudentSchema>;
 export type InsertCommissionEntry = z.infer<typeof insertCommissionEntrySchema>;
+export type InsertSubAgentEntry = z.infer<typeof insertSubAgentEntrySchema>;
+export type InsertSubAgentTermEntry = z.infer<typeof insertSubAgentTermEntrySchema>;
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type InsertAgreement = z.infer<typeof insertAgreementSchema>;
 export type InsertTarget = z.infer<typeof insertTargetSchema>;
@@ -510,6 +564,13 @@ export const PERMISSION_REGISTRY = [
     ],
   },
   {
+    module: "sub_agent_commission",
+    label: "Sub-Agent Commission",
+    resources: [
+      { resource: "entry", label: "Sub-Agent Entries", actions: ["read", "add", "update", "delete"] },
+    ],
+  },
+  {
     module: "documents",
     label: "Documents",
     resources: [
@@ -575,6 +636,10 @@ export const LEGACY_PERMISSION_MAP: Record<string, string> = {
   "contacts.edit": "contacts.contact.update",
   "contacts.delete": "contacts.contact.delete",
   "contacts.export": "contacts.contact.export",
+  "sub_agent_commission.view": "sub_agent_commission.entry.read",
+  "sub_agent_commission.create": "sub_agent_commission.entry.add",
+  "sub_agent_commission.edit": "sub_agent_commission.entry.update",
+  "sub_agent_commission.delete": "sub_agent_commission.entry.delete",
   "document.list": "documents.document.list",
   "document.view_in_portal": "documents.document.view_in_portal",
   "document.download": "documents.document.download",

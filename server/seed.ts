@@ -70,6 +70,10 @@ const PERMISSION_CODES = [
   { code: "security.country_scope.manage", module: "administration", resource: "country_scope", action: "update", description: "Manage country access" },
   { code: "reminders.view", module: "reminders", resource: "reminder", action: "read", description: "View reminders" },
   { code: "reminders.manage", module: "reminders", resource: "reminder", action: "update", description: "Manage reminders" },
+  { code: "sub_agent_commission.view", module: "sub_agent_commission", resource: "entry", action: "read", description: "View sub-agent commission" },
+  { code: "sub_agent_commission.create", module: "sub_agent_commission", resource: "entry", action: "add", description: "Add sub-agent entries" },
+  { code: "sub_agent_commission.edit", module: "sub_agent_commission", resource: "entry", action: "update", description: "Edit sub-agent entries" },
+  { code: "sub_agent_commission.delete", module: "sub_agent_commission", resource: "entry", action: "delete", description: "Delete sub-agent entries" },
   { code: "commission_tracker.view", module: "commission_tracker", resource: "student", action: "read", description: "View commission tracker" },
   { code: "commission_tracker.create", module: "commission_tracker", resource: "student", action: "add", description: "Add commission students" },
   { code: "commission_tracker.edit", module: "commission_tracker", resource: "student", action: "update", description: "Edit commission students" },
@@ -151,6 +155,7 @@ const ROLE_PERMISSION_MAP: Record<string, string[]> = {
     "commission_tracker.view", "commission_tracker.create", "commission_tracker.edit", "commission_tracker.delete",
     "commission_tracker.entry.view", "commission_tracker.entry.create", "commission_tracker.entry.edit", "commission_tracker.entry.delete",
     "commission_tracker.export",
+    "sub_agent_commission.view", "sub_agent_commission.create", "sub_agent_commission.edit", "sub_agent_commission.delete",
   ],
   "Finance Viewer": [
     "commission.view", "bonus.view",

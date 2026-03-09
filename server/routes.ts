@@ -6,6 +6,7 @@ import { seedDatabase } from "./seed";
 import { loginSchema, insertAgreementSchema, insertTargetSchema, insertCommissionRuleSchema, insertContactSchema, insertUniversitySchema, PERMISSION_REGISTRY, LEGACY_PERMISSION_MAP } from "@shared/schema";
 import { sendPasswordResetEmail, sendLoginOtpEmail, verifyEmailConnection } from "./email";
 import { calculateEntry, computeMasterFromEntries, STUDENT_STATUSES, PAYMENT_STATUSES } from "./commission-calc";
+import { calculateSubAgentTermEntry, calculateMasterTotals, SUB_AGENT_PAYMENT_STATUSES, SUB_AGENT_ACADEMIC_YEARS } from "./sub-agent-calc";
 import multer from "multer";
 import path from "path";
 import fs from "fs";
@@ -2159,6 +2160,206 @@ export async function registerRoutes(
       }
 
       res.json(results);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  // ===================== SUB-AGENT COMMISSION ROUTES =====================
+
+  app.get("/api/sub-agent-commission/dashboard", requireAuth, requirePermission("sub_agent_commission.view"), async (req, res) => {
+    try {
+      const year = req.query.year ? Number(req.query.year) : undefined;
+      const dashboard = await storage.getSubAgentDashboard(year);
+      res.json(dashboard);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.get("/api/sub-agent-commission/master", requireAuth, requirePermission("sub_agent_commission.view"), async (req, res) => {
+    try {
+      const filters: any = {};
+      if (req.query.search) filters.search = String(req.query.search);
+      if (req.query.agents) filters.agents = String(req.query.agents).split(",");
+      if (req.query.providers) filters.providers = String(req.query.providers).split(",");
+      if (req.query.statuses) filters.statuses = String(req.query.statuses).split(",");
+      const entries = await storage.getSubAgentEntries(filters);
+      res.json(entries);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.put("/api/sub-agent-commission/master/:studentId", requireAuth, requirePermission("sub_agent_commission.edit"), async (req, res) => {
+    try {
+      const studentId = Number(req.params.studentId);
+      const { subAgentCommissionRatePct, gstApplicable } = req.body;
+      const updated = await storage.upsertSubAgentEntry(studentId, {
+        subAgentCommissionRatePct: subAgentCommissionRatePct !== undefined ? String(subAgentCommissionRatePct) : undefined,
+        gstApplicable: gstApplicable || undefined,
+      });
+
+      const allTerms = await storage.getCommissionTerms();
+      for (const term of allTerms) {
+        const entries = await storage.getSubAgentTermEntries(term.termName);
+        for (const entry of entries) {
+          if (entry.commissionStudentId === studentId) {
+            const newRate = subAgentCommissionRatePct !== undefined ? Number(subAgentCommissionRatePct) : Number(entry.commissionRateAuto);
+            const gstFlag = (gstApplicable || entry.student?.gstApplicable || "No") === "Yes";
+            const calc = calculateSubAgentTermEntry({
+              feeNet: Number(entry.feeNet) || 0,
+              mainCommission: Number(entry.mainCommission) || 0,
+              commissionRateAuto: newRate,
+              commissionRateOverridePct: entry.commissionRateOverridePct ? Number(entry.commissionRateOverridePct) : null,
+              bonusPaid: Number(entry.bonusPaid) || 0,
+              gstPct: Number(entry.gstPct) || 0,
+              gstApplicable: gstFlag,
+            });
+            await storage.updateSubAgentTermEntry(entry.id, {
+              commissionRateAuto: String(newRate),
+              ...calc,
+            });
+          }
+        }
+      }
+
+      await storage.recalcSubAgentMasterTotals(studentId);
+
+      await storage.createAuditLog({
+        userId: req.session.userId,
+        action: "update",
+        entityType: "sub_agent_entry",
+        entityId: studentId,
+        ipAddress: req.ip,
+        userAgent: req.get("user-agent"),
+        metadata: { subAgentCommissionRatePct, gstApplicable },
+      });
+
+      const result = await storage.getSubAgentEntry(studentId);
+      res.json(result);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.post("/api/sub-agent-commission/sync", requireAuth, requirePermission("sub_agent_commission.edit"), async (req, res) => {
+    try {
+      const result = await storage.syncSubAgentFromMain();
+
+      await storage.createAuditLog({
+        userId: req.session.userId,
+        action: "sync",
+        entityType: "sub_agent_commission",
+        ipAddress: req.ip,
+        userAgent: req.get("user-agent"),
+        metadata: result,
+      });
+
+      res.json(result);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.get("/api/sub-agent-commission/terms/:termName", requireAuth, requirePermission("sub_agent_commission.view"), async (req, res) => {
+    try {
+      const termName = req.params.termName;
+      const filters: any = {};
+      if (req.query.search) filters.search = String(req.query.search);
+      if (req.query.agents) filters.agents = String(req.query.agents).split(",");
+      if (req.query.providers) filters.providers = String(req.query.providers).split(",");
+      if (req.query.statuses) filters.statuses = String(req.query.statuses).split(",");
+      const entries = await storage.getSubAgentTermEntries(termName, filters);
+      res.json(entries);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.put("/api/sub-agent-commission/terms/:termName/entries/:id", requireAuth, requirePermission("sub_agent_commission.edit"), async (req, res) => {
+    try {
+      const id = Number(req.params.id);
+      const existing = await storage.getSubAgentTermEntry(id);
+      if (!existing) return res.status(404).json({ message: "Entry not found" });
+
+      const body = req.body;
+      const [subAgentEntry] = await Promise.all([
+        storage.getSubAgentEntry(existing.commissionStudentId),
+      ]);
+
+      const feeNet = body.feeNet !== undefined ? Number(body.feeNet) : Number(existing.feeNet);
+      const mainComm = Number(existing.mainCommission) || 0;
+      const autoRate = Number(subAgentEntry?.subAgentCommissionRatePct || existing.commissionRateAuto) || 0;
+      const overrideRate = body.commissionRateOverridePct !== undefined
+        ? (body.commissionRateOverridePct === "" || body.commissionRateOverridePct === null ? null : Number(body.commissionRateOverridePct))
+        : (existing.commissionRateOverridePct ? Number(existing.commissionRateOverridePct) : null);
+      const bonusPaid = body.bonusPaid !== undefined ? Number(body.bonusPaid) : Number(existing.bonusPaid);
+      const gstPct = body.gstPct !== undefined ? Number(body.gstPct) : Number(existing.gstPct);
+      const gstApplicable = (subAgentEntry?.gstApplicable || "No") === "Yes";
+
+      const calc = calculateSubAgentTermEntry({
+        feeNet,
+        mainCommission: mainComm,
+        commissionRateAuto: autoRate,
+        commissionRateOverridePct: overrideRate,
+        bonusPaid,
+        gstPct,
+        gstApplicable,
+      });
+
+      const updateData: any = {
+        ...calc,
+        commissionRateAuto: String(autoRate),
+      };
+
+      if (body.feeNet !== undefined) updateData.feeNet = String(feeNet);
+      if (body.commissionRateOverridePct !== undefined) updateData.commissionRateOverridePct = overrideRate !== null ? String(overrideRate) : null;
+      if (body.bonusPaid !== undefined) updateData.bonusPaid = String(bonusPaid);
+      if (body.gstPct !== undefined) updateData.gstPct = String(gstPct);
+      if (body.academicYear !== undefined) updateData.academicYear = body.academicYear;
+      if (body.paymentStatus !== undefined) updateData.paymentStatus = body.paymentStatus;
+      if (body.notes !== undefined) updateData.notes = body.notes;
+
+      const updated = await storage.updateSubAgentTermEntry(id, updateData);
+      await storage.recalcSubAgentMasterTotals(existing.commissionStudentId);
+
+      await storage.createAuditLog({
+        userId: req.session.userId,
+        action: "update",
+        entityType: "sub_agent_term_entry",
+        entityId: id,
+        ipAddress: req.ip,
+        userAgent: req.get("user-agent"),
+        metadata: { termName: req.params.termName, changes: body },
+      });
+
+      const result = await storage.getSubAgentTermEntry(id);
+      res.json(result);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.delete("/api/sub-agent-commission/terms/:termName/entries/:id", requireAuth, requirePermission("sub_agent_commission.delete"), async (req, res) => {
+    try {
+      const id = Number(req.params.id);
+      const existing = await storage.getSubAgentTermEntry(id);
+      if (!existing) return res.status(404).json({ message: "Entry not found" });
+
+      await storage.deleteSubAgentTermEntry(id);
+      await storage.recalcSubAgentMasterTotals(existing.commissionStudentId);
+
+      await storage.createAuditLog({
+        userId: req.session.userId,
+        action: "delete",
+        entityType: "sub_agent_term_entry",
+        entityId: id,
+        ipAddress: req.ip,
+        userAgent: req.get("user-agent"),
+      });
+
+      res.json({ success: true });
     } catch (err: any) {
       res.status(500).json({ message: err.message });
     }
