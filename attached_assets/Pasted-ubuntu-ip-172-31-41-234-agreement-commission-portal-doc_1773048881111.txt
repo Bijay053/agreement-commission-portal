@@ -1,0 +1,101 @@
+ubuntu@ip-172-31-41-234:~/agreement-commission-portal$ docker exec -it $(docker ps -q) node -e "
+const { Pool } = require('pg');
+const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+pool.query(\`
+  INSERT INTO permissions (code, module, resource, action, description) VALUES
+    ('sub_agent_commission.view', 'sub_agent_commission', 'entry', 'read', 'View sub-agent commission'),
+    ('sub_agent_commission.create', 'sub_agent_commission', 'entry', 'add', 'Add sub-agent entries'),
+    ('sub_agent_commission.edit', 'sub_agent_commission', 'entry', 'update', 'Edit sub-agent entries'),
+    ('sub_agent_commission.delete', 'sub_agent_commission', 'entry', 'delete', 'Delete sub-agent entries')
+  ON CONFLICT (code) DO NOTHING
+  RETURNING id, code;
+\`).then(r => {
+  console.log('Inserted permissions:', r.rows);
+  return pool.query(\`
+    INSERT INTO role_permissions (role_id, permission_id)
+    SELECT 1, id FROM permissions WHERE code LIKE 'sub_agent_commission%'
+    ON CONFLICT DO NOTHING;
+  \`);
+}).then(r => {
+  console.log('Assigned to Super Admin role:', r.rowCount, 'permissions');
+  pool.end();
+}).catch(e => { console.error(e); pool.end(); });
+"
+OCI runtime exec failed: exec failed: unable to start container process: exec: "958664cbb804": executable file not found in $PATH
+ubuntu@ip-172-31-41-234:~/agreement-commission-portal$ docker exec -it $(docker ps -q) node -e "
+const { Pool } = require('pg');
+const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+pool.query(\`
+  CREATE TABLE IF NOT EXISTS sub_agent_entries (
+    id SERIAL PRIMARY KEY,
+    commission_student_id INTEGER NOT NULL REFERENCES commission_students(id) ON DELETE CASCADE,
+    sub_agent_commission_rate_pct VARCHAR(20),
+    gst_applicable VARCHAR(10) DEFAULT 'No',
+    sic_received_total VARCHAR(20) DEFAULT '0',
+    sub_agent_paid_total VARCHAR(20) DEFAULT '0',
+    margin VARCHAR(20) DEFAULT '0',
+    overpay_warning BOOLEAN DEFAULT false,
+    status VARCHAR(50) DEFAULT 'Under Enquiry',
+    UNIQUE(commission_student_id)
+  );
+  CREATE TABLE IF NOT EXISTS sub_agent_term_entries (
+    id SERIAL PRIMARY KEY,
+    commission_student_id INTEGER NOT NULL REFERENCES commission_students(id) ON DELETE CASCADE,
+    term_name VARCHAR(20) NOT NULL,
+    academic_year VARCHAR(16),
+    fee_net VARCHAR(20) DEFAULT '0',
+    main_commission VARCHAR(20) DEFAULT '0',
+    commission_rate_auto VARCHAR(20),
+    commission_rate_override_pct VARCHAR(20),
+    commission_rate_used_pct VARCHAR(20),
+    sub_agent_commission VARCHAR(20) DEFAULT '0',
+    bonus_paid VARCHAR(20) DEFAULT '0',
+    gst_pct VARCHAR(10) DEFAULT '0',
+    gst_amount VARCHAR(20) DEFAULT '0',
+    total_paid VARCHAR(20) DEFAULT '0',
+    payment_status VARCHAR(30) DEFAULT 'Invoice Waiting',
+    student_status VARCHAR(50),
+    rate_override_warning BOOLEAN DEFAULT false,
+    exceeds_main_warning BOOLEAN DEFAULT false,
+").catch(e => { console.error(e); pool.end(); });
+OCI runtime exec failed: exec failed: unable to start container process: exec: "958664cbb804": executable file not found in $PATH
+ubuntu@ip-172-31-41-234:~/agreement-commission-portal$ docker-compose up -d --build
+WARN[0000] /home/ubuntu/agreement-commission-portal/docker-compose.yml: the attribute `version` is obsolete, it will be ignored, please remove it to avoid potential confusion 
+[+] Building 2.4s (20/20) FINISHED                                                                                                                                    
+ => [internal] load local bake definitions                                                                                                                       0.0s
+ => => reading from stdin 560B                                                                                                                                   0.0s
+ => [internal] load build definition from Dockerfile                                                                                                             0.1s
+ => => transferring dockerfile: 700B                                                                                                                             0.0s
+ => [internal] load metadata for docker.io/library/node:20-alpine                                                                                                0.9s
+ => [internal] load .dockerignore                                                                                                                                0.0s
+ => => transferring context: 121B                                                                                                                                0.0s
+ => [base 1/2] FROM docker.io/library/node:20-alpine@sha256:b88333c42c23fbd91596ebd7fd10de239cedab9617de04142dde7315e3bc0afa                                     0.1s
+ => => resolve docker.io/library/node:20-alpine@sha256:b88333c42c23fbd91596ebd7fd10de239cedab9617de04142dde7315e3bc0afa                                          0.0s
+ => [internal] load build context                                                                                                                                0.1s
+ => => transferring context: 6.82kB                                                                                                                              0.0s
+ => CACHED [base 2/2] WORKDIR /app                                                                                                                               0.0s
+ => CACHED [deps 1/2] COPY package.json ./                                                                                                                       0.0s
+ => CACHED [production 2/8] RUN npm install && npm install drizzle-kit tsx && npm cache clean --force                                                            0.0s
+ => CACHED [deps 2/2] RUN npm install                                                                                                                            0.0s
+ => CACHED [build 1/2] COPY . .                                                                                                                                  0.0s
+ => CACHED [build 2/2] RUN mkdir -p uploads && npm run build                                                                                                     0.0s
+ => CACHED [production 3/8] COPY --from=build /app/dist ./dist                                                                                                   0.0s
+ => CACHED [production 4/8] COPY --from=build /app/drizzle.config.ts ./drizzle.config.ts                                                                         0.0s
+ => CACHED [production 5/8] COPY --from=build /app/shared ./shared                                                                                               0.0s
+ => CACHED [production 6/8] COPY --from=build /app/tsconfig.json ./tsconfig.json                                                                                 0.0s
+ => CACHED [production 7/8] COPY docker-entrypoint.sh ./                                                                                                         0.0s
+ => CACHED [production 8/8] RUN mkdir -p uploads && chmod +x docker-entrypoint.sh                                                                                0.0s
+ => exporting to image                                                                                                                                           0.2s
+ => => exporting layers                                                                                                                                          0.0s
+ => => exporting manifest sha256:65a03b57228d618201912832a446f0def9d472f784887b742dd1aa53153def1a                                                                0.0s
+ => => exporting config sha256:4ec71d06eb531bce83aecda2722bab2cab95a25254ddace3846942c7fe2d241f                                                                  0.0s
+ => => exporting attestation manifest sha256:d8cc3e145f54ef6a469cdd714034629d3c6bcbc572f274116ba6a26171779376                                                    0.0s
+ => => exporting manifest list sha256:6ece951df016c1c93a9c6367da7761b9ac97248a2e1d64b5ad580e55dbdc7b67                                                           0.0s
+ => => naming to docker.io/library/agreement-commission-portal-app:latest                                                                                        0.0s
+ => => unpacking to docker.io/library/agreement-commission-portal-app:latest                                                                                     0.0s
+ => resolving provenance for metadata file                                                                                                                       0.0s
+[+] up 3/3
+ ✔ Image agreement-commission-portal-app       Built                                                                                                             2.6ss
+ ✔ Container agreement-commission-portal-db-1  Healthy                                                                                                           11.6s
+ ✔ Container agreement-commission-portal-app-1 Started                                                                                                           11.9s
+ubuntu@ip-172-31-41-234:~/agreement-commission-portal$ 
