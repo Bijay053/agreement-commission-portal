@@ -1,0 +1,17 @@
+ => resolving provenance for metadata file                                                                                                                                                                    5.1s
+[+] build 1/1
+ ✔ Image agreement-commission-portal-app Built                                                                                                                                                               229.4s
+WARN[0000] /home/ubuntu/agreement-commission-portal/docker-compose.yml: the attribute `version` is obsolete, it will be ignored, please remove it to avoid potential confusion 
+[+] up 3/3
+ ✔ Network agreement-commission-portal_default Created                                                                                                                                                         0.4s
+ ✔ Container agreement-commission-portal-db-1  Healthy                                                                                                                                                         6.9s
+ ✔ Container agreement-commission-portal-app-1 Started                                                                                                                                                         6.8s
+ubuntu@ip-172-31-41-234:~/agreement-commission-portal$ Creating agreement-commission-portal-app-1 ... done
+Creating agreement-commission-portal-db-1  ... done
+Creating: command not found
+Creating: command not found
+ubuntu@ip-172-31-41-234:~/agreement-commission-portal$ docker ps
+CONTAINER ID   IMAGE                             COMMAND                  CREATED          STATUS                          PORTS                                         NAMES
+731f40460770   agreement-commission-portal-app   "./docker-entrypoint…"   14 minutes ago   Restarting (1) 13 seconds ago                                                 agreement-commission-portal-app-1
+b14f5d6ff9b6   postgres:16-alpine                "docker-entrypoint.s…"   14 minutes ago   Up 14 minutes (healthy)         0.0.0.0:5432->5432/tcp, [::]:5432->5432/tcp   agreement-commission-portal-db-1
+ubuntu@ip-172-31-41-234:~/agreement-commission-portal$ 
