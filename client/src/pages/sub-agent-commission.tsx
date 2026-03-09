@@ -154,6 +154,11 @@ export default function SubAgentCommissionPage() {
 
   const dashboardQuery = useQuery({
     queryKey: ["/api/sub-agent-commission/dashboard", selectedYear],
+    queryFn: async () => {
+      const res = await fetch(`/api/sub-agent-commission/dashboard?year=${selectedYear}`, { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to fetch dashboard");
+      return res.json();
+    },
     enabled: activeTab === "DASHBOARD",
   });
 
@@ -197,7 +202,9 @@ export default function SubAgentCommissionPage() {
     },
     onSuccess: (data) => {
       toast({ title: "Sync Complete", description: `Added: ${data.added}, Updated: ${data.updated}, Removed: ${data.removed}` });
-      queryClient.invalidateQueries({ queryKey: ["/api/sub-agent-commission"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/sub-agent-commission/master"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/sub-agent-commission/terms"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/sub-agent-commission/dashboard"] });
     },
     onError: (err: any) => {
       toast({ title: "Sync Failed", description: err.message, variant: "destructive" });
@@ -210,7 +217,9 @@ export default function SubAgentCommissionPage() {
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/sub-agent-commission"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/sub-agent-commission/master"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/sub-agent-commission/terms"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/sub-agent-commission/dashboard"] });
     },
     onError: (err: any) => {
       toast({ title: "Update Failed", description: err.message, variant: "destructive" });
@@ -223,7 +232,9 @@ export default function SubAgentCommissionPage() {
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/sub-agent-commission"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/sub-agent-commission/master"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/sub-agent-commission/terms"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/sub-agent-commission/dashboard"] });
     },
     onError: (err: any) => {
       toast({ title: "Update Failed", description: err.message, variant: "destructive" });
