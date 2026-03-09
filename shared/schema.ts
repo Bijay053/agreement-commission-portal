@@ -607,6 +607,7 @@ export const PERMISSION_REGISTRY = [
     resources: [
       { resource: "student", label: "Commission Students", actions: ["read", "add", "update", "delete", "export", "delete_master"] },
       { resource: "entry", label: "Term Entries", actions: ["read", "add", "update", "delete"] },
+      { resource: "master", label: "Master Sheet", actions: ["edit"] },
     ],
   },
   {
@@ -677,6 +678,7 @@ export const LEGACY_PERMISSION_MAP: Record<string, string> = {
   "commission_tracker.entry.edit": "commission_tracker.entry.update",
   "commission_tracker.entry.delete": "commission_tracker.entry.delete",
   "commission_tracker.student.delete_master": "commission_tracker.student.delete_master",
+  "commission_tracker.master.edit": "commission_tracker.master.edit",
   "contacts.view": "contacts.contact.read",
   "contacts.create": "contacts.contact.add",
   "contacts.edit": "contacts.contact.update",

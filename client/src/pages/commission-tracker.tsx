@@ -472,15 +472,40 @@ export default function CommissionTrackerPage() {
   );
 }
 
+const DURATION_OPTIONS = ["6 months", "1 year", "2 years", "3 years", "4 years"];
+
 function AddProviderButton({ studentId, studentName }: { studentId: number; studentName: string }) {
   const { toast } = useToast();
   const [open, setOpen] = useState(false);
   const [provider, setProvider] = useState("");
   const [studentIdVal, setStudentIdVal] = useState("");
+  const [courseName, setCourseName] = useState("");
+  const [courseLevel, setCourseLevel] = useState("");
+  const [duration, setDuration] = useState("");
+  const [intake, setIntake] = useState("");
+  const [country, setCountry] = useState("Australia");
+  const [notes, setNotes] = useState("");
+  const [dupError, setDupError] = useState("");
+
+  const resetForm = () => {
+    setProvider(""); setStudentIdVal(""); setCourseName(""); setCourseLevel("");
+    setDuration(""); setIntake(""); setCountry("Australia"); setNotes(""); setDupError("");
+  };
+
+  const isValid = provider.trim() && courseName.trim() && courseLevel.trim() && intake.trim();
 
   const addMutation = useMutation({
     mutationFn: async () => {
-      const res = await apiRequest("POST", `/api/commission-tracker/students/${studentId}/providers`, { provider, studentId: studentIdVal });
+      const res = await apiRequest("POST", `/api/commission-tracker/students/${studentId}/providers`, {
+        provider: provider.trim(),
+        studentId: studentIdVal.trim() || null,
+        courseName: courseName.trim(),
+        courseLevel: courseLevel.trim(),
+        courseDurationYears: duration || null,
+        startIntake: intake.trim(),
+        country: country.trim() || "Australia",
+        notes: notes.trim() || null,
+      });
       if (!res.ok) {
         const err = await res.json();
         throw new Error(err.message || "Failed");
@@ -490,39 +515,90 @@ function AddProviderButton({ studentId, studentName }: { studentId: number; stud
     onSuccess: () => {
       toast({ title: "Provider added" });
       queryClient.invalidateQueries({ queryKey: ["/api/commission-tracker/all-student-providers"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/commission-tracker/students"] });
       setOpen(false);
-      setProvider("");
-      setStudentIdVal("");
+      resetForm();
     },
     onError: (err: Error) => {
-      toast({ title: "Error", description: err.message, variant: "destructive" });
+      if (err.message.includes("combination")) {
+        setDupError(err.message);
+      } else {
+        toast({ title: "Error", description: err.message, variant: "destructive" });
+      }
     },
   });
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) resetForm(); }}>
       <DialogTrigger asChild>
         <button className="text-blue-500 hover:text-blue-700 shrink-0" title="Add another provider" data-testid={`button-add-provider-${studentId}`}>
           <Plus className="h-3 w-3" />
         </button>
       </DialogTrigger>
-      <DialogContent className="max-w-sm">
+      <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle className="text-sm">Add Provider for {studentName}</DialogTitle>
-          <DialogDescription className="text-xs">Add another provider and student ID for this student.</DialogDescription>
+          <DialogTitle className="text-sm">Add Provider / Course for {studentName}</DialogTitle>
+          <DialogDescription className="text-xs text-muted-foreground">
+            Add another provider and academic record for this student. Each provider entry can have a different student ID, course, level, duration, and intake.
+          </DialogDescription>
         </DialogHeader>
-        <div className="space-y-3">
+        <div className="space-y-3 max-h-[60vh] overflow-y-auto pr-1">
           <div>
             <Label className="text-xs">Provider *</Label>
-            <Input value={provider} onChange={(e) => setProvider(e.target.value)} required className="h-8 text-sm" data-testid="input-new-provider" />
+            <Input value={provider} onChange={(e) => { setProvider(e.target.value); setDupError(""); }} required className="h-8 text-sm" data-testid="input-new-provider" />
           </div>
           <div>
             <Label className="text-xs">Student ID</Label>
             <Input value={studentIdVal} onChange={(e) => setStudentIdVal(e.target.value)} className="h-8 text-sm" data-testid="input-new-provider-student-id" />
           </div>
+          <div>
+            <Label className="text-xs">Course Name *</Label>
+            <Input value={courseName} onChange={(e) => { setCourseName(e.target.value); setDupError(""); }} required className="h-8 text-sm" data-testid="input-new-course-name" />
+          </div>
+          <div>
+            <Label className="text-xs">Course Level *</Label>
+            <Select value={courseLevel} onValueChange={(v) => { setCourseLevel(v); setDupError(""); }}>
+              <SelectTrigger className="h-8 text-sm" data-testid="select-new-course-level">
+                <SelectValue placeholder="Select level" />
+              </SelectTrigger>
+              <SelectContent>
+                {COURSE_LEVELS.map(l => <SelectItem key={l} value={l}>{l}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <Label className="text-xs">Duration</Label>
+            <Select value={duration} onValueChange={setDuration}>
+              <SelectTrigger className="h-8 text-sm" data-testid="select-new-duration">
+                <SelectValue placeholder="Select duration" />
+              </SelectTrigger>
+              <SelectContent>
+                {DURATION_OPTIONS.map(d => <SelectItem key={d} value={d}>{d}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <Label className="text-xs">Intake *</Label>
+            <Input value={intake} onChange={(e) => { setIntake(e.target.value); setDupError(""); }} required placeholder="e.g. T1 2025" className="h-8 text-sm" data-testid="input-new-intake" />
+          </div>
+          <div>
+            <Label className="text-xs">Country</Label>
+            <Input value={country} onChange={(e) => setCountry(e.target.value)} className="h-8 text-sm" data-testid="input-new-country" />
+          </div>
+          <div>
+            <Label className="text-xs">Notes</Label>
+            <Input value={notes} onChange={(e) => setNotes(e.target.value)} className="h-8 text-sm" data-testid="input-new-notes" />
+          </div>
+          {dupError && (
+            <div className="flex items-start gap-2 p-2 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded text-xs text-red-600 dark:text-red-400" data-testid="text-dup-error">
+              <AlertCircle className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
+              <span>{dupError}</span>
+            </div>
+          )}
         </div>
-        <DialogFooter>
-          <Button size="sm" onClick={() => addMutation.mutate()} disabled={!provider.trim() || addMutation.isPending} data-testid="button-submit-new-provider">
+        <DialogFooter className="gap-2 sm:gap-0">
+          <Button variant="outline" size="sm" onClick={() => { setOpen(false); resetForm(); }} data-testid="button-cancel-provider">Cancel</Button>
+          <Button size="sm" onClick={() => addMutation.mutate()} disabled={!isValid || addMutation.isPending} data-testid="button-submit-new-provider">
             {addMutation.isPending ? "Adding..." : "Add Provider"}
           </Button>
         </DialogFooter>

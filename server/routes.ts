@@ -1765,22 +1765,25 @@ export async function registerRoutes(
 
       const providerName = req.body.provider.trim().toLowerCase();
       const courseName = (req.body.courseName || "").trim().toLowerCase();
+      const courseLevel = (req.body.courseLevel || "").trim().toLowerCase();
       const intake = (req.body.startIntake || "").trim().toLowerCase();
 
       const existingProviders = await storage.getStudentProviders(id);
       const duplicate = existingProviders.find(p =>
         p.provider.trim().toLowerCase() === providerName &&
         (p.courseName || "").trim().toLowerCase() === courseName &&
+        (p.courseLevel || "").trim().toLowerCase() === courseLevel &&
         (p.startIntake || "").trim().toLowerCase() === intake
       );
       if (duplicate) {
-        return res.status(400).json({ message: "This provider + course + intake combination already exists for this student" });
+        return res.status(400).json({ message: "This provider + course + level + intake combination already exists for this student" });
       }
 
       if (existing.provider.trim().toLowerCase() === providerName &&
         (existing.courseName || "").trim().toLowerCase() === courseName &&
+        (existing.courseLevel || "").trim().toLowerCase() === courseLevel &&
         (existing.startIntake || "").trim().toLowerCase() === intake) {
-        return res.status(400).json({ message: "This provider + course + intake combination matches the primary provider" });
+        return res.status(400).json({ message: "This provider + course + level + intake combination matches the primary provider" });
       }
 
       const provider = await storage.addStudentProvider({
@@ -1820,8 +1823,35 @@ export async function registerRoutes(
   app.patch("/api/commission-tracker/student-providers/:id", requireAuth, requirePermission("commission_tracker.edit"), async (req, res) => {
     try {
       const id = Number(req.params.id);
+      const existingProvider = await storage.getStudentProviderById?.(id);
       const updated = await storage.updateStudentProvider(id, req.body);
       if (!updated) return res.status(404).json({ message: "Provider not found" });
+
+      const clientIp = req.headers["x-forwarded-for"] || req.socket.remoteAddress || "unknown";
+      const changes: Array<{ field: string; oldValue: any; newValue: any }> = [];
+      if (req.body._auditChanges && Array.isArray(req.body._auditChanges)) {
+        changes.push(...req.body._auditChanges);
+      } else if (existingProvider) {
+        for (const key of Object.keys(req.body)) {
+          if (key.startsWith("_")) continue;
+          const oldVal = (existingProvider as any)[key];
+          const newVal = req.body[key];
+          if (String(oldVal ?? "") !== String(newVal ?? "")) {
+            changes.push({ field: key, oldValue: oldVal ?? null, newValue: newVal ?? null });
+          }
+        }
+      }
+      if (changes.length > 0) {
+        await storage.createAuditLog({
+          userId: req.session.userId!,
+          action: "master_sheet_edit",
+          entityType: "student_provider",
+          entityId: id,
+          ipAddress: String(clientIp),
+          userAgent: req.headers["user-agent"],
+          metadata: { changes, providerName: updated.provider },
+        });
+      }
 
       if (updated.commissionRatePct !== undefined || updated.gstApplicable !== undefined || updated.scholarshipType !== undefined || updated.scholarshipValue !== undefined) {
         const entries = await storage.getCommissionEntries(updated.commissionStudentId);
