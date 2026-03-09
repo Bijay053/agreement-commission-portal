@@ -11,6 +11,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { SearchableSelect } from "@/components/ui/searchable-select";
+import { MultiSearchableSelect } from "@/components/ui/multi-searchable-select";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
@@ -33,18 +34,18 @@ export default function ProvidersListPage() {
   const canManage = hasPermission("providers.provider.add") || hasPermission("providers.provider.update");
 
   const [search, setSearch] = useState("");
-  const [typeFilter, setTypeFilter] = useState("all");
-  const [statusFilter, setStatusFilter] = useState("all");
-  const [countryFilter, setCountryFilter] = useState("all");
+  const [typeFilters, setTypeFilters] = useState<string[]>([]);
+  const [statusFilters, setStatusFilters] = useState<string[]>([]);
+  const [countryFilters, setCountryFilters] = useState<string[]>([]);
   const [showDialog, setShowDialog] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [viewingProvider, setViewingProvider] = useState<any>(null);
 
   const queryParams = new URLSearchParams();
   if (search) queryParams.set("search", search);
-  if (typeFilter !== "all") queryParams.set("providerType", typeFilter);
-  if (statusFilter !== "all") queryParams.set("status", statusFilter);
-  if (countryFilter !== "all") queryParams.set("countryId", countryFilter);
+  if (typeFilters.length > 0) queryParams.set("providerType", typeFilters.join(","));
+  if (statusFilters.length > 0) queryParams.set("status", statusFilters.join(","));
+  if (countryFilters.length > 0) queryParams.set("countryId", countryFilters.join(","));
   const queryString = queryParams.toString();
 
   const { data: providers, isLoading } = useQuery<any[]>({
@@ -116,20 +117,11 @@ export default function ProvidersListPage() {
     });
   };
 
-  const typeFilterOptions = [
-    { value: "all", label: "All Types" },
-    ...PROVIDER_TYPES.map(t => ({ value: t, label: providerTypeLabels[t] })),
-  ];
+  const typeFilterOptions = PROVIDER_TYPES.map(t => ({ value: t, label: providerTypeLabels[t] }));
 
-  const statusFilterOptions = [
-    { value: "all", label: "All Statuses" },
-    ...PROVIDER_STATUSES.map(s => ({ value: s, label: s.charAt(0).toUpperCase() + s.slice(1) })),
-  ];
+  const statusFilterOptions = PROVIDER_STATUSES.map(s => ({ value: s, label: s.charAt(0).toUpperCase() + s.slice(1) }));
 
-  const countryFilterOptions = [
-    { value: "all", label: "All Countries" },
-    ...(countries?.map((c: any) => ({ value: String(c.id), label: c.name })) || []),
-  ];
+  const countryFilterOptions = countries?.map((c: any) => ({ value: String(c.id), label: c.name })) || [];
 
   const formTypeOptions = PROVIDER_TYPES.map(t => ({ value: t, label: providerTypeLabels[t] }));
 
@@ -165,27 +157,27 @@ export default function ProvidersListPage() {
                 data-testid="input-search-providers"
               />
             </div>
-            <SearchableSelect
-              value={typeFilter}
-              onValueChange={setTypeFilter}
+            <MultiSearchableSelect
+              values={typeFilters}
+              onValuesChange={setTypeFilters}
               options={typeFilterOptions}
               placeholder="Type"
               searchPlaceholder="Search types..."
               className="w-[150px]"
               data-testid="select-type-filter"
             />
-            <SearchableSelect
-              value={statusFilter}
-              onValueChange={setStatusFilter}
+            <MultiSearchableSelect
+              values={statusFilters}
+              onValuesChange={setStatusFilters}
               options={statusFilterOptions}
               placeholder="Status"
               searchPlaceholder="Search statuses..."
               className="w-[140px]"
               data-testid="select-status-filter"
             />
-            <SearchableSelect
-              value={countryFilter}
-              onValueChange={setCountryFilter}
+            <MultiSearchableSelect
+              values={countryFilters}
+              onValuesChange={setCountryFilters}
               options={countryFilterOptions}
               placeholder="Country"
               searchPlaceholder="Search countries..."
@@ -197,11 +189,11 @@ export default function ProvidersListPage() {
               size="default"
               onClick={() => {
                 setSearch("");
-                setTypeFilter("all");
-                setStatusFilter("all");
-                setCountryFilter("all");
+                setTypeFilters([]);
+                setStatusFilters([]);
+                setCountryFilters([]);
               }}
-              disabled={!search && typeFilter === "all" && statusFilter === "all" && countryFilter === "all"}
+              disabled={!search && typeFilters.length === 0 && statusFilters.length === 0 && countryFilters.length === 0}
               data-testid="button-reset-filters"
             >
               <RotateCcw className="w-4 h-4 mr-2" />
@@ -275,8 +267,8 @@ export default function ProvidersListPage() {
             <Building2 className="w-12 h-12 mx-auto text-muted-foreground/50 mb-3" />
             <h3 className="text-lg font-medium">No providers found</h3>
             <p className="text-sm text-muted-foreground mt-1">
-              {search || typeFilter !== "all" || statusFilter !== "all" || countryFilter !== "all"
-                ? <>Try adjusting your filters or <span className="text-foreground underline cursor-pointer" data-testid="link-reset-filters" onClick={() => { setSearch(""); setTypeFilter("all"); setStatusFilter("all"); setCountryFilter("all"); }}>Reset filters</span></>
+              {search || typeFilters.length > 0 || statusFilters.length > 0 || countryFilters.length > 0
+                ? <>Try adjusting your filters or <span className="text-foreground underline cursor-pointer" data-testid="link-reset-filters" onClick={() => { setSearch(""); setTypeFilters([]); setStatusFilters([]); setCountryFilters([]); }}>Reset filters</span></>
                 : "Add your first provider to get started"}
             </p>
           </CardContent>
