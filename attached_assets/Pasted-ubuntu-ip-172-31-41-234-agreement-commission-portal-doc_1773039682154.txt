@@ -1,0 +1,54 @@
+ubuntu@ip-172-31-41-234:~/agreement-commission-portal$ docker compose build --no-cache app && docker compose up -d && sleep 15 && docker logs agreement-commission-portal-app-1 --tail 5
+WARN[0000] /home/ubuntu/agreement-commission-portal/docker-compose.yml: the attribute `version` is obsolete, it will be ignored, please remove it to avoid potential confusion 
+[+] Building 117.4s (10/18)                                                                                                                                                                                        
+ => [internal] load local bake definitions                                                                                                                                                                    0.0s
+ => => reading from stdin 584B                                                                                                                                                                                0.0s
+ => [internal] load build definition from Dockerfile                                                                                                                                                          0.0s
+ => => transferring dockerfile: 700B                                                                                                                                                                          0.0s
+ => [internal] load metadata for docker.io/library/node:20-alpine                                                                                                                                             0.0s
+ => [internal] load .dockerignore                                                                                                                                                                             0.0s
+ => => transferring context: 121B                                                                                                                                                                             0.0s
+ => [base 1/2] FROM docker.io/library/node:20-alpine@sha256:b88333c42c23fbd91596ebd7fd10de239cedab9617de04142dde7315e3bc0afa                                                                                  0.1s
+ => => resolve docker.io/library/node:20-alpine@sha256:b88333c42c23fbd91596ebd7fd10de239cedab9617de04142dde7315e3bc0afa                                                                                       0.0s
+ => [internal] load build context                                                                                                                                                                             0.0s
+ => => transferring context: 6.24kB                                                                                                                                                                           0.0s
+ => CACHED [base 2/2] WORKDIR /app                                                                                                                                                                            0.0s
+ => [deps 1/2] COPY package.json ./                                                                                                                                                                           0.1s
+ => CANCELED [deps 2/2] RUN npm install                                                                                                                                                                     116.0s
+ => ERROR [production 2/8] RUN npm install && npm install drizzle-kit tsx && npm cache clean --force                                                                                                        114.7s
+------                                                                                                                                                                                                             
+ > [production 2/8] RUN npm install && npm install drizzle-kit tsx && npm cache clean --force:                                                                                                                     
+114.3 npm error code ENOSPC                                                                                                                                                                                        
+114.3 npm error syscall write                                                                                                                                                                                      
+114.3 npm error errno ENOSPC                                                                                                                                                                                       
+114.3 npm error nospc Invalid response body while trying to fetch https://registry.npmjs.org/@types%2fexpress: ENOSPC: no space left on device, write                                                              
+114.3 npm error nospc There appears to be insufficient space on your system to finish.
+114.3 npm error nospc Clear up some disk space and try again.
+114.3 npm notice
+114.3 npm notice New major version of npm available! 10.8.2 -> 11.11.0
+114.3 npm notice Changelog: https://github.com/npm/cli/releases/tag/v11.11.0
+114.3 npm notice To update run: npm install -g npm@11.11.0
+114.3 npm notice
+114.3 npm error A complete log of this run can be found in: /root/.npm/_logs/2026-03-09T06_58_07_490Z-debug-0.log
+------
+[+] build 0/1
+ ⠙ Image agreement-commission-portal-app Building                                                                                                                                                            117.6s
+Dockerfile:16
+
+--------------------
+
+  14 |     ENV NODE_ENV=production
+
+  15 |     COPY package.json ./
+
+  16 | >>> RUN npm install && npm install drizzle-kit tsx && npm cache clean --force
+
+  17 |     COPY --from=build /app/dist ./dist
+
+  18 |     COPY --from=build /app/drizzle.config.ts ./drizzle.config.ts
+
+--------------------
+
+failed to solve: process "/bin/sh -c npm install && npm install drizzle-kit tsx && npm cache clean --force" did not complete successfully: exit code: 1
+
+ubuntu@ip-172-31-41-234:~/agreement-commission-portal$ 
