@@ -1,0 +1,99 @@
+
+git clone https://github.com/Bijay053/agreement-commission-portal.git
+cd agreement-commission-portal
+cp .env.example .env
+nano .env
+ubuntu@ip-172-31-41-234:~$ DB_PASSWORD=!@$03-SEP0+@#26123
+SESSION_SECRET=a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6q7r8s9t0
+DATABASE_URL=postgresql://portal_user:MyStr0ngP@ssw0rd2026@db:5432/agreement_portal
+bash: !@: event not found
+ubuntu@ip-172-31-41-234:~$ ^C
+ubuntu@ip-172-31-41-234:~$ git clone https://github.com/Bijay053/agreement-commission-portal.git
+Cloning into 'agreement-commission-portal'...
+Username for 'https://github.com': cd agreement-commission-portal
+Password for 'https://cd%20agreement-commission-portal@github.com': 
+ubuntu@ip-172-31-41-234:~$ ssh -i ~/Downloads/chat-key.pem ubuntu@YOUR_EC2_PUBLIC_IP
+Warning: Identity file /home/ubuntu/Downloads/chat-key.pem not accessible: No such file or directory.
+ssh: Could not resolve hostname your_ec2_public_ip: Temporary failure in name resolution
+ubuntu@ip-172-31-41-234:~$ ls agreement-commission-portal
+ls: cannot access 'agreement-commission-portal': No such file or directory
+ubuntu@ip-172-31-41-234:~$ cd agreement-commission-portal
+bash: cd: agreement-commission-portal: No such file or directory
+ubuntu@ip-172-31-41-234:~$ git clone https://github.com/Bijay053/agreement-commission-portal.git
+Cloning into 'agreement-commission-portal'...
+Username for 'https://github.com': Bijay053
+Password for 'https://Bijay053@github.com': 
+ubuntu@ip-172-31-41-234:~$ cd agreement-commission-portal
+bash: cd: agreement-commission-portal: No such file or directory
+ubuntu@ip-172-31-41-234:~$ git clone https://github.com/Bijay053/agreement-commission-portal.git
+Cloning into 'agreement-commission-portal'...
+remote: Enumerating objects: 146, done.
+remote: Counting objects: 100% (146/146), done.
+remote: Compressing objects: 100% (142/142), done.
+remote: Total 146 (delta 16), reused 0 (delta 0), pack-reused 0 (from 0)
+Receiving objects: 100% (146/146), 626.44 KiB | 16.06 MiB/s, done.
+Resolving deltas: 100% (16/16), done.
+ubuntu@ip-172-31-41-234:~$ cd agreement-commission-portal
+ubuntu@ip-172-31-41-234:~/agreement-commission-portal$ cat > .env << 'EOF'
+DB_PASSWORD=Sep03Portal2026Secure
+SESSION_SECRET=a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6q7r8s9t0
+DATABASE_URL=postgresql://portal_user:Sep03Portal2026Secure@db:5432/agreement_portal
+PORT=5000
+EOF
+ubuntu@ip-172-31-41-234:~/agreement-commission-portal$ docker-compose up -d --build
+WARN[0000] /home/ubuntu/agreement-commission-portal/docker-compose.yml: the attribute `version` is obsolete, it will be ignored, please remove it to avoid potential confusion 
+[+] up 14/14
+ ✔ Image postgres:16-alpine Pulled                                                                                                                                                                             9.3s
+[+] Building 2.6s (8/14)                                                                                                                                                                                           
+ => [internal] load local bake definitions                                                                                                                                                                    0.0s
+ => => reading from stdin 560B                                                                                                                                                                                0.0s
+ => [internal] load build definition from Dockerfile                                                                                                                                                          0.1s
+ => => transferring dockerfile: 467B                                                                                                                                                                          0.0s
+ => [internal] load metadata for docker.io/library/node:20-alpine                                                                                                                                             2.1s
+ => [internal] load .dockerignore                                                                                                                                                                             0.0s
+ => => transferring context: 121B                                                                                                                                                                             0.0s
+ => CANCELED [base 1/2] FROM docker.io/library/node:20-alpine@sha256:b88333c42c23fbd91596ebd7fd10de239cedab9617de04142dde7315e3bc0afa                                                                         0.2s
+ => => resolve docker.io/library/node:20-alpine@sha256:b88333c42c23fbd91596ebd7fd10de239cedab9617de04142dde7315e3bc0afa                                                                                       0.0s
+ => [internal] load build context                                                                                                                                                                             0.1s
+ => => transferring context: 600.50kB                                                                                                                                                                         0.0s
+ => CACHED [base 2/2] WORKDIR /app                                                                                                                                                                            0.0s
+ => ERROR [deps 1/2] COPY package.json package-lock.json ./                                                                                                                                                   0.0s
+------
+[+] up 14/15] COPY package.json package-lock.json ./:
+ ✔ Image postgres:16-alpine              Pulled                                                                                                                                                                9.3s
+ ⠙ Image agreement-commission-portal-app Building                                                                                                                                                              2.7s
+Dockerfile:6
+
+--------------------
+
+   4 |     
+
+   5 |     FROM base AS deps
+
+   6 | >>> COPY package.json package-lock.json ./
+
+   7 |     RUN npm ci --include=dev
+
+   8 |     
+
+--------------------
+
+Dockerfile:15
+
+--------------------
+
+  13 |     FROM base AS production
+
+  14 |     ENV NODE_ENV=production
+
+  15 | >>> COPY package.json package-lock.json ./
+
+  16 |     RUN npm ci --omit=dev && npm cache clean --force
+
+  17 |     COPY --from=build /app/dist ./dist
+
+--------------------
+
+failed to solve: failed to compute cache key: failed to calculate checksum of ref zh8bxrordkgncj502jwcb0o05::3wvxb6r9mdzq9dvomn9c2tpxu: "/package-lock.json": not found
+
+ubuntu@ip-172-31-41-234:~/agreement-commission-portal$ 
