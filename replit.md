@@ -35,7 +35,7 @@ A secure internal portal for Study Info Centre — managing provider (university
 - Fine-grained RBAC with module.resource.action permission codes
 - Audit logging for all key actions including role/permission changes
 - Confidentiality level hidden (defaults to "high" for all agreements)
-- **Commission Tracker** — Student enrollment tracking across 3 terms (T1, T2, T3) with auto-calculated commissions, scholarships, GST, bonuses, cascade logic (Withdrawn/Complete blocks downstream terms), payment tracking, and dashboard stats
+- **Commission Tracker v2** — Spreadsheet-style student enrollment tracking with dynamic terms (T1_2025, T2_2025, T3_2025, extendable to 2026+). MASTER tab shows all student info in spreadsheet layout. Term tabs show per-term commission entries with inline editing. Dynamic term management via "Manage Terms" dialog. Auto-calculated commissions, scholarships, GST, bonuses, cascade logic (Withdrawn/Complete blocks downstream terms), payment tracking, and dashboard stats
 
 ## Data Model
 - `countries` — Reference table for territories and provider countries
@@ -52,7 +52,8 @@ A secure internal portal for Study Info Centre — managing provider (university
 - `agreement_documents` — Versioned document uploads
 - `audit_logs` — System activity tracking
 - `commission_students` — Master student enrollment records for commission tracking
-- `commission_entries` — Per-term (T1/T2/T3) fee & commission entries with auto-calculations
+- `commission_entries` — Per-term fee & commission entries with auto-calculations
+- `commission_terms` — Dynamic term definitions (T1_2025, T2_2025, etc.) with year, termNumber, sortOrder, isActive
 
 ## Default Users (Seeded)
 - **Super Admin**: admin@studyinfocentre.com / admin123
@@ -118,6 +119,10 @@ A secure internal portal for Study Info Centre — managing provider (university
 - `POST /api/commission-tracker/students/:id/recalculate` — Recalculate all auto fields
 - `GET /api/commission-tracker/dashboard` — Summary stats
 - `GET /api/commission-tracker/filters` — Distinct filter values
+- `GET /api/commission-tracker/terms` — List dynamic terms
+- `POST /api/commission-tracker/terms` — Add new term
+- `DELETE /api/commission-tracker/terms/:id` — Delete term (blocked if entries exist)
+- `GET /api/commission-tracker/all-entries` — All entries grouped by student ID
 
 ## Project Structure
 ```
@@ -140,8 +145,8 @@ client/src/
     agreement-detail.tsx   # 6-tab detail view
     agreement-form.tsx     # Create/edit with inline provider add, multi-territory
     providers-list.tsx     # Provider management
-    commission-tracker.tsx        # Commission tracker student list with dashboard stats
-    commission-tracker-detail.tsx # Student detail with T1/T2/T3 term entry tabs
+    commission-tracker.tsx        # Spreadsheet-style commission tracker with MASTER + dynamic term tabs, inline editing, term management
+    commission-tracker-detail.tsx # Legacy student detail view (kept for backward compatibility)
     roles-management.tsx   # Role CRUD + permission grid editor
     users-management.tsx   # User management with multi-role assignment
     audit-logs.tsx

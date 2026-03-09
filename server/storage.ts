@@ -5,7 +5,7 @@ import {
   countries, universities, agreements, agreementTerritories, agreementTargets,
   agreementCommissionRules, agreementContacts, agreementDocuments, auditLogs,
   targetBonusRules, targetBonusTiers, targetBonusCountry, passwordResetTokens,
-  commissionStudents, commissionEntries,
+  commissionStudents, commissionEntries, commissionTerms,
   type User, type InsertUser, type Agreement, type InsertAgreement,
   type AgreementTarget, type InsertTarget, type AgreementCommissionRule,
   type InsertCommissionRule, type AgreementContact, type InsertContact,
@@ -15,6 +15,7 @@ import {
   type PasswordResetToken,
   type CommissionStudent, type InsertCommissionStudent,
   type CommissionEntry, type InsertCommissionEntry,
+  type CommissionTerm,
 } from "@shared/schema";
 
 export interface IStorage {
@@ -99,6 +100,10 @@ export interface IStorage {
   invalidateUserPasswordResetTokens(userId: number): Promise<void>;
   updateUserPassword(userId: number, passwordHash: string): Promise<void>;
   invalidateUserSessions(userId: number): Promise<void>;
+
+  getCommissionTerms(): Promise<CommissionTerm[]>;
+  createCommissionTerm(data: { termName: string; termLabel: string; year: number; termNumber: number; sortOrder: number }): Promise<CommissionTerm>;
+  deleteCommissionTerm(id: number): Promise<void>;
 
   getCommissionStudents(filters?: { search?: string; agent?: string; provider?: string; country?: string; status?: string }): Promise<CommissionStudent[]>;
   getCommissionStudent(id: number): Promise<CommissionStudent | undefined>;
@@ -1011,6 +1016,19 @@ export class DatabaseStorage implements IStorage {
         .orderBy(asc(commissionStudents.id));
     }
     return db.select().from(commissionStudents).orderBy(asc(commissionStudents.id));
+  }
+
+  async getCommissionTerms(): Promise<CommissionTerm[]> {
+    return db.select().from(commissionTerms).orderBy(asc(commissionTerms.sortOrder));
+  }
+
+  async createCommissionTerm(data: { termName: string; termLabel: string; year: number; termNumber: number; sortOrder: number }): Promise<CommissionTerm> {
+    const [term] = await db.insert(commissionTerms).values(data).returning();
+    return term;
+  }
+
+  async deleteCommissionTerm(id: number): Promise<void> {
+    await db.delete(commissionTerms).where(eq(commissionTerms.id, id));
   }
 
   async getCommissionStudent(id: number): Promise<CommissionStudent | undefined> {

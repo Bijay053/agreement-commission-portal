@@ -195,6 +195,17 @@ export const agreementDocuments = pgTable("agreement_documents", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+export const commissionTerms = pgTable("commission_terms", {
+  id: serial("id").primaryKey(),
+  termName: varchar("term_name", { length: 16 }).notNull().unique(),
+  termLabel: varchar("term_label", { length: 32 }).notNull(),
+  year: integer("year").notNull(),
+  termNumber: integer("term_number").notNull(),
+  sortOrder: integer("sort_order").notNull(),
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
 export const commissionStudents = pgTable("commission_students", {
   id: serial("id").primaryKey(),
   agentName: varchar("agent_name", { length: 255 }).notNull(),
@@ -362,6 +373,7 @@ export type AuditLog = typeof auditLogs.$inferSelect;
 export type TargetBonusRule = typeof targetBonusRules.$inferSelect;
 export type TargetBonusTier = typeof targetBonusTiers.$inferSelect;
 export type TargetBonusCountryEntry = typeof targetBonusCountry.$inferSelect;
+export type CommissionTerm = typeof commissionTerms.$inferSelect;
 export type CommissionStudent = typeof commissionStudents.$inferSelect;
 export type CommissionEntry = typeof commissionEntries.$inferSelect;
 export type InsertCommissionStudent = z.infer<typeof insertCommissionStudentSchema>;

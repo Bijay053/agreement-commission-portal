@@ -3,7 +3,7 @@ import { hashPassword } from "./auth";
 import {
   countries, universities, users, roles, permissions,
   rolePermissions, userRoles, agreements, agreementTargets,
-  agreementCommissionRules, agreementContacts,
+  agreementCommissionRules, agreementContacts, commissionTerms,
 } from "@shared/schema";
 import { eq, sql } from "drizzle-orm";
 
@@ -399,6 +399,12 @@ export async function seedDatabase() {
       countryId: countryMap["AU"],
       isPrimary: true,
     },
+  ]);
+
+  await db.insert(commissionTerms).values([
+    { termName: "T1_2025", termLabel: "T1 2025", year: 2025, termNumber: 1, sortOrder: 1 },
+    { termName: "T2_2025", termLabel: "T2 2025", year: 2025, termNumber: 2, sortOrder: 2 },
+    { termName: "T3_2025", termLabel: "T3 2025", year: 2025, termNumber: 3, sortOrder: 3 },
   ]);
 
   console.log("Database seeded successfully!");

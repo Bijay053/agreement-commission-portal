@@ -5,7 +5,7 @@ import { setupAuth, hashPassword, comparePassword, requireAuth, requirePermissio
 import { seedDatabase } from "./seed";
 import { loginSchema, insertAgreementSchema, insertTargetSchema, insertCommissionRuleSchema, insertContactSchema, insertUniversitySchema, PERMISSION_REGISTRY, LEGACY_PERMISSION_MAP } from "@shared/schema";
 import { sendPasswordResetEmail, verifyEmailConnection } from "./email";
-import { calculateEntry, computeMasterFromEntries, TERM_NAMES, STUDENT_STATUSES, PAYMENT_STATUSES } from "./commission-calc";
+import { calculateEntry, computeMasterFromEntries, STUDENT_STATUSES, PAYMENT_STATUSES } from "./commission-calc";
 import multer from "multer";
 import path from "path";
 import fs from "fs";
@@ -1179,7 +1179,8 @@ export async function registerRoutes(
       }
 
       const updatedEntries = await storage.getCommissionEntries(id);
-      const master = computeMasterFromEntries(updatedEntries);
+      const tms = await storage.getCommissionTerms();
+      const master = computeMasterFromEntries(updatedEntries, tms.map(t => t.termName));
       await storage.updateCommissionStudent(id, {
         status: master.status,
         notes: master.notes,
@@ -1218,8 +1219,10 @@ export async function registerRoutes(
       if (!student) return res.status(404).json({ message: "Student not found" });
 
       const termName = req.body.termName;
-      if (!TERM_NAMES.includes(termName)) {
-        return res.status(400).json({ message: `Invalid term: ${termName}. Must be one of: ${TERM_NAMES.join(", ")}` });
+      const allTerms = await storage.getCommissionTerms();
+      const termNames = allTerms.map(t => t.termName);
+      if (!termNames.includes(termName)) {
+        return res.status(400).json({ message: `Invalid term: ${termName}. Must be one of: ${termNames.join(", ")}` });
       }
 
       const existingEntries = await storage.getCommissionEntries(studentId);
@@ -1227,13 +1230,13 @@ export async function registerRoutes(
         return res.status(400).json({ message: `Entry for ${termName} already exists` });
       }
 
-      const termIdx = TERM_NAMES.indexOf(termName);
+      const termIdx = termNames.indexOf(termName);
       for (let i = 0; i < termIdx; i++) {
-        const prevEntry = existingEntries.find(e => e.termName === TERM_NAMES[i]);
+        const prevEntry = existingEntries.find(e => e.termName === termNames[i]);
         if (prevEntry) {
           const st = prevEntry.studentStatus || "";
           if (st === "Withdrawn" || st === "Complete") {
-            return res.status(400).json({ message: `Cannot add ${termName} entry: previous term ${TERM_NAMES[i]} has status "${st}" which blocks downstream terms` });
+            return res.status(400).json({ message: `Cannot add ${termName} entry: previous term ${termNames[i]} has status "${st}" which blocks downstream terms` });
           }
         }
       }
@@ -1260,7 +1263,7 @@ export async function registerRoutes(
       const entry = await storage.createCommissionEntry(entryData);
 
       const allEntries = await storage.getCommissionEntries(studentId);
-      const master = computeMasterFromEntries(allEntries);
+      const master = computeMasterFromEntries(allEntries, termNames);
       await storage.updateCommissionStudent(studentId, {
         status: master.status,
         notes: master.notes,
@@ -1282,14 +1285,20 @@ export async function registerRoutes(
       const student = await storage.getCommissionStudent(existing.commissionStudentId);
       if (!student) return res.status(404).json({ message: "Student not found" });
 
-      const merged = { ...existing, ...req.body };
+      const body = { ...req.body };
+      if (body.feeGross === "" || body.feeGross === null) body.feeGross = "0";
+      if (body.bonus === "" || body.bonus === null) body.bonus = "0";
+      if (body.commissionRateOverridePct === "") body.commissionRateOverridePct = null;
+      if (body.scholarshipValueOverride === "") body.scholarshipValueOverride = null;
+
+      const merged = { ...existing, ...body };
       const calc = calculateEntry(student, merged);
 
       const updateData = {
         academicYear: merged.academicYear,
-        feeGross: merged.feeGross,
-        bonus: merged.bonus,
-        commissionRateOverridePct: merged.commissionRateOverridePct,
+        feeGross: merged.feeGross || "0",
+        bonus: merged.bonus || "0",
+        commissionRateOverridePct: merged.commissionRateOverridePct || null,
         paymentStatus: merged.paymentStatus,
         paidDate: merged.paidDate || null,
         invoiceNo: merged.invoiceNo || null,
@@ -1304,7 +1313,8 @@ export async function registerRoutes(
       const entry = await storage.updateCommissionEntry(entryId, updateData);
 
       const allEntries = await storage.getCommissionEntries(student.id);
-      const master = computeMasterFromEntries(allEntries);
+      const tms3 = await storage.getCommissionTerms();
+      const master = computeMasterFromEntries(allEntries, tms3.map(t => t.termName));
       await storage.updateCommissionStudent(student.id, {
         status: master.status,
         notes: master.notes,
@@ -1327,7 +1337,8 @@ export async function registerRoutes(
       await storage.deleteCommissionEntry(entryId);
 
       const allEntries = await storage.getCommissionEntries(studentId);
-      const master = computeMasterFromEntries(allEntries);
+      const tms2 = await storage.getCommissionTerms();
+      const master = computeMasterFromEntries(allEntries, tms2.map(t => t.termName));
       await storage.updateCommissionStudent(studentId, {
         status: master.status,
         notes: master.notes,
@@ -1353,7 +1364,9 @@ export async function registerRoutes(
       }
 
       const updatedEntries = await storage.getCommissionEntries(studentId);
-      const master = computeMasterFromEntries(updatedEntries);
+      const terms = await storage.getCommissionTerms();
+      const termOrder = terms.map(t => t.termName);
+      const master = computeMasterFromEntries(updatedEntries, termOrder);
       const updated = await storage.updateCommissionStudent(studentId, {
         status: master.status,
         notes: master.notes,
@@ -1378,6 +1391,7 @@ export async function registerRoutes(
   app.get("/api/commission-tracker/filters", requireAuth, requirePermission("commission_tracker.view"), async (_req, res) => {
     try {
       const students = await storage.getCommissionStudents();
+      const terms = await storage.getCommissionTerms();
       const agents = [...new Set(students.map(s => s.agentName))].sort();
       const providers = [...new Set(students.map(s => s.provider))].sort();
       const countries = [...new Set(students.map(s => s.country))].sort();
@@ -1387,8 +1401,62 @@ export async function registerRoutes(
         countries,
         statuses: [...STUDENT_STATUSES],
         paymentStatuses: [...PAYMENT_STATUSES],
-        termNames: [...TERM_NAMES],
+        termNames: terms.map(t => t.termName),
       });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.get("/api/commission-tracker/terms", requireAuth, requirePermission("commission_tracker.view"), async (_req, res) => {
+    try {
+      const terms = await storage.getCommissionTerms();
+      res.json(terms);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.post("/api/commission-tracker/terms", requireAuth, requirePermission("commission_tracker.create"), async (req, res) => {
+    try {
+      const { termName, termLabel, year, termNumber, sortOrder } = req.body;
+      if (!termName || !termLabel || !year || !termNumber || sortOrder === undefined) {
+        return res.status(400).json({ message: "termName, termLabel, year, termNumber, and sortOrder are required" });
+      }
+      const term = await storage.createCommissionTerm({ termName, termLabel, year, termNumber, sortOrder });
+      res.status(201).json(term);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.delete("/api/commission-tracker/terms/:id", requireAuth, requirePermission("commission_tracker.delete"), async (req, res) => {
+    try {
+      const id = Number(req.params.id);
+      const allTerms = await storage.getCommissionTerms();
+      const term = allTerms.find(t => t.id === id);
+      if (!term) return res.status(404).json({ message: "Term not found" });
+
+      const entries = await storage.getCommissionEntriesByTerm(term.termName);
+      if (entries.length > 0) {
+        return res.status(400).json({ message: `Cannot delete term ${term.termLabel}: ${entries.length} entries exist. Remove entries first.` });
+      }
+
+      await storage.deleteCommissionTerm(id);
+      res.json({ message: "Term deleted" });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.get("/api/commission-tracker/all-entries", requireAuth, requirePermission("commission_tracker.view"), async (_req, res) => {
+    try {
+      const students = await storage.getCommissionStudents();
+      const result: Record<number, any[]> = {};
+      for (const s of students) {
+        result[s.id] = await storage.getCommissionEntries(s.id);
+      }
+      res.json(result);
     } catch (err: any) {
       res.status(500).json({ message: err.message });
     }

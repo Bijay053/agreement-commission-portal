@@ -1,10 +1,8 @@
 import type { CommissionStudent, CommissionEntry } from "@shared/schema";
 
-export const TERM_NAMES = ["T1_2025", "T2_2025", "T3_2025"] as const;
-
 export const STUDENT_STATUSES = ["Under Enquiry", "Claim Next Semester", "On Break", "Withdrawn", "Complete", "Active"] as const;
 export const PAYMENT_STATUSES = ["Pending", "Received", "Reversed", "Hold"] as const;
-export const ACADEMIC_YEARS = ["Year 1", "Year 2", "Year 3"] as const;
+export const ACADEMIC_YEARS = ["Year 1", "Year 2", "Year 3", "Year 4"] as const;
 export const SCHOLARSHIP_TYPES = ["None", "Percent", "Fixed"] as const;
 export const COURSE_LEVELS = [
   "Diploma",
@@ -12,8 +10,13 @@ export const COURSE_LEVELS = [
   "Bachelor",
   "Master",
   "Eap leading Master",
+  "EAP leading Bachelor",
+  "EAP + Bachelor of IT",
   "PhD",
   "Certificate",
+  "MBA",
+  "MPA",
+  "BIT",
   "Other"
 ] as const;
 
@@ -134,12 +137,14 @@ export function computeMasterStatus(termStatuses: string[]): string {
   return "Under Enquiry";
 }
 
-export function computeMasterFromEntries(entries: CommissionEntry[]): {
+export function computeMasterFromEntries(
+  entries: CommissionEntry[],
+  termOrder: string[]
+): {
   status: string;
   notes: string;
   totalReceived: string;
 } {
-  const termOrder = TERM_NAMES;
   const entryByTerm: Record<string, CommissionEntry> = {};
   for (const e of entries) {
     entryByTerm[e.termName] = e;
@@ -161,7 +166,7 @@ export function computeMasterFromEntries(entries: CommissionEntry[]): {
     const st = (e.studentStatus || "Under Enquiry").trim();
     termStatuses.push(st);
 
-    const shortTerm = term.split("_")[0];
+    const shortTerm = term.replace("_", " ");
     parts.push(`${shortTerm}:${st}`);
 
     totalAmount += num(e.totalAmount, 0);
@@ -176,24 +181,6 @@ export function computeMasterFromEntries(entries: CommissionEntry[]): {
     notes: parts.join(" | "),
     totalReceived: String(round2(totalAmount)),
   };
-}
-
-export function getEligibleTerms(startIntake: string | null | undefined): string[] {
-  const s = (startIntake || "").trim().toUpperCase();
-  if (!s) return [...TERM_NAMES];
-
-  const termMatch = s.match(/T\s*([123])/i);
-  const yearMatch = s.match(/(20\d{2})/);
-
-  const term = termMatch ? parseInt(termMatch[1], 10) : 1;
-  const year = yearMatch ? parseInt(yearMatch[1], 10) : 2025;
-
-  let startIdx: number;
-  if (year <= 2024) startIdx = 0;
-  else if (year === 2025) startIdx = Math.max(0, Math.min(2, term - 1));
-  else startIdx = 2;
-
-  return TERM_NAMES.slice(startIdx) as unknown as string[];
 }
 
 export const STATUS_COLORS: Record<string, string> = {
