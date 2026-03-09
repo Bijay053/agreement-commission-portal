@@ -181,7 +181,7 @@ export async function seedDatabase() {
 
   const adminHash = await hashPassword(defaultAdminPass);
   const [adminUser] = await db.insert(users).values({
-    email: "admin@studyinfocentre.com",
+    email: "au@studyinfocentre.com",
     fullName: "System Administrator",
     passwordHash: adminHash,
     isActive: true,
