@@ -1,0 +1,12 @@
+ubuntu@ip-172-31-41-234:~/agreement-commission-portal$ cd ~/agreement-commission-portal && sed -i 's/"80:5000"/"5000:5000"/g' docker-compose.yml && sed -i '/PORT: 5000/a\      SMTP_HOST: ${SMTP_HOST}\n      SMTP_PORT: ${SMTP_PORT}\n      SMTP_USER: ${SMTP_USER}\n      SMTP_PASS: ${SMTP_PASS}\n      FROM_EMAIL: ${FROM_EMAIL:-noreply@studyinfocentre.com}' docker-compose.yml && docker compose down && docker compose up -d
+WARN[0000] /home/ubuntu/agreement-commission-portal/docker-compose.yml: the attribute `version` is obsolete, it will be ignored, please remove it to avoid potential confusion 
+[+] down 3/3
+ ✔ Container agreement-commission-portal-app-1 Removed                                                                                                                                                         0.2s
+ ✔ Container agreement-commission-portal-db-1  Removed                                                                                                                                                         0.3s
+ ✔ Network agreement-commission-portal_default Removed                                                                                                                                                         0.1s
+WARN[0000] /home/ubuntu/agreement-commission-portal/docker-compose.yml: the attribute `version` is obsolete, it will be ignored, please remove it to avoid potential confusion 
+[+] up 3/3
+ ✔ Network agreement-commission-portal_default Created                                                                                                                                                         0.1s
+ ✔ Container agreement-commission-portal-db-1  Healthy                                                                                                                                                         6.0s
+ ✔ Container agreement-commission-portal-app-1 Started                                                                                                                                                         6.1s
+ubuntu@ip-172-31-41-234:~/agreement-commission-portal$ 
