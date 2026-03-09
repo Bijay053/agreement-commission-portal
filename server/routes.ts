@@ -10,7 +10,8 @@ import multer from "multer";
 import path from "path";
 import fs from "fs";
 import crypto from "crypto";
-import * as UAParser from "ua-parser-js";
+import * as UAParserImport from "ua-parser-js";
+const UAParser: (ua?: string) => any = (UAParserImport as any).default || UAParserImport;
 
 const uploadsDir = path.join(process.cwd(), "uploads");
 if (!fs.existsSync(uploadsDir)) {
