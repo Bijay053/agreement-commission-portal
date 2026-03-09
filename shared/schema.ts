@@ -237,6 +237,7 @@ export const commissionStudents = pgTable("commission_students", {
 export const commissionEntries = pgTable("commission_entries", {
   id: serial("id").primaryKey(),
   commissionStudentId: integer("commission_student_id").notNull().references(() => commissionStudents.id, { onDelete: "cascade" }),
+  studentProviderId: integer("student_provider_id").references(() => studentProviders.id, { onDelete: "cascade" }),
   termName: varchar("term_name", { length: 16 }).notNull(),
   academicYear: varchar("academic_year", { length: 16 }),
   feeGross: numeric("fee_gross", { precision: 12, scale: 2 }).default("0"),
@@ -277,6 +278,13 @@ export const studentProviders = pgTable("student_providers", {
   courseName: varchar("course_name", { length: 500 }),
   courseDurationYears: numeric("course_duration_years", { precision: 4, scale: 1 }),
   startIntake: varchar("start_intake", { length: 32 }),
+  commissionRatePct: numeric("commission_rate_pct", { precision: 8, scale: 4 }),
+  gstRatePct: numeric("gst_rate_pct", { precision: 5, scale: 2 }).default("10"),
+  gstApplicable: varchar("gst_applicable", { length: 3 }).default("Yes"),
+  scholarshipType: varchar("scholarship_type", { length: 16 }).default("None"),
+  scholarshipValue: numeric("scholarship_value", { precision: 12, scale: 2 }).default("0"),
+  status: varchar("status", { length: 32 }).default("Under Enquiry"),
+  notes: text("notes"),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
@@ -387,6 +395,17 @@ export const passwordHistory = pgTable("password_history", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+export const agreementNotifications = pgTable("agreement_notifications", {
+  id: serial("id").primaryKey(),
+  agreementId: integer("agreement_id").notNull().references(() => agreements.id, { onDelete: "cascade" }),
+  providerName: varchar("provider_name", { length: 255 }).notNull(),
+  notificationType: varchar("notification_type", { length: 64 }).notNull(),
+  sentDate: timestamp("sent_date").defaultNow(),
+  daysBeforeExpiry: integer("days_before_expiry"),
+  status: varchar("status", { length: 32 }).notNull().default("sent"),
+  recipientEmails: text("recipient_emails"),
+});
+
 export const insertUserSchema = createInsertSchema(users).omit({
   id: true,
   createdAt: true,
@@ -458,6 +477,11 @@ export const insertStudentProviderSchema = createInsertSchema(studentProviders).
   createdAt: true,
 });
 
+export const insertAgreementNotificationSchema = createInsertSchema(agreementNotifications).omit({
+  id: true,
+  sentDate: true,
+});
+
 export const insertSubAgentEntrySchema = createInsertSchema(subAgentEntries).omit({
   id: true,
   createdAt: true,
@@ -504,6 +528,8 @@ export type PasswordHistoryEntry = typeof passwordHistory.$inferSelect;
 export type InsertCommissionStudent = z.infer<typeof insertCommissionStudentSchema>;
 export type InsertCommissionEntry = z.infer<typeof insertCommissionEntrySchema>;
 export type InsertStudentProvider = z.infer<typeof insertStudentProviderSchema>;
+export type InsertAgreementNotification = z.infer<typeof insertAgreementNotificationSchema>;
+export type AgreementNotification = typeof agreementNotifications.$inferSelect;
 export type InsertSubAgentEntry = z.infer<typeof insertSubAgentEntrySchema>;
 export type InsertSubAgentTermEntry = z.infer<typeof insertSubAgentTermEntrySchema>;
 export type InsertUser = z.infer<typeof insertUserSchema>;
@@ -581,6 +607,7 @@ export const PERMISSION_REGISTRY = [
     resources: [
       { resource: "student", label: "Commission Students", actions: ["read", "add", "update", "delete", "export", "delete_master"] },
       { resource: "entry", label: "Term Entries", actions: ["read", "add", "update", "delete"] },
+      { resource: "master", label: "Master Sheet", actions: ["edit"] },
     ],
   },
   {
@@ -651,6 +678,7 @@ export const LEGACY_PERMISSION_MAP: Record<string, string> = {
   "commission_tracker.entry.edit": "commission_tracker.entry.update",
   "commission_tracker.entry.delete": "commission_tracker.entry.delete",
   "commission_tracker.student.delete_master": "commission_tracker.student.delete_master",
+  "commission_tracker.master.edit": "commission_tracker.master.edit",
   "contacts.view": "contacts.contact.read",
   "contacts.create": "contacts.contact.add",
   "contacts.edit": "contacts.contact.update",
