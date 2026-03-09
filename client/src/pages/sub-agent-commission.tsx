@@ -297,22 +297,22 @@ export default function SubAgentCommissionPage() {
         </div>
         <MultiSearchableSelect
           options={allAgents.map(a => ({ value: a, label: a }))}
-          selected={selectedAgents}
-          onChange={setSelectedAgents}
+          values={selectedAgents}
+          onValuesChange={setSelectedAgents}
           placeholder="All Agents"
           data-testid="filter-agents"
         />
         <MultiSearchableSelect
           options={allProviders.map(p => ({ value: p, label: p }))}
-          selected={selectedProviders}
-          onChange={setSelectedProviders}
+          values={selectedProviders}
+          onValuesChange={setSelectedProviders}
           placeholder="All Providers"
           data-testid="filter-providers"
         />
         <MultiSearchableSelect
           options={STUDENT_STATUSES.map(s => ({ value: s, label: s }))}
-          selected={selectedStatuses}
-          onChange={setSelectedStatuses}
+          values={selectedStatuses}
+          onValuesChange={setSelectedStatuses}
           placeholder="All Statuses"
           data-testid="filter-statuses"
         />
