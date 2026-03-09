@@ -20,6 +20,7 @@ import {
   Settings, X, Upload, Download, Clock, CheckCircle2, FileSpreadsheet, AlertTriangle, RotateCcw
 } from "lucide-react";
 import type { CommissionStudent, CommissionEntry } from "@shared/schema";
+import { parseIntake, intakeSortKeyFromParsed, intakeFromTermName, isFinalStatus } from "@shared/intake-utils";
 
 type CommissionTerm = { id: number; termName: string; termLabel: string; year: number; termNumber: number; sortOrder: number; isActive: boolean };
 
@@ -192,6 +193,15 @@ export default function CommissionTrackerPage() {
     enabled: !!selectedYear,
   });
 
+  const { data: allEntriesGlobal = {} } = useQuery<Record<number, CommissionEntry[]>>({
+    queryKey: ["/api/commission-tracker/all-entries-global"],
+    queryFn: async () => {
+      const res = await fetch(`/api/commission-tracker/all-entries`, { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to fetch");
+      return res.json();
+    },
+  });
+
   const { data: filters } = useQuery<{
     agents: string[];
     providers: string[];
@@ -216,6 +226,7 @@ export default function CommissionTrackerPage() {
   const invalidateAll = useCallback(() => {
     queryClient.invalidateQueries({ queryKey: ["/api/commission-tracker/students"] });
     queryClient.invalidateQueries({ queryKey: ["/api/commission-tracker/all-entries"] });
+    queryClient.invalidateQueries({ queryKey: ["/api/commission-tracker/all-entries-global"] });
     queryClient.invalidateQueries({ queryKey: ["/api/commission-tracker/dashboard"] });
     queryClient.invalidateQueries({ queryKey: ["/api/commission-tracker/filters"] });
     queryClient.invalidateQueries({ queryKey: ["/api/commission-tracker/years"] });
@@ -446,6 +457,7 @@ export default function CommissionTrackerPage() {
               termName={activeTab}
               students={students || []}
               allEntries={allEntries}
+              allEntriesGlobal={allEntriesGlobal}
               terms={terms}
               isLoading={isLoading}
               canEdit={canEdit}
@@ -472,7 +484,13 @@ export default function CommissionTrackerPage() {
   );
 }
 
-const DURATION_OPTIONS = ["6 months", "1 year", "2 years", "3 years", "4 years"];
+const DURATION_OPTIONS = [
+  { label: "6 months", value: "0.5" },
+  { label: "1 year", value: "1" },
+  { label: "2 years", value: "2" },
+  { label: "3 years", value: "3" },
+  { label: "4 years", value: "4" },
+];
 
 function AddProviderButton({ studentId, studentName }: { studentId: number; studentName: string }) {
   const { toast } = useToast();
@@ -573,7 +591,7 @@ function AddProviderButton({ studentId, studentName }: { studentId: number; stud
                 <SelectValue placeholder="Select duration" />
               </SelectTrigger>
               <SelectContent>
-                {DURATION_OPTIONS.map(d => <SelectItem key={d} value={d}>{d}</SelectItem>)}
+                {DURATION_OPTIONS.map(d => <SelectItem key={d.value} value={d.value}>{d.label}</SelectItem>)}
               </SelectContent>
             </Select>
           </div>
@@ -779,8 +797,8 @@ function DashboardView({ dashboard, year, intakeFilter, onIntakeChange, provider
                   const rows: any[] = [];
                   let sn = 0;
                   for (const sd of dashboard.studentDetails) {
-                    const additionalProviders = providersByStudent[sd.id] || [];
-                    const totalRows = 1 + additionalProviders.length;
+                    const provDetails = sd.providerDetails || [];
+                    const totalRows = 1 + provDetails.length;
                     sn++;
 
                     rows.push(
@@ -813,24 +831,26 @@ function DashboardView({ dashboard, year, intakeFilter, onIntakeChange, provider
                       </tr>
                     );
 
-                    for (const ap of additionalProviders) {
+                    for (const pd of provDetails) {
                       rows.push(
-                        <tr key={`${sd.id}-ap-${ap.id}`} style={{ backgroundColor: STATUS_ROW_BG[sd.status || ""] || "transparent" }}>
-                          <td className="px-2 py-1 border border-gray-200 text-blue-600">{ap.provider}</td>
-                          <td className="px-2 py-1 border border-gray-200 text-blue-600">{ap.courseName || "-"}</td>
-                          <td className="px-2 py-1 border border-gray-200 text-blue-600">{ap.country || sd.country}</td>
-                          <td className="px-2 py-1 border border-gray-200 text-blue-600">{ap.startIntake || "-"}</td>
-                          <td className="px-2 py-1 border border-gray-200"></td>
+                        <tr key={`${sd.id}-pd-${pd.providerId}`} style={{ backgroundColor: STATUS_ROW_BG[pd.status || sd.status || ""] || "transparent" }}>
+                          <td className="px-2 py-1 border border-gray-200 text-blue-600">{pd.provider}{pd.studentId ? ` (${pd.studentId})` : ""}</td>
+                          <td className="px-2 py-1 border border-gray-200 text-blue-600">{pd.courseName || "-"}</td>
+                          <td className="px-2 py-1 border border-gray-200 text-blue-600">{pd.country || sd.country}</td>
+                          <td className="px-2 py-1 border border-gray-200 text-blue-600">{pd.startIntake || "-"}</td>
+                          <td className="px-2 py-1 border border-gray-200">
+                            {pd.status && <Badge className={`${STATUS_COLORS[pd.status || ""] || "bg-gray-100 text-gray-800"} text-[10px] px-1.5 py-0`}>{pd.status}</Badge>}
+                          </td>
                           {termNames.map((t: string) => (
-                            <td key={`${t}-c`} className="px-2 py-1 border border-gray-200"></td>
+                            <td key={`${t}-c`} className="px-2 py-1 border border-gray-200 text-right font-mono text-blue-600">{pd.termBreakdown?.[t]?.commission ? `$${pd.termBreakdown[t].commission.toFixed(2)}` : ""}</td>
                           ))}
                           {termNames.map((t: string) => (
-                            <td key={`${t}-b`} className="px-2 py-1 border border-gray-200"></td>
+                            <td key={`${t}-b`} className="px-2 py-1 border border-gray-200 text-right font-mono text-blue-600">{pd.termBreakdown?.[t]?.bonus ? `$${pd.termBreakdown[t].bonus.toFixed(2)}` : ""}</td>
                           ))}
-                          <td className="px-2 py-1 border border-gray-200"></td>
-                          <td className="px-2 py-1 border border-gray-200"></td>
-                          <td className="px-2 py-1 border border-gray-200"></td>
-                          <td className="px-2 py-1 border border-gray-200"></td>
+                          <td className="px-2 py-1 border border-gray-200 text-right font-mono text-blue-600">{pd.totalCommission ? `$${pd.totalCommission.toFixed(2)}` : ""}</td>
+                          <td className="px-2 py-1 border border-gray-200 text-right font-mono text-blue-600">{pd.totalBonus ? `$${pd.totalBonus.toFixed(2)}` : ""}</td>
+                          <td className="px-2 py-1 border border-gray-200 text-right font-mono text-green-600">{pd.totalReceived ? `$${pd.totalReceived.toFixed(2)}` : ""}</td>
+                          <td className="px-2 py-1 border border-gray-200 text-right font-mono text-orange-500">{pd.pendingAmount ? `$${pd.pendingAmount.toFixed(2)}` : ""}</td>
                           <td className="px-2 py-1 border border-gray-200"></td>
                         </tr>
                       );
@@ -1077,10 +1097,11 @@ function MasterTable({ students, allEntries, year, isLoading, canEdit, canDelete
   );
 }
 
-function TermTable({ termName, students, allEntries, terms, isLoading, canEdit, canDelete, providersByStudent, onUpdateStudent, onDeleteStudent, onCreateEntry, onUpdateEntry, onDeleteEntry }: {
+function TermTable({ termName, students, allEntries, allEntriesGlobal, terms, isLoading, canEdit, canDelete, providersByStudent, onUpdateStudent, onDeleteStudent, onCreateEntry, onUpdateEntry, onDeleteEntry }: {
   termName: string;
   students: CommissionStudent[];
   allEntries: Record<number, CommissionEntry[]>;
+  allEntriesGlobal: Record<number, CommissionEntry[]>;
   terms: CommissionTerm[];
   isLoading: boolean;
   canEdit: boolean;
@@ -1096,16 +1117,29 @@ function TermTable({ termName, students, allEntries, terms, isLoading, canEdit, 
     return (allEntries[studentId] || []).find(e => e.termName === termName && (e.studentProviderId || null) === studentProviderId);
   };
 
-  const isBlocked = (studentId: number, studentProviderId: number | null): boolean => {
-    const entries = (allEntries[studentId] || []).filter(e => (e.studentProviderId || null) === studentProviderId);
-    const termOrder = terms.map(t => t.termName);
-    const currentIdx = termOrder.indexOf(termName);
-    for (let i = 0; i < currentIdx; i++) {
-      const prev = entries.find(e => e.termName === termOrder[i]);
-      if (prev && (prev.studentStatus === "Withdrawn" || prev.studentStatus === "Complete")) {
-        return true;
+  const pageIntake = intakeFromTermName(termName, terms);
+  const pageSortKey = pageIntake ? intakeSortKeyFromParsed(pageIntake) : 0;
+
+  const isHidden = (studentId: number, studentProviderId: number | null, startIntakeRaw: string | null | undefined): boolean => {
+    const studentStartIntake = parseIntake(startIntakeRaw);
+    if (studentStartIntake && pageIntake) {
+      const startKey = intakeSortKeyFromParsed(studentStartIntake);
+      if (pageSortKey < startKey) return true;
+    }
+
+    const entries = (allEntriesGlobal[studentId] || []).filter(e => (e.studentProviderId || null) === studentProviderId);
+    let earliestFinalKey = Infinity;
+    for (const e of entries) {
+      if (isFinalStatus(e.studentStatus)) {
+        const entryIntake = intakeFromTermName(e.termName, terms);
+        if (entryIntake) {
+          const key = intakeSortKeyFromParsed(entryIntake);
+          if (key < earliestFinalKey) earliestFinalKey = key;
+        }
       }
     }
+    if (earliestFinalKey < Infinity && pageSortKey > earliestFinalKey) return true;
+
     return false;
   };
 
@@ -1122,7 +1156,6 @@ function TermTable({ termName, students, allEntries, terms, isLoading, canEdit, 
     isAdditional: boolean,
   ) => {
     const entry = getEntry(s.id, studentProviderId);
-    const blocked = isBlocked(s.id, studentProviderId);
 
     const commonCells = (textClass: string) => (
       <>
@@ -1143,17 +1176,6 @@ function TermTable({ termName, students, allEntries, terms, isLoading, canEdit, 
         <td className={`px-2 py-1 border border-gray-200 ${isAdditional ? "text-blue-600" : textClass}`}>{providerCourseName || "-"}</td>
       </>
     );
-
-    if (blocked) {
-      return (
-        <tr key={rowKey} className="bg-gray-100 dark:bg-gray-800 opacity-50" data-testid={`row-term-${rowKey}`}>
-          {commonCells("text-gray-400")}
-          <td colSpan={24} className="px-2 py-1 border border-gray-200 text-center text-gray-400 italic">
-            Blocked (previous term Withdrawn/Complete)
-          </td>
-        </tr>
-      );
-    }
 
     if (!entry) {
       return (
@@ -1274,21 +1296,33 @@ function TermTable({ termName, students, allEntries, terms, isLoading, canEdit, 
               let sn = 0;
               for (const s of students) {
                 const additionalProviders = providersByStudent?.[s.id] || [];
-                const totalProviderRows = 1 + additionalProviders.length;
+
+                const primaryHidden = isHidden(s.id, null, s.startIntake);
+                const visibleAdditional = additionalProviders.filter(ap =>
+                  !isHidden(s.id, ap.id, ap.startIntake || s.startIntake)
+                );
+
+                if (primaryHidden && visibleAdditional.length === 0) continue;
+
+                const visibleProviderRows = (primaryHidden ? 0 : 1) + visibleAdditional.length;
                 sn++;
 
-                const primaryEntry = getEntry(s.id, null);
-                if (primaryEntry) allTermEntries.push(primaryEntry);
+                if (!primaryHidden) {
+                  const primaryEntry = getEntry(s.id, null);
+                  if (primaryEntry) allTermEntries.push(primaryEntry);
 
-                rows.push(renderEntryRow(
-                  s, s.provider, s.country, s.courseLevel || "", s.courseName || "",
-                  null, `${s.id}`, sn, totalProviderRows, false,
-                ));
+                  rows.push(renderEntryRow(
+                    s, s.provider, s.country, s.courseLevel || "", s.courseName || "",
+                    null, `${s.id}`, sn, visibleProviderRows, false,
+                  ));
+                }
 
-                for (const ap of additionalProviders) {
+                for (let apIdx = 0; apIdx < visibleAdditional.length; apIdx++) {
+                  const ap = visibleAdditional[apIdx];
                   const apEntry = getEntry(s.id, ap.id);
                   if (apEntry) allTermEntries.push(apEntry);
 
+                  const isFirstRow = primaryHidden && apIdx === 0;
                   rows.push(renderEntryRow(
                     s,
                     `${ap.provider}${ap.studentId ? ` (${ap.studentId})` : ""}`,
@@ -1297,9 +1331,9 @@ function TermTable({ termName, students, allEntries, terms, isLoading, canEdit, 
                     ap.courseName || "",
                     ap.id,
                     `${s.id}-ap-${ap.id}`,
-                    null,
-                    0,
-                    true,
+                    isFirstRow ? sn : null,
+                    isFirstRow ? visibleProviderRows : 0,
+                    !isFirstRow,
                   ));
                 }
               }

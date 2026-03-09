@@ -118,6 +118,7 @@ export interface IStorage {
   deleteCommissionStudent(id: number): Promise<void>;
 
   getStudentProviders(commissionStudentId: number): Promise<import("@shared/schema").StudentProvider[]>;
+  getStudentProviderById(id: number): Promise<import("@shared/schema").StudentProvider | undefined>;
   addStudentProvider(data: import("@shared/schema").InsertStudentProvider): Promise<import("@shared/schema").StudentProvider>;
   updateStudentProvider(id: number, data: Partial<import("@shared/schema").InsertStudentProvider>): Promise<import("@shared/schema").StudentProvider | undefined>;
   deleteStudentProvider(id: number): Promise<void>;
@@ -1119,6 +1120,11 @@ export class DatabaseStorage implements IStorage {
 
   async getStudentProviders(commissionStudentId: number) {
     return db.select().from(studentProviders).where(eq(studentProviders.commissionStudentId, commissionStudentId));
+  }
+
+  async getStudentProviderById(id: number) {
+    const [provider] = await db.select().from(studentProviders).where(eq(studentProviders.id, id));
+    return provider;
   }
 
   async addStudentProvider(data: any) {

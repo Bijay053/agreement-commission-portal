@@ -1,0 +1,387 @@
+Commission Tracker – Cascade Hide Logic + Intake Visibility Fix + Dashboard Multiple Provider Fix
+
+We need to fix the Commission Tracker visibility logic. Right now a student can still appear blurred in future intake tables even after being marked Withdrawn or Complete, and some students are also appearing in intakes where they should never appear based on their start intake. This must be corrected.
+
+1) Cascade hide logic for Withdrawn / Complete
+Required behavior
+
+If any student record is marked as Withdrawn or Complete in an intake, that student must be fully hidden from all later intake tables.
+
+Rules
+
+If student is Withdrawn or Complete in T1 2025, do not show that student in:
+
+T2 2025
+
+T3 2025
+
+T1 2026
+
+T2 2026
+
+T3 2026
+
+T1 2027
+
+T2 2027
+
+T3 2027
+
+and all future intakes
+
+If student is Withdrawn or Complete in T2 2025, do not show in:
+
+T3 2025
+
+all 2026+
+
+all future intakes
+
+If student is Withdrawn or Complete in T3 2025, do not show in:
+
+all 2026+
+
+all future intakes
+
+If student is Withdrawn or Complete in T1 2026, do not show in:
+
+T2 2026
+
+T3 2026
+
+all 2027+
+
+all future intakes
+
+Same logic must apply for every year and intake combination.
+
+Important
+
+Do not blur the row
+
+Do not disable only visually
+
+Do not keep hidden row space
+
+Row must be completely removed from that page/table query result
+
+Row numbering / serial number must be recalculated based only on visible rows in that page
+
+2) No editing in future tables if student already ended
+
+If a student has status Withdrawn or Complete in an earlier intake, they should not appear in future intake tables at all, so they cannot be edited there.
+
+Example bug to fix
+
+Student qwwd was terminated/withdrawn in T1 2025, but still appears in T2 2025 / T3 2025 in blur, and can still be edited in T1/T2/T3 2026.
+
+Expected result
+
+Student should be visible only in the intake where the status was recorded
+
+After that point, student must disappear from all future tables
+
+No editing possible in future tables because record is not shown there
+
+3) Start intake visibility logic
+
+A student must only appear from their start intake onward, never before it.
+
+Required behavior
+
+If student start intake is T2 2026, do not show the student in:
+
+T1 2026
+
+any intake in 2025
+
+any earlier intake before T2 2026
+
+If student start intake is T3 2025, do not show in:
+
+T1 2025
+
+T2 2025
+
+any earlier year
+
+If student start intake is T1 2026, do not show in:
+
+any 2025 intake
+
+Intake normalization
+
+System must treat these as the same value:
+
+t12026
+
+T12026
+
+t1 2026
+
+T1 2026
+
+t1-2026
+
+T1-2026
+
+All should normalize to: T1 2026
+
+Same normalization must work for:
+
+T2 2025
+
+T3 2025
+
+T1 2027
+
+etc.
+
+Suggested implementation
+
+Create one reusable intake parser/normalizer that converts intake text into:
+
+term = T1 | T2 | T3
+
+year = 2025 | 2026 | ...
+
+sort_key = year + term_order
+
+Example:
+
+T1 2025 = 2025.1
+
+T2 2025 = 2025.2
+
+T3 2025 = 2025.3
+
+T1 2026 = 2026.1
+
+Then:
+
+show record only if page_intake >= start_intake
+
+hide record if there exists an earlier/equal visible record with final status and final_status_intake < current_page_intake
+
+4) Final status definition
+
+Treat these statuses as final stop statuses:
+
+Withdrawn
+
+Complete
+
+Once any of these statuses is set in an intake, student progression stops there.
+
+Result
+
+Student can remain visible in that intake row where status was set
+
+Student must disappear from every later intake table
+
+5) Apply same logic everywhere
+
+This logic must apply consistently across:
+
+Master page visibility logic where relevant
+
+T1 page
+
+T2 page
+
+T3 page
+
+all years
+
+all filtering/search results
+
+export/sample logic if based on same dataset
+
+dashboard student list
+
+No separate inconsistent logic per page.
+
+6) Dashboard student list bug – multiple provider students not shown properly
+Current issue
+
+In Dashboard student list, students with multiple providers are not shown properly.
+
+Required fix
+
+Dashboard student list must support:
+
+one student linked to multiple providers
+
+same student linked to different courses
+
+same student linked to different intakes
+
+same provider with multiple course entries if allowed by logic
+
+Expected behavior
+
+For a multiple-provider student:
+
+dashboard should still show student
+
+each provider entry should be visible correctly
+
+total commission should calculate correctly across all related provider/intake records
+
+search by student name / student ID / Agentsic ID should still return that student and related provider records
+
+filters by year/intake/provider/agent should still work correctly
+
+Important
+
+Do not collapse multiple-provider student incorrectly into one missing row.
+If using grouped display:
+
+allow expand/collapse, or
+
+show merged student info with child provider rows
+
+But data must not disappear.
+
+7) Data filtering logic priority
+
+For each intake table page, visible rows should follow this order:
+
+Step 1 – normalize intake
+
+Normalize page intake and student start intake.
+
+Step 2 – exclude rows before start intake
+
+If current page intake is earlier than student’s start intake, do not show.
+
+Step 3 – find earliest final stop intake
+
+Check whether student has any row with status:
+
+Withdrawn
+
+Complete
+
+If yes, get the earliest intake where final stop happened.
+
+Step 4 – hide future rows after final stop
+
+If current page intake is later than final stop intake, do not show.
+
+Step 5 – render remaining rows only
+
+Visible row numbers must be recalculated after filtering.
+
+8) Duplicate / identity matching for cascade logic
+
+Cascade hide must work based on the correct student identity key.
+
+Use stable unique matching priority such as:
+
+Internal ID / primary unique record ID
+
+Student ID if unique
+
+Agentsic ID + Student Name fallback
+
+Never rely only on row index
+
+For multiple-provider students, the stop logic should still apply correctly to the same student progression record structure.
+
+If progression is student-level, then final stop should remove future appearances for that student.
+If progression is provider-level, define clearly and keep consistent.
+
+Recommended
+
+Use student progression key that is stable and not dependent on table row position.
+
+9) UI expectations
+
+Hidden means not rendered
+
+No greyed-out/blurred rows
+
+No empty gaps
+
+S.No must be continuous: 1, 2, 3, 4...
+
+Search/filter counts and footer counts must use visible filtered data only
+
+10) Test cases to verify
+
+Please test these cases:
+
+Case A
+
+Start intake: T1 2025
+
+Status in T1 2025 = Withdrawn
+
+Expected:
+
+visible in T1 2025
+
+hidden in T2 2025 onward forever
+
+Case B
+
+Start intake: T2 2026
+
+Expected:
+
+hidden in all 2025 tables
+
+hidden in T1 2026
+
+visible from T2 2026 onward unless stopped
+
+Case C
+
+Start intake stored as t12026
+
+Page intake T1 2026
+
+Expected:
+
+should match and show correctly
+
+Case D
+
+Status in T2 2025 = Complete
+
+Expected:
+
+visible in T2 2025
+
+hidden in T3 2025 and all later intakes
+
+Case E
+
+Multiple provider student on dashboard
+
+Expected:
+
+student appears in dashboard
+
+all provider rows shown correctly
+
+totals correct
+
+11) Technical expectation
+
+Please refactor current logic so intake visibility is controlled by a single reusable helper/service, not repeated separately in every table. This is important to avoid mismatch between T1/T2/T3 pages and Dashboard.
+
+Suggested helper methods:
+
+normalizeIntake(value)
+
+compareIntake(a, b)
+
+isVisibleInPage(studentRecord, pageIntake, allStudentRecords)
+
+getEarliestFinalStatusIntake(studentKey, allStudentRecords)
+
+12) Specific bug to fix now
+
+Student qwwd is showing incorrectly after termination in future intake tables. Fix this exact issue as part of the above logic.

@@ -1795,6 +1795,7 @@ export async function registerRoutes(
         courseName: req.body.courseName || null,
         courseDurationYears: req.body.courseDurationYears || null,
         startIntake: req.body.startIntake || null,
+        notes: req.body.notes || null,
       });
       res.status(201).json(provider);
     } catch (err: any) {
@@ -1823,19 +1824,19 @@ export async function registerRoutes(
   app.patch("/api/commission-tracker/student-providers/:id", requireAuth, requirePermission("commission_tracker.edit"), async (req, res) => {
     try {
       const id = Number(req.params.id);
-      const existingProvider = await storage.getStudentProviderById?.(id);
-      const updated = await storage.updateStudentProvider(id, req.body);
+      const existingProvider = await storage.getStudentProviderById(id);
+      const updateData = { ...req.body };
+      delete updateData._auditChanges;
+      const updated = await storage.updateStudentProvider(id, updateData);
       if (!updated) return res.status(404).json({ message: "Provider not found" });
 
       const clientIp = req.headers["x-forwarded-for"] || req.socket.remoteAddress || "unknown";
       const changes: Array<{ field: string; oldValue: any; newValue: any }> = [];
-      if (req.body._auditChanges && Array.isArray(req.body._auditChanges)) {
-        changes.push(...req.body._auditChanges);
-      } else if (existingProvider) {
-        for (const key of Object.keys(req.body)) {
+      if (existingProvider) {
+        for (const key of Object.keys(updateData)) {
           if (key.startsWith("_")) continue;
           const oldVal = (existingProvider as any)[key];
-          const newVal = req.body[key];
+          const newVal = updateData[key];
           if (String(oldVal ?? "") !== String(newVal ?? "")) {
             changes.push({ field: key, oldValue: oldVal ?? null, newValue: newVal ?? null });
           }
@@ -1889,6 +1890,17 @@ export async function registerRoutes(
         return res.status(400).json({ message: "Agentsic ID cannot be empty" });
       }
 
+      const clientIp = req.headers["x-forwarded-for"] || req.socket.remoteAddress || "unknown";
+      const auditChanges: Array<{ field: string; oldValue: any; newValue: any }> = [];
+      for (const key of Object.keys(req.body)) {
+        if (key.startsWith("_")) continue;
+        const oldVal = (existing as any)[key];
+        const newVal = req.body[key];
+        if (String(oldVal ?? "") !== String(newVal ?? "")) {
+          auditChanges.push({ field: key, oldValue: oldVal ?? null, newValue: newVal ?? null });
+        }
+      }
+
       const mergedName = (req.body.studentName || existing.studentName).trim();
       const mergedAgentsicId = (req.body.agentsicId || existing.agentsicId || "").trim();
       const mergedProvider = (req.body.provider || existing.provider).trim();
@@ -1902,6 +1914,7 @@ export async function registerRoutes(
       const country = (req.body.country || existing.country).trim();
       const isAU = country.toLowerCase() === "au" || country.toLowerCase() === "australia";
       const updateData = { ...req.body };
+      delete updateData._auditChanges;
       if (req.body.country) {
         updateData.gstRatePct = isAU ? "10" : "0";
         if (!req.body.gstApplicable) updateData.gstApplicable = isAU ? "Yes" : "No";
@@ -1938,6 +1951,18 @@ export async function registerRoutes(
         notes: master.notes,
         totalReceived: master.totalReceived,
       });
+
+      if (auditChanges.length > 0) {
+        await storage.createAuditLog({
+          userId: req.session.userId!,
+          action: "master_sheet_edit",
+          entityType: "commission_student",
+          entityId: id,
+          ipAddress: String(clientIp),
+          userAgent: req.headers["user-agent"],
+          metadata: { changes: auditChanges, studentName: existing.studentName },
+        });
+      }
 
       const final = await storage.getCommissionStudent(id);
       res.json(final);
@@ -2313,44 +2338,81 @@ export async function registerRoutes(
 
       const allYearTermNames = yearTerms.map(t => t.termName);
 
-      for (const s of students) {
-        const allEntries = await storage.getCommissionEntries(s.id);
-        const yearEntries = allEntries.filter(e => filteredTermNames.includes(e.termName));
-        const allYearEntries = allEntries.filter(e => allYearTermNames.includes(e.termName));
-
-        if (yearEntries.length === 0) continue;
-
-        totalStudents++;
-        providerSet.add(s.provider);
-
-        let studentTotalComm = 0;
-        let studentTotalBonus = 0;
-        let studentTotalReceived = 0;
-        let studentPending = 0;
-
-        const termBreakdown: Record<string, { commission: number; bonus: number }> = {};
+      const processEntries = (yearEntries: any[], allYearEntries: any[]) => {
+        let tComm = 0, tBonus = 0, tReceived = 0, tPending = 0;
+        const tb: Record<string, { commission: number; bonus: number }> = {};
         for (const term of yearTerms) {
-          const e = allYearEntries.find(en => en.termName === term.termName);
-          termBreakdown[`T${term.termNumber}`] = {
+          const e = allYearEntries.find((en: any) => en.termName === term.termName);
+          tb[`T${term.termNumber}`] = {
             commission: e ? Number(e.commissionAmount || 0) : 0,
             bonus: e ? Number(e.bonus || 0) : 0,
           };
         }
-
         for (const e of yearEntries) {
           const comm = Number(e.commissionAmount || 0);
           const bonus = Number(e.bonus || 0);
           const total = Number(e.totalAmount || 0);
-          studentTotalComm += comm;
-          studentTotalBonus += bonus;
-          if (e.paymentStatus === "Received") {
-            studentTotalReceived += total;
-          }
-          if (e.paymentStatus === "Pending") {
-            studentPending += total;
-          }
+          tComm += comm;
+          tBonus += bonus;
+          if (e.paymentStatus === "Received") tReceived += total;
+          if (e.paymentStatus === "Pending") tPending += total;
           const st = e.studentStatus || "Under Enquiry";
           byStatus[st] = (byStatus[st] || 0) + 1;
+        }
+        return { tComm, tBonus, tReceived, tPending, tb };
+      };
+
+      for (const s of students) {
+        const allEntries = await storage.getCommissionEntries(s.id);
+        const studentProvidersList = await storage.getStudentProviders(s.id);
+
+        const primaryEntries = allEntries.filter(e => !e.studentProviderId);
+        const primaryYearEntries = primaryEntries.filter(e => filteredTermNames.includes(e.termName));
+        const primaryAllYearEntries = primaryEntries.filter(e => allYearTermNames.includes(e.termName));
+
+        let hasAnyEntries = primaryYearEntries.length > 0;
+
+        const providerDetails: any[] = [];
+        for (const sp of studentProvidersList) {
+          const spEntries = allEntries.filter(e => e.studentProviderId === sp.id);
+          const spYearEntries = spEntries.filter(e => filteredTermNames.includes(e.termName));
+          const spAllYearEntries = spEntries.filter(e => allYearTermNames.includes(e.termName));
+          if (spYearEntries.length > 0) hasAnyEntries = true;
+          const spResult = processEntries(spYearEntries, spAllYearEntries);
+          providerDetails.push({
+            providerId: sp.id,
+            provider: sp.provider,
+            courseName: sp.courseName,
+            courseLevel: sp.courseLevel,
+            country: sp.country || s.country,
+            startIntake: sp.startIntake,
+            status: sp.status,
+            studentId: sp.studentId,
+            termBreakdown: spResult.tb,
+            totalCommission: Math.round(spResult.tComm * 100) / 100,
+            totalBonus: Math.round(spResult.tBonus * 100) / 100,
+            totalReceived: Math.round(spResult.tReceived * 100) / 100,
+            pendingAmount: Math.round(spResult.tPending * 100) / 100,
+          });
+        }
+
+        if (!hasAnyEntries) continue;
+
+        totalStudents++;
+        providerSet.add(s.provider);
+        for (const sp of studentProvidersList) providerSet.add(sp.provider);
+
+        const primaryResult = processEntries(primaryYearEntries, primaryAllYearEntries);
+        let studentTotalComm = primaryResult.tComm;
+        let studentTotalBonus = primaryResult.tBonus;
+        let studentTotalReceived = primaryResult.tReceived;
+        let studentPending = primaryResult.tPending;
+
+        for (const pd of providerDetails) {
+          studentTotalComm += pd.totalCommission;
+          studentTotalBonus += pd.totalBonus;
+          studentTotalReceived += pd.totalReceived;
+          studentPending += pd.pendingAmount;
         }
 
         totalCommission += studentTotalComm;
@@ -2365,10 +2427,19 @@ export async function registerRoutes(
 
         if (!byProvider[s.provider]) byProvider[s.provider] = { count: 0, totalCommission: 0, totalBonus: 0, totalReceived: 0, pending: 0 };
         byProvider[s.provider].count++;
-        byProvider[s.provider].totalCommission += studentTotalComm;
-        byProvider[s.provider].totalBonus += studentTotalBonus;
-        byProvider[s.provider].totalReceived += studentTotalReceived;
-        byProvider[s.provider].pending += studentPending;
+        byProvider[s.provider].totalCommission += primaryResult.tComm;
+        byProvider[s.provider].totalBonus += primaryResult.tBonus;
+        byProvider[s.provider].totalReceived += primaryResult.tReceived;
+        byProvider[s.provider].pending += primaryResult.tPending;
+
+        for (const pd of providerDetails) {
+          if (!byProvider[pd.provider]) byProvider[pd.provider] = { count: 0, totalCommission: 0, totalBonus: 0, totalReceived: 0, pending: 0 };
+          byProvider[pd.provider].count++;
+          byProvider[pd.provider].totalCommission += pd.totalCommission;
+          byProvider[pd.provider].totalBonus += pd.totalBonus;
+          byProvider[pd.provider].totalReceived += pd.totalReceived;
+          byProvider[pd.provider].pending += pd.pendingAmount;
+        }
 
         studentDetails.push({
           id: s.id,
@@ -2381,12 +2452,13 @@ export async function registerRoutes(
           country: s.country,
           startIntake: s.startIntake,
           status: s.status,
-          termBreakdown,
+          termBreakdown: primaryResult.tb,
           totalCommission: Math.round(studentTotalComm * 100) / 100,
           totalBonus: Math.round(studentTotalBonus * 100) / 100,
           totalReceived: Math.round(studentTotalReceived * 100) / 100,
           pendingAmount: Math.round(studentPending * 100) / 100,
           notes: s.notes,
+          providerDetails,
         });
       }
 
