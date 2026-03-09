@@ -1,0 +1,33 @@
+nginx: configuration file /etc/nginx/nginx.conf test is successful
+░░ Defined-By: systemd
+░░ Support: http://www.ubuntu.com/support
+░░ 
+░░ An ExecStart= process belonging to unit nginx.service has exited.
+░░ 
+░░ The process' exit code is 'exited' and its exit status is 1.
+Mar 09 07:39:50 ip-172-31-41-234 systemd[1]: nginx.service: Failed with result 'exit-code'.
+░░ Subject: Unit failed
+░░ Defined-By: systemd
+░░ Support: http://www.ubuntu.com/support
+░░ 
+░░ The unit nginx.service has entered the 'failed' state with result 'exit-code'.
+Mar 09 07:39:50 ip-172-31-41-234 systemd[1]: Failed to start nginx.service - A high performance web server and a reverse proxy server.
+░░ Subject: A start job for unit nginx.service has failed
+░░ Defined-By: systemd
+░░ Support: http://www.ubuntu.com/support
+░░ 
+░░ A start job for unit nginx.service has finished with a failure.
+░░ 
+░░ The job identifier is 14581 and the job result is failed.
+ubuntu@ip-172-31-41-234:~/agreement-commission-portal$ cd ~/agreement-commission-portal && docker compose down && sed -i 's/"80:5000"/"5000:5000"/g' docker-compose.yml && docker compose up -d && sudo systemctl start nginx
+WARN[0000] /home/ubuntu/agreement-commission-portal/docker-compose.yml: the attribute `version` is obsolete, it will be ignored, please remove it to avoid potential confusion 
+[+] down 3/3
+ ✔ Container agreement-commission-portal-app-1 Removed                                                                                                                                                        10.4s
+ ✔ Container agreement-commission-portal-db-1  Removed                                                                                                                                                        0.2s
+ ✔ Network agreement-commission-portal_default Removed                                                                                                                                                        0.1s
+WARN[0000] /home/ubuntu/agreement-commission-portal/docker-compose.yml: the attribute `version` is obsolete, it will be ignored, please remove it to avoid potential confusion 
+[+] up 3/3
+ ✔ Network agreement-commission-portal_default Created                                                                                                                                                         0.1s
+ ✔ Container agreement-commission-portal-db-1  Healthy                                                                                                                                                         6.0s
+ ✔ Container agreement-commission-portal-app-1 Started                                                                                                                                                         6.1s
+ubuntu@ip-172-31-41-234:~/agreement-commission-portal$ 
