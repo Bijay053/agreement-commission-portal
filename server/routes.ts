@@ -142,9 +142,11 @@ export async function registerRoutes(
 
       await storage.createLoginVerificationCode({ userId: user.id, codeHash: otpHash, expiresAt });
 
+      let otpSent = false;
       try {
         await sendLoginOtpEmail(user.email, otpCode, OTP_EXPIRY_MINUTES);
         await storage.createSecurityAuditLog({ userId: user.id, eventType: "OTP_SENT", ipAddress: clientIp, deviceInfo: getUA(req) });
+        otpSent = true;
       } catch (emailErr: any) {
         console.error("Failed to send OTP email:", emailErr.message);
         await storage.createSecurityAuditLog({ userId: user.id, eventType: "OTP_SEND_FAILED", ipAddress: clientIp, metadata: { error: emailErr.message } });
@@ -152,6 +154,12 @@ export async function registerRoutes(
 
       req.session.pendingUserId = user.id;
       req.session.otpRequired = true;
+
+      if (!otpSent) {
+        return res.status(500).json({
+          message: "Failed to send verification email. Please try again or contact an administrator.",
+        });
+      }
 
       res.json({
         requiresOtp: true,
@@ -282,6 +290,7 @@ export async function registerRoutes(
         await storage.createSecurityAuditLog({ userId, eventType: "OTP_RESENT", ipAddress: clientIp });
       } catch (emailErr: any) {
         console.error("Failed to resend OTP:", emailErr.message);
+        return res.status(500).json({ message: "Failed to send verification email. Please try again." });
       }
 
       res.json({ message: "New verification code sent" });

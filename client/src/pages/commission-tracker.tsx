@@ -553,6 +553,9 @@ function YearDashboard({ dashboard, year, students, allEntries, isLoading, canDe
                 <th className="px-2 py-1.5 text-left font-medium border border-[#2060a0] min-w-[60px]">Country</th>
                 <th className="px-2 py-1.5 text-left font-medium border border-[#2060a0] min-w-[80px]">Intake</th>
                 <th className="px-2 py-1.5 text-left font-medium border border-[#2060a0] min-w-[70px]">Status</th>
+                <th className="px-2 py-1.5 text-right font-medium border border-[#2060a0] min-w-[70px]">Comm. %</th>
+                <th className="px-2 py-1.5 text-center font-medium border border-[#2060a0] min-w-[50px]">GST</th>
+                <th className="px-2 py-1.5 text-left font-medium border border-[#2060a0] min-w-[80px]">Scholarship</th>
                 <th className="px-2 py-1.5 text-right font-medium border border-[#2060a0] min-w-[80px]">Total Comm.</th>
                 <th className="px-2 py-1.5 text-left font-medium border border-[#2060a0] min-w-[120px]">Notes</th>
                 {canDeleteMaster && <th className="px-2 py-1.5 text-center font-medium border border-[#2060a0] w-10"></th>}
@@ -562,7 +565,7 @@ function YearDashboard({ dashboard, year, students, allEntries, isLoading, canDe
               {isLoading ? (
                 Array.from({ length: 5 }).map((_, i) => (
                   <tr key={i}>
-                    {Array.from({ length: canDeleteMaster ? 12 : 11 }).map((_, j) => (
+                    {Array.from({ length: canDeleteMaster ? 15 : 14 }).map((_, j) => (
                       <td key={j} className="px-2 py-1 border border-gray-200"><Skeleton className="h-3 w-full" /></td>
                     ))}
                   </tr>
@@ -585,6 +588,9 @@ function YearDashboard({ dashboard, year, students, allEntries, isLoading, canDe
                           {s.status}
                         </Badge>
                       </td>
+                      <td className="px-2 py-1 border border-gray-200 text-right font-mono">{s.commissionRatePct ? `${s.commissionRatePct}%` : "-"}</td>
+                      <td className="px-2 py-1 border border-gray-200 text-center">{s.gstApplicable || "-"}</td>
+                      <td className="px-2 py-1 border border-gray-200">{s.scholarshipType || "None"}</td>
                       <td className="px-2 py-1 border border-gray-200 text-right font-mono">${getTotalForStudent(s.id).toFixed(2)}</td>
                       <td className="px-2 py-1 border border-gray-200 max-w-[150px] truncate" title={s.notes || ""}>{s.notes || "-"}</td>
                       {canDeleteMaster && (
@@ -603,7 +609,7 @@ function YearDashboard({ dashboard, year, students, allEntries, isLoading, canDe
                 })
               ) : (
                 <tr>
-                  <td colSpan={canDeleteMaster ? 12 : 11} className="px-3 py-6 text-center text-muted-foreground text-sm">
+                  <td colSpan={canDeleteMaster ? 15 : 14} className="px-3 py-6 text-center text-muted-foreground text-sm">
                     No students found for this year.
                   </td>
                 </tr>
