@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { SearchableSelect } from "@/components/ui/searchable-select";
+import { MultiSearchableSelect } from "@/components/ui/multi-searchable-select";
 import {
   Search, Plus, FileText, Building2, MapPin, Calendar, Filter, Globe, RotateCcw,
 } from "lucide-react";
@@ -47,21 +47,21 @@ export default function AgreementsListPage() {
   const urlStatus = urlParams.get("status") || "";
 
   const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState<string>(urlStatus || "all");
-  const [territoryCountryFilter, setTerritoryCountryFilter] = useState<string>("all");
-  const [providerCountryFilter, setProviderCountryFilter] = useState<string>("all");
-  const [providerFilter, setProviderFilter] = useState<string>("all");
+  const [statusFilters, setStatusFilters] = useState<string[]>(urlStatus ? [urlStatus] : []);
+  const [territoryCountryFilters, setTerritoryCountryFilters] = useState<string[]>([]);
+  const [providerCountryFilters, setProviderCountryFilters] = useState<string[]>([]);
+  const [providerFilters, setProviderFilters] = useState<string[]>([]);
 
   useEffect(() => {
-    setStatusFilter(urlStatus || "all");
+    setStatusFilters(urlStatus ? [urlStatus] : []);
   }, [urlStatus]);
 
   const queryParams = new URLSearchParams();
   if (search) queryParams.set("search", search);
-  if (statusFilter && statusFilter !== "all") queryParams.set("status", statusFilter);
-  if (territoryCountryFilter && territoryCountryFilter !== "all") queryParams.set("countryId", territoryCountryFilter);
-  if (providerCountryFilter && providerCountryFilter !== "all") queryParams.set("providerCountryId", providerCountryFilter);
-  if (providerFilter && providerFilter !== "all") queryParams.set("providerId", providerFilter);
+  if (statusFilters.length > 0) queryParams.set("status", statusFilters.join(","));
+  if (territoryCountryFilters.length > 0) queryParams.set("countryId", territoryCountryFilters.join(","));
+  if (providerCountryFilters.length > 0) queryParams.set("providerCountryId", providerCountryFilters.join(","));
+  if (providerFilters.length > 0) queryParams.set("providerId", providerFilters.join(","));
   const queryString = queryParams.toString();
 
   const { data: agreements, isLoading } = useQuery<any[]>({
@@ -83,10 +83,10 @@ export default function AgreementsListPage() {
     },
   });
 
-  const handleStatusChange = (value: string) => {
-    setStatusFilter(value);
-    if (value !== "all") {
-      navigate(`/agreements?status=${value}`);
+  const handleStatusChange = (values: string[]) => {
+    setStatusFilters(values);
+    if (values.length > 0) {
+      navigate(`/agreements?status=${values.join(",")}`);
     } else {
       navigate("/agreements");
     }
@@ -120,62 +120,50 @@ export default function AgreementsListPage() {
                 data-testid="input-search-agreements"
               />
             </div>
-            <SearchableSelect
-              value={statusFilter}
-              onValueChange={handleStatusChange}
-              options={[
-                { value: "all", label: "All Statuses" },
-                ...AGREEMENT_STATUSES.map((s) => ({
-                  value: s,
-                  label: s.replace(/_/g, " ").replace(/\b\w/g, l => l.toUpperCase()),
-                })),
-              ]}
-              placeholder="Status"
+            <MultiSearchableSelect
+              values={statusFilters}
+              onValuesChange={handleStatusChange}
+              options={AGREEMENT_STATUSES.map((s) => ({
+                value: s,
+                label: s.replace(/_/g, " ").replace(/\b\w/g, l => l.toUpperCase()),
+              }))}
+              placeholder="All Statuses"
               searchPlaceholder="Search statuses..."
               className="w-[160px]"
               data-testid="select-status-filter"
             />
-            <SearchableSelect
-              value={providerFilter}
-              onValueChange={setProviderFilter}
-              options={[
-                { value: "all", label: "All Providers" },
-                ...(providers?.map((p: any) => ({
-                  value: String(p.id),
-                  label: `${p.name}${p.countryName ? ` (${p.countryName})` : ""}`,
-                })) || []),
-              ]}
-              placeholder="Provider"
+            <MultiSearchableSelect
+              values={providerFilters}
+              onValuesChange={setProviderFilters}
+              options={providers?.map((p: any) => ({
+                value: String(p.id),
+                label: `${p.name}${p.countryName ? ` (${p.countryName})` : ""}`,
+              })) || []}
+              placeholder="All Providers"
               searchPlaceholder="Search providers..."
               className="w-[180px]"
               data-testid="select-provider-filter"
             />
-            <SearchableSelect
-              value={providerCountryFilter}
-              onValueChange={setProviderCountryFilter}
-              options={[
-                { value: "all", label: "All Provider Countries" },
-                ...(countries?.map((c: any) => ({
-                  value: String(c.id),
-                  label: c.name,
-                })) || []),
-              ]}
-              placeholder="Provider Country"
+            <MultiSearchableSelect
+              values={providerCountryFilters}
+              onValuesChange={setProviderCountryFilters}
+              options={countries?.map((c: any) => ({
+                value: String(c.id),
+                label: c.name,
+              })) || []}
+              placeholder="All Provider Countries"
               searchPlaceholder="Search countries..."
               className="w-[180px]"
               data-testid="select-provider-country-filter"
             />
-            <SearchableSelect
-              value={territoryCountryFilter}
-              onValueChange={setTerritoryCountryFilter}
-              options={[
-                { value: "all", label: "All Territories" },
-                ...(countries?.map((c: any) => ({
-                  value: String(c.id),
-                  label: c.name,
-                })) || []),
-              ]}
-              placeholder="Territory"
+            <MultiSearchableSelect
+              values={territoryCountryFilters}
+              onValuesChange={setTerritoryCountryFilters}
+              options={countries?.map((c: any) => ({
+                value: String(c.id),
+                label: c.name,
+              })) || []}
+              placeholder="All Territories"
               searchPlaceholder="Search territories..."
               className="w-[180px]"
               data-testid="select-territory-country-filter"
@@ -185,13 +173,13 @@ export default function AgreementsListPage() {
               size="default"
               onClick={() => {
                 setSearch("");
-                setStatusFilter("all");
-                setProviderFilter("all");
-                setProviderCountryFilter("all");
-                setTerritoryCountryFilter("all");
+                setStatusFilters([]);
+                setProviderFilters([]);
+                setProviderCountryFilters([]);
+                setTerritoryCountryFilters([]);
                 navigate("/agreements");
               }}
-              disabled={!search && statusFilter === "all" && providerFilter === "all" && providerCountryFilter === "all" && territoryCountryFilter === "all"}
+              disabled={!search && statusFilters.length === 0 && providerFilters.length === 0 && providerCountryFilters.length === 0 && territoryCountryFilters.length === 0}
               data-testid="button-reset-filters"
             >
               <RotateCcw className="w-4 h-4 mr-2" />
@@ -268,8 +256,8 @@ export default function AgreementsListPage() {
             <FileText className="w-12 h-12 mx-auto text-muted-foreground/50 mb-3" />
             <h3 className="text-lg font-medium">No agreements found</h3>
             <p className="text-sm text-muted-foreground mt-1">
-              {search || statusFilter !== "all" || territoryCountryFilter !== "all" || providerCountryFilter !== "all" || providerFilter !== "all"
-                ? <>Try adjusting your filters or <span className="text-foreground underline cursor-pointer" data-testid="link-reset-filters" onClick={() => { setSearch(""); setStatusFilter("all"); setProviderFilter("all"); setProviderCountryFilter("all"); setTerritoryCountryFilter("all"); navigate("/agreements"); }}>Reset filters</span></>
+              {search || statusFilters.length > 0 || territoryCountryFilters.length > 0 || providerCountryFilters.length > 0 || providerFilters.length > 0
+                ? <>Try adjusting your filters or <span className="text-foreground underline cursor-pointer" data-testid="link-reset-filters" onClick={() => { setSearch(""); setStatusFilters([]); setProviderFilters([]); setProviderCountryFilters([]); setTerritoryCountryFilters([]); navigate("/agreements"); }}>Reset filters</span></>
                 : "Create your first agreement to get started"}
             </p>
           </CardContent>
