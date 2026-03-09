@@ -1,0 +1,49 @@
+5:47:26 AM [express] serving on port 5000
+ubuntu@ip-172-31-41-234:~/agreement-commission-portal$ docker exec agreement-commission-portal-db-1 psql -U portal_user -d agreement_portal -c "ALTER TABLE users ADD COLUMN IF NOT EXISTS last_login_at TIMESTAMP; ALTER TABLE users ADD COLUMN IF NOT EXISTS last_login_ip VARCHAR(45); ALTER TABLE users ADD COLUMN IF NOT EXISTS force_password_change BOOLEAN NOT NULL DEFAULT false; CREATE TABLE IF NOT EXISTS commission_terms (id SERIAL PRIMARY KEY, term_name VARCHAR(16) NOT NULL UNIQUE, term_label VARCHAR(32) NOT NULL, year INTEGER NOT NULL, term_number INTEGER NOT NULL, sort_order INTEGER NOT NULL, is_active BOOLEAN NOT NULL DEFAULT true, created_at TIMESTAMP DEFAULT NOW()); CREATE TABLE IF NOT EXISTS commission_students (id SERIAL PRIMARY KEY, agent_name VARCHAR(255) NOT NULL, student_id VARCHAR(64), agentsic_id VARCHAR(64), student_name VARCHAR(255) NOT NULL, provider VARCHAR(255) NOT NULL, country VARCHAR(64) NOT NULL DEFAULT 'AU', start_intake VARCHAR(32), course_level VARCHAR(64), course_name VARCHAR(500), course_duration_years NUMERIC(4,1), commission_rate_pct NUMERIC(8,4), gst_rate_pct NUMERIC(5,2) DEFAULT 10, gst_applicable VARCHAR(3) NOT NULL DEFAULT 'Yes', scholarship_type VARCHAR(16) DEFAULT 'None', scholarship_value NUMERIC(12,2) DEFAULT 0, status VARCHAR(32) DEFAULT 'Under Enquiry', notes TEXT, total_received NUMERIC(14,2) DEFAULT 0, created_at TIMESTAMP DEFAULT NOW(), updated_at TIMESTAMP DEFAULT NOW()); CREATE TABLE IF NOT EXISTS commission_entries (id SERIAL PRIMARY KEY, commission_student_id INTEGER NOT NULL REFERENCES commission_students(id) ON DELETE CASCADE, term_name VARCHAR(16) NOT NULL, academic_year VARCHAR(16), fee_gross NUMERIC(12,2) DEFAULT 0, commission_rate_auto NUMERIC(8,4), commission_rate_override_pct NUMERIC(8,4), commission_rate_used_pct NUMERIC(8,4), commission_amount NUMERIC(12,2) DEFAULT 0, bonus NUMERIC(12,2) DEFAULT 0, gst_amount NUMERIC(12,2) DEFAULT 0, total_amount NUMERIC(12,2) DEFAULT 0, payment_status VARCHAR(16) DEFAULT 'Pending', paid_date DATE, invoice_no VARCHAR(64), payment_ref VARCHAR(128), notes TEXT, student_status VARCHAR(32) DEFAULT 'Under Enquiry', rate_change_warning VARCHAR(128), scholarship_type_auto VARCHAR(16), scholarship_value_auto NUMERIC(12,2), scholarship_type_override VARCHAR(16), scholarship_value_override NUMERIC(12,2), scholarship_type_used VARCHAR(16), scholarship_value_used NUMERIC(12,2), scholarship_change_warning VARCHAR(128), scholarship_amount NUMERIC(12,2) DEFAULT 0, fee_after_scholarship NUMERIC(12,2) DEFAULT 0, created_at TIMESTAMP DEFAULT NOW(), updated_at TIMESTAMP DEFAULT NOW()); CREATE TABLE IF NOT EXISTS password_reset_tokens (id SERIAL PRIMARY KEY, user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE, token_hash VARCHAR(64) NOT NULL, expires_at TIMESTAMP NOT NULL, used_at TIMESTAMP, request_ip VARCHAR(45), user_agent TEXT, created_at TIMESTAMP DEFAULT NOW()); CREATE TABLE IF NOT EXISTS user_sessions (id SERIAL PRIMARY KEY, user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE, session_token VARCHAR(128), ip_address VARCHAR(45), browser VARCHAR(128), os VARCHAR(64), device_type VARCHAR(32), location VARCHAR(255), login_at TIMESTAMP DEFAULT NOW(), last_activity_at TIMESTAMP DEFAULT NOW(), logout_at TIMESTAMP, logout_reason VARCHAR(32), is_active BOOLEAN NOT NULL DEFAULT true, otp_verified BOOLEAN NOT NULL DEFAULT false); CREATE TABLE IF NOT EXISTS login_verification_codes (id SERIAL PRIMARY KEY, user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE, code_hash VARCHAR(128) NOT NULL, created_at TIMESTAMP DEFAULT NOW(), expires_at TIMESTAMP NOT NULL, used_at TIMESTAMP, attempts INTEGER NOT NULL DEFAULT 0, resend_count INTEGER NOT NULL DEFAULT 0, status VARCHAR(16) NOT NULL DEFAULT 'pending'); CREATE TABLE IF NOT EXISTS security_audit_logs (id SERIAL PRIMARY KEY, user_id INTEGER REFERENCES users(id), event_type VARCHAR(64) NOT NULL, ip_address VARCHAR(45), device_info TEXT, metadata JSONB, created_at TIMESTAMP DEFAULT NOW()); CREATE TABLE IF NOT EXISTS password_history (id SERIAL PRIMARY KEY, user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE, password_hash TEXT NOT NULL, created_at TIMESTAMP DEFAULT NOW());"
+NOTICE:  column "last_login_at" of relation "users" already exists, skipping
+NOTICE:  column "last_login_ip" of relation "users" already exists, skipping
+NOTICE:  column "force_password_change" of relation "users" already exists, skipping
+ALTER TABLE
+NOTICE:  relation "commission_terms" already exists, skipping
+NOTICE:  relation "commission_students" already exists, skipping
+NOTICE:  relation "commission_entries" already exists, skipping
+ALTER TABLE
+ALTER TABLE
+CREATE TABLE
+CREATE TABLE
+CREATE TABLE
+CREATE TABLE
+CREATE TABLE
+CREATE TABLE
+NOTICE:  relation "password_reset_tokens" already exists, skipping
+NOTICE:  relation "user_sessions" already exists, skipping
+NOTICE:  relation "login_verification_codes" already exists, skipping
+NOTICE:  relation "security_audit_logs" already exists, skipping
+NOTICE:  relation "password_history" already exists, skipping
+CREATE TABLE
+CREATE TABLE
+ubuntu@ip-172-31-41-234:~/agreement-commission-portal$ docker restart agreement-commission-portal-app-1 && sleep 10 && docker logs agreement-commission-portal-app-1 --tail 5
+agreement-commission-portal-app-1
+- /root/.npm/_npx/7c7555b0b81cc7e0/node_modules/drizzle-kit/bin.cjs
+Migration warning (may already be applied)
+Starting application...
+Database already seeded, skipping...
+5:48:36 AM [express] serving on port 5000
+ubuntu@ip-172-31-41-234:~/agreement-commission-portal$ cat ~/agreement-commission-portal/.env 2>/dev/null || echo "No .env file found"
+DB_PASSWORD=Sep03Portal2026Secure
+SESSION_SECRET=a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6q7r8s9t0
+DATABASE_URL=postgresql://portal_user:Sep03Portal2026Secure@db:5432/agreement_portal
+PORT=5000
+ubuntu@ip-172-31-41-234:~/agreement-commission-portal$ cat >> ~/agreement-commission-portal/.env << 'EOF'
+SMTP_HOST=email-smtp.ap-south-1.amazonaws.com
+SMTP_PORT=587
+SMTP_USER=AKIA5FOGK7GYWINZAVNE  
+SMTP_PASS=BPQS7Mr3h1D/c87mpq25GOF8HICeYiL+/pFI9LSihINa
+FROM_EMAIL=noreply@studyinfocentre.com
+EOF
+ubuntu@ip-172-31-41-234:~/agreement-commission-portal$ cd ~/agreement-commission-portal
+ubuntu@ip-172-31-41-234:~/agreement-commission-portal$ sed -i 's/      NODE_ENV: production/      NODE_ENV: production\n      SMTP_HOST: ${SMTP_HOST:-email-smtp.ap-south-1.amazonaws.com}\n      SMTP_PORT: ${SMTP_PORT:-587}\n      SMTP_USER: ${SMTP_USER:-}\n      SMTP_PASS: ${SMTP_PASS:-}\n      FROM_EMAIL: ${FROM_EMAIL:-noreply@studyinfocentre.com}/' docker-compose.yml
+ubuntu@ip-172-31-41-234:~/agreement-commission-portal$ docker compose down && docker compose up -d
+WARN[0000] /home/ubuntu/agreement-commission-portal/docker-compose.yml: the attribute `version` is obsolete, it will be ignored, please remove it to avoid potential confusion 
+[+] down 0/1
+ ⠏ Container agreement-commission-portal-app-1 Stopping 
