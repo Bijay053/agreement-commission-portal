@@ -2039,12 +2039,14 @@ export async function registerRoutes(
       const byProvider: Record<string, { count: number; totalCommission: number; totalBonus: number; totalReceived: number; pending: number }> = {};
       const studentDetails: any[] = [];
 
+      const allYearTermNames = yearTerms.map(t => t.termName);
+
       for (const s of students) {
         const allEntries = await storage.getCommissionEntries(s.id);
         const yearEntries = allEntries.filter(e => filteredTermNames.includes(e.termName));
-        const allYearEntries = allEntries.filter(e => yearTerms.map(t => t.termName).includes(e.termName));
+        const allYearEntries = allEntries.filter(e => allYearTermNames.includes(e.termName));
 
-        if (allYearEntries.length === 0) continue;
+        if (yearEntries.length === 0) continue;
 
         totalStudents++;
         providerSet.add(s.provider);
