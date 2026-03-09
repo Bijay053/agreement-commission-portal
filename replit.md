@@ -1,166 +1,44 @@
 # Agreement & Commission Management Portal
 
 ## Overview
-A secure internal portal for Study Info Centre — managing provider (university/college/B2B) partnership agreements with role-based access control, commission tracking, target & bonus management, document handling, and audit logging.
+This project is an internal portal for Study Info Centre, designed to streamline the management of partnership agreements with educational providers (universities, colleges, B2B entities). It provides robust commission tracking, target and bonus management, secure document handling, and comprehensive audit logging. The portal aims to enhance operational efficiency, ensure compliance, and provide a secure, role-based access environment for sensitive business data. The business vision is to centralize and automate agreement lifecycle management, reducing manual overhead and improving data accuracy for financial reconciliation and strategic planning.
 
-## Architecture
-- **Frontend**: React + TypeScript + Vite, using shadcn/ui components, wouter for routing, TanStack Query for data fetching
-- **Backend**: Express.js (Node.js), session-based auth with bcryptjs password hashing
-- **Database**: PostgreSQL with Drizzle ORM
-- **Storage**: Local file uploads via multer
+## User Preferences
+I prefer clear, concise communication. When making changes, please outline the proposed modifications and explain the reasoning before execution. For new features or significant architectural decisions, I expect detailed explanations. Do not make changes to files outside the `client/src` and `server/` directories unless explicitly instructed. Prioritize secure and maintainable code.
 
-## Key Features
-- Session-based authentication with role-based permissions (RBAC)
-- Dashboard with expiring agreements and recent activity
-- Full CRUD for agreements with metadata, commission rules, targets, contacts, documents
-- **Provider Management** (University / College / B2B Company) with type, country, status
-- **Multi-territory support** — agreements can be Global or Country-Specific (multiple countries)
-- **Target Bonus System** — bonus toggle + amount/condition on targets, with bonus calculation API
-- **Target Bonus Rules** — per-student tier, flat on target, country-based, tiered flat bonus structures
-- **Duplicate prevention** — providers (name+country), targets (type+metric+period), agreements (provider+type+date+territory)
-- **Period key validation** — yearly=YYYY, monthly=YYYY-MM, intake=T1-YYYY
-- **Password policy** — 12+ chars, uppercase, lowercase, number required
-- **Forgot Password** — token-based reset with 30-minute expiry, console-logged reset URLs
-- **Role & Permission Management** — admin UI for creating/editing/deleting/duplicating roles, dynamic permission grid by module/resource/action
-- **Global Contacts Page** — view/filter/add/edit/delete all contacts across agreements with search, country, and status filters; Contact Location column shows country + city
-- **Searchable Dropdowns** — All Select/dropdown fields use SearchableSelect component (Popover + Command/cmdk) with type-to-filter, keyboard support, "No results found"
-- **Reset Filters** — All filter pages (Contacts, Agreements, Providers, Commission) have Reset button (RotateCcw icon) that clears all active filters; empty state shows clickable "Reset filters" link
-- **Secure Document Viewer** — View button opens documents in a secure full-screen modal (not browser tab); PDF rendered via blob URL (hides real API endpoint); watermark overlay with "Study Info Centre - Confidential", user email, and timestamp; right-click, Ctrl+S/P, and print disabled; download button only visible to users with `document.download` permission; DOC_VIEW and DOC_DOWNLOAD audit log entries with IP, user agent, and metadata
-- **Commission & Bonus Master Table** — Standalone page (`/commission`) with Commission and Bonus tabs; pulls all rules from all agreements; filters, search, reset; each row links back to source agreement
-- **Sidebar Status Sub-menu** — Agreements sidebar with expandable status filters and count badges
-- **Agreement List Filters** — search, status, provider, provider country, territory country
-- **Permission-Based Access Control** — Route-level `AccessGuard` blocks pages with "Access Denied" when user lacks permission; sidebar hides nav items user can't access; action buttons (Add/Edit/Delete) hidden per permission; server-side `requirePermission` middleware on all API endpoints
-- **Granular Permissions** — Contacts: `contacts.view`, `contacts.create`, `contacts.edit`, `contacts.delete`, `contacts.export`; Commission: `commission.view`, `commission.create`, `commission.edit`, `commission.delete`, `commission.export`; Bonus: `bonus.view`, `bonus.create`, `bonus.edit`, `bonus.delete`, `bonus.export`; Targets: `targets.view`, `targets.create`, `targets.edit`, `targets.delete`, `targets.export`
-- **Specialized Roles** — Contact Viewer, Contact Manager, Commission Viewer, Commission Manager, Finance Viewer (in addition to Super Admin, Agreement Admin, Editor, Viewer, Document Viewer Only, Compliance/Auditor)
-- Fine-grained RBAC with module.resource.action permission codes
-- Audit logging for all key actions including role/permission changes
-- Confidentiality level hidden (defaults to "high" for all agreements)
-- **Commission Tracker v2** — Spreadsheet-style student enrollment tracking with dynamic terms (T1_2025, T2_2025, T3_2025, extendable to 2026+). Year-based navigation with year selector dropdown. Dashboard tab replaces MASTER tab (6 stat cards: Total Students, Total Commission, Total Received, Active Students, Pending Payments, Paid Payments + by-agent/by-provider breakdowns). Term tabs filtered by selected year. Mandatory Agentsic ID on all student records. Duplicate prevention (3 rules: Name+AgentsicID, Name+Provider+StudentID, Provider+StudentID). Bulk CSV upload with preview/validate/confirm flow and failed-row download. Dynamic term management via "Manage Terms" dialog. Auto-calculated commissions, scholarships, GST, bonuses, cascade logic (Withdrawn/Complete blocks downstream terms), payment tracking
+## System Architecture
+The portal adopts a client-server architecture. The frontend is built with **React, TypeScript, and Vite**, utilizing `shadcn/ui` for a modern, consistent UI, `wouter` for routing, and `TanStack Query` for efficient data fetching. The backend is powered by **Express.js (Node.js)**, implementing session-based authentication with `bcryptjs` for secure password hashing. **PostgreSQL** serves as the primary database, managed through the **Drizzle ORM**. Local file uploads are handled via `multer`.
 
-## Data Model
-- `countries` — Reference table for territories and provider countries
-- `universities` — Provider records (university/college/b2b_company/other) with type, country, status, notes
-- `users` — System users with password hashing
-- `roles`, `permissions`, `role_permissions`, `user_roles` — RBAC tables
-- `password_reset_tokens` — Forgot password token storage with hash, expiry, used_at
-- `agreements` — Core agreement records with status, dates, territory_type (global/country_specific)
-- `agreement_territories` — Many-to-many: agreement ↔ territory countries
-- `agreement_targets` — Performance targets with bonus fields
-- `target_bonus_rules`, `target_bonus_tiers`, `target_bonus_country` — Bonus structures
-- `agreement_commission_rules` — Flexible commission configuration
-- `agreement_contacts` — Provider contacts for renewals
-- `agreement_documents` — Versioned document uploads
-- `audit_logs` — System activity tracking
-- `commission_students` — Master student enrollment records for commission tracking
-- `commission_entries` — Per-term fee & commission entries with auto-calculations
-- `commission_terms` — Dynamic term definitions (T1_2025, T2_2025, etc.) with year, termNumber, sortOrder, isActive
+Key architectural decisions and features include:
+- **Role-Based Access Control (RBAC)**: Fine-grained permissions (`module.resource.action`) control UI elements, route access, and API endpoints. Roles are managed dynamically via an admin UI.
+- **Secure Authentication & Session Management**:
+    - Session-based authentication with robust password policies (12+ chars, complexity, 90-day forced change, history check).
+    - Token-based "Forgot Password" functionality.
+    - Mandatory Email OTP Verification for every login (6-digit, 5-min expiry, rate-limited).
+    - Inactivity auto-logout with warnings.
+    - Comprehensive session tracking (device, browser, IP) and active session management (logout specific/all other sessions).
+    - Security audit logging for all authentication-related events.
+- **Agreement Management**: Full CRUD operations for agreements, including metadata, commission rules, targets, contacts, and documents. Supports multi-territory agreements (Global or Country-Specific).
+- **Commission & Bonus Management**:
+    - Flexible commission rule configuration per agreement.
+    - Advanced Target Bonus System with various structures (per-student tier, flat, country-based, tiered flat).
+    - Global "Commission & Bonus Master Table" for comprehensive overview and filtering.
+- **Commission Tracker v2**: Spreadsheet-style student enrollment tracking with dynamic terms (T1_YYYY, T2_YYYY), year-based navigation, and a dashboard view. Features include mandatory `Agentsic ID`, duplicate prevention, bulk CSV upload with preview/validation, and auto-calculated commissions and payments with cascade logic.
+- **Document Management**: Secure document viewer with blob URL rendering, watermarking (Confidential, user email, timestamp), disabled right-click/print/download (unless permitted), and detailed audit logging for view/download actions.
+- **UI/UX**: Consistent design using `shadcn/ui` components. Features like searchable dropdowns, global filter reset buttons, and sidebar status sub-menus enhance usability.
+- **Data Integrity**: Duplicate prevention implemented for providers, targets, and agreements. Period key validation (YYYY, YYYY-MM, T1-YYYY) ensures data consistency.
+- **Audit Logging**: Comprehensive logging for all key actions, including role/permission changes, document access, and security events, tracking user, IP, user agent, and metadata.
 
-## Default Users (Seeded)
-- **Super Admin**: admin@studyinfocentre.com / admin123
-- **Viewer**: viewer@studyinfocentre.com / viewer123
-- **Editor**: editor@studyinfocentre.com / editor123
-
-## API Endpoints
-### Auth
-- `POST /api/auth/login` — Login
-- `POST /api/auth/logout` — Logout
-- `GET /api/auth/me` — Current user + permissions
-- `POST /api/auth/forgot-password` — Request password reset (generic response)
-- `POST /api/auth/reset-password` — Reset password with token
-
-### Agreements
-- `GET /api/agreements` — List with filters: status, search, providerId, countryId, providerCountryId
-- `GET /api/agreements/status-counts` — Status count badges for sidebar
-- `GET/POST /api/agreements/:id` — CRUD with territory support
-- `GET/POST /api/agreements/:id/targets` — Target CRUD with period validation + duplicate check
-- `GET/POST /api/agreements/:id/commission-rules` — Commission CRUD
-- `GET/POST /api/agreements/:id/contacts` — Contact CRUD per agreement
-- `GET/POST /api/agreements/:id/documents` — Document upload
-
-### Contacts (Global)
-- `GET /api/contacts` — All contacts across agreements with filters: q, providerId, providerCountryId, contactCountryId, agreementStatus
-- `PATCH /api/contacts/:id` — Update contact
-- `DELETE /api/contacts/:id` — Delete contact
-
-### Providers
-- `GET/POST /api/providers` — Provider CRUD with duplicate checking
-- `PATCH /api/providers/:id` — Update provider
-
-### Roles & Permissions (Admin)
-- `GET /api/roles` — List roles with user counts
-- `POST /api/roles` — Create role
-- `PATCH /api/roles/:id` — Update role
-- `DELETE /api/roles/:id` — Delete (with safety checks)
-- `POST /api/roles/:id/duplicate` — Duplicate role with permissions
-- `GET /api/roles/:id/permissions` — Get role permission IDs
-- `PUT /api/roles/:id/permissions` — Set role permissions
-- `PUT /api/users/:id/roles` — Set user roles (multi-role)
-- `GET /api/admin/permissions/schema` — Dynamic permission registry
-
-### Commission & Bonus (Global)
-- `GET /api/commission-rules` — All commission rules across agreements with filters: providerId, providerCountryId, agreementStatus, commissionMode, search
-- `GET /api/bonus-rules` — All bonus rules across agreements with filters: providerId, providerCountryId, agreementStatus, bonusType, search
-- `GET/POST /api/targets/:id/bonus-rules` — Bonus rule management per target
-- `POST /api/bonus/calculate` — Bonus preview calculator
-
-### Documents
-- `GET /api/documents/:id/view` — Secure document view (streams via blob, audit logged, permission: document.view_in_portal)
-- `GET /api/documents/:id/download` — Download document (audit logged, permission: document.download)
-
-### Commission Tracker
-- `GET /api/commission-tracker/students` — List students with filters (search, agent, provider, country, status)
-- `POST /api/commission-tracker/students` — Create student (Agentsic ID mandatory, duplicate prevention)
-- `GET /api/commission-tracker/students/:id` — Student detail with entries
-- `PATCH /api/commission-tracker/students/:id` — Update student (duplicate prevention + Agentsic ID enforcement)
-- `DELETE /api/commission-tracker/students/:id` — Delete student
-- `POST /api/commission-tracker/students/:id/entries` — Add term entry
-- `PATCH /api/commission-tracker/entries/:id` — Update term entry
-- `DELETE /api/commission-tracker/entries/:id` — Delete term entry
-- `POST /api/commission-tracker/students/:id/recalculate` — Recalculate all auto fields
-- `GET /api/commission-tracker/dashboard/:year` — Year-specific dashboard stats
-- `GET /api/commission-tracker/years` — Distinct years from commission_terms
-- `GET /api/commission-tracker/filters` — Distinct filter values
-- `GET /api/commission-tracker/terms` — List dynamic terms
-- `POST /api/commission-tracker/terms` — Add new term
-- `DELETE /api/commission-tracker/terms/:id` — Delete term (blocked if entries exist)
-- `GET /api/commission-tracker/all-entries` — All entries grouped by student ID (optional `?year=` filter)
-- `GET /api/commission-tracker/sample-sheet` — Download CSV template
-- `POST /api/commission-tracker/bulk-upload/preview` — Upload CSV, validate, return valid/invalid/duplicate rows
-- `POST /api/commission-tracker/bulk-upload/confirm` — Import validated rows (server-side re-validation)
-
-## Project Structure
-```
-client/src/
-  components/
-    agreement/        # Tab components (overview, commission, targets, contacts, docs, audit)
-    app-sidebar.tsx   # Navigation with agreement status sub-menu + count badges
-    ui/               # shadcn/ui components (searchable-select, checkbox, dialog, etc.)
-  lib/
-    auth.tsx          # Auth context and hooks
-    queryClient.ts    # TanStack Query setup
-  pages/
-    login.tsx              # Login with forgot password link
-    forgot-password.tsx    # Email-based password reset request
-    reset-password.tsx     # Token-based password reset with policy display
-    dashboard.tsx
-    contacts-list.tsx      # Global contacts table with filters, add/edit/delete
-    commission-table.tsx   # Master commission & bonus view with tabs, filters, agreement links
-    agreements-list.tsx    # 5 filters: search, status, provider, provider country, territory
-    agreement-detail.tsx   # 6-tab detail view
-    agreement-form.tsx     # Create/edit with inline provider add, multi-territory
-    providers-list.tsx     # Provider management
-    commission-tracker.tsx        # Commission Tracker v2: year selector, dashboard, term tabs, inline editing, bulk upload, term management
-    commission-tracker-detail.tsx # Legacy student detail view (kept for backward compatibility)
-    roles-management.tsx   # Role CRUD + permission grid editor
-    users-management.tsx   # User management with multi-role assignment
-    audit-logs.tsx
-server/
-  auth.ts            # Auth middleware, session, password utilities
-  commission-calc.ts # Commission calculation engine (mirrors Google Sheet formulas)
-  db.ts              # Database connection
-  routes.ts          # API endpoints with validation
-  seed.ts            # Database seed data with permission registry
-  storage.ts         # Data access layer
-shared/
-  schema.ts          # Drizzle schema, types, constants, PERMISSION_REGISTRY
-```
+## External Dependencies
+- **PostgreSQL**: Primary database for all application data.
+- **Node.js (Express.js)**: Backend runtime and framework.
+- **React**: Frontend library.
+- **Vite**: Frontend build tool.
+- **TypeScript**: Superset of JavaScript used across frontend and backend.
+- **Drizzle ORM**: Object-Relational Mapper for PostgreSQL.
+- **bcryptjs**: Library for password hashing.
+- **multer**: Node.js middleware for handling `multipart/form-data`, primarily for file uploads.
+- **shadcn/ui**: Component library for React.
+- **wouter**: Small routing library for React.
+- **TanStack Query (React Query)**: Data fetching and caching library.
+- **cmdk**: Command palette component used in searchable dropdowns.

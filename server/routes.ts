@@ -1,15 +1,16 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { setupAuth, hashPassword, comparePassword, requireAuth, requirePermission } from "./auth";
+import { setupAuth, hashPassword, comparePassword, requireAuth, requirePermission, requireActivePassword } from "./auth";
 import { seedDatabase } from "./seed";
 import { loginSchema, insertAgreementSchema, insertTargetSchema, insertCommissionRuleSchema, insertContactSchema, insertUniversitySchema, PERMISSION_REGISTRY, LEGACY_PERMISSION_MAP } from "@shared/schema";
-import { sendPasswordResetEmail, verifyEmailConnection } from "./email";
+import { sendPasswordResetEmail, sendLoginOtpEmail, verifyEmailConnection } from "./email";
 import { calculateEntry, computeMasterFromEntries, STUDENT_STATUSES, PAYMENT_STATUSES } from "./commission-calc";
 import multer from "multer";
 import path from "path";
 import fs from "fs";
 import crypto from "crypto";
+import * as UAParser from "ua-parser-js";
 
 const uploadsDir = path.join(process.cwd(), "uploads");
 if (!fs.existsSync(uploadsDir)) {
@@ -40,12 +41,64 @@ function validatePeriodKey(targetType: string, periodKey: string): string | null
   return null;
 }
 
+function parseDeviceInfo(userAgent: string) {
+  const result = UAParser(userAgent);
+  const browser = result.browser;
+  const os = result.os;
+  const device = result.device;
+  return {
+    browser: `${browser.name || "Unknown"} ${browser.version || ""}`.trim(),
+    os: `${os.name || "Unknown"} ${os.version || ""}`.trim(),
+    deviceType: device.type || "desktop",
+  };
+}
+
+function getUA(req: any): string {
+  const ua = req.headers["user-agent"];
+  if (Array.isArray(ua)) return ua[0] || "";
+  return ua || "";
+}
+
+function generateOtp(): string {
+  return crypto.randomInt(100000, 999999).toString();
+}
+
+function hashOtp(code: string): string {
+  return crypto.createHash("sha256").update(code).digest("hex");
+}
+
+const PASSWORD_POLICY = {
+  minLength: 8,
+  requireUppercase: true,
+  requireLowercase: true,
+  requireNumber: true,
+  requireSpecial: true,
+};
+
+function validatePasswordPolicy(password: string): string | null {
+  if (password.length < PASSWORD_POLICY.minLength) return `Password must be at least ${PASSWORD_POLICY.minLength} characters`;
+  if (PASSWORD_POLICY.requireUppercase && !/[A-Z]/.test(password)) return "Password must contain at least one uppercase letter";
+  if (PASSWORD_POLICY.requireLowercase && !/[a-z]/.test(password)) return "Password must contain at least one lowercase letter";
+  if (PASSWORD_POLICY.requireNumber && !/[0-9]/.test(password)) return "Password must contain at least one number";
+  if (PASSWORD_POLICY.requireSpecial && !/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(password)) return "Password must contain at least one special character";
+  return null;
+}
+
+const loginAttemptTracker = new Map<string, { count: number; lockedUntil: number }>();
+const OTP_EXPIRY_MINUTES = 5;
+const MAX_OTP_ATTEMPTS = 5;
+const MAX_OTP_RESENDS = 3;
+const PASSWORD_EXPIRY_DAYS = 90;
+const PASSWORD_WARNING_DAYS = 14;
+
 export async function registerRoutes(
   httpServer: Server,
   app: Express
 ): Promise<Server> {
   setupAuth(app);
   await seedDatabase();
+
+  app.use("/api", requireActivePassword);
 
   app.post("/api/auth/login", async (req, res) => {
     try {
@@ -54,33 +107,202 @@ export async function registerRoutes(
         return res.status(400).json({ message: "Invalid credentials format" });
       }
       const { email, password } = parsed.data;
+      const clientIp = req.ip || "unknown";
+
+      const tracker = loginAttemptTracker.get(email);
+      if (tracker && tracker.lockedUntil > Date.now()) {
+        const remainSec = Math.ceil((tracker.lockedUntil - Date.now()) / 1000);
+        await storage.createSecurityAuditLog({ eventType: "LOGIN_LOCKED", ipAddress: clientIp, metadata: { email, remainSec } });
+        return res.status(429).json({ message: `Too many failed attempts. Try again in ${remainSec} seconds.` });
+      }
+
       const user = await storage.getUserByEmail(email);
       if (!user || !user.isActive) {
         return res.status(401).json({ message: "Invalid email or password" });
       }
       const valid = await comparePassword(password, user.passwordHash);
       if (!valid) {
-        await storage.createAuditLog({ userId: user.id, action: "LOGIN_FAILED", entityType: "user", entityId: user.id, ipAddress: req.ip });
+        const entry = loginAttemptTracker.get(email) || { count: 0, lockedUntil: 0 };
+        entry.count++;
+        if (entry.count >= 5) {
+          entry.lockedUntil = Date.now() + 15 * 60 * 1000;
+          entry.count = 0;
+        }
+        loginAttemptTracker.set(email, entry);
+        await storage.createAuditLog({ userId: user.id, action: "LOGIN_FAILED", entityType: "user", entityId: user.id, ipAddress: clientIp });
+        await storage.createSecurityAuditLog({ userId: user.id, eventType: "LOGIN_FAILED", ipAddress: clientIp, deviceInfo: getUA(req) });
         return res.status(401).json({ message: "Invalid email or password" });
       }
-      const perms = await storage.getUserPermissions(user.id);
-      const userRoles = await storage.getUserRoles(user.id);
-      req.session.userId = user.id;
-      req.session.userPermissions = perms;
-      await storage.createAuditLog({ userId: user.id, action: "LOGIN_SUCCESS", entityType: "user", entityId: user.id, ipAddress: req.ip });
-      const { passwordHash, ...safeUser } = user;
-      res.json({ user: safeUser, permissions: perms, roles: userRoles });
+
+      loginAttemptTracker.delete(email);
+
+      const otpCode = generateOtp();
+      const otpHash = hashOtp(otpCode);
+      const expiresAt = new Date(Date.now() + OTP_EXPIRY_MINUTES * 60 * 1000);
+
+      await storage.createLoginVerificationCode({ userId: user.id, codeHash: otpHash, expiresAt });
+
+      try {
+        await sendLoginOtpEmail(user.email, otpCode, OTP_EXPIRY_MINUTES);
+        await storage.createSecurityAuditLog({ userId: user.id, eventType: "OTP_SENT", ipAddress: clientIp, deviceInfo: getUA(req) });
+      } catch (emailErr: any) {
+        console.error("Failed to send OTP email:", emailErr.message);
+        await storage.createSecurityAuditLog({ userId: user.id, eventType: "OTP_SEND_FAILED", ipAddress: clientIp, metadata: { error: emailErr.message } });
+      }
+
+      req.session.pendingUserId = user.id;
+      req.session.otpRequired = true;
+
+      res.json({
+        requiresOtp: true,
+        message: "Verification code sent to your email",
+        email: user.email.replace(/(.{2})(.*)(@.*)/, "$1***$3"),
+      });
     } catch (err: any) {
       res.status(500).json({ message: err.message });
     }
   });
 
-  app.post("/api/auth/logout", (req, res) => {
-    const userId = req.session.userId;
-    req.session.destroy(() => {
-      if (userId) {
-        storage.createAuditLog({ userId, action: "LOGOUT", entityType: "user", entityId: userId });
+  app.post("/api/auth/verify-otp", async (req, res) => {
+    try {
+      const { code } = req.body;
+      const userId = req.session.pendingUserId;
+      if (!userId || !req.session.otpRequired) {
+        return res.status(400).json({ message: "No pending verification. Please login again." });
       }
+
+      const clientIp = req.ip || "unknown";
+      const activeCode = await storage.getActiveVerificationCode(userId);
+
+      if (!activeCode) {
+        return res.status(400).json({ message: "Verification code expired. Please login again." });
+      }
+
+      if (activeCode.attempts >= MAX_OTP_ATTEMPTS) {
+        await storage.updateVerificationCode(activeCode.id, { status: "exhausted" });
+        await storage.createSecurityAuditLog({ userId, eventType: "OTP_EXHAUSTED", ipAddress: clientIp });
+        delete req.session.pendingUserId;
+        delete req.session.otpRequired;
+        return res.status(400).json({ message: "Too many attempts. Please login again." });
+      }
+
+      await storage.updateVerificationCode(activeCode.id, { attempts: activeCode.attempts + 1 });
+
+      if (hashOtp(code) !== activeCode.codeHash) {
+        await storage.createSecurityAuditLog({ userId, eventType: "OTP_FAILED", ipAddress: clientIp });
+        const remaining = MAX_OTP_ATTEMPTS - activeCode.attempts - 1;
+        return res.status(401).json({ message: `Invalid code. ${remaining} attempt(s) remaining.` });
+      }
+
+      await storage.updateVerificationCode(activeCode.id, { status: "used", usedAt: new Date() });
+      await storage.createSecurityAuditLog({ userId, eventType: "OTP_VERIFIED", ipAddress: clientIp, deviceInfo: getUA(req) });
+
+      const user = await storage.getUser(userId);
+      if (!user) return res.status(401).json({ message: "User not found" });
+
+      const perms = await storage.getUserPermissions(user.id);
+      const userRolesData = await storage.getUserRoles(user.id);
+      req.session.userId = user.id;
+      req.session.userPermissions = perms;
+      delete req.session.pendingUserId;
+      delete req.session.otpRequired;
+
+      const deviceInfo = parseDeviceInfo(getUA(req));
+      await storage.createUserSession({
+        userId: user.id,
+        sessionToken: req.sessionID,
+        ipAddress: clientIp,
+        browser: deviceInfo.browser,
+        os: deviceInfo.os,
+        deviceType: deviceInfo.deviceType,
+        otpVerified: true,
+      });
+
+      await storage.updateUserLoginInfo(user.id, clientIp);
+      await storage.createAuditLog({ userId: user.id, action: "LOGIN_SUCCESS", entityType: "user", entityId: user.id, ipAddress: clientIp });
+
+      let passwordExpired = false;
+      let passwordWarning = false;
+      let daysUntilExpiry: number | null = null;
+      if (user.forcePasswordChange) {
+        passwordExpired = true;
+      } else if (user.passwordChangedAt) {
+        const daysSinceChange = Math.floor((Date.now() - new Date(user.passwordChangedAt).getTime()) / (1000 * 60 * 60 * 24));
+        daysUntilExpiry = PASSWORD_EXPIRY_DAYS - daysSinceChange;
+        if (daysUntilExpiry <= 0) {
+          passwordExpired = true;
+        } else if (daysUntilExpiry <= PASSWORD_WARNING_DAYS) {
+          passwordWarning = true;
+        }
+      }
+
+      req.session.passwordExpired = passwordExpired;
+
+      const { passwordHash, ...safeUser } = user;
+      res.json({
+        user: safeUser,
+        permissions: perms,
+        roles: userRolesData,
+        passwordExpired,
+        passwordWarning,
+        daysUntilExpiry,
+      });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.post("/api/auth/resend-otp", async (req, res) => {
+    try {
+      const userId = req.session.pendingUserId;
+      if (!userId || !req.session.otpRequired) {
+        return res.status(400).json({ message: "No pending verification. Please login again." });
+      }
+
+      const clientIp = req.ip || "unknown";
+      const existingCode = await storage.getActiveVerificationCode(userId);
+      if (existingCode && existingCode.resendCount >= MAX_OTP_RESENDS) {
+        return res.status(429).json({ message: "Maximum resend limit reached. Please login again." });
+      }
+
+      const user = await storage.getUser(userId);
+      if (!user) return res.status(400).json({ message: "User not found" });
+
+      const otpCode = generateOtp();
+      const otpHash = hashOtp(otpCode);
+      const expiresAt = new Date(Date.now() + OTP_EXPIRY_MINUTES * 60 * 1000);
+
+      const newCode = await storage.createLoginVerificationCode({ userId, codeHash: otpHash, expiresAt });
+      if (existingCode) {
+        await storage.updateVerificationCode(newCode.id, { resendCount: (existingCode.resendCount || 0) + 1 });
+      }
+
+      try {
+        await sendLoginOtpEmail(user.email, otpCode, OTP_EXPIRY_MINUTES);
+        await storage.createSecurityAuditLog({ userId, eventType: "OTP_RESENT", ipAddress: clientIp });
+      } catch (emailErr: any) {
+        console.error("Failed to resend OTP:", emailErr.message);
+      }
+
+      res.json({ message: "New verification code sent" });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.post("/api/auth/logout", async (req, res) => {
+    const userId = req.session.userId;
+    const sessionId = req.sessionID;
+    if (userId) {
+      const sessions = await storage.getUserSessions(userId, true);
+      const matchingSession = sessions.find(s => s.sessionToken === sessionId);
+      if (matchingSession) {
+        await storage.updateUserSession(matchingSession.id, { isActive: false, logoutAt: new Date(), logoutReason: "manual" });
+      }
+      await storage.createAuditLog({ userId, action: "LOGOUT", entityType: "user", entityId: userId });
+      await storage.createSecurityAuditLog({ userId, eventType: "LOGOUT", ipAddress: req.ip });
+    }
+    req.session.destroy(() => {
       res.json({ message: "Logged out" });
     });
   });
@@ -165,18 +387,8 @@ export async function registerRoutes(
         return res.status(400).json({ message: "New password is required" });
       }
 
-      if (newPassword.length < 12) {
-        return res.status(400).json({ message: "Password must be at least 12 characters" });
-      }
-      if (!/[A-Z]/.test(newPassword)) {
-        return res.status(400).json({ message: "Password must include at least one uppercase letter" });
-      }
-      if (!/[a-z]/.test(newPassword)) {
-        return res.status(400).json({ message: "Password must include at least one lowercase letter" });
-      }
-      if (!/\d/.test(newPassword)) {
-        return res.status(400).json({ message: "Password must include at least one number" });
-      }
+      const policyError = validatePasswordPolicy(newPassword);
+      if (policyError) return res.status(400).json({ message: policyError });
 
       const rawToken = Buffer.from(token, "hex");
       const tokenHash = crypto.createHash("sha256").update(rawToken).digest("hex");
@@ -197,6 +409,17 @@ export async function registerRoutes(
         return res.status(400).json({ message: "This account is no longer active" });
       }
 
+      const history = await storage.getPasswordHistory(resetToken.userId, 3);
+      for (const h of history) {
+        if (await comparePassword(newPassword, h.passwordHash)) {
+          return res.status(400).json({ message: "Cannot reuse a recent password. Please choose a different password." });
+        }
+      }
+      if (await comparePassword(newPassword, user.passwordHash)) {
+        return res.status(400).json({ message: "New password must be different from current password." });
+      }
+
+      await storage.addPasswordToHistory(resetToken.userId, user.passwordHash);
       const hashedPassword = await hashPassword(newPassword);
       await storage.updateUserPassword(resetToken.userId, hashedPassword);
 
@@ -227,10 +450,167 @@ export async function registerRoutes(
     const user = await storage.getUser(req.session.userId);
     if (!user) return res.status(401).json({ message: "User not found" });
     const perms = await storage.getUserPermissions(user.id);
-    const userRoles = await storage.getUserRoles(user.id);
+    const userRolesData = await storage.getUserRoles(user.id);
     req.session.userPermissions = perms;
+
+    let passwordExpired = false;
+    let passwordWarning = false;
+    let daysUntilExpiry: number | null = null;
+    if (user.forcePasswordChange) {
+      passwordExpired = true;
+    } else if (user.passwordChangedAt) {
+      const daysSinceChange = Math.floor((Date.now() - new Date(user.passwordChangedAt).getTime()) / (1000 * 60 * 60 * 24));
+      daysUntilExpiry = PASSWORD_EXPIRY_DAYS - daysSinceChange;
+      if (daysUntilExpiry <= 0) {
+        passwordExpired = true;
+      } else if (daysUntilExpiry <= PASSWORD_WARNING_DAYS) {
+        passwordWarning = true;
+      }
+    }
+
     const { passwordHash, ...safeUser } = user;
-    res.json({ user: safeUser, permissions: perms, roles: userRoles });
+    res.json({ user: safeUser, permissions: perms, roles: userRolesData, passwordExpired, passwordWarning, daysUntilExpiry });
+  });
+
+  app.post("/api/auth/change-password", requireAuth, async (req, res) => {
+    try {
+      const { currentPassword, newPassword, confirmPassword } = req.body;
+      const userId = req.session.userId!;
+      const clientIp = req.ip || "unknown";
+
+      if (!currentPassword || !newPassword || !confirmPassword) {
+        return res.status(400).json({ message: "All fields are required" });
+      }
+      if (newPassword !== confirmPassword) {
+        return res.status(400).json({ message: "New password and confirmation do not match" });
+      }
+
+      const policyError = validatePasswordPolicy(newPassword);
+      if (policyError) return res.status(400).json({ message: policyError });
+
+      const user = await storage.getUser(userId);
+      if (!user) return res.status(404).json({ message: "User not found" });
+
+      const validCurrent = await comparePassword(currentPassword, user.passwordHash);
+      if (!validCurrent) {
+        await storage.createSecurityAuditLog({ userId, eventType: "PASSWORD_CHANGE_FAILED", ipAddress: clientIp, metadata: { reason: "wrong_current" } });
+        return res.status(401).json({ message: "Current password is incorrect" });
+      }
+
+      const history = await storage.getPasswordHistory(userId, 3);
+      for (const h of history) {
+        if (await comparePassword(newPassword, h.passwordHash)) {
+          return res.status(400).json({ message: "Cannot reuse a recent password. Please choose a different password." });
+        }
+      }
+      if (await comparePassword(newPassword, user.passwordHash)) {
+        return res.status(400).json({ message: "New password must be different from current password." });
+      }
+
+      await storage.addPasswordToHistory(userId, user.passwordHash);
+      const newHash = await hashPassword(newPassword);
+      await storage.updateUserPassword(userId, newHash);
+      await storage.createSecurityAuditLog({ userId, eventType: "PASSWORD_CHANGED", ipAddress: clientIp });
+      await storage.createAuditLog({ userId, action: "PASSWORD_CHANGED", entityType: "user", entityId: userId, ipAddress: clientIp });
+
+      req.session.passwordExpired = false;
+
+      res.json({ message: "Password changed successfully" });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.post("/api/auth/heartbeat", requireAuth, async (req, res) => {
+    try {
+      const userId = req.session.userId!;
+      const sessionId = req.sessionID;
+      const sessions = await storage.getUserSessions(userId, true);
+      const match = sessions.find(s => s.sessionToken === sessionId);
+      if (match) {
+        await storage.updateUserSession(match.id, { lastActivityAt: new Date() });
+      }
+      res.json({ active: true });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.get("/api/auth/sessions", requireAuth, async (req, res) => {
+    try {
+      const userId = req.session.userId!;
+      const sessions = await storage.getUserSessions(userId);
+      const currentToken = req.sessionID;
+      const result = sessions.map(s => ({
+        ...s,
+        isCurrent: s.sessionToken === currentToken,
+        sessionToken: undefined,
+      }));
+      res.json(result);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.post("/api/auth/sessions/:id/logout", requireAuth, async (req, res) => {
+    try {
+      const sessionDbId = Number(req.params.id);
+      const session = await storage.getUserSession(sessionDbId);
+      if (!session || session.userId !== req.session.userId!) {
+        return res.status(404).json({ message: "Session not found" });
+      }
+      await storage.updateUserSession(sessionDbId, { isActive: false, logoutAt: new Date(), logoutReason: "remote_logout" });
+      await storage.createSecurityAuditLog({ userId: req.session.userId!, eventType: "REMOTE_LOGOUT", ipAddress: req.ip, metadata: { targetSessionId: sessionDbId } });
+      res.json({ message: "Session logged out" });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.post("/api/auth/logout-others", requireAuth, async (req, res) => {
+    try {
+      const userId = req.session.userId!;
+      const currentToken = req.sessionID;
+      const sessions = await storage.getUserSessions(userId, true);
+      const currentSession = sessions.find(s => s.sessionToken === currentToken);
+      if (currentSession) {
+        await storage.deactivateUserSessions(userId, "logout_others", currentSession.id);
+      }
+      await storage.createSecurityAuditLog({ userId, eventType: "LOGOUT_ALL_OTHERS", ipAddress: req.ip });
+      res.json({ message: "All other sessions logged out" });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.get("/api/auth/security-logs", requireAuth, async (req, res) => {
+    try {
+      const userId = req.session.userId!;
+      const logs = await storage.getSecurityAuditLogs(userId, 50);
+      res.json(logs);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.get("/api/admin/users/:id/sessions", requireAuth, requirePermission("security.user.manage"), async (req, res) => {
+    try {
+      const userId = Number(req.params.id);
+      const sessions = await storage.getUserSessions(userId);
+      res.json(sessions.map(s => ({ ...s, sessionToken: undefined })));
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.get("/api/admin/users/:id/security-logs", requireAuth, requirePermission("security.user.manage"), async (req, res) => {
+    try {
+      const userId = Number(req.params.id);
+      const logs = await storage.getSecurityAuditLogs(userId, 100);
+      res.json(logs);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
   });
 
   app.get("/api/countries", requireAuth, async (_req, res) => {
@@ -1224,7 +1604,7 @@ export async function registerRoutes(
     }
   });
 
-  app.delete("/api/commission-tracker/students/:id", requireAuth, requirePermission("commission_tracker.delete"), async (req, res) => {
+  app.delete("/api/commission-tracker/students/:id", requireAuth, requirePermission("commission_tracker.student.delete_master"), async (req, res) => {
     try {
       await storage.deleteCommissionStudent(Number(req.params.id));
       res.json({ message: "Student deleted" });

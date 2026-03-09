@@ -74,6 +74,7 @@ const PERMISSION_CODES = [
   { code: "commission_tracker.student.add", module: "commission_tracker", resource: "student", action: "add", description: "Add commission students" },
   { code: "commission_tracker.student.update", module: "commission_tracker", resource: "student", action: "update", description: "Edit commission students" },
   { code: "commission_tracker.student.delete", module: "commission_tracker", resource: "student", action: "delete", description: "Delete commission students" },
+  { code: "commission_tracker.student.delete_master", module: "commission_tracker", resource: "student", action: "delete_master", description: "Delete students from dashboard (admin only)" },
   { code: "commission_tracker.student.export", module: "commission_tracker", resource: "student", action: "export", description: "Export commission students" },
   { code: "commission_tracker.entry.read", module: "commission_tracker", resource: "entry", action: "read", description: "View term entries" },
   { code: "commission_tracker.entry.add", module: "commission_tracker", resource: "entry", action: "add", description: "Add term entries" },

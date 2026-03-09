@@ -11,6 +11,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Plus, Search, Trash2, Users, DollarSign, TrendingUp, AlertCircle,
   Settings, X, Upload, Download, Clock, CheckCircle2, FileSpreadsheet
@@ -134,6 +135,7 @@ export default function CommissionTrackerPage() {
   const canCreate = hasPermission("commission_tracker.create");
   const canEdit = hasPermission("commission_tracker.edit");
   const canDelete = hasPermission("commission_tracker.delete");
+  const canDeleteMaster = hasPermission("commission_tracker.student.delete_master");
 
   const { data: years = [] } = useQuery<number[]>({
     queryKey: ["/api/commission-tracker/years"],
@@ -343,8 +345,7 @@ export default function CommissionTrackerPage() {
           </div>
         </div>
 
-        {activeTab !== "DASHBOARD" && (
-          <div className="flex flex-col md:flex-row gap-2">
+        <div className="flex flex-col md:flex-row gap-2">
             <div className="relative flex-1">
               <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
               <Input
@@ -383,13 +384,32 @@ export default function CommissionTrackerPage() {
               </SelectContent>
             </Select>
           </div>
-        )}
+
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="mt-1">
+          <TabsList data-testid="tabs-bar" className="w-auto">
+            {tabs.map(tab => (
+              <TabsTrigger key={tab} value={tab} data-testid={`tab-${tab}`}>
+                {tab === "DASHBOARD" ? `Dashboard ${selectedYear || ""}` : terms.find(t => t.termName === tab)?.termLabel || tab.replace("_", " ")}
+              </TabsTrigger>
+            ))}
+          </TabsList>
+        </Tabs>
       </div>
 
-      <div className="flex-1 overflow-hidden flex flex-col mt-2">
+      <div className="flex-1 overflow-hidden flex flex-col">
         <div className="flex-1 overflow-auto border-t">
           {activeTab === "DASHBOARD" ? (
-            <YearDashboard dashboard={yearDashboard} year={selectedYear} />
+            <YearDashboard
+              dashboard={yearDashboard}
+              year={selectedYear}
+              students={students || []}
+              allEntries={allEntries}
+              isLoading={isLoading}
+              canDeleteMaster={canDeleteMaster}
+              onDeleteStudent={(id) => {
+                if (confirm("Delete this student and all their term entries?")) deleteStudentMutation.mutate(id);
+              }}
+            />
           ) : (
             <TermTable
               termName={activeTab}
@@ -398,11 +418,9 @@ export default function CommissionTrackerPage() {
               terms={terms}
               isLoading={isLoading}
               canEdit={canEdit}
-              canDelete={canDelete}
+              canDelete={false}
               onUpdateStudent={(id, data) => updateStudentMutation.mutate({ id, data })}
-              onDeleteStudent={(id) => {
-                if (confirm("Delete this student and all their term entries?")) deleteStudentMutation.mutate(id);
-              }}
+              onDeleteStudent={() => {}}
               onCreateEntry={(studentId, data) => createEntryMutation.mutate({ studentId, data })}
               onUpdateEntry={(id, data) => updateEntryMutation.mutate({ id, data })}
               onDeleteEntry={(id) => deleteEntryMutation.mutate(id)}
@@ -410,36 +428,27 @@ export default function CommissionTrackerPage() {
           )}
         </div>
 
-        <div className="flex items-center border-t bg-muted/30 overflow-x-auto" data-testid="tabs-bar">
-          {tabs.map(tab => (
-            <button
-              key={tab}
-              className={`px-4 py-1.5 text-xs font-medium border-r whitespace-nowrap transition-colors ${
-                activeTab === tab
-                  ? "bg-white dark:bg-gray-800 text-primary border-t-2 border-t-primary"
-                  : "bg-muted/50 text-muted-foreground hover:bg-muted"
-              }`}
-              onClick={() => setActiveTab(tab)}
-              data-testid={`tab-${tab}`}
-            >
-              {tab === "DASHBOARD" ? `Dashboard ${selectedYear || ""}` : terms.find(t => t.termName === tab)?.termLabel || tab.replace("_", " ")}
-            </button>
-          ))}
-        </div>
+        {students && (
+          <div className="px-3 py-1 border-t bg-muted/20">
+            <p className="text-[10px] text-muted-foreground" data-testid="text-count">
+              {students.length} student{students.length !== 1 ? "s" : ""}
+            </p>
+          </div>
+        )}
       </div>
-
-      {activeTab !== "DASHBOARD" && students && (
-        <div className="px-3 py-1 border-t bg-muted/20">
-          <p className="text-[10px] text-muted-foreground" data-testid="text-count">
-            {students.length} student{students.length !== 1 ? "s" : ""}
-          </p>
-        </div>
-      )}
     </div>
   );
 }
 
-function YearDashboard({ dashboard, year }: { dashboard: any; year: number | null }) {
+function YearDashboard({ dashboard, year, students, allEntries, isLoading, canDeleteMaster, onDeleteStudent }: {
+  dashboard: any;
+  year: number | null;
+  students: CommissionStudent[];
+  allEntries: Record<number, CommissionEntry[]>;
+  isLoading: boolean;
+  canDeleteMaster: boolean;
+  onDeleteStudent: (id: number) => void;
+}) {
   if (!dashboard || !year) {
     return (
       <div className="p-6 space-y-4">
@@ -460,6 +469,11 @@ function YearDashboard({ dashboard, year }: { dashboard: any; year: number | nul
     { label: "Pending Payments", value: dashboard.pendingPayments || 0, icon: Clock, color: "text-orange-500", format: "number" },
     { label: "Paid Payments", value: dashboard.paidPayments || 0, icon: CheckCircle2, color: "text-teal-500", format: "number" },
   ];
+
+  const getTotalForStudent = (studentId: number) => {
+    const entries = allEntries[studentId] || [];
+    return entries.reduce((sum, e) => sum + Number(e.totalAmount || 0), 0);
+  };
 
   return (
     <div className="p-4 space-y-6" data-testid="year-dashboard">
@@ -523,6 +537,81 @@ function YearDashboard({ dashboard, year }: { dashboard: any; year: number | nul
           </div>
         </div>
       )}
+
+      <div>
+        <h3 className="text-sm font-medium mb-2">All Students</h3>
+        <div className="overflow-auto border rounded-lg">
+          <table className="w-full text-xs border-collapse" data-testid="table-dashboard-students">
+            <thead className="sticky top-0 z-10">
+              <tr className="bg-[#2E75B6] text-white">
+                <th className="px-2 py-1.5 text-left font-medium border border-[#2060a0] w-10">S.No</th>
+                <th className="px-2 py-1.5 text-left font-medium border border-[#2060a0] min-w-[100px]">Agent</th>
+                <th className="px-2 py-1.5 text-left font-medium border border-[#2060a0] min-w-[80px]">Agentsic ID</th>
+                <th className="px-2 py-1.5 text-left font-medium border border-[#2060a0] min-w-[80px]">Student ID</th>
+                <th className="px-2 py-1.5 text-left font-medium border border-[#2060a0] min-w-[120px]">Student Name</th>
+                <th className="px-2 py-1.5 text-left font-medium border border-[#2060a0] min-w-[120px]">Provider</th>
+                <th className="px-2 py-1.5 text-left font-medium border border-[#2060a0] min-w-[60px]">Country</th>
+                <th className="px-2 py-1.5 text-left font-medium border border-[#2060a0] min-w-[80px]">Intake</th>
+                <th className="px-2 py-1.5 text-left font-medium border border-[#2060a0] min-w-[70px]">Status</th>
+                <th className="px-2 py-1.5 text-right font-medium border border-[#2060a0] min-w-[80px]">Total Comm.</th>
+                <th className="px-2 py-1.5 text-left font-medium border border-[#2060a0] min-w-[120px]">Notes</th>
+                {canDeleteMaster && <th className="px-2 py-1.5 text-center font-medium border border-[#2060a0] w-10"></th>}
+              </tr>
+            </thead>
+            <tbody>
+              {isLoading ? (
+                Array.from({ length: 5 }).map((_, i) => (
+                  <tr key={i}>
+                    {Array.from({ length: canDeleteMaster ? 12 : 11 }).map((_, j) => (
+                      <td key={j} className="px-2 py-1 border border-gray-200"><Skeleton className="h-3 w-full" /></td>
+                    ))}
+                  </tr>
+                ))
+              ) : students.length > 0 ? (
+                students.map((s, idx) => {
+                  const statusBg = STATUS_ROW_BG[s.status || ""] || "transparent";
+                  return (
+                    <tr key={s.id} style={{ backgroundColor: statusBg }} data-testid={`row-dashboard-${s.id}`}>
+                      <td className="px-2 py-1 border border-gray-200 text-center">{idx + 1}</td>
+                      <td className="px-2 py-1 border border-gray-200">{s.agentName}</td>
+                      <td className="px-2 py-1 border border-gray-200 font-mono">{s.agentsicId || "-"}</td>
+                      <td className="px-2 py-1 border border-gray-200 font-mono">{s.studentId || "-"}</td>
+                      <td className="px-2 py-1 border border-gray-200">{s.studentName}</td>
+                      <td className="px-2 py-1 border border-gray-200">{s.provider}</td>
+                      <td className="px-2 py-1 border border-gray-200">{s.country}</td>
+                      <td className="px-2 py-1 border border-gray-200">{s.startIntake || "-"}</td>
+                      <td className="px-2 py-1 border border-gray-200">
+                        <Badge className={`${STATUS_COLORS[s.status || ""] || "bg-gray-100 text-gray-800"} text-[10px] px-1.5 py-0`}>
+                          {s.status}
+                        </Badge>
+                      </td>
+                      <td className="px-2 py-1 border border-gray-200 text-right font-mono">${getTotalForStudent(s.id).toFixed(2)}</td>
+                      <td className="px-2 py-1 border border-gray-200 max-w-[150px] truncate" title={s.notes || ""}>{s.notes || "-"}</td>
+                      {canDeleteMaster && (
+                        <td className="px-1 py-1 border border-gray-200 text-center">
+                          <button
+                            className="text-red-500 hover:text-red-700 p-0.5"
+                            onClick={() => onDeleteStudent(s.id)}
+                            data-testid={`button-delete-master-${s.id}`}
+                          >
+                            <Trash2 className="w-3 h-3" />
+                          </button>
+                        </td>
+                      )}
+                    </tr>
+                  );
+                })
+              ) : (
+                <tr>
+                  <td colSpan={canDeleteMaster ? 12 : 11} className="px-3 py-6 text-center text-muted-foreground text-sm">
+                    No students found for this year.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
     </div>
   );
 }
@@ -643,13 +732,7 @@ function TermTable({ termName, students, allEntries, terms, isLoading, canEdit, 
                         <span className="text-gray-400 text-xs">No entry</span>
                       )}
                     </td>
-                    <td className="px-1 py-1 border border-gray-200">
-                      {canDelete && (
-                        <button className="text-red-500 hover:text-red-700 p-0.5" onClick={() => onDeleteStudent(s.id)} data-testid={`button-delete-${s.id}`}>
-                          <Trash2 className="w-3 h-3" />
-                        </button>
-                      )}
-                    </td>
+                    <td className="px-1 py-1 border border-gray-200"></td>
                   </tr>
                 );
               }
@@ -682,27 +765,15 @@ function TermTable({ termName, students, allEntries, terms, isLoading, canEdit, 
                   <EditableCell value={entry.studentStatus || "Under Enquiry"} readOnly={!canEdit} onSave={(v) => onUpdateEntry(entry.id, { studentStatus: v })} type="select" options={STUDENT_STATUSES} width="80px" />
                   <EditableCell value={entry.notes || ""} readOnly={!canEdit} onSave={(v) => onUpdateEntry(entry.id, { notes: v || null })} width="120px" />
                   <td className="px-1 py-1 border border-gray-200 text-center">
-                    <div className="flex items-center gap-0.5">
-                      {canEdit && (
-                        <button
-                          className="text-red-500 hover:text-red-700 p-0.5"
-                          onClick={() => { if (confirm("Delete this entry?")) onDeleteEntry(entry.id); }}
-                          data-testid={`button-delete-entry-${entry.id}`}
-                        >
-                          <Trash2 className="w-3 h-3" />
-                        </button>
-                      )}
-                      {canDelete && (
-                        <button
-                          className="text-gray-400 hover:text-red-600 p-0.5"
-                          onClick={() => onDeleteStudent(s.id)}
-                          title="Delete student"
-                          data-testid={`button-delete-${s.id}`}
-                        >
-                          <X className="w-3 h-3" />
-                        </button>
-                      )}
-                    </div>
+                    {canEdit && (
+                      <button
+                        className="text-red-500 hover:text-red-700 p-0.5"
+                        onClick={() => { if (confirm("Delete this entry?")) onDeleteEntry(entry.id); }}
+                        data-testid={`button-delete-entry-${entry.id}`}
+                      >
+                        <Trash2 className="w-3 h-3" />
+                      </button>
+                    )}
                   </td>
                 </tr>
               );

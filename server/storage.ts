@@ -6,6 +6,7 @@ import {
   agreementCommissionRules, agreementContacts, agreementDocuments, auditLogs,
   targetBonusRules, targetBonusTiers, targetBonusCountry, passwordResetTokens,
   commissionStudents, commissionEntries, commissionTerms,
+  userSessions, loginVerificationCodes, securityAuditLogs, passwordHistory,
   type User, type InsertUser, type Agreement, type InsertAgreement,
   type AgreementTarget, type InsertTarget, type AgreementCommissionRule,
   type InsertCommissionRule, type AgreementContact, type InsertContact,
@@ -16,6 +17,7 @@ import {
   type CommissionStudent, type InsertCommissionStudent,
   type CommissionEntry, type InsertCommissionEntry,
   type CommissionTerm,
+  type UserSession, type LoginVerificationCode, type SecurityAuditLog,
 } from "@shared/schema";
 
 export interface IStorage {
@@ -1166,6 +1168,124 @@ export class DatabaseStorage implements IStorage {
       byAgent: Object.entries(agentMap).map(([agent, v]) => ({ agent, ...v })).sort((a, b) => b.total - a.total),
       byProvider: Object.entries(providerMap).map(([provider, v]) => ({ provider, ...v })).sort((a, b) => b.total - a.total),
     };
+  }
+
+  async createUserSession(data: {
+    userId: number;
+    sessionToken?: string;
+    ipAddress?: string;
+    browser?: string;
+    os?: string;
+    deviceType?: string;
+    location?: string;
+    otpVerified?: boolean;
+  }): Promise<UserSession> {
+    const [session] = await db.insert(userSessions).values(data).returning();
+    return session;
+  }
+
+  async getUserSessions(userId: number, activeOnly = false): Promise<UserSession[]> {
+    const conditions = [eq(userSessions.userId, userId)];
+    if (activeOnly) conditions.push(eq(userSessions.isActive, true));
+    return db.select().from(userSessions).where(and(...conditions)).orderBy(desc(userSessions.loginAt));
+  }
+
+  async getUserSession(id: number): Promise<UserSession | undefined> {
+    const [session] = await db.select().from(userSessions).where(eq(userSessions.id, id));
+    return session;
+  }
+
+  async updateUserSession(id: number, data: Partial<UserSession>): Promise<UserSession> {
+    const [session] = await db.update(userSessions).set(data).where(eq(userSessions.id, id)).returning();
+    return session;
+  }
+
+  async deactivateUserSessions(userId: number, reason: string, exceptSessionId?: number): Promise<void> {
+    const conditions = [eq(userSessions.userId, userId), eq(userSessions.isActive, true)];
+    if (exceptSessionId) {
+      await db.update(userSessions)
+        .set({ isActive: false, logoutAt: new Date(), logoutReason: reason })
+        .where(and(...conditions, sql`${userSessions.id} != ${exceptSessionId}`));
+    } else {
+      await db.update(userSessions)
+        .set({ isActive: false, logoutAt: new Date(), logoutReason: reason })
+        .where(and(...conditions));
+    }
+  }
+
+  async createLoginVerificationCode(data: {
+    userId: number;
+    codeHash: string;
+    expiresAt: Date;
+  }): Promise<LoginVerificationCode> {
+    await db.update(loginVerificationCodes)
+      .set({ status: "invalidated" })
+      .where(and(eq(loginVerificationCodes.userId, data.userId), eq(loginVerificationCodes.status, "pending")));
+    const [code] = await db.insert(loginVerificationCodes).values(data).returning();
+    return code;
+  }
+
+  async getActiveVerificationCode(userId: number): Promise<LoginVerificationCode | undefined> {
+    const [code] = await db.select().from(loginVerificationCodes)
+      .where(and(
+        eq(loginVerificationCodes.userId, userId),
+        eq(loginVerificationCodes.status, "pending"),
+        sql`${loginVerificationCodes.expiresAt} > NOW()`
+      ))
+      .orderBy(desc(loginVerificationCodes.createdAt))
+      .limit(1);
+    return code;
+  }
+
+  async updateVerificationCode(id: number, data: Partial<LoginVerificationCode>): Promise<void> {
+    await db.update(loginVerificationCodes).set(data).where(eq(loginVerificationCodes.id, id));
+  }
+
+  async createSecurityAuditLog(data: {
+    userId?: number;
+    eventType: string;
+    ipAddress?: string;
+    deviceInfo?: string;
+    metadata?: any;
+  }): Promise<SecurityAuditLog> {
+    const [log] = await db.insert(securityAuditLogs).values(data).returning();
+    return log;
+  }
+
+  async getSecurityAuditLogs(userId?: number, limit = 50): Promise<SecurityAuditLog[]> {
+    const conditions = userId ? [eq(securityAuditLogs.userId, userId)] : [];
+    return db.select().from(securityAuditLogs)
+      .where(conditions.length > 0 ? and(...conditions) : undefined)
+      .orderBy(desc(securityAuditLogs.createdAt))
+      .limit(limit);
+  }
+
+  async addPasswordToHistory(userId: number, hash: string): Promise<void> {
+    await db.insert(passwordHistory).values({ userId, passwordHash: hash });
+  }
+
+  async getPasswordHistory(userId: number, limit = 5): Promise<{ passwordHash: string }[]> {
+    return db.select({ passwordHash: passwordHistory.passwordHash })
+      .from(passwordHistory)
+      .where(eq(passwordHistory.userId, userId))
+      .orderBy(desc(passwordHistory.createdAt))
+      .limit(limit);
+  }
+
+  async updateUserPassword(userId: number, newPasswordHash: string): Promise<void> {
+    await db.update(users).set({
+      passwordHash: newPasswordHash,
+      passwordChangedAt: new Date(),
+      forcePasswordChange: false,
+      updatedAt: new Date(),
+    }).where(eq(users.id, userId));
+  }
+
+  async updateUserLoginInfo(userId: number, ip: string): Promise<void> {
+    await db.update(users).set({
+      lastLoginAt: new Date(),
+      lastLoginIp: ip,
+    }).where(eq(users.id, userId));
   }
 }
 

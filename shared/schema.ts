@@ -38,6 +38,10 @@ export const users = pgTable("users", {
   fullName: varchar("full_name", { length: 255 }).notNull(),
   passwordHash: text("password_hash").notNull(),
   isActive: boolean("is_active").notNull().default(true),
+  passwordChangedAt: timestamp("password_changed_at"),
+  lastLoginAt: timestamp("last_login_at"),
+  lastLoginIp: varchar("last_login_ip", { length: 45 }),
+  forcePasswordChange: boolean("force_password_change").notNull().default(false),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -286,6 +290,52 @@ export const auditLogs = pgTable("audit_logs", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+export const userSessions = pgTable("user_sessions", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  sessionToken: varchar("session_token", { length: 128 }),
+  ipAddress: varchar("ip_address", { length: 45 }),
+  browser: varchar("browser", { length: 128 }),
+  os: varchar("os", { length: 64 }),
+  deviceType: varchar("device_type", { length: 32 }),
+  location: varchar("location", { length: 255 }),
+  loginAt: timestamp("login_at").defaultNow(),
+  lastActivityAt: timestamp("last_activity_at").defaultNow(),
+  logoutAt: timestamp("logout_at"),
+  logoutReason: varchar("logout_reason", { length: 32 }),
+  isActive: boolean("is_active").notNull().default(true),
+  otpVerified: boolean("otp_verified").notNull().default(false),
+});
+
+export const loginVerificationCodes = pgTable("login_verification_codes", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  codeHash: varchar("code_hash", { length: 128 }).notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+  expiresAt: timestamp("expires_at").notNull(),
+  usedAt: timestamp("used_at"),
+  attempts: integer("attempts").notNull().default(0),
+  resendCount: integer("resend_count").notNull().default(0),
+  status: varchar("status", { length: 16 }).notNull().default("pending"),
+});
+
+export const securityAuditLogs = pgTable("security_audit_logs", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").references(() => users.id),
+  eventType: varchar("event_type", { length: 64 }).notNull(),
+  ipAddress: varchar("ip_address", { length: 45 }),
+  deviceInfo: text("device_info"),
+  metadata: jsonb("metadata"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const passwordHistory = pgTable("password_history", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  passwordHash: text("password_hash").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
 export const insertUserSchema = createInsertSchema(users).omit({
   id: true,
   createdAt: true,
@@ -376,6 +426,10 @@ export type TargetBonusCountryEntry = typeof targetBonusCountry.$inferSelect;
 export type CommissionTerm = typeof commissionTerms.$inferSelect;
 export type CommissionStudent = typeof commissionStudents.$inferSelect;
 export type CommissionEntry = typeof commissionEntries.$inferSelect;
+export type UserSession = typeof userSessions.$inferSelect;
+export type LoginVerificationCode = typeof loginVerificationCodes.$inferSelect;
+export type SecurityAuditLog = typeof securityAuditLogs.$inferSelect;
+export type PasswordHistoryEntry = typeof passwordHistory.$inferSelect;
 export type InsertCommissionStudent = z.infer<typeof insertCommissionStudentSchema>;
 export type InsertCommissionEntry = z.infer<typeof insertCommissionEntrySchema>;
 export type InsertUser = z.infer<typeof insertUserSchema>;
@@ -451,7 +505,7 @@ export const PERMISSION_REGISTRY = [
     module: "commission_tracker",
     label: "Commission Tracker",
     resources: [
-      { resource: "student", label: "Commission Students", actions: ["read", "add", "update", "delete", "export"] },
+      { resource: "student", label: "Commission Students", actions: ["read", "add", "update", "delete", "export", "delete_master"] },
       { resource: "entry", label: "Term Entries", actions: ["read", "add", "update", "delete"] },
     ],
   },
@@ -515,6 +569,7 @@ export const LEGACY_PERMISSION_MAP: Record<string, string> = {
   "commission_tracker.entry.create": "commission_tracker.entry.add",
   "commission_tracker.entry.edit": "commission_tracker.entry.update",
   "commission_tracker.entry.delete": "commission_tracker.entry.delete",
+  "commission_tracker.student.delete_master": "commission_tracker.student.delete_master",
   "contacts.view": "contacts.contact.read",
   "contacts.create": "contacts.contact.add",
   "contacts.edit": "contacts.contact.update",

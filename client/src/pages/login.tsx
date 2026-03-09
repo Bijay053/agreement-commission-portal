@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Shield, Lock, Mail, Eye, EyeOff } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { useLocation } from "wouter";
 
 export default function LoginPage() {
   const { login } = useAuth();
@@ -14,13 +15,19 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [, setLocation] = useLocation();
+
+  const params = new URLSearchParams(window.location.search);
+  const reason = params.get("reason");
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
     try {
-      await login(email, password);
-      toast({ title: "Welcome back", description: "You have been logged in successfully." });
+      const result = await login(email, password);
+      if (result.requiresOtp) {
+        toast({ title: "Verification Required", description: "A verification code has been sent to your email." });
+      }
     } catch (err: any) {
       toast({ title: "Login failed", description: err.message || "Invalid credentials", variant: "destructive" });
     } finally {
@@ -38,6 +45,17 @@ export default function LoginPage() {
           <h1 className="text-2xl font-semibold text-foreground">Agreement Portal</h1>
           <p className="text-sm text-muted-foreground mt-1">Study Info Centre</p>
         </div>
+
+        {reason === "inactivity" && (
+          <div className="mb-4 p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg text-sm text-amber-800 dark:text-amber-200 text-center" data-testid="text-inactivity-notice">
+            You were logged out due to inactivity. Please sign in again.
+          </div>
+        )}
+        {reason === "expired" && (
+          <div className="mb-4 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-sm text-red-800 dark:text-red-200 text-center" data-testid="text-session-expired-notice">
+            Your session has expired. Please sign in again.
+          </div>
+        )}
 
         <Card>
           <CardHeader className="pb-4">

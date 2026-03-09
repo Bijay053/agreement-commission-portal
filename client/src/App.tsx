@@ -7,7 +7,10 @@ import { AuthProvider, useAuth } from "@/lib/auth";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/app-sidebar";
 import { AccessGuard } from "@/components/access-guard";
+import { InactivityMonitor } from "@/components/inactivity-monitor";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { AlertTriangle } from "lucide-react";
 import NotFound from "@/pages/not-found";
 import LoginPage from "@/pages/login";
 import DashboardPage from "@/pages/dashboard";
@@ -24,6 +27,11 @@ import CommissionTrackerPage from "@/pages/commission-tracker";
 import CommissionTrackerDetailPage from "@/pages/commission-tracker-detail";
 import ForgotPasswordPage from "@/pages/forgot-password";
 import ResetPasswordPage from "@/pages/reset-password";
+import VerifyOtpPage from "@/pages/verify-otp";
+import ChangePasswordPage from "@/pages/change-password";
+import AccountSecurityPage from "@/pages/account-security";
+import { useLocation } from "wouter";
+import { Button } from "@/components/ui/button";
 
 function Router() {
   return (
@@ -89,13 +97,46 @@ function Router() {
           <AuditLogsPage />
         </AccessGuard>
       </Route>
+      <Route path="/account-security" component={AccountSecurityPage} />
+      <Route path="/change-password">
+        {() => <ChangePasswordPage />}
+      </Route>
       <Route component={NotFound} />
     </Switch>
   );
 }
 
+function PasswordExpiryWarning() {
+  const { passwordWarning, daysUntilExpiry } = useAuth();
+  const [, setLocation] = useLocation();
+  const [dismissed, setDismissed] = useState(false);
+
+  if (!passwordWarning || dismissed) return null;
+
+  return (
+    <Alert className="mx-4 mt-2 border-amber-300 bg-amber-50 dark:bg-amber-900/20" data-testid="alert-password-expiry">
+      <AlertTriangle className="h-4 w-4 text-amber-600" />
+      <AlertDescription className="flex items-center justify-between">
+        <span className="text-sm text-amber-800 dark:text-amber-200">
+          Your password will expire in {daysUntilExpiry} day(s). Please change it soon.
+        </span>
+        <div className="flex gap-2 ml-4">
+          <Button size="sm" variant="outline" onClick={() => setLocation("/change-password")} data-testid="button-change-password-warning">
+            Change Now
+          </Button>
+          <Button size="sm" variant="ghost" onClick={() => setDismissed(true)}>
+            Dismiss
+          </Button>
+        </div>
+      </AlertDescription>
+    </Alert>
+  );
+}
+
+import { useState } from "react";
+
 function AuthenticatedApp() {
-  const { user, isLoading } = useAuth();
+  const { user, isLoading, otpPending, passwordExpired, clearOtpPending, clearPasswordExpired } = useAuth();
 
   if (isLoading) {
     return (
@@ -108,6 +149,15 @@ function AuthenticatedApp() {
     );
   }
 
+  if (otpPending) {
+    return (
+      <VerifyOtpPage
+        maskedEmail={otpPending.maskedEmail}
+        onCancel={clearOtpPending}
+      />
+    );
+  }
+
   if (!user) {
     return (
       <Switch>
@@ -115,6 +165,15 @@ function AuthenticatedApp() {
         <Route path="/reset-password" component={ResetPasswordPage} />
         <Route><LoginPage /></Route>
       </Switch>
+    );
+  }
+
+  if (passwordExpired) {
+    return (
+      <ChangePasswordPage
+        forced={true}
+        onSuccess={clearPasswordExpired}
+      />
     );
   }
 
@@ -131,11 +190,13 @@ function AuthenticatedApp() {
           <header className="flex items-center justify-between gap-2 p-2 border-b h-12 shrink-0">
             <SidebarTrigger data-testid="button-sidebar-toggle" />
           </header>
+          <PasswordExpiryWarning />
           <main className="flex-1 overflow-auto">
             <Router />
           </main>
         </div>
       </div>
+      <InactivityMonitor />
     </SidebarProvider>
   );
 }
