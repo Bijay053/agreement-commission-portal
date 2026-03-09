@@ -6,7 +6,7 @@ import {
   agreementCommissionRules, agreementContacts, agreementDocuments, auditLogs,
   targetBonusRules, targetBonusTiers, targetBonusCountry, passwordResetTokens,
   commissionStudents, commissionEntries, commissionTerms,
-  subAgentEntries, subAgentTermEntries,
+  subAgentEntries, subAgentTermEntries, studentProviders,
   userSessions, loginVerificationCodes, securityAuditLogs, passwordHistory,
   type User, type InsertUser, type Agreement, type InsertAgreement,
   type AgreementTarget, type InsertTarget, type AgreementCommissionRule,
@@ -116,6 +116,11 @@ export interface IStorage {
   createCommissionStudent(data: InsertCommissionStudent): Promise<CommissionStudent>;
   updateCommissionStudent(id: number, data: Partial<InsertCommissionStudent>): Promise<CommissionStudent>;
   deleteCommissionStudent(id: number): Promise<void>;
+
+  getStudentProviders(commissionStudentId: number): Promise<import("@shared/schema").StudentProvider[]>;
+  addStudentProvider(data: import("@shared/schema").InsertStudentProvider): Promise<import("@shared/schema").StudentProvider>;
+  deleteStudentProvider(id: number): Promise<void>;
+  getAllStudentProviders(): Promise<import("@shared/schema").StudentProvider[]>;
 
   getCommissionEntries(studentId: number): Promise<CommissionEntry[]>;
   getCommissionEntry(id: number): Promise<CommissionEntry | undefined>;
@@ -1107,6 +1112,23 @@ export class DatabaseStorage implements IStorage {
 
   async deleteCommissionStudent(id: number): Promise<void> {
     await db.delete(commissionStudents).where(eq(commissionStudents.id, id));
+  }
+
+  async getStudentProviders(commissionStudentId: number) {
+    return db.select().from(studentProviders).where(eq(studentProviders.commissionStudentId, commissionStudentId));
+  }
+
+  async addStudentProvider(data: any) {
+    const [created] = await db.insert(studentProviders).values(data).returning();
+    return created;
+  }
+
+  async deleteStudentProvider(id: number) {
+    await db.delete(studentProviders).where(eq(studentProviders.id, id));
+  }
+
+  async getAllStudentProviders() {
+    return db.select().from(studentProviders);
   }
 
   async getCommissionEntries(studentId: number): Promise<CommissionEntry[]> {
