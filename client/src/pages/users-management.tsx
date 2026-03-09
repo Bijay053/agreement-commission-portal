@@ -14,7 +14,7 @@ import { SearchableSelect } from "@/components/ui/searchable-select";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter,
 } from "@/components/ui/dialog";
-import { Plus, Users, Mail, User, Pencil, Shield, Monitor, Smartphone, Tablet, Clock, Globe, LogOut } from "lucide-react";
+import { Plus, Users, Mail, User, Pencil, Shield, Monitor, Smartphone, Tablet, Clock, Globe, LogOut, UserCheck, UserX } from "lucide-react";
 import type { Role } from "@shared/schema";
 
 interface UserWithRoles {
@@ -77,6 +77,18 @@ export default function UsersManagementPage() {
       qc.invalidateQueries({ queryKey: ["/api/users"] });
       setEditingUser(null);
       toast({ title: "Roles updated" });
+    },
+    onError: (err: any) => toast({ title: "Error", description: err.message, variant: "destructive" }),
+  });
+
+  const toggleStatusMutation = useMutation({
+    mutationFn: async ({ userId, isActive }: { userId: number; isActive: boolean }) => {
+      const res = await apiRequest("PATCH", `/api/users/${userId}/status`, { isActive });
+      return res.json();
+    },
+    onSuccess: (_, variables) => {
+      qc.invalidateQueries({ queryKey: ["/api/users"] });
+      toast({ title: variables.isActive ? "User activated" : "User deactivated" });
     },
     onError: (err: any) => toast({ title: "Error", description: err.message, variant: "destructive" }),
   });
@@ -181,9 +193,26 @@ export default function UsersManagementPage() {
                     ) : (
                       <span className="text-xs text-muted-foreground" data-testid={`text-no-roles-${user.id}`}>No roles assigned</span>
                     )}
-                    <Badge variant={user.isActive ? "default" : "secondary"} data-testid={`badge-status-${user.id}`}>
+                    <Badge variant={user.isActive ? "default" : "destructive"} data-testid={`badge-status-${user.id}`}>
                       {user.isActive ? "Active" : "Inactive"}
                     </Badge>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      onClick={() => {
+                        if (user.isActive) {
+                          if (confirm(`Deactivate ${user.fullName}? They will be logged out and unable to sign in.`)) {
+                            toggleStatusMutation.mutate({ userId: user.id, isActive: false });
+                          }
+                        } else {
+                          toggleStatusMutation.mutate({ userId: user.id, isActive: true });
+                        }
+                      }}
+                      title={user.isActive ? "Deactivate account" : "Activate account"}
+                      data-testid={`button-toggle-status-${user.id}`}
+                    >
+                      {user.isActive ? <UserX className="w-4 h-4 text-destructive" /> : <UserCheck className="w-4 h-4 text-green-600" />}
+                    </Button>
                     <Button
                       size="icon"
                       variant="ghost"
