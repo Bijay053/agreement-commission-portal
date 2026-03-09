@@ -158,6 +158,13 @@ export async function registerRoutes(
       req.session.pendingUserId = user.id;
       req.session.otpRequired = true;
 
+      await new Promise<void>((resolve, reject) => {
+        req.session.save((err) => {
+          if (err) reject(err);
+          else resolve();
+        });
+      });
+
       if (!otpSent) {
         return res.status(500).json({
           message: "Failed to send verification email. Please try again or contact an administrator.",
