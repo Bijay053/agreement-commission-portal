@@ -228,6 +228,7 @@ export async function registerRoutes(
     if (!user) return res.status(401).json({ message: "User not found" });
     const perms = await storage.getUserPermissions(user.id);
     const userRoles = await storage.getUserRoles(user.id);
+    req.session.userPermissions = perms;
     const { passwordHash, ...safeUser } = user;
     res.json({ user: safeUser, permissions: perms, roles: userRoles });
   });
