@@ -15,6 +15,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter,
 } from "@/components/ui/dialog";
 import { Plus, Users, Mail, User, Pencil, Shield, Monitor, Smartphone, Tablet, Clock, Globe, LogOut, UserCheck, UserX } from "lucide-react";
+import { ConfirmModal } from "@/components/ui/confirm-modal";
 import type { Role } from "@shared/schema";
 
 interface UserWithRoles {
@@ -33,6 +34,7 @@ export default function UsersManagementPage() {
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [editingUser, setEditingUser] = useState<UserWithRoles | null>(null);
   const [viewingSessionsUser, setViewingSessionsUser] = useState<UserWithRoles | null>(null);
+  const [deactivatingUser, setDeactivatingUser] = useState<UserWithRoles | null>(null);
 
   const { data: users, isLoading } = useQuery<UserWithRoles[]>({ queryKey: ["/api/users"] });
   const { data: roles } = useQuery<Role[]>({ queryKey: ["/api/roles"] });
@@ -201,9 +203,7 @@ export default function UsersManagementPage() {
                       variant="ghost"
                       onClick={() => {
                         if (user.isActive) {
-                          if (confirm(`Deactivate ${user.fullName}? They will be logged out and unable to sign in.`)) {
-                            toggleStatusMutation.mutate({ userId: user.id, isActive: false });
-                          }
+                          setDeactivatingUser(user);
                         } else {
                           toggleStatusMutation.mutate({ userId: user.id, isActive: true });
                         }
@@ -314,6 +314,21 @@ export default function UsersManagementPage() {
           {viewingSessionsUser && <UserSessionsPanel userId={viewingSessionsUser.id} />}
         </DialogContent>
       </Dialog>
+
+      <ConfirmModal
+        open={!!deactivatingUser}
+        onOpenChange={(open) => { if (!open) setDeactivatingUser(null); }}
+        variant="danger"
+        title="Deactivate User Account?"
+        description={`${deactivatingUser?.fullName} will be signed out immediately and will no longer be able to access the portal until the account is reactivated.`}
+        confirmText="Deactivate User"
+        onConfirm={() => {
+          if (deactivatingUser) {
+            toggleStatusMutation.mutate({ userId: deactivatingUser.id, isActive: false });
+          }
+        }}
+        data-testid="modal-deactivate-user"
+      />
     </div>
   );
 }
