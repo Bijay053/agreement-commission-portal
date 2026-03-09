@@ -15,7 +15,7 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   Plus, Search, Trash2, Users, DollarSign, TrendingUp, AlertCircle,
-  Settings, X, Upload, Download, Clock, CheckCircle2, FileSpreadsheet, AlertTriangle
+  Settings, X, Upload, Download, Clock, CheckCircle2, FileSpreadsheet, AlertTriangle, RotateCcw
 } from "lucide-react";
 import type { CommissionStudent, CommissionEntry } from "@shared/schema";
 
@@ -384,6 +384,18 @@ export default function CommissionTrackerPage() {
                 {filters?.statuses?.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
               </SelectContent>
             </Select>
+            {(search || agentFilter || providerFilter || statusFilter) && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-8 px-2 text-xs text-muted-foreground hover:text-foreground"
+                onClick={() => { setSearch(""); setAgentFilter(""); setProviderFilter(""); setStatusFilter(""); }}
+                data-testid="button-reset-filters"
+              >
+                <RotateCcw className="w-3.5 h-3.5 mr-1" />
+                Reset
+              </Button>
+            )}
           </div>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="mt-1">
@@ -865,6 +877,56 @@ function TermTable({ termName, students, allEntries, terms, isLoading, canEdit, 
             </tr>
           )}
         </tbody>
+        {(() => {
+          const entries = students.map(s => getEntry(s.id)).filter((e): e is CommissionEntry => !!e);
+          const totalCommission = entries.reduce((sum, e) => sum + Number(e.commissionAmount || 0), 0);
+          const totalBonus = entries.reduce((sum, e) => sum + Number(e.bonus || 0), 0);
+          const totalGst = entries.reduce((sum, e) => sum + Number(e.gstAmount || 0), 0);
+          const totalAmount = entries.reduce((sum, e) => sum + Number(e.totalAmount || 0), 0);
+          if (entries.length === 0) return null;
+          return (
+            <tfoot className="sticky bottom-0 z-10">
+              <tr className="bg-[#1a4971] text-white font-semibold text-xs" data-testid={`row-totals-${termName}`}>
+                {/* 1-10: S.No, Agent, AgentsicID, StudentID, Name, Provider, Country, CourseLevel, CourseName, AcademicYear */}
+                <td className="px-2 py-2 border border-[#2060a0]" colSpan={10}>
+                  <span className="text-white/80">Entries: {entries.length} / {students.length}</span>
+                </td>
+                {/* 11: Fee Gross */}
+                <td className="px-2 py-2 border border-[#2060a0]"></td>
+                {/* 12-14: Comm Rate Auto, Override, Used */}
+                <td className="px-2 py-2 border border-[#2060a0]"></td>
+                <td className="px-2 py-2 border border-[#2060a0]"></td>
+                <td className="px-2 py-2 border border-[#2060a0]"></td>
+                {/* 15: Commission */}
+                <td className="px-2 py-2 border border-[#2060a0] text-right font-mono" data-testid={`total-commission-${termName}`}>${totalCommission.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                {/* 16: Rate Change Warning */}
+                <td className="px-2 py-2 border border-[#2060a0]"></td>
+                {/* 17: Bonus */}
+                <td className="px-2 py-2 border border-[#2060a0] text-right font-mono" data-testid={`total-bonus-${termName}`}>${totalBonus.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                {/* 18-25: Scholarship Type Auto, Value Auto, Override Type, Override Value, Used, Amt, Fee After Scholarship, Warning */}
+                <td className="px-2 py-2 border border-[#2060a0]"></td>
+                <td className="px-2 py-2 border border-[#2060a0]"></td>
+                <td className="px-2 py-2 border border-[#2060a0]"></td>
+                <td className="px-2 py-2 border border-[#2060a0]"></td>
+                <td className="px-2 py-2 border border-[#2060a0]"></td>
+                <td className="px-2 py-2 border border-[#2060a0]"></td>
+                <td className="px-2 py-2 border border-[#2060a0]"></td>
+                <td className="px-2 py-2 border border-[#2060a0]"></td>
+                {/* 26: GST */}
+                <td className="px-2 py-2 border border-[#2060a0] text-right font-mono" data-testid={`total-gst-${termName}`}>${totalGst.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                {/* 27: Total */}
+                <td className="px-2 py-2 border border-[#2060a0] text-right font-mono" data-testid={`total-amount-${termName}`}>${totalAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                {/* 28-33: Payment, Paid Date, Invoice No, Payment Ref, Student Status, Notes */}
+                <td className="px-2 py-2 border border-[#2060a0]"></td>
+                <td className="px-2 py-2 border border-[#2060a0]"></td>
+                <td className="px-2 py-2 border border-[#2060a0]"></td>
+                <td className="px-2 py-2 border border-[#2060a0]"></td>
+                <td className="px-2 py-2 border border-[#2060a0]"></td>
+                <td className="px-2 py-2 border border-[#2060a0]"></td>
+              </tr>
+            </tfoot>
+          );
+        })()}
       </table>
     </div>
   );
