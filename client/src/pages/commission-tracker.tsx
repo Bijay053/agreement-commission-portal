@@ -405,7 +405,9 @@ export default function CommissionTrackerPage() {
               students={students || []}
               allEntries={allEntries}
               isLoading={isLoading}
+              canEdit={canEdit}
               canDeleteMaster={canDeleteMaster}
+              onUpdateStudent={(id, data) => updateStudentMutation.mutate({ id, data })}
               onDeleteStudent={(id) => {
                 if (confirm("Delete this student and all their term entries?")) deleteStudentMutation.mutate(id);
               }}
@@ -440,13 +442,15 @@ export default function CommissionTrackerPage() {
   );
 }
 
-function YearDashboard({ dashboard, year, students, allEntries, isLoading, canDeleteMaster, onDeleteStudent }: {
+function YearDashboard({ dashboard, year, students, allEntries, isLoading, canEdit, canDeleteMaster, onUpdateStudent, onDeleteStudent }: {
   dashboard: any;
   year: number | null;
   students: CommissionStudent[];
   allEntries: Record<number, CommissionEntry[]>;
   isLoading: boolean;
+  canEdit: boolean;
   canDeleteMaster: boolean;
+  onUpdateStudent: (id: number, data: Record<string, any>) => void;
   onDeleteStudent: (id: number) => void;
 }) {
   if (!dashboard || !year) {
@@ -588,9 +592,9 @@ function YearDashboard({ dashboard, year, students, allEntries, isLoading, canDe
                           {s.status}
                         </Badge>
                       </td>
-                      <td className="px-2 py-1 border border-gray-200 text-right font-mono">{s.commissionRatePct ? `${s.commissionRatePct}%` : "-"}</td>
-                      <td className="px-2 py-1 border border-gray-200 text-center">{s.gstApplicable || "-"}</td>
-                      <td className="px-2 py-1 border border-gray-200">{s.scholarshipType || "None"}</td>
+                      <EditableCell value={s.commissionRatePct?.toString() || ""} readOnly={!canEdit} onSave={(v) => onUpdateStudent(s.id, { commissionRatePct: v })} type="number" align="right" mono width="70px" />
+                      <EditableCell value={s.gstApplicable || "Yes"} readOnly={!canEdit} onSave={(v) => onUpdateStudent(s.id, { gstApplicable: v })} type="select" options={["Yes", "No"]} width="50px" />
+                      <EditableCell value={s.scholarshipType || "None"} readOnly={!canEdit} onSave={(v) => onUpdateStudent(s.id, { scholarshipType: v })} type="select" options={["None", "Percent", "Fixed"]} width="80px" />
                       <td className="px-2 py-1 border border-gray-200 text-right font-mono">${getTotalForStudent(s.id).toFixed(2)}</td>
                       <td className="px-2 py-1 border border-gray-200 max-w-[150px] truncate" title={s.notes || ""}>{s.notes || "-"}</td>
                       {canDeleteMaster && (
@@ -1073,10 +1077,6 @@ function AddStudentForm({ onSuccess }: { onSuccess: () => void }) {
     courseLevel: "",
     courseName: "",
     courseDurationYears: "",
-    commissionRatePct: "",
-    gstApplicable: "Yes",
-    scholarshipType: "None",
-    scholarshipValue: "0",
   });
 
   const createMutation = useMutation({
@@ -1156,41 +1156,6 @@ function AddStudentForm({ onSuccess }: { onSuccess: () => void }) {
           <Label className="text-xs">Course Duration (Years)</Label>
           <Input type="number" step="0.5" value={form.courseDurationYears} onChange={(e) => update("courseDurationYears", e.target.value)} data-testid="input-duration" className="h-8 text-sm" />
         </div>
-        <div>
-          <Label className="text-xs">Commission Rate (%)</Label>
-          <Input type="number" step="0.01" value={form.commissionRatePct} onChange={(e) => update("commissionRatePct", e.target.value)} data-testid="input-commission-rate" className="h-8 text-sm" />
-        </div>
-        <div>
-          <Label className="text-xs">GST Applicable</Label>
-          <Select value={form.gstApplicable} onValueChange={(v) => update("gstApplicable", v)}>
-            <SelectTrigger data-testid="select-gst" className="h-8 text-sm">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="Yes">Yes</SelectItem>
-              <SelectItem value="No">No</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-        <div>
-          <Label className="text-xs">Scholarship Type</Label>
-          <Select value={form.scholarshipType} onValueChange={(v) => update("scholarshipType", v)}>
-            <SelectTrigger data-testid="select-scholarship-type" className="h-8 text-sm">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="None">None</SelectItem>
-              <SelectItem value="Percent">Percent</SelectItem>
-              <SelectItem value="Fixed">Fixed</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-        {form.scholarshipType !== "None" && (
-          <div>
-            <Label className="text-xs">Scholarship Value</Label>
-            <Input type="number" step="0.01" value={form.scholarshipValue} onChange={(e) => update("scholarshipValue", e.target.value)} data-testid="input-scholarship-value" className="h-8 text-sm" />
-          </div>
-        )}
       </div>
       <div className="flex justify-end gap-2">
         <Button type="submit" size="sm" disabled={createMutation.isPending} data-testid="button-submit-student">
