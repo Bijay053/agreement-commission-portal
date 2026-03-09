@@ -1593,6 +1593,23 @@ export async function registerRoutes(
       };
       const student = await storage.createCommissionStudent(data);
 
+      if (req.body.additionalProviders && Array.isArray(req.body.additionalProviders)) {
+        for (const ap of req.body.additionalProviders) {
+          if (ap.provider && ap.provider.trim()) {
+            await storage.addStudentProvider({
+              commissionStudentId: student.id,
+              provider: ap.provider.trim(),
+              studentId: ap.studentId || null,
+              country: ap.country || country,
+              courseLevel: ap.courseLevel || req.body.courseLevel || null,
+              courseName: ap.courseName || req.body.courseName || null,
+              courseDurationYears: ap.courseDurationYears || req.body.courseDurationYears || null,
+              startIntake: ap.startIntake || req.body.startIntake || null,
+            });
+          }
+        }
+      }
+
       const clientIp = req.headers["x-forwarded-for"] || req.socket.remoteAddress || "unknown";
       await storage.createAuditLog({
         userId: req.session.userId!,
@@ -1604,6 +1621,56 @@ export async function registerRoutes(
       });
 
       res.status(201).json(student);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.get("/api/commission-tracker/students/:id/providers", requireAuth, requirePermission("commission_tracker.view"), async (req, res) => {
+    try {
+      const id = Number(req.params.id);
+      const providers = await storage.getStudentProviders(id);
+      res.json(providers);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.post("/api/commission-tracker/students/:id/providers", requireAuth, requirePermission("commission_tracker.edit"), async (req, res) => {
+    try {
+      const id = Number(req.params.id);
+      const existing = await storage.getCommissionStudent(id);
+      if (!existing) return res.status(404).json({ message: "Student not found" });
+      if (!req.body.provider?.trim()) return res.status(400).json({ message: "Provider is required" });
+      const provider = await storage.addStudentProvider({
+        commissionStudentId: id,
+        provider: req.body.provider.trim(),
+        studentId: req.body.studentId || null,
+        country: req.body.country || existing.country,
+        courseLevel: req.body.courseLevel || null,
+        courseName: req.body.courseName || null,
+        courseDurationYears: req.body.courseDurationYears || null,
+        startIntake: req.body.startIntake || null,
+      });
+      res.status(201).json(provider);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.delete("/api/commission-tracker/students/:id/providers/:providerId", requireAuth, requirePermission("commission_tracker.edit"), async (req, res) => {
+    try {
+      await storage.deleteStudentProvider(Number(req.params.providerId));
+      res.json({ success: true });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.get("/api/commission-tracker/all-student-providers", requireAuth, requirePermission("commission_tracker.view"), async (req, res) => {
+    try {
+      const providers = await storage.getAllStudentProviders();
+      res.json(providers);
     } catch (err: any) {
       res.status(500).json({ message: err.message });
     }
