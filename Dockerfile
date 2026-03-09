@@ -13,8 +13,13 @@ RUN mkdir -p uploads && npm run build
 FROM base AS production
 ENV NODE_ENV=production
 COPY package.json ./
-RUN npm install --omit=dev && npm cache clean --force
+RUN npm install && npm cache clean --force
 COPY --from=build /app/dist ./dist
-RUN mkdir -p uploads
+COPY --from=build /app/drizzle.config.ts ./drizzle.config.ts
+COPY --from=build /app/shared ./shared
+COPY --from=build /app/tsconfig.json ./tsconfig.json
+COPY docker-entrypoint.sh ./
+RUN mkdir -p uploads && chmod +x docker-entrypoint.sh
 EXPOSE 5000
+ENTRYPOINT ["./docker-entrypoint.sh"]
 CMD ["node", "dist/index.cjs"]
