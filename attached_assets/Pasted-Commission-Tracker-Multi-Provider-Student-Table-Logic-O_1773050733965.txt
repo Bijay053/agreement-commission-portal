@@ -1,0 +1,115 @@
+Commission Tracker – Multi-Provider Student Table Logic
+Objective
+
+If a single student is enrolled with multiple providers, the table should display multiple rows for providers, but student information should appear only once using merged rows (rowspan).
+
+This prevents duplicate student entries and makes the table cleaner.
+
+Table Display Logic
+
+If a student has multiple providers, apply row merging for these columns:
+
+Columns to Merge
+
+Merge vertically across rows:
+
+Agent
+
+Agentsic ID
+
+Student ID
+
+Student Name
+
+These values should appear only once.
+
+Columns NOT to Merge
+
+These should be separate per provider:
+
+Provider
+
+Country
+
+Intake
+
+Status
+
+Commission %
+
+GST
+
+Scholarship
+
+Total Commission
+
+Notes
+
+Example
+Current (Incorrect)
+Agent	Agentsic ID	Student Name	Provider	Intake
+www	wdw	qwww	Provider A	T1
+www	wdw	qwww	Provider B	T2
+
+Student information repeats unnecessarily.
+
+Correct Display (Row Merge)
+Agent	Agentsic ID	Student Name	Provider	Intake
+www	wdw	qwww	Provider A	T1
+			Provider B	T2
+
+Or visually:
+
+Agent	Agentsic ID	Student Name	Provider	Intake
+www	wdw	qwww	Provider A	T1
+			Provider B	T2
+
+(First 3 columns merged with rowspan=2)
+
+Backend Data Logic
+
+Group rows by:
+
+student_id OR agentsic_id
+
+Example structure:
+
+Student
+ ├─ Provider 1
+ ├─ Provider 2
+ └─ Provider 3
+Frontend Rendering Logic (Pseudo)
+groupByStudent()
+
+for each student:
+    providers = student.providers
+    rowspan = providers.length
+
+    render first row:
+        agent rowspan=rowspan
+        agentsic_id rowspan=rowspan
+        student_name rowspan=rowspan
+        provider[0]
+
+    render remaining rows:
+        provider[1]
+        provider[2]
+Extra Validation Rule
+
+System must allow:
+
+✔ Same student → multiple providers
+✔ Same student → same provider but different course/intake
+
+But block duplicates:
+
+❌ Same student name + provider + intake
+❌ Same student id + provider
+
+Expected Result
+
+Example for John Smith enrolled in 2 universities:
+
+Agent	Agentsic ID	Student Name	Provider	Intake	Comm
+Test Agent	asic12322	John Smith	University of Newcastle	T1 2025	$28
+			Kaplan Business School	T2 2025	$320

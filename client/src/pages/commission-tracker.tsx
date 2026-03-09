@@ -1171,6 +1171,11 @@ function BulkUploadDialog({ onSuccess }: { onSuccess: () => void }) {
                 {preview.valid.map((r, i) => (
                   <div key={i} className="py-1 px-2 border-b bg-green-50">
                     Row {r.row}: {r.data.studentName} ({r.data.agentsicId}) — {r.data.provider}
+                    {r.data.additionalProviders?.length > 0 && (
+                      <span className="text-blue-600 ml-1">
+                        + {r.data.additionalProviders.map((ap: any) => ap.provider).join(", ")}
+                      </span>
+                    )}
                   </div>
                 ))}
               </div>

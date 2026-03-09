@@ -2078,12 +2078,18 @@ export async function registerRoutes(
       const headers = [
         "Agent Name", "Agentsic ID (mandatory)", "Student ID", "Student Name",
         "Provider", "Country", "Start Intake", "Course Level", "Course Name",
-        "Duration (Years)"
+        "Duration (Years)",
+        "Additional Provider 1", "Additional Student ID 1",
+        "Additional Provider 2", "Additional Student ID 2",
+        "Additional Provider 3", "Additional Student ID 3"
       ];
       const sampleRow = [
         "Sample Agent", "AG-001", "STU-001", "John Doe",
         "University of Newcastle", "Australia", "T1 2025", "Bachelor", "Computer Science",
-        "3"
+        "3",
+        "University of Sydney", "STU-002",
+        "", "",
+        "", ""
       ];
       const csv = [headers.join(","), sampleRow.join(",")].join("\n");
       res.setHeader("Content-Type", "text/csv");
@@ -2147,6 +2153,13 @@ export async function registerRoutes(
           continue;
         }
 
+        const additionalProviders: Array<{ provider: string; studentId: string }> = [];
+        for (let pi = 1; pi <= 3; pi++) {
+          const aprov = (row[`Additional Provider ${pi}`] || "").trim();
+          const asid = (row[`Additional Student ID ${pi}`] || "").trim();
+          if (aprov) additionalProviders.push({ provider: aprov, studentId: asid });
+        }
+
         seenInFile.push({ studentName, agentsicId, provider, studentId });
         valid.push({
           row: rowNum,
@@ -2165,6 +2178,7 @@ export async function registerRoutes(
             gstApplicable: (row["GST Applicable (Yes/No)"] || "Yes").trim(),
             scholarshipType: (row["Scholarship Type (None/Percent/Fixed)"] || "None").trim(),
             scholarshipValue: (row["Scholarship Value"] || "0").trim(),
+            additionalProviders,
           },
         });
       }
@@ -2213,11 +2227,25 @@ export async function registerRoutes(
 
           const country = (data.country || "Australia").trim();
           const isAU = country.toLowerCase() === "au" || country.toLowerCase() === "australia";
-          await storage.createCommissionStudent({
+          const created = await storage.createCommissionStudent({
             ...data,
             gstRatePct: isAU ? "10" : "0",
             gstApplicable: data.gstApplicable || (isAU ? "Yes" : "No"),
           });
+
+          if (data.additionalProviders && Array.isArray(data.additionalProviders)) {
+            for (const ap of data.additionalProviders) {
+              if (ap.provider && ap.provider.trim()) {
+                await storage.addStudentProvider({
+                  commissionStudentId: created.id,
+                  provider: ap.provider.trim(),
+                  studentId: ap.studentId || null,
+                  country: country,
+                });
+              }
+            }
+          }
+
           importedSoFar.push({ studentName, agentsicId, provider, studentId });
           results.imported++;
         } catch (e: any) {
