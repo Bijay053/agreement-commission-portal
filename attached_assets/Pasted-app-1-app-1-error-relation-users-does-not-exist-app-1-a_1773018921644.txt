@@ -1,0 +1,95 @@
+app-1  | 
+app-1  | error: relation "users" does not exist
+app-1  |     at /app/dist/index.cjs:59:15227
+app-1  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+app-1  |     at async /app/dist/index.cjs:73:31386
+app-1  |     at async ME (/app/dist/index.cjs:73:136688)
+app-1  |     at async m8 (/app/dist/index.cjs:73:143925)
+app-1  |     at async /app/dist/index.cjs:75:25535 {
+app-1  |   length: 104,
+app-1  |   severity: 'ERROR',
+app-1  |   code: '42P01',
+app-1  |   detail: undefined,
+app-1  |   hint: undefined,
+app-1  |   position: '98',
+app-1  |   internalPosition: undefined,
+app-1  |   internalQuery: undefined,
+app-1  |   where: undefined,
+app-1  |   schema: undefined,
+app-1  |   table: undefined,
+app-1  |   column: undefined,
+app-1  |   dataType: undefined,
+app-1  |   constraint: undefined,
+app-1  |   file: 'parse_relation.c',
+app-1  |   line: '1449',
+app-1  |   routine: 'parserOpenTable'
+app-1  | }
+app-1  | 
+app-1  | Node.js v20.20.1
+ubuntu@ip-172-31-41-234:~/agreement-commission-portal$ sudo docker-compose exec app node -e "console.log('Connected')"
+WARN[0000] /home/ubuntu/agreement-commission-portal/docker-compose.yml: the attribute `version` is obsolete, it will be ignored, please remove it to avoid potential confusion 
+Error response from daemon: Container 949a951e3376f80689cde73bedb2dd11bbe5b3754d07dd40d7320e047ea9b9e4 is restarting, wait until the container is running
+ubuntu@ip-172-31-41-234:~/agreement-commission-portal$ sudo docker-compose exec app npx drizzle-kit push --force
+WARN[0000] /home/ubuntu/agreement-commission-portal/docker-compose.yml: the attribute `version` is obsolete, it will be ignored, please remove it to avoid potential confusion 
+Error response from daemon: Container 949a951e3376f80689cde73bedb2dd11bbe5b3754d07dd40d7320e047ea9b9e4 is restarting, wait until the container is running
+ubuntu@ip-172-31-41-234:~/agreement-commission-portal$ cd ~/agreement-commission-portal
+git pull
+sudo docker-compose down
+sudo docker-compose up -d --build
+remote: Enumerating objects: 6, done.
+remote: Counting objects: 100% (6/6), done.
+remote: Compressing objects: 100% (4/4), done.
+remote: Total 4 (delta 2), reused 0 (delta 0), pack-reused 0 (from 0)
+Unpacking objects: 100% (4/4), 630 bytes | 630.00 KiB/s, done.
+From https://github.com/Bijay053/agreement-commission-portal
+   645d9a0..2fdf548  main       -> origin/main
+Updating 645d9a0..2fdf548
+Fast-forward
+ Dockerfile           | 9 +++++++--
+ docker-entrypoint.sh | 8 ++++++++
+ 2 files changed, 15 insertions(+), 2 deletions(-)
+ create mode 100755 docker-entrypoint.sh
+WARN[0000] /home/ubuntu/agreement-commission-portal/docker-compose.yml: the attribute `version` is obsolete, it will be ignored, please remove it to avoid potential confusion 
+[+] down 3/3
+ ✔ Container agreement-commission-portal-app-1 Removed                                                                                                                                                         0.0s
+ ✔ Container agreement-commission-portal-db-1  Removed                                                                                                                                                         0.2s
+ ✔ Network agreement-commission-portal_default Removed                                                                                                                                                         0.1s
+WARN[0000] /home/ubuntu/agreement-commission-portal/docker-compose.yml: the attribute `version` is obsolete, it will be ignored, please remove it to avoid potential confusion 
+[+] Building 242.1s (18/19)                                                                                                                                                                                        
+ => [internal] load local bake definitions                                                                                                                                                                    0.0s
+ => => reading from stdin 560B                                                                                                                                                                                0.0s
+ => [internal] load build definition from Dockerfile                                                                                                                                                          0.0s
+ => => transferring dockerfile: 669B                                                                                                                                                                          0.0s
+ => [internal] load metadata for docker.io/library/node:20-alpine                                                                                                                                             0.9s
+ => [internal] load .dockerignore                                                                                                                                                                             0.0s
+ => => transferring context: 121B                                                                                                                                                                             0.0s
+ => [base 1/2] FROM docker.io/library/node:20-alpine@sha256:b88333c42c23fbd91596ebd7fd10de239cedab9617de04142dde7315e3bc0afa                                                                                  0.0s
+ => => resolve docker.io/library/node:20-alpine@sha256:b88333c42c23fbd91596ebd7fd10de239cedab9617de04142dde7315e3bc0afa                                                                                       0.0s
+ => [internal] load build context                                                                                                                                                                             0.0s
+ => => transferring context: 6.53kB                                                                                                                                                                           0.0s
+ => CACHED [base 2/2] WORKDIR /app                                                                                                                                                                            0.0s
+ => CACHED [deps 1/2] COPY package.json ./                                                                                                                                                                    0.0s
+ => CACHED [deps 2/2] RUN npm install                                                                                                                                                                         0.0s
+ => [production 2/8] RUN npm install && npm cache clean --force                                                                                                                                             196.5s
+ => [build 1/2] COPY . .                                                                                                                                                                                      0.2s
+ => [build 2/2] RUN mkdir -p uploads && npm run build                                                                                                                                                        23.0s
+ => [production 3/8] COPY --from=build /app/dist ./dist                                                                                                                                                       0.8s 
+ => [production 4/8] COPY --from=build /app/drizzle.config.ts ./drizzle.config.ts                                                                                                                             0.1s 
+ => [production 5/8] COPY --from=build /app/shared ./shared                                                                                                                                                   0.2s 
+ => [production 6/8] COPY --from=build /app/tsconfig.json ./tsconfig.json                                                                                                                                     0.1s 
+ => [production 7/8] COPY docker-entrypoint.sh ./                                                                                                                                                             0.1s 
+ => [production 8/8] RUN mkdir -p uploads && chmod +x docker-entrypoint.sh                                                                                                                                    0.7s 
+ => exporting to image                                                                                                                                                                                       42.4s
+ => => exporting layers                                                                                                                                                                                      30.9s
+ => => exporting manifest sha256:87663ea2e692954c19a1f8558287c9eb11f6e69cbd534e6fac03ba357e042178                                                                                                             0.0s
+ => => exporting config sha256:2cfd46f02b00e4add95fe867f51506941d9f65d5ba20b14e5c5d457912f7133b                                                                                                               0.0s
+ => => exporting attestation manifest sha256:882f3280e5f660b406a37fb8405ca51d040412027c66381877dbeea9a786de4b                                                                                                 0.0s
+ => => exporting manifest list sha256:7be885d15a3989d9b5a8040e173d2546e81b69ff2ffe3d754ffec5ff81b12714                                                                                                        0.0s
+ => => naming to docker.io/library/agreement-commission-portal-app:latest                                                                                                                                     0.0s
+ => => unpacking to docker.io/library/agreement-commission-portal-app:latest                                                                                                                                  6.3s
+[+] up 4/4
+ ✔ Image agreement-commission-portal-app       Built                                                                                                                                                         242.2s
+ ✔ Network agreement-commission-portal_default Created                                                                                                                                                       0.1s
+ ✔ Container agreement-commission-portal-db-1  Healthy                                                                                                                                                       6.7s
+ ✔ Container agreement-commission-portal-app-1 Started                                                                                                                                                       6.7s
+ubuntu@ip-172-31-41-234:~/agreement-commission-portal$ 
