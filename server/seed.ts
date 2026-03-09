@@ -175,7 +175,11 @@ export async function seedDatabase() {
     }
   }
 
-  const adminHash = await hashPassword("admin123");
+  const defaultAdminPass = process.env.DEFAULT_ADMIN_PASSWORD || "Admin@Portal2026";
+  const defaultViewerPass = process.env.DEFAULT_VIEWER_PASSWORD || "Viewer@Portal2026";
+  const defaultEditorPass = process.env.DEFAULT_EDITOR_PASSWORD || "Editor@Portal2026";
+
+  const adminHash = await hashPassword(defaultAdminPass);
   const [adminUser] = await db.insert(users).values({
     email: "admin@studyinfocentre.com",
     fullName: "System Administrator",
@@ -183,7 +187,7 @@ export async function seedDatabase() {
     isActive: true,
   }).returning();
 
-  const viewerHash = await hashPassword("viewer123");
+  const viewerHash = await hashPassword(defaultViewerPass);
   const [viewerUser] = await db.insert(users).values({
     email: "viewer@studyinfocentre.com",
     fullName: "Sarah Johnson",
@@ -191,7 +195,7 @@ export async function seedDatabase() {
     isActive: true,
   }).returning();
 
-  const editorHash = await hashPassword("editor123");
+  const editorHash = await hashPassword(defaultEditorPass);
   const [editorUser] = await db.insert(users).values({
     email: "editor@studyinfocentre.com",
     fullName: "Michael Chen",
