@@ -25,11 +25,14 @@ const allowlist = [
   "passport-local",
   "pg",
   "stripe",
+  "ua-parser-js",
   "uuid",
   "ws",
   "xlsx",
   "zod",
   "zod-validation-error",
+  "bcryptjs",
+  "csv-parse",
 ];
 
 async function buildAll() {
