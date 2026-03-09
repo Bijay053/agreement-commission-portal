@@ -1544,6 +1544,22 @@ export class DatabaseStorage implements IStorage {
       .from(subAgentEntries)
       .innerJoin(commissionStudents, eq(subAgentEntries.commissionStudentId, commissionStudents.id));
 
+    const yearTermNames = year
+      ? (await db.select().from(commissionTerms).where(eq(commissionTerms.year, year))).map(t => t.termName)
+      : null;
+
+    const allTermEntries = yearTermNames
+      ? await db.select().from(subAgentTermEntries).where(inArray(subAgentTermEntries.termName, yearTermNames.length > 0 ? yearTermNames : ["__none__"]))
+      : await db.select().from(subAgentTermEntries);
+
+    const termPaidByStudent: Record<number, number> = {};
+    for (const te of allTermEntries) {
+      const sid = te.commissionStudentId;
+      termPaidByStudent[sid] = (termPaidByStudent[sid] || 0) + (Number(te.totalPaid) || 0);
+    }
+
+    const relevantStudentIds = year ? new Set(Object.keys(termPaidByStudent).map(Number)) : null;
+
     const byStatus: Record<string, number> = {};
     let totalPaid = 0;
     let totalMargin = 0;
@@ -1554,12 +1570,15 @@ export class DatabaseStorage implements IStorage {
       const entry = r.sub_agent_entries;
       const student = r.commission_students;
 
+      if (relevantStudentIds && !relevantStudentIds.has(entry.commissionStudentId)) continue;
+
       const st = entry.status || "Under Enquiry";
       byStatus[st] = (byStatus[st] || 0) + 1;
 
-      const paid = Number(entry.subAgentPaidTotal) || 0;
+      const paid = year ? (termPaidByStudent[entry.commissionStudentId] || 0) : (Number(entry.subAgentPaidTotal) || 0);
       totalPaid += paid;
-      totalMargin += Number(entry.margin) || 0;
+      const margin = year ? 0 : (Number(entry.margin) || 0);
+      totalMargin += margin;
 
       if (!agentMap[student.agentName]) agentMap[student.agentName] = { count: 0, totalPaid: 0 };
       agentMap[student.agentName].count++;
@@ -1571,7 +1590,7 @@ export class DatabaseStorage implements IStorage {
     }
 
     return {
-      totalStudents: rows.length,
+      totalStudents: year ? (relevantStudentIds?.size || 0) : rows.length,
       totalPaid: Math.round((totalPaid + Number.EPSILON) * 100) / 100,
       totalMargin: Math.round((totalMargin + Number.EPSILON) * 100) / 100,
       byStatus,
