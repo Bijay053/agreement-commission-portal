@@ -1,0 +1,52 @@
+ubuntu@ip-172-31-41-234:~/agreement-commission-portal$ docker logs agreement-commission-portal-app-1 --tail 5
+Error response from daemon: No such container: agreement-commission-portal-app-1
+ubuntu@ip-172-31-41-234:~/agreement-commission-portal$ cd ~/agreement-commission-portal && docker compose ps
+WARN[0000] /home/ubuntu/agreement-commission-portal/docker-compose.yml: the attribute `version` is obsolete, it will be ignored, please remove it to avoid potential confusion 
+NAME      IMAGE     COMMAND   SERVICE   CREATED   STATUS    PORTS
+ubuntu@ip-172-31-41-234:~/agreement-commission-portal$ cd ~/agreement-commission-portal && cat server/auth.ts | head -35
+import { Request, Response, NextFunction } from "express";
+import bcrypt from "bcryptjs";
+import session from "express-session";
+import pgSession from "connect-pg-simple";
+import { storage } from "./storage";
+import { pool } from "./db";
+
+const PgStore = pgSession(session);
+
+export async function setupAuth(app: any) {
+  if (process.env.NODE_ENV === "production") {
+    app.set("trust proxy", 1);
+  }
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS "session" (
+      "sid" varchar NOT NULL COLLATE "default",
+      "sess" json NOT NULL,
+      "expire" timestamp(6) NOT NULL,
+      CONSTRAINT "session_pkey" PRIMARY KEY ("sid") NOT DEFERRABLE INITIALLY IMMEDIATE
+    );
+    CREATE INDEX IF NOT EXISTS "IDX_session_expire" ON "session" ("expire");
+  `);
+  app.use(
+    session({
+      store: new PgStore({
+        pool: pool,
+      }),
+      secret: process.env.SESSION_SECRET!,
+      resave: false,
+      saveUninitialized: false,
+      cookie: {
+        maxAge: 60 * 60 * 1000,
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "lax",
+ubuntu@ip-172-31-41-234:~/agreement-commission-portal$ cat server/routes.ts | head -5 | tail -1 && grep -n "session.save\|setupAuth\|pendingUserId" server/routes.ts | head -10
+import { seedDatabase } from "./seed";
+4:import { setupAuth, hashPassword, comparePassword, requireAuth, requirePermission, requireActivePassword } from "./auth";
+99:  await setupAuth(app);
+158:      req.session.pendingUserId = user.id;
+162:        req.session.save((err) => {
+187:      const userId = req.session.pendingUserId;
+202:        delete req.session.pendingUserId;
+225:      delete req.session.pendingUserId;
+275:      const userId = req.session.pendingUserId;
+ubuntu@ip-172-31-41-234:~/agreement-commission-portal$ 
