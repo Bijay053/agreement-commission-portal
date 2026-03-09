@@ -1,0 +1,28 @@
+t-forward
+ Dockerfile        |    8 +-
+ package-lock.json | 9331 ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+ 2 files changed, 9335 insertions(+), 4 deletions(-)
+ create mode 100644 package-lock.json
+WARN[0000] /home/ubuntu/agreement-commission-portal/docker-compose.yml: the attribute `version` is obsolete, it will be ignored, please remove it to avoid potential confusion 
+[+] Building 45.7s (8/14)                                                                                                                                                                                          
+ => [internal] load local bake definitions                                                                                                                                                                    0.0s
+ => => reading from stdin 560B                                                                                                                                                                                0.0s
+ => [internal] load build definition from Dockerfile                                                                                                                                                          0.0s
+ => => transferring dockerfile: 427B                                                                                                                                                                          0.0s
+ => [internal] load metadata for docker.io/library/node:20-alpine                                                                                                                                             0.6s
+ => [internal] load .dockerignore                                                                                                                                                                             0.0s
+ => => transferring context: 121B                                                                                                                                                                             0.0s
+ => [base 1/2] FROM docker.io/library/node:20-alpine@sha256:b88333c42c23fbd91596ebd7fd10de239cedab9617de04142dde7315e3bc0afa                                                                                  3.2s
+ => => resolve docker.io/library/node:20-alpine@sha256:b88333c42c23fbd91596ebd7fd10de239cedab9617de04142dde7315e3bc0afa                                                                                       0.0s
+ => => sha256:9d10d4687fae6e13c052431ea3221ccda835c3262df3564310345ffe173146d9 445B / 445B                                                                                                                    0.5s
+ => => sha256:7ad115895a6aadccf7f98a05c33873c04df2933ba557c5bcdbedd3de612803da 1.26MB / 1.26MB                                                                                                                0.7s
+ => => sha256:ed2fdcee5269a06b0b8b77c69867176443364a72a9626e9aa2e66ab1ebda35a7 43.22MB / 43.22MB                                                                                                              1.4s
+ => => extracting sha256:ed2fdcee5269a06b0b8b77c69867176443364a72a9626e9aa2e66ab1ebda35a7                                                                                                                     1.6s
+ => => extracting sha256:7ad115895a6aadccf7f98a05c33873c04df2933ba557c5bcdbedd3de612803da                                                                                                                     0.1s
+ => => extracting sha256:9d10d4687fae6e13c052431ea3221ccda835c3262df3564310345ffe173146d9                                                                                                                     0.0s
+ => [internal] load build context                                                                                                                                                                             0.0s
+ => => transferring context: 336.19kB                                                                                                                                                                         0.0s
+ => [base 2/2] WORKDIR /app                                                                                                                                                                                   0.1s
+ => [deps 1/2] COPY package.json ./                                                                                                                                                                           0.1s
+ => [production 2/4] RUN npm install --omit=dev && npm cache clean --force                                                                                                                                   41.6s
+ => [deps 2/2] RUN npm install                                                                                                                                                                               41.6s
