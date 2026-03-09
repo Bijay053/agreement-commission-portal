@@ -4,6 +4,7 @@ import { storage } from "./storage";
 import { setupAuth, hashPassword, comparePassword, requireAuth, requirePermission } from "./auth";
 import { seedDatabase } from "./seed";
 import { loginSchema, insertAgreementSchema, insertTargetSchema, insertCommissionRuleSchema, insertContactSchema, insertUniversitySchema, PERMISSION_REGISTRY, LEGACY_PERMISSION_MAP } from "@shared/schema";
+import { sendPasswordResetEmail, verifyEmailConnection } from "./email";
 import multer from "multer";
 import path from "path";
 import fs from "fs";
@@ -135,14 +136,17 @@ export async function registerRoutes(
         userAgent: req.headers["user-agent"],
       });
 
-      const resetUrl = `${req.protocol}://${req.get("host")}/reset-password?token=${tokenHex}`;
-      console.log("\n========================================");
-      console.log("PASSWORD RESET LINK");
-      console.log("========================================");
-      console.log(`User: ${user.email}`);
-      console.log(`URL: ${resetUrl}`);
-      console.log(`Expires: ${expiresAt.toISOString()}`);
-      console.log("========================================\n");
+      const proto = req.headers["x-forwarded-proto"] || req.protocol;
+      const host = req.headers["x-forwarded-host"] || req.get("host");
+      const resetUrl = `${proto}://${host}/reset-password?token=${tokenHex}`;
+
+      try {
+        await sendPasswordResetEmail(user.email, resetUrl, expiresAt);
+        console.log(`Password reset email sent to ${user.email}`);
+      } catch (emailErr) {
+        console.error("Failed to send password reset email:", emailErr);
+        console.log(`Fallback - Reset URL for ${user.email}: ${resetUrl}`);
+      }
 
       res.json(genericResponse);
     } catch (err: any) {
