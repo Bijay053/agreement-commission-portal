@@ -34,7 +34,7 @@ interface MultiSearchableSelectProps {
 }
 
 export function MultiSearchableSelect({
-  values,
+  values = [],
   onValuesChange,
   options,
   placeholder = "All",
