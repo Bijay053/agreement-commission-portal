@@ -2015,58 +2015,119 @@ export async function registerRoutes(
   app.get("/api/commission-tracker/dashboard/:year", requireAuth, requirePermission("commission_tracker.view"), async (req, res) => {
     try {
       const year = Number(req.params.year);
+      const intakeFilter = req.query.intake ? String(req.query.intake) : "All";
       const terms = await storage.getCommissionTerms();
-      const yearTermNames = terms.filter(t => t.year === year).map(t => t.termName);
+      const yearTerms = terms.filter(t => t.year === year);
+
+      let filteredTermNames: string[];
+      if (intakeFilter !== "All") {
+        const termNum = intakeFilter.replace("T", "");
+        filteredTermNames = yearTerms.filter(t => String(t.termNumber) === termNum).map(t => t.termName);
+      } else {
+        filteredTermNames = yearTerms.map(t => t.termName);
+      }
 
       const students = await storage.getCommissionStudents();
       let totalStudents = 0;
       let totalCommission = 0;
+      let totalBonus = 0;
       let totalReceived = 0;
-      let activeCount = 0;
-      let pendingPayments = 0;
-      let paidPayments = 0;
+      let totalPending = 0;
+      const providerSet = new Set<string>();
       const byStatus: Record<string, number> = {};
-      const byAgent: Record<string, { count: number; total: number }> = {};
-      const byProvider: Record<string, { count: number; total: number }> = {};
+      const byAgent: Record<string, { count: number; total: number; bonus: number }> = {};
+      const byProvider: Record<string, { count: number; totalCommission: number; totalBonus: number; totalReceived: number; pending: number }> = {};
+      const studentDetails: any[] = [];
 
       for (const s of students) {
-        const entries = await storage.getCommissionEntries(s.id);
-        const yearEntries = entries.filter(e => yearTermNames.includes(e.termName));
-        if (yearEntries.length === 0) continue;
+        const allEntries = await storage.getCommissionEntries(s.id);
+        const yearEntries = allEntries.filter(e => filteredTermNames.includes(e.termName));
+        const allYearEntries = allEntries.filter(e => yearTerms.map(t => t.termName).includes(e.termName));
+
+        if (allYearEntries.length === 0) continue;
 
         totalStudents++;
-        for (const e of yearEntries) {
-          const amt = Number(e.totalAmount || 0);
-          totalCommission += amt;
-          if (e.paymentStatus === "Received") {
-            totalReceived += amt;
-            paidPayments++;
-          }
-          if (e.paymentStatus === "Pending") pendingPayments++;
-          const st = e.studentStatus || "Under Enquiry";
-          byStatus[st] = (byStatus[st] || 0) + 1;
-          if (st === "Active") activeCount++;
+        providerSet.add(s.provider);
+
+        let studentTotalComm = 0;
+        let studentTotalBonus = 0;
+        let studentTotalReceived = 0;
+        let studentPending = 0;
+
+        const termBreakdown: Record<string, { commission: number; bonus: number }> = {};
+        for (const term of yearTerms) {
+          const e = allYearEntries.find(en => en.termName === term.termName);
+          termBreakdown[`T${term.termNumber}`] = {
+            commission: e ? Number(e.commissionAmount || 0) : 0,
+            bonus: e ? Number(e.bonus || 0) : 0,
+          };
         }
 
-        if (!byAgent[s.agentName]) byAgent[s.agentName] = { count: 0, total: 0 };
-        byAgent[s.agentName].count++;
-        byAgent[s.agentName].total += yearEntries.reduce((sum, e) => sum + Number(e.totalAmount || 0), 0);
+        for (const e of yearEntries) {
+          const comm = Number(e.commissionAmount || 0);
+          const bonus = Number(e.bonus || 0);
+          const total = Number(e.totalAmount || 0);
+          studentTotalComm += comm;
+          studentTotalBonus += bonus;
+          if (e.paymentStatus === "Received") {
+            studentTotalReceived += total;
+          }
+          if (e.paymentStatus === "Pending") {
+            studentPending += total;
+          }
+          const st = e.studentStatus || "Under Enquiry";
+          byStatus[st] = (byStatus[st] || 0) + 1;
+        }
 
-        if (!byProvider[s.provider]) byProvider[s.provider] = { count: 0, total: 0 };
+        totalCommission += studentTotalComm;
+        totalBonus += studentTotalBonus;
+        totalReceived += studentTotalReceived;
+        totalPending += studentPending;
+
+        if (!byAgent[s.agentName]) byAgent[s.agentName] = { count: 0, total: 0, bonus: 0 };
+        byAgent[s.agentName].count++;
+        byAgent[s.agentName].total += studentTotalComm;
+        byAgent[s.agentName].bonus += studentTotalBonus;
+
+        if (!byProvider[s.provider]) byProvider[s.provider] = { count: 0, totalCommission: 0, totalBonus: 0, totalReceived: 0, pending: 0 };
         byProvider[s.provider].count++;
-        byProvider[s.provider].total += yearEntries.reduce((sum, e) => sum + Number(e.totalAmount || 0), 0);
+        byProvider[s.provider].totalCommission += studentTotalComm;
+        byProvider[s.provider].totalBonus += studentTotalBonus;
+        byProvider[s.provider].totalReceived += studentTotalReceived;
+        byProvider[s.provider].pending += studentPending;
+
+        studentDetails.push({
+          id: s.id,
+          agentName: s.agentName,
+          agentsicId: s.agentsicId,
+          studentId: s.studentId,
+          studentName: s.studentName,
+          provider: s.provider,
+          courseName: s.courseName,
+          country: s.country,
+          startIntake: s.startIntake,
+          status: s.status,
+          termBreakdown,
+          totalCommission: Math.round(studentTotalComm * 100) / 100,
+          totalBonus: Math.round(studentTotalBonus * 100) / 100,
+          totalReceived: Math.round(studentTotalReceived * 100) / 100,
+          pendingAmount: Math.round(studentPending * 100) / 100,
+          notes: s.notes,
+        });
       }
 
       res.json({
         totalStudents,
+        totalProviders: providerSet.size,
         totalCommission: Math.round(totalCommission * 100) / 100,
+        totalBonus: Math.round(totalBonus * 100) / 100,
         totalReceived: Math.round(totalReceived * 100) / 100,
-        activeCount,
-        pendingPayments,
-        paidPayments,
+        totalPending: Math.round(totalPending * 100) / 100,
         byStatus,
-        byAgent: Object.entries(byAgent).map(([agent, v]) => ({ agent, ...v })),
-        byProvider: Object.entries(byProvider).map(([provider, v]) => ({ provider, ...v })),
+        byAgent: Object.entries(byAgent).map(([agent, v]) => ({ agent, ...v })).sort((a, b) => b.count - a.count),
+        byProvider: Object.entries(byProvider).map(([provider, v]) => ({ provider, ...v })).sort((a, b) => b.count - a.count),
+        studentDetails,
+        termNames: yearTerms.map(t => `T${t.termNumber}`),
       });
     } catch (err: any) {
       res.status(500).json({ message: err.message });
@@ -2265,7 +2326,8 @@ export async function registerRoutes(
   app.get("/api/sub-agent-commission/dashboard", requireAuth, requirePermission("sub_agent_commission.view"), async (req, res) => {
     try {
       const year = req.query.year ? Number(req.query.year) : undefined;
-      const dashboard = await storage.getSubAgentDashboard(year);
+      const intake = req.query.intake ? String(req.query.intake) : undefined;
+      const dashboard = await storage.getSubAgentDashboard(year, intake);
       res.json(dashboard);
     } catch (err: any) {
       res.status(500).json({ message: err.message });
