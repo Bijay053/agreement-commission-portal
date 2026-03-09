@@ -1,0 +1,208 @@
+Redesign all popups/modals across the entire app with a modern, premium, consistent UI/UX. Do not use browser default alert/confirm dialogs anywhere. Replace all current popups with a reusable custom modal system.
+
+GOAL
+Create a single standardized popup/modal design language for the whole application so every popup feels clean, modern, consistent, and action-focused.
+
+CURRENT PROBLEM
+The current popup design looks outdated and too basic. It has weak spacing, poor visual hierarchy, low-quality buttons, and does not clearly communicate danger, warning, confirmation, success, or error states. This issue is not limited to one popup only. Apply the improvement to all app popups.
+
+SCOPE
+Update all popups/modals in the app, including but not limited to:
+- deactivate user
+- delete confirmation
+- warning popups
+- session timeout popups
+- unsaved changes popups
+- success popups
+- error popups
+- info popups
+- any page-specific confirmation modal
+- any action popup in dashboard, users, agreements, commission tracker, contacts, roles, audit logs, etc.
+
+REQUIRED APPROACH
+Build a reusable modal system instead of styling each popup separately.
+
+Create reusable components such as:
+- AppModal
+- ConfirmModal
+- DangerModal
+- SuccessModal
+- WarningModal
+- ErrorModal
+or one flexible modal component with props like:
+- type
+- title
+- description
+- icon
+- primaryAction
+- secondaryAction
+- onClose
+- loading
+- allowOutsideClick
+- allowEscClose
+
+VISUAL DESIGN REQUIREMENTS
+1. Modal container
+- centered on screen
+- rounded corners
+- smooth shadow
+- clean border
+- balanced width
+- enough internal padding
+- responsive on desktop/mobile
+- layered above a dimmed overlay background
+- smooth open and close animation
+
+2. Visual hierarchy
+- icon section at top or left
+- clear bold title
+- readable supporting description
+- action buttons grouped clearly
+- enough spacing between icon, title, description, and buttons
+
+3. Icon styling
+Use a soft colored circular or rounded background behind the icon.
+Examples:
+- danger = red icon
+- warning = amber/yellow icon
+- success = green icon
+- error = deep red icon
+- info = blue icon
+- confirmation = brand color or neutral
+
+4. Typography
+- title should be prominent and bold
+- body text should be easy to read
+- proper line-height
+- avoid cramped text
+- no raw browser-style popup appearance
+
+5. Buttons
+- primary and secondary buttons must be visually distinct
+- destructive action buttons must use a danger style
+- cancel button should be neutral
+- strong hover, focus, active, disabled states
+- good border radius and padding
+- equal button heights
+- prevent ugly mismatched button sizing
+
+INTERACTION / UX REQUIREMENTS
+1. All popups must use custom UI, not window.alert or window.confirm.
+2. Destructive actions must clearly explain the consequence.
+3. Add loading state after confirming action.
+4. Prevent double submission while action is processing.
+5. Focus should be trapped inside modal while open.
+6. Keyboard accessibility required:
+- tab navigation
+- enter to confirm where appropriate
+- esc to close only if safe
+7. Clicking outside:
+- allowed only for safe informational popups if configured
+- not allowed for destructive confirmation popups by default
+8. Add ARIA/accessibility support.
+9. Support dark mode if theme system exists.
+10. Maintain consistent animation and spacing across all popup types.
+
+CONTENT / COPY IMPROVEMENT RULES
+Do not use weak or unclear messages.
+Popup text should clearly explain:
+- what action is happening
+- what happens after confirmation
+- whether the action can be reversed
+
+EXAMPLE FOR CURRENT USER DEACTIVATION POPUP
+Replace current popup text with something like:
+
+Title:
+Deactivate User Account?
+
+Description:
+Michael Chen will be signed out immediately and will no longer be able to access the portal until the account is reactivated.
+
+Buttons:
+- Cancel
+- Deactivate User
+
+Style:
+- danger modal
+- warning/danger icon
+- red primary destructive button
+- neutral secondary button
+- much cleaner spacing and hierarchy
+
+MODAL TYPE STANDARDS
+
+1. Confirmation modal
+Use for normal confirm actions.
+Example:
+Title: Confirm Action
+Description: Are you sure you want to continue?
+
+2. Danger modal
+Use for delete/deactivate/terminate/revoke actions.
+Must visually highlight risk.
+
+3. Warning modal
+Use for session timeout, unsaved changes, risky edits, dependency warnings.
+
+4. Success modal
+Use for successful save/update/create/submit states.
+Can optionally auto-close for lightweight confirmation.
+
+5. Error modal
+Use for failed actions and validation/server issues.
+
+6. Info modal
+Use for neutral messages/help/system information.
+
+EXAMPLE CONTENT STANDARDS
+
+Unsaved changes:
+Title: Leave without saving?
+Description: Your recent changes have not been saved. If you leave now, those updates will be lost.
+Buttons:
+- Stay on Page
+- Leave Without Saving
+
+Session timeout:
+Title: Session Expiring Soon
+Description: You have been inactive for a while. For security reasons, you will be logged out in 5 minutes unless you continue your session.
+Buttons:
+- Stay Logged In
+- Logout Now
+
+Success:
+Title: Changes Saved
+Description: Your updates have been saved successfully.
+
+Error:
+Title: Something Went Wrong
+Description: We could not complete this action right now. Please try again.
+
+GLOBAL CONSISTENCY REQUIREMENT
+All popups across the app must share:
+- same border radius system
+- same spacing system
+- same title/body typography scale
+- same overlay behavior
+- same animation logic
+- same button structure
+- same icon treatment
+- same accessibility standards
+
+TECHNICAL EXPECTATION
+Audit the whole codebase and find every popup/alert/confirm/modal implementation.
+Replace inconsistent popup implementations with the new reusable modal system.
+Remove all browser-native confirm/alert popups.
+Ensure old popup logic is migrated safely without breaking actions.
+
+OPTIONAL NICE-TO-HAVE
+- add subtle entrance animation
+- add optional subtitle/support text
+- add optional destructive action note
+- add optional toast after success action
+- support reusable confirm hook if needed
+- support modal size variants if necessary
+
+EXPECTED RESULT
+After implementation, all popups in the app should feel modern, premium, trustworthy, and consistent. Destructive actions should feel safer and clearer. The UI should no longer feel like a default browser popup or unfinished admin panel.

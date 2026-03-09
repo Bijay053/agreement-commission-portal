@@ -11,6 +11,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { MultiSearchableSelect } from "@/components/ui/multi-searchable-select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription, DialogFooter } from "@/components/ui/dialog";
+import { ConfirmModal } from "@/components/ui/confirm-modal";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
@@ -1086,6 +1087,7 @@ function ManageTermsDialog({ terms, onClose }: { terms: CommissionTerm[]; onClos
   const { toast } = useToast();
   const [year, setYear] = useState(new Date().getFullYear().toString());
   const [termNum, setTermNum] = useState("1");
+  const [deletingTerm, setDeletingTerm] = useState<CommissionTerm | null>(null);
 
   const createMutation = useMutation({
     mutationFn: async () => {
@@ -1130,9 +1132,7 @@ function ManageTermsDialog({ terms, onClose }: { terms: CommissionTerm[]; onClos
             {canDeleteTerms && (
               <button
                 className="text-red-500 hover:text-red-700"
-                onClick={() => {
-                  if (confirm(`Delete term ${t.termLabel}? Entries must be removed first.`)) deleteMutation.mutate(t.id);
-                }}
+                onClick={() => setDeletingTerm(t)}
                 data-testid={`button-delete-term-${t.id}`}
               >
                 <X className="w-4 h-4" />
@@ -1168,6 +1168,19 @@ function ManageTermsDialog({ terms, onClose }: { terms: CommissionTerm[]; onClos
           </Button>
         </div>
       </div>
+
+      <ConfirmModal
+        open={!!deletingTerm}
+        onOpenChange={(open) => { if (!open) setDeletingTerm(null); }}
+        variant="danger"
+        title="Delete Term?"
+        description={`Are you sure you want to delete ${deletingTerm?.termLabel}? All entries for this term must be removed first. This action cannot be undone.`}
+        confirmText="Delete Term"
+        onConfirm={() => {
+          if (deletingTerm) deleteMutation.mutate(deletingTerm.id);
+        }}
+        data-testid="modal-delete-term"
+      />
     </div>
   );
 }
