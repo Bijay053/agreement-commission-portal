@@ -2227,7 +2227,7 @@ export async function registerRoutes(
       await storage.recalcSubAgentMasterTotals(studentId);
 
       await storage.createAuditLog({
-        userId: (req as any).user?.id,
+        userId: req.session.userId,
         action: "update",
         entityType: "sub_agent_entry",
         entityId: studentId,
@@ -2248,7 +2248,7 @@ export async function registerRoutes(
       const result = await storage.syncSubAgentFromMain();
 
       await storage.createAuditLog({
-        userId: (req as any).user?.id,
+        userId: req.session.userId,
         action: "sync",
         entityType: "sub_agent_commission",
         ipAddress: req.ip,
@@ -2325,7 +2325,7 @@ export async function registerRoutes(
       await storage.recalcSubAgentMasterTotals(existing.commissionStudentId);
 
       await storage.createAuditLog({
-        userId: (req as any).user?.id,
+        userId: req.session.userId,
         action: "update",
         entityType: "sub_agent_term_entry",
         entityId: id,
@@ -2351,7 +2351,7 @@ export async function registerRoutes(
       await storage.recalcSubAgentMasterTotals(existing.commissionStudentId);
 
       await storage.createAuditLog({
-        userId: (req as any).user?.id,
+        userId: req.session.userId,
         action: "delete",
         entityType: "sub_agent_term_entry",
         entityId: id,
