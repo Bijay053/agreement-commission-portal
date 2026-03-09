@@ -1,0 +1,38 @@
+WARN[0000] /home/ubuntu/agreement-commission-portal/docker-compose.yml: the attribute `version` is obsolete, it will be ignored, please remove it to avoid potential confusion 
+[+] Building 66.6s (16/16) FINISHED                                                                                                                                                                                
+ => [internal] load local bake definitions                                                                                                                                                                    0.0s
+ => => reading from stdin 560B                                                                                                                                                                                0.0s
+ => [internal] load build definition from Dockerfile                                                                                                                                                          0.0s
+ => => transferring dockerfile: 427B                                                                                                                                                                          0.0s
+ => [internal] load metadata for docker.io/library/node:20-alpine                                                                                                                                             1.0s
+ => [internal] load .dockerignore                                                                                                                                                                             0.0s
+ => => transferring context: 121B                                                                                                                                                                             0.0s
+ => [base 1/2] FROM docker.io/library/node:20-alpine@sha256:b88333c42c23fbd91596ebd7fd10de239cedab9617de04142dde7315e3bc0afa                                                                                  0.0s
+ => => resolve docker.io/library/node:20-alpine@sha256:b88333c42c23fbd91596ebd7fd10de239cedab9617de04142dde7315e3bc0afa                                                                                       0.0s
+ => [internal] load build context                                                                                                                                                                             0.0s
+ => => transferring context: 6.06kB                                                                                                                                                                           0.0s
+ => CACHED [base 2/2] WORKDIR /app                                                                                                                                                                            0.0s
+ => CACHED [deps 1/2] COPY package.json ./                                                                                                                                                                    0.0s
+ => CACHED [production 2/4] RUN npm install --omit=dev && npm cache clean --force                                                                                                                             0.0s
+ => CACHED [deps 2/2] RUN npm install                                                                                                                                                                         0.0s
+ => [build 1/2] COPY . .                                                                                                                                                                                      0.1s
+ => [build 2/2] RUN mkdir -p uploads && npm run build                                                                                                                                                        19.4s
+ => [production 3/4] COPY --from=build /app/dist ./dist                                                                                                                                                       2.5s 
+ => [production 4/4] RUN mkdir -p uploads                                                                                                                                                                     0.6s 
+ => exporting to image                                                                                                                                                                                       36.8s 
+ => => exporting layers                                                                                                                                                                                      30.3s 
+ => => exporting manifest sha256:6a27659dd25d634c7194d713359d262e74be824c4a195ae441fa988fe7cd1fb7                                                                                                             0.0s 
+ => => exporting config sha256:ec5057312365d78f6ab37692fac800d73dbf4489a76839f428f4952c39f35c81                                                                                                               0.0s 
+ => => exporting attestation manifest sha256:2f5aff6aa7fbb8d36363650dacd46b2f05ef17d1aa3984528beb85381ca806cc                                                                                                 0.0s
+ => => exporting manifest list sha256:bde925a72cb8c31138241f3f2ada011867d4859a263b2f6fe3f51723fa4fca0d                                                                                                        0.0s
+ => => naming to docker.io/library/agreement-commission-portal-app:latest                                                                                                                                     0.0s
+ => => unpacking to docker.io/library/agreement-commission-portal-app:latest                                                                                                                                  6.1s
+ => resolving provenance for metadata file                                                                                                                                                                    0.4s
+[+] up 6/6
+ ✔ Image agreement-commission-portal-app       Built                                                                                                                                                          66.7s
+ ✔ Network agreement-commission-portal_default Created                                                                                                                                                        0.2s
+ ✔ Volume agreement-commission-portal_pgdata   Created                                                                                                                                                        0.0s
+ ✔ Volume agreement-commission-portal_uploads  Created                                                                                                                                                        0.0s
+ ✔ Container agreement-commission-portal-db-1  Healthy                                                                                                                                                        6.9s
+ ✔ Container agreement-commission-portal-app-1 Started                                                                                                                                                        6.7s
+ubuntu@ip-172-31-41-234:~/agreement-commission-portal$ 
