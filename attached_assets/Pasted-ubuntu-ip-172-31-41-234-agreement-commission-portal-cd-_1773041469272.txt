@@ -1,0 +1,80 @@
+ubuntu@ip-172-31-41-234:~/agreement-commission-portal$ cd ~/agreement-commission-portal && docker builder prune -a -f && docker image prune -a -f && git pull origin main && docker compose build --no-cache app && docker compose up -d
+Total:  0B
+Total reclaimed space: 0B
+remote: Enumerating objects: 11, done.
+remote: Counting objects: 100% (11/11), done.
+remote: Compressing objects: 100% (6/6), done.
+remote: Total 6 (delta 5), reused 0 (delta 0), pack-reused 0 (from 0)
+Unpacking objects: 100% (6/6), 627 bytes | 125.00 KiB/s, done.
+From https://github.com/Bijay053/agreement-commission-portal
+ * branch            main       -> FETCH_HEAD
+   b12048e..2430869  main       -> origin/main
+Updating 28924fc..2430869
+error: Your local changes to the following files would be overwritten by merge:
+        server/auth.ts
+        server/routes.ts
+Please commit your changes or stash them before you merge.
+Aborting
+ubuntu@ip-172-31-41-234:~/agreement-commission-portal$ cd ~/agreement-commission-portal && git stash && git pull origin main && docker compose build --no-cache app && docker compose up -d
+Saved working directory and index state WIP on main: 28924fc Fix: Install drizzle-kit and tsx in production image for database migrations
+From https://github.com/Bijay053/agreement-commission-portal
+ * branch            main       -> FETCH_HEAD
+Updating 28924fc..2430869
+Fast-forward
+ client/src/components/ui/multi-searchable-select.tsx | 160 ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+ client/src/index.css                                 |  43 +++++++++++++++++++++++++++++++++++++++++
+ client/src/pages/agreements-list.tsx                 | 118 ++++++++++++++++++++++++++++++++++++++++++++++++++------------------------------------------------------------
+ client/src/pages/commission-table.tsx                | 129 ++++++++++++++++++++++++++++++++++++++++++++++++++++++-------------------------------------------------------------------
+ client/src/pages/commission-tracker-detail.tsx       |   1 +
+ client/src/pages/commission-tracker.tsx              | 109 +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++---------------------------------
+ client/src/pages/contacts-list.tsx                   |  66 ++++++++++++++++++++++++++++----------------------------------
+ client/src/pages/providers-list.tsx                  |  60 +++++++++++++++++++++++++-------------------------------
+ client/src/pages/users-management.tsx                |  45 ++++++++++++++++++++++++++++++++++--------
+ server/auth.ts                                       |  15 ++++++++++++--
+ server/routes.ts                                     |  50 +++++++++++++++++++++++++++++++++++++++++++----
+ server/seed.ts                                       |  20 +++++++++++--------
+ server/storage.ts                                    |  22 ++++++++++++---------
+ 13 files changed, 564 insertions(+), 274 deletions(-)
+ create mode 100644 client/src/components/ui/multi-searchable-select.tsx
+WARN[0000] /home/ubuntu/agreement-commission-portal/docker-compose.yml: the attribute `version` is obsolete, it will be ignored, please remove it to avoid potential confusion 
+[+] Building 244.6s (20/20) FINISHED                                                                                                                                                                               
+ => [internal] load local bake definitions                                                                                                                                                                    0.0s
+ => => reading from stdin 584B                                                                                                                                                                                0.0s
+ => [internal] load build definition from Dockerfile                                                                                                                                                          0.1s
+ => => transferring dockerfile: 700B                                                                                                                                                                          0.0s
+ => [internal] load metadata for docker.io/library/node:20-alpine                                                                                                                                             2.2s
+ => [internal] load .dockerignore                                                                                                                                                                             0.0s
+ => => transferring context: 121B                                                                                                                                                                             0.0s
+ => [base 1/2] FROM docker.io/library/node:20-alpine@sha256:b88333c42c23fbd91596ebd7fd10de239cedab9617de04142dde7315e3bc0afa                                                                                  0.2s
+ => => resolve docker.io/library/node:20-alpine@sha256:b88333c42c23fbd91596ebd7fd10de239cedab9617de04142dde7315e3bc0afa                                                                                       0.1s
+ => [internal] load build context                                                                                                                                                                             0.2s
+ => => transferring context: 1.41MB                                                                                                                                                                           0.1s
+ => [base 2/2] WORKDIR /app                                                                                                                                                                                   0.1s
+ => [deps 1/2] COPY package.json ./                                                                                                                                                                           0.1s
+ => [deps 2/2] RUN npm install                                                                                                                                                                              148.4s
+ => [production 2/8] RUN npm install && npm install drizzle-kit tsx && npm cache clean --force                                                                                                              145.9s
+ => [build 1/2] COPY . .                                                                                                                                                                                      2.7s 
+ => [build 2/2] RUN mkdir -p uploads && npm run build                                                                                                                                                        29.7s 
+ => [production 3/8] COPY --from=build /app/dist ./dist                                                                                                                                                       4.0s 
+ => [production 4/8] COPY --from=build /app/drizzle.config.ts ./drizzle.config.ts                                                                                                                             0.1s 
+ => [production 5/8] COPY --from=build /app/shared ./shared                                                                                                                                                   0.2s 
+ => [production 6/8] COPY --from=build /app/tsconfig.json ./tsconfig.json                                                                                                                                     0.1s 
+ => [production 7/8] COPY docker-entrypoint.sh ./                                                                                                                                                             0.1s 
+ => [production 8/8] RUN mkdir -p uploads && chmod +x docker-entrypoint.sh                                                                                                                                    0.8s 
+ => exporting to image                                                                                                                                                                                       44.6s
+ => => exporting layers                                                                                                                                                                                      37.4s
+ => => exporting manifest sha256:b3dd94da2940b3df84727d0ac847d95cfd377c3dcc1bb9ce309239e0a0f2ab25                                                                                                             0.0s
+ => => exporting config sha256:8d36631f5501eced1636a62fb9adca77b7faffb3d712a5adee85680ef597c975                                                                                                               0.0s
+ => => exporting attestation manifest sha256:808307273b5c4cc44591a47608712769640578400dc7b6a55b024943101b1fed                                                                                                 0.0s
+ => => exporting manifest list sha256:26d3c0a6a378984fdcaec71ae88a3995dd05c6d5a7d28879a549b88f2c108d68                                                                                                        0.0s
+ => => naming to docker.io/library/agreement-commission-portal-app:latest                                                                                                                                     0.0s
+ => => unpacking to docker.io/library/agreement-commission-portal-app:latest                                                                                                                                  6.9s
+ => resolving provenance for metadata file                                                                                                                                                                    0.5s
+[+] build 1/1
+ ✔ Image agreement-commission-portal-app Built                                                                                                                                                               244.8s
+WARN[0000] /home/ubuntu/agreement-commission-portal/docker-compose.yml: the attribute `version` is obsolete, it will be ignored, please remove it to avoid potential confusion 
+[+] up 1/2
+ ✔ Container agreement-commission-portal-db-1  Healthy                                                                                                                                                        13.5s
+ ⠴ Container agreement-commission-portal-app-1 Starting                                                                                                                                                       14.1s
+Error response from daemon: failed to set up container networking: driver failed programming external connectivity on endpoint agreement-commission-portal-app-1 (449c79efad1bcc3d553b2b4e6ab93cb1f00dbb89b1fd80ef26ea77954c110a8f): failed to bind host port 0.0.0.0:80/tcp: address already in use
+ubuntu@ip-172-31-41-234:~/agreement-commission-portal$ 
