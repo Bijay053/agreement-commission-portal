@@ -1,0 +1,207 @@
+Agreement Expiry & Renewal Reminder System
+Feature Requirement + Email Template
+Objective
+
+Implement an automated Agreement Expiry Notification System to ensure no university/provider agreements expire without renewal. The system must send automatic reminder notifications before the agreement expiry date and also notify if renewal is delayed.
+
+This helps prevent commission loss, compliance issues, and partnership disruption.
+
+1. Trigger Logic
+
+The system must monitor the Agreement Expiry Date in the agreement database.
+
+Reminder Schedule
+
+Send automatic reminders at the following intervals:
+
+Days Before Expiry	Action
+90 Days	First reminder
+60 Days	Second reminder
+30 Days	Third reminder
+14 Days	Urgent reminder
+7 Days	Critical reminder
+Expired	Expiry notification
+2. Renewal Delay Alert
+
+If Agreement Status = "Renewal in Progress" and the agreement expires before renewal is completed:
+
+Trigger Renewal Delay Alert.
+
+Send reminder every 7 days until renewal is completed.
+
+3. Email Recipients
+
+All notifications must be sent to:
+
+au@studyinfocentre.com
+info@studyinfocentre.com
+partners@studyinfocentre.com
+
+Future option: allow admin to configure recipients.
+
+4. Email Subject Format
+Expiry Reminder
+Agreement Expiry Reminder – [Provider Name] – Expires in [X] Days
+Urgent Reminder
+URGENT: Agreement Expiring Soon – [Provider Name]
+Expired Agreement
+Agreement Expired – Immediate Action Required – [Provider Name]
+Renewal Delay Alert
+Renewal Pending – Agreement Expired but Renewal Not Completed – [Provider Name]
+5. Email Template
+Agreement Expiry Reminder Email
+
+Subject:
+Agreement Expiry Reminder – [Provider Name] – Expires in [X] Days
+
+Email Body:
+
+Hello,
+
+This is an automated notification from the Agreement Management System.
+
+The agreement with the following provider is approaching its expiry date.
+
+Provider Name: [Provider Name]
+Country: [Country]
+Agreement Start Date: [Start Date]
+Agreement Expiry Date: [Expiry Date]
+Days Remaining: [X Days]
+Agreement Status: [Current Status]
+
+Action Required:
+
+Please review the agreement and initiate the renewal process if continuation of the partnership is required.
+
+Failure to renew the agreement before expiry may result in:
+
+• Commission payment issues
+• Student application processing delays
+• Partnership suspension
+
+You can review the agreement in the Agreement Portal.
+
+Agreement Link:
+[Agreement Portal Link]
+
+This is an automated reminder.
+
+Study Info Centre
+Agreement Management System
+
+6. Expired Agreement Email Template
+
+Subject:
+Agreement Expired – Immediate Action Required – [Provider Name]
+
+Email Body:
+
+Hello,
+
+The agreement with the following provider has expired.
+
+Provider Name: [Provider Name]
+Country: [Country]
+Agreement Expiry Date: [Expiry Date]
+Current Status: Expired
+
+Immediate action is required.
+
+Please initiate renewal or confirm whether the partnership will continue.
+
+If renewal is already in progress, please update the status to Renewal in Progress in the system.
+
+Agreement Portal:
+[Agreement Link]
+
+Study Info Centre
+Agreement Management System
+
+7. Renewal Delay Notification
+
+Subject:
+Renewal Pending – Agreement Expired but Renewal Not Completed
+
+Email Body:
+
+Hello,
+
+The following agreement has expired and renewal has not been completed yet.
+
+Provider Name: [Provider Name]
+Expiry Date: [Expiry Date]
+Current Status: Renewal in Progress
+
+Please follow up with the provider and complete the renewal process.
+
+This notification will continue every 7 days until renewal is completed.
+
+Agreement Portal:
+[Agreement Link]
+
+Study Info Centre
+Agreement Management System
+
+8. System Requirements
+
+Developer must implement:
+
+Backend Logic
+
+Daily cron job / scheduled task
+
+Example:
+
+Run once every day at 08:00 AM
+
+Process:
+
+Check all agreements
+Compare expiry_date with current_date
+Trigger reminders based on rule table
+Send email notification
+Log notification in system
+9. Notification Log (Required)
+
+Create table:
+
+agreement_notifications
+
+Fields:
+
+id
+agreement_id
+provider_name
+notification_type
+sent_date
+days_before_expiry
+status
+10. Admin Dashboard
+
+Add section:
+
+Agreement Alerts
+
+Show:
+
+• Expiring within 90 days
+• Expiring within 30 days
+• Expired agreements
+• Renewal pending agreements
+
+With filters:
+
+Provider
+
+Country
+
+Status
+
+Expiry date
+
+11. Optional Future Enhancement
+
+Add:
+
+• Portal notification bell 🔔
+• Slack notification

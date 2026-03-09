@@ -1,0 +1,329 @@
+Prompt: Commission Tracker and Sub-Agent Commission Dashboard Restructure
+
+We need to update the Commission Tracker page so it works similar to the Sub-Agent Commission page layout, but with its own separate dashboard and master pages.
+
+1) Commission Tracker Page Structure
+
+Inside Commission Tracker, create separate tabs/pages like this:
+
+Dashboard
+
+Master
+
+T1
+
+T2
+
+T3
+
+This should be similar to the tab structure already used in Sub-Agent Commission.
+
+Important:
+
+Dashboard and Master must be separate pages/tabs.
+
+Do not keep the current combined dashboard layout.
+
+The design, spacing, and tab behavior should feel consistent with the Sub-Agent Commission module.
+
+2) Commission Tracker – Dashboard Requirements
+
+The Commission Tracker Dashboard should focus on provider-wise student and commission overview.
+
+Filters required on top:
+
+Year filter
+
+Intake filter:
+
+All
+
+T1
+
+T2
+
+T3
+
+Optional supporting filters:
+
+Agent
+
+Provider
+
+Status
+
+Search
+
+Dashboard data blocks / widgets:
+
+Show provider-level summary based on selected filters:
+
+Provider by Student Number
+
+Show how many students belong to each provider
+
+Sort by highest student count first
+
+Respect selected year and intake filters
+
+Provider Commission Summary
+
+Total commission by provider
+
+Total bonus by provider
+
+Total received by provider
+
+Pending amount if available
+
+Summary cards at top
+
+Total Students
+
+Total Providers
+
+Total Commission
+
+Total Bonus
+
+Total Received
+
+Pending / Unpaid
+
+3) Commission Tracker – Student List Section
+
+Below dashboard summary, show a student list table.
+
+Student list columns:
+
+S.N.
+
+Agent
+
+Agentsic ID
+
+Student ID
+
+Student Name
+
+Provider Name
+
+Course Name
+
+Country
+
+Course Start Intake
+
+Current Status
+
+T1 Commission
+
+T1 Bonus
+
+T2 Commission
+
+T2 Bonus
+
+T3 Commission
+
+T3 Bonus
+
+Total Commission
+
+Total Bonus
+
+Total Received
+
+Pending Amount
+
+Notes
+
+Important logic:
+
+For each student row:
+
+Show intake-wise commission and bonus details
+
+Show total commission received for that student
+
+Data must respect selected year and intake filters
+
+If intake filter is T1, only T1-related data should be shown in dashboard totals and calculations
+
+If intake filter is All, show combined T1 + T2 + T3 totals
+
+4) Commission Tracker – Master Page
+
+Create a separate Master tab/page inside Commission Tracker.
+
+Master page purpose:
+
+Show full detailed commission records
+
+Include all editable/manual fields as per current logic
+
+Should not be mixed with dashboard widgets
+
+Should behave like the detailed data page, while Dashboard remains analytics/summary page
+
+5) Term Pages in Commission Tracker
+
+Tabs:
+
+T1
+
+T2
+
+T3
+
+Each term page should show only that term’s records for the selected year.
+
+Example:
+
+If Year = 2025, tabs show data for:
+
+T1 2025
+
+T2 2025
+
+T3 2025
+
+If Year = 2026, tabs show data for:
+
+T1 2026
+
+T2 2026
+
+T3 2026
+
+6) Sub-Agent Commission Dashboard Updates
+
+Update Sub-Agent Commission dashboard so it shows better agent-level analytics.
+
+Required filters:
+
+Year
+
+Intake
+
+All
+
+T1
+
+T2
+
+T3
+
+Agent
+
+Provider
+
+Status
+
+Search
+
+Dashboard must show:
+
+Each agent’s student number
+
+Number of students under each sub-agent
+
+Respect year and intake filters
+
+Commission received by each agent
+
+Show total received amount per sub-agent
+
+Respect year and intake filters
+
+Optional summary cards:
+
+Total Agents
+
+Total Students
+
+Total Paid to Sub-Agents
+
+Total Pending to Sub-Agents
+
+Total Margin
+
+7) Intake Filter Logic
+
+For both Commission Tracker and Sub-Agent Commission:
+
+Intake filter behavior:
+
+All = combined T1 + T2 + T3 data
+
+T1 = only T1 data
+
+T2 = only T2 data
+
+T3 = only T3 data
+
+Year filter behavior:
+
+All calculations, tables, and summaries must use selected year only
+
+No cross-year mixing
+
+8) UI / UX Requirements
+
+Make Commission Tracker tabs visually similar to Sub-Agent Commission
+
+Keep Dashboard and Master clearly separated
+
+Use clean summary cards and readable tables
+
+Maintain responsive layout
+
+Use consistent spacing, alignment, and typography
+
+Active tab should be clearly highlighted
+
+Filters should update all dashboard widgets and tables instantly
+
+9) Data Calculation Rules
+
+Please ensure:
+
+No duplicate student counting in dashboard totals
+
+Student counting must follow existing duplicate validation logic
+
+Provider totals must be based on filtered unique student records
+
+Agent totals must also respect filter conditions
+
+Total Received should come from actual received commission entries
+
+Bonus and commission should be shown separately where possible, and also combined in totals where needed
+
+10) Expected Result
+
+After update:
+
+Commission Tracker
+
+Should have:
+
+Separate Dashboard
+
+Separate Master
+
+Separate T1 / T2 / T3 tabs
+
+Dashboard focused on provider-wise student and commission analytics
+
+Student list with intake-wise commission/bonus and total received per student
+
+Sub-Agent Commission
+
+Should show:
+
+Agent-wise student count
+
+Agent-wise received commission
+
+Filtered by year and intake

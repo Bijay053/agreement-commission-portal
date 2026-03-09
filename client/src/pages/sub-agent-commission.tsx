@@ -143,6 +143,7 @@ export default function SubAgentCommissionPage() {
 
   const [activeTab, setActiveTab] = useState("DASHBOARD");
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
+  const [selectedIntake, setSelectedIntake] = useState("All");
   const [search, setSearch] = useState("");
   const [selectedAgents, setSelectedAgents] = useState<string[]>([]);
   const [selectedProviders, setSelectedProviders] = useState<string[]>([]);
@@ -153,9 +154,11 @@ export default function SubAgentCommissionPage() {
   const years = [...new Set((termsQuery.data || []).map(t => t.year))].sort((a, b) => b - a);
 
   const dashboardQuery = useQuery({
-    queryKey: ["/api/sub-agent-commission/dashboard", selectedYear],
+    queryKey: ["/api/sub-agent-commission/dashboard", selectedYear, selectedIntake],
     queryFn: async () => {
-      const res = await fetch(`/api/sub-agent-commission/dashboard?year=${selectedYear}`, { credentials: "include" });
+      const params = new URLSearchParams({ year: String(selectedYear) });
+      if (selectedIntake && selectedIntake !== "All") params.set("intake", selectedIntake);
+      const res = await fetch(`/api/sub-agent-commission/dashboard?${params.toString()}`, { credentials: "include" });
       if (!res.ok) throw new Error("Failed to fetch dashboard");
       return res.json();
     },
@@ -267,6 +270,19 @@ export default function SubAgentCommissionPage() {
               </Button>
             ))}
           </div>
+          <div className="flex items-center gap-1">
+            {["All", "T1", "T2", "T3"].map(i => (
+              <Button
+                key={i}
+                variant={selectedIntake === i ? "default" : "outline"}
+                size="sm"
+                onClick={() => setSelectedIntake(i)}
+                data-testid={`button-intake-${i}`}
+              >
+                {i}
+              </Button>
+            ))}
+          </div>
         </div>
         <div className="flex items-center gap-2">
           {canEdit && (
@@ -368,7 +384,20 @@ function DashboardView({ data }: { data: any }) {
 
   return (
     <div className="space-y-6" data-testid="dashboard-view">
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4">
+        <Card data-testid="card-total-agents">
+          <CardContent className="p-4">
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-lg bg-indigo-100 dark:bg-indigo-900/30">
+                <Users className="h-5 w-5 text-indigo-600" />
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground">Total Agents</p>
+                <p className="text-2xl font-bold" data-testid="text-total-agents">{data.totalAgents ?? 0}</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
         <Card data-testid="card-total-students">
           <CardContent className="p-4">
             <div className="flex items-center gap-3">
@@ -395,6 +424,19 @@ function DashboardView({ data }: { data: any }) {
             </div>
           </CardContent>
         </Card>
+        <Card data-testid="card-total-pending">
+          <CardContent className="p-4">
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-lg bg-orange-100 dark:bg-orange-900/30">
+                <AlertTriangle className="h-5 w-5 text-orange-600" />
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground">Total Pending</p>
+                <p className="text-2xl font-bold" data-testid="text-total-pending">${fmt(data.totalPending ?? 0)}</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
         <Card data-testid="card-total-margin">
           <CardContent className="p-4">
             <div className="flex items-center gap-3">
@@ -411,6 +453,32 @@ function DashboardView({ data }: { data: any }) {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <Card data-testid="card-agent-breakdown">
+          <CardContent className="p-4">
+            <h3 className="font-semibold mb-3">Agent-wise Summary</h3>
+            <div className="overflow-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b">
+                    <th className="text-left py-1.5 font-medium">Agent</th>
+                    <th className="text-right py-1.5 font-medium">Students</th>
+                    <th className="text-right py-1.5 font-medium">Commission Paid</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(data.byAgent || []).map((a: any) => (
+                    <tr key={a.agent} className="border-b last:border-0" data-testid={`row-agent-${a.agent}`}>
+                      <td className="py-1.5 truncate max-w-[180px]">{a.agent}</td>
+                      <td className="py-1.5 text-right font-mono">{a.count}</td>
+                      <td className="py-1.5 text-right font-mono">${fmt(a.totalPaid)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </CardContent>
+        </Card>
+
         <Card data-testid="card-status-breakdown">
           <CardContent className="p-4">
             <h3 className="font-semibold mb-3">Status Breakdown</h3>
@@ -419,20 +487,6 @@ function DashboardView({ data }: { data: any }) {
                 <Badge key={status} className={STATUS_COLORS[status] || "bg-gray-100 text-gray-800"} data-testid={`badge-status-${status}`}>
                   {status}: {count as number}
                 </Badge>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card data-testid="card-agent-breakdown">
-          <CardContent className="p-4">
-            <h3 className="font-semibold mb-3">By Agent</h3>
-            <div className="space-y-1 max-h-48 overflow-auto">
-              {(data.byAgent || []).map((a: any) => (
-                <div key={a.agent} className="flex justify-between text-sm" data-testid={`row-agent-${a.agent}`}>
-                  <span className="truncate mr-2">{a.agent}</span>
-                  <span className="font-mono text-muted-foreground">{a.count} students / ${fmt(a.totalPaid)}</span>
-                </div>
               ))}
             </div>
           </CardContent>

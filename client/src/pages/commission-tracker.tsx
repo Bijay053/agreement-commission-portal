@@ -127,6 +127,7 @@ export default function CommissionTrackerPage() {
   const { toast } = useToast();
   const [selectedYear, setSelectedYear] = useState<number | null>(null);
   const [activeTab, setActiveTab] = useState("DASHBOARD");
+  const [intakeFilter, setIntakeFilter] = useState("All");
   const [search, setSearch] = useState("");
   const [agentFilters, setAgentFilters] = useState<string[]>([]);
   const [providerFilters, setProviderFilters] = useState<string[]>([]);
@@ -200,18 +201,12 @@ export default function CommissionTrackerPage() {
     queryKey: ["/api/commission-tracker/filters"],
   });
 
-  const { data: yearDashboard } = useQuery<{
-    totalStudents: number;
-    totalCommission: number;
-    totalReceived: number;
-    activeCount: number;
-    pendingPayments: number;
-    paidPayments: number;
-    byStatus: Record<string, number>;
-  }>({
-    queryKey: ["/api/commission-tracker/dashboard", selectedYear],
+  const { data: yearDashboard } = useQuery<any>({
+    queryKey: ["/api/commission-tracker/dashboard", selectedYear, intakeFilter],
     queryFn: async () => {
-      const res = await fetch(`/api/commission-tracker/dashboard/${selectedYear}`, { credentials: "include" });
+      const params = new URLSearchParams();
+      if (intakeFilter !== "All") params.set("intake", intakeFilter);
+      const res = await fetch(`/api/commission-tracker/dashboard/${selectedYear}?${params}`, { credentials: "include" });
       if (!res.ok) throw new Error("Failed to fetch");
       return res.json();
     },
@@ -279,10 +274,10 @@ export default function CommissionTrackerPage() {
     onSuccess: invalidateAll,
   });
 
-  const tabs = ["DASHBOARD", ...yearTerms.map(t => t.termName)];
+  const tabs = ["DASHBOARD", "MASTER", ...yearTerms.map(t => t.termName)];
 
   useEffect(() => {
-    if (activeTab !== "DASHBOARD" && !yearTerms.find(t => t.termName === activeTab)) {
+    if (activeTab !== "DASHBOARD" && activeTab !== "MASTER" && !yearTerms.find(t => t.termName === activeTab)) {
       setActiveTab("DASHBOARD");
     }
   }, [selectedYear, yearTerms, activeTab]);
@@ -401,7 +396,7 @@ export default function CommissionTrackerPage() {
           <TabsList data-testid="tabs-bar" className="w-auto">
             {tabs.map(tab => (
               <TabsTrigger key={tab} value={tab} data-testid={`tab-${tab}`}>
-                {tab === "DASHBOARD" ? `Dashboard ${selectedYear || ""}` : terms.find(t => t.termName === tab)?.termLabel || tab.replace("_", " ")}
+                {tab === "DASHBOARD" ? `Dashboard` : tab === "MASTER" ? `Master` : terms.find(t => t.termName === tab)?.termLabel || tab.replace("_", " ")}
               </TabsTrigger>
             ))}
           </TabsList>
@@ -411,11 +406,19 @@ export default function CommissionTrackerPage() {
       <div className="flex-1 overflow-hidden flex flex-col">
         <div className="flex-1 overflow-auto border-t">
           {activeTab === "DASHBOARD" ? (
-            <YearDashboard
+            <DashboardView
               dashboard={yearDashboard}
               year={selectedYear}
+              intakeFilter={intakeFilter}
+              onIntakeChange={setIntakeFilter}
+              providersByStudent={providersByStudent}
+              yearTerms={yearTerms}
+            />
+          ) : activeTab === "MASTER" ? (
+            <MasterTable
               students={students || []}
               allEntries={allEntries}
+              year={selectedYear}
               isLoading={isLoading}
               canEdit={canEdit}
               canDeleteMaster={canDeleteMaster}
@@ -515,21 +518,14 @@ function AddProviderButton({ studentId, studentName }: { studentId: number; stud
   );
 }
 
-function YearDashboard({ dashboard, year, students, allEntries, isLoading, canEdit, canDeleteMaster, isDeleting, providersByStudent, onRemoveProvider, onUpdateStudent, onDeleteStudent }: {
+function DashboardView({ dashboard, year, intakeFilter, onIntakeChange, providersByStudent, yearTerms }: {
   dashboard: any;
   year: number | null;
-  students: CommissionStudent[];
-  allEntries: Record<number, CommissionEntry[]>;
-  isLoading: boolean;
-  canEdit: boolean;
-  canDeleteMaster: boolean;
-  isDeleting: boolean;
+  intakeFilter: string;
+  onIntakeChange: (v: string) => void;
   providersByStudent: Record<number, any[]>;
-  onRemoveProvider: (studentId: number, providerId: number) => void;
-  onUpdateStudent: (id: number, data: Record<string, any>) => void;
-  onDeleteStudent: (id: number) => void;
+  yearTerms: CommissionTerm[];
 }) {
-  const [deleteTarget, setDeleteTarget] = useState<CommissionStudent | null>(null);
   if (!dashboard || !year) {
     return (
       <div className="p-6 space-y-4">
@@ -544,21 +540,38 @@ function YearDashboard({ dashboard, year, students, allEntries, isLoading, canEd
 
   const cards = [
     { label: "Total Students", value: dashboard.totalStudents || 0, icon: Users, color: "text-blue-500", format: "number" },
+    { label: "Total Providers", value: dashboard.totalProviders || 0, icon: AlertCircle, color: "text-purple-500", format: "number" },
     { label: "Total Commission", value: dashboard.totalCommission || 0, icon: DollarSign, color: "text-green-500", format: "currency" },
-    { label: "Total Received", value: dashboard.totalReceived || 0, icon: TrendingUp, color: "text-emerald-500", format: "currency" },
-    { label: "Active Students", value: dashboard.activeCount || 0, icon: AlertCircle, color: "text-amber-500", format: "number" },
-    { label: "Pending Payments", value: dashboard.pendingPayments || 0, icon: Clock, color: "text-orange-500", format: "number" },
-    { label: "Paid Payments", value: dashboard.paidPayments || 0, icon: CheckCircle2, color: "text-teal-500", format: "number" },
+    { label: "Total Bonus", value: dashboard.totalBonus || 0, icon: TrendingUp, color: "text-amber-500", format: "currency" },
+    { label: "Total Received", value: dashboard.totalReceived || 0, icon: CheckCircle2, color: "text-emerald-500", format: "currency" },
+    { label: "Pending / Unpaid", value: dashboard.totalPending || 0, icon: Clock, color: "text-orange-500", format: "currency" },
   ];
 
-  const getTotalForStudent = (studentId: number) => {
-    const entries = allEntries[studentId] || [];
-    return entries.reduce((sum, e) => sum + Number(e.totalAmount || 0), 0);
-  };
+  const termNames = dashboard.termNames || yearTerms.map((_: any, i: number) => `T${i + 1}`);
 
   return (
     <div className="p-4 space-y-6" data-testid="year-dashboard">
-      <h2 className="text-lg font-semibold">Commission Summary - {year}</h2>
+      <div className="flex items-center justify-between">
+        <h2 className="text-lg font-semibold" data-testid="text-dashboard-title">Commission Dashboard - {year}</h2>
+        <div className="flex items-center gap-2">
+          <Label className="text-xs font-medium text-muted-foreground">Intake:</Label>
+          <div className="flex gap-1">
+            {["All", "T1", "T2", "T3"].map(f => (
+              <Button
+                key={f}
+                variant={intakeFilter === f ? "default" : "outline"}
+                size="sm"
+                className="h-7 px-3 text-xs"
+                onClick={() => onIntakeChange(f)}
+                data-testid={`button-intake-${f.toLowerCase()}`}
+              >
+                {f}
+              </Button>
+            ))}
+          </div>
+        </div>
+      </div>
+
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
         {cards.map((c, i) => (
           <Card key={i} data-testid={`card-${c.label.toLowerCase().replace(/\s+/g, "-")}`}>
@@ -592,99 +605,239 @@ function YearDashboard({ dashboard, year, students, allEntries, isLoading, canEd
         </div>
       )}
 
-      {dashboard.byAgent && dashboard.byAgent.length > 0 && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {dashboard.byProvider && dashboard.byProvider.length > 0 && (
           <div>
-            <h3 className="text-sm font-medium mb-2">By Agent</h3>
-            <div className="space-y-1">
-              {dashboard.byAgent.map((a: any) => (
-                <div key={a.agent} className="flex justify-between text-xs py-1 px-2 border rounded">
-                  <span>{a.agent}</span>
-                  <span className="font-mono">{a.count} students / ${Number(a.total).toFixed(2)}</span>
+            <h3 className="text-sm font-medium mb-2">Provider by Student Number</h3>
+            <div className="space-y-1 max-h-60 overflow-y-auto">
+              {dashboard.byProvider.map((p: any) => (
+                <div key={p.provider} className="flex justify-between text-xs py-1.5 px-2 border rounded">
+                  <span className="truncate max-w-[250px]">{p.provider}</span>
+                  <span className="font-mono font-semibold">{p.count} students</span>
                 </div>
               ))}
             </div>
           </div>
+        )}
+        {dashboard.byProvider && dashboard.byProvider.length > 0 && (
           <div>
-            <h3 className="text-sm font-medium mb-2">By Provider</h3>
-            <div className="space-y-1">
-              {dashboard.byProvider?.map((p: any) => (
-                <div key={p.provider} className="flex justify-between text-xs py-1 px-2 border rounded">
-                  <span className="truncate max-w-[200px]">{p.provider}</span>
-                  <span className="font-mono">{p.count} students / ${Number(p.total).toFixed(2)}</span>
+            <h3 className="text-sm font-medium mb-2">Provider Commission Summary</h3>
+            <div className="space-y-1 max-h-60 overflow-y-auto">
+              {dashboard.byProvider.map((p: any) => (
+                <div key={p.provider} className="text-xs py-1.5 px-2 border rounded">
+                  <div className="flex justify-between">
+                    <span className="truncate max-w-[200px] font-medium">{p.provider}</span>
+                    <span className="font-mono text-green-600">${Number(p.totalCommission || 0).toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between text-[10px] text-muted-foreground mt-0.5">
+                    <span>Bonus: ${Number(p.totalBonus || 0).toFixed(2)}</span>
+                    <span>Received: ${Number(p.totalReceived || 0).toFixed(2)}</span>
+                    <span className="text-orange-500">Pending: ${Number(p.pending || 0).toFixed(2)}</span>
+                  </div>
                 </div>
               ))}
             </div>
+          </div>
+        )}
+      </div>
+
+      {dashboard.byAgent && dashboard.byAgent.length > 0 && (
+        <div>
+          <h3 className="text-sm font-medium mb-2">By Agent</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-1">
+            {dashboard.byAgent.map((a: any) => (
+              <div key={a.agent} className="flex justify-between text-xs py-1 px-2 border rounded">
+                <span>{a.agent}</span>
+                <span className="font-mono">{a.count} students / ${Number(a.total).toFixed(2)}</span>
+              </div>
+            ))}
           </div>
         </div>
       )}
 
-      <div>
-        <h3 className="text-sm font-medium mb-2">All Students</h3>
-        <div className="overflow-auto border rounded-lg">
-          <table className="w-full text-xs border-collapse" data-testid="table-dashboard-students">
-            <thead className="sticky top-0 z-10">
-              <tr className="bg-[#2E75B6] text-white">
-                <th className="px-2 py-1.5 text-left font-medium border border-[#2060a0] w-10">S.No</th>
-                <th className="px-2 py-1.5 text-left font-medium border border-[#2060a0] min-w-[100px]">Agent</th>
-                <th className="px-2 py-1.5 text-left font-medium border border-[#2060a0] min-w-[80px]">Agentsic ID</th>
-                <th className="px-2 py-1.5 text-left font-medium border border-[#2060a0] min-w-[80px]">Student ID</th>
-                <th className="px-2 py-1.5 text-left font-medium border border-[#2060a0] min-w-[120px]">Student Name</th>
-                <th className="px-2 py-1.5 text-left font-medium border border-[#2060a0] min-w-[120px]">Provider</th>
-                <th className="px-2 py-1.5 text-left font-medium border border-[#2060a0] min-w-[60px]">Country</th>
-                <th className="px-2 py-1.5 text-left font-medium border border-[#2060a0] min-w-[80px]">Intake</th>
-                <th className="px-2 py-1.5 text-left font-medium border border-[#2060a0] min-w-[70px]">Status</th>
-                <th className="px-2 py-1.5 text-right font-medium border border-[#2060a0] min-w-[70px]">Comm. %</th>
-                <th className="px-2 py-1.5 text-center font-medium border border-[#2060a0] min-w-[50px]">GST</th>
-                <th className="px-2 py-1.5 text-left font-medium border border-[#2060a0] min-w-[80px]">Scholarship</th>
-                <th className="px-2 py-1.5 text-right font-medium border border-[#2060a0] min-w-[80px]">Total Comm.</th>
-                <th className="px-2 py-1.5 text-left font-medium border border-[#2060a0] min-w-[120px]">Notes</th>
-                {canDeleteMaster && <th className="px-2 py-1.5 text-center font-medium border border-[#2060a0] w-10"></th>}
-              </tr>
-            </thead>
-            <tbody>
-              {isLoading ? (
-                Array.from({ length: 5 }).map((_, i) => (
-                  <tr key={i}>
-                    {Array.from({ length: canDeleteMaster ? 15 : 14 }).map((_, j) => (
-                      <td key={j} className="px-2 py-1 border border-gray-200"><Skeleton className="h-3 w-full" /></td>
-                    ))}
-                  </tr>
-                ))
-              ) : students.length > 0 ? (
-                students.map((s, idx) => {
+      {dashboard.studentDetails && dashboard.studentDetails.length > 0 && (
+        <div>
+          <h3 className="text-sm font-medium mb-2">Student List</h3>
+          <div className="overflow-auto border rounded-lg max-h-[500px]">
+            <table className="w-full text-xs border-collapse" data-testid="table-dashboard-students">
+              <thead className="sticky top-0 z-10">
+                <tr className="bg-[#2E75B6] text-white">
+                  <th className="px-2 py-1.5 text-left font-medium border border-[#2060a0] w-10">S.N.</th>
+                  <th className="px-2 py-1.5 text-left font-medium border border-[#2060a0] min-w-[90px]">Agent</th>
+                  <th className="px-2 py-1.5 text-left font-medium border border-[#2060a0] min-w-[70px]">Agentsic ID</th>
+                  <th className="px-2 py-1.5 text-left font-medium border border-[#2060a0] min-w-[70px]">Student ID</th>
+                  <th className="px-2 py-1.5 text-left font-medium border border-[#2060a0] min-w-[100px]">Student Name</th>
+                  <th className="px-2 py-1.5 text-left font-medium border border-[#2060a0] min-w-[100px]">Provider</th>
+                  <th className="px-2 py-1.5 text-left font-medium border border-[#2060a0] min-w-[100px]">Course</th>
+                  <th className="px-2 py-1.5 text-left font-medium border border-[#2060a0] min-w-[50px]">Country</th>
+                  <th className="px-2 py-1.5 text-left font-medium border border-[#2060a0] min-w-[60px]">Intake</th>
+                  <th className="px-2 py-1.5 text-left font-medium border border-[#2060a0] min-w-[60px]">Status</th>
+                  {termNames.map((t: string) => (
+                    <th key={`${t}-comm`} className="px-2 py-1.5 text-right font-medium border border-[#2060a0] min-w-[65px]">{t} Comm</th>
+                  ))}
+                  {termNames.map((t: string) => (
+                    <th key={`${t}-bonus`} className="px-2 py-1.5 text-right font-medium border border-[#2060a0] min-w-[60px]">{t} Bonus</th>
+                  ))}
+                  <th className="px-2 py-1.5 text-right font-medium border border-[#2060a0] min-w-[75px]">Total Comm</th>
+                  <th className="px-2 py-1.5 text-right font-medium border border-[#2060a0] min-w-[65px]">Total Bonus</th>
+                  <th className="px-2 py-1.5 text-right font-medium border border-[#2060a0] min-w-[70px]">Received</th>
+                  <th className="px-2 py-1.5 text-right font-medium border border-[#2060a0] min-w-[65px]">Pending</th>
+                  <th className="px-2 py-1.5 text-left font-medium border border-[#2060a0] min-w-[80px]">Notes</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(() => {
+                  const rows: any[] = [];
+                  let sn = 0;
+                  for (const sd of dashboard.studentDetails) {
+                    const additionalProviders = providersByStudent[sd.id] || [];
+                    const totalRows = 1 + additionalProviders.length;
+                    sn++;
+
+                    rows.push(
+                      <tr key={`${sd.id}-primary`} style={{ backgroundColor: STATUS_ROW_BG[sd.status || ""] || "transparent" }} data-testid={`row-dashboard-${sd.id}`}>
+                        <td className="px-2 py-1 border border-gray-200 text-center" rowSpan={totalRows > 1 ? totalRows : undefined}>{sn}</td>
+                        <td className="px-2 py-1 border border-gray-200" rowSpan={totalRows > 1 ? totalRows : undefined}>{sd.agentName}</td>
+                        <td className="px-2 py-1 border border-gray-200 font-mono" rowSpan={totalRows > 1 ? totalRows : undefined}>{sd.agentsicId || "-"}</td>
+                        <td className="px-2 py-1 border border-gray-200 font-mono" rowSpan={totalRows > 1 ? totalRows : undefined}>{sd.studentId || "-"}</td>
+                        <td className="px-2 py-1 border border-gray-200" rowSpan={totalRows > 1 ? totalRows : undefined}>{sd.studentName}</td>
+                        <td className="px-2 py-1 border border-gray-200">{sd.provider}</td>
+                        <td className="px-2 py-1 border border-gray-200">{sd.courseName || "-"}</td>
+                        <td className="px-2 py-1 border border-gray-200">{sd.country}</td>
+                        <td className="px-2 py-1 border border-gray-200">{sd.startIntake || "-"}</td>
+                        <td className="px-2 py-1 border border-gray-200">
+                          <Badge className={`${STATUS_COLORS[sd.status || ""] || "bg-gray-100 text-gray-800"} text-[10px] px-1.5 py-0`}>{sd.status}</Badge>
+                        </td>
+                        {termNames.map((t: string) => (
+                          <td key={`${t}-c`} className="px-2 py-1 border border-gray-200 text-right font-mono">${(sd.termBreakdown?.[t]?.commission || 0).toFixed(2)}</td>
+                        ))}
+                        {termNames.map((t: string) => (
+                          <td key={`${t}-b`} className="px-2 py-1 border border-gray-200 text-right font-mono">${(sd.termBreakdown?.[t]?.bonus || 0).toFixed(2)}</td>
+                        ))}
+                        <td className="px-2 py-1 border border-gray-200 text-right font-mono font-semibold">${sd.totalCommission.toFixed(2)}</td>
+                        <td className="px-2 py-1 border border-gray-200 text-right font-mono">${sd.totalBonus.toFixed(2)}</td>
+                        <td className="px-2 py-1 border border-gray-200 text-right font-mono text-green-600">${sd.totalReceived.toFixed(2)}</td>
+                        <td className="px-2 py-1 border border-gray-200 text-right font-mono text-orange-500">${sd.pendingAmount.toFixed(2)}</td>
+                        <td className="px-2 py-1 border border-gray-200 max-w-[150px]">
+                          {sd.notes ? <span className="block truncate" title={sd.notes}>{sd.notes}</span> : "-"}
+                        </td>
+                      </tr>
+                    );
+
+                    for (const ap of additionalProviders) {
+                      rows.push(
+                        <tr key={`${sd.id}-ap-${ap.id}`} style={{ backgroundColor: STATUS_ROW_BG[sd.status || ""] || "transparent" }}>
+                          <td className="px-2 py-1 border border-gray-200 text-blue-600">{ap.provider}</td>
+                          <td className="px-2 py-1 border border-gray-200 text-blue-600">{ap.courseName || "-"}</td>
+                          <td className="px-2 py-1 border border-gray-200 text-blue-600">{ap.country || sd.country}</td>
+                          <td className="px-2 py-1 border border-gray-200 text-blue-600">{ap.startIntake || "-"}</td>
+                          <td className="px-2 py-1 border border-gray-200"></td>
+                          {termNames.map((t: string) => (
+                            <td key={`${t}-c`} className="px-2 py-1 border border-gray-200"></td>
+                          ))}
+                          {termNames.map((t: string) => (
+                            <td key={`${t}-b`} className="px-2 py-1 border border-gray-200"></td>
+                          ))}
+                          <td className="px-2 py-1 border border-gray-200"></td>
+                          <td className="px-2 py-1 border border-gray-200"></td>
+                          <td className="px-2 py-1 border border-gray-200"></td>
+                          <td className="px-2 py-1 border border-gray-200"></td>
+                          <td className="px-2 py-1 border border-gray-200"></td>
+                        </tr>
+                      );
+                    }
+                  }
+                  return rows;
+                })()}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function MasterTable({ students, allEntries, year, isLoading, canEdit, canDeleteMaster, isDeleting, providersByStudent, onRemoveProvider, onUpdateStudent, onDeleteStudent }: {
+  students: CommissionStudent[];
+  allEntries: Record<number, CommissionEntry[]>;
+  year: number | null;
+  isLoading: boolean;
+  canEdit: boolean;
+  canDeleteMaster: boolean;
+  isDeleting: boolean;
+  providersByStudent: Record<number, any[]>;
+  onRemoveProvider: (studentId: number, providerId: number) => void;
+  onUpdateStudent: (id: number, data: Record<string, any>) => void;
+  onDeleteStudent: (id: number) => void;
+}) {
+  const [deleteTarget, setDeleteTarget] = useState<CommissionStudent | null>(null);
+
+  const getTotalForStudent = (studentId: number) => {
+    const entries = allEntries[studentId] || [];
+    return entries.reduce((sum, e) => sum + Number(e.totalAmount || 0), 0);
+  };
+
+  return (
+    <div className="p-4 space-y-4" data-testid="master-table-view">
+      <h2 className="text-lg font-semibold">Master - All Students {year ? `(${year})` : ""}</h2>
+      <div className="overflow-auto border rounded-lg">
+        <table className="w-full text-xs border-collapse" data-testid="table-master-students">
+          <thead className="sticky top-0 z-10">
+            <tr className="bg-[#2E75B6] text-white">
+              <th className="px-2 py-1.5 text-left font-medium border border-[#2060a0] w-10">S.No</th>
+              <th className="px-2 py-1.5 text-left font-medium border border-[#2060a0] min-w-[100px]">Agent</th>
+              <th className="px-2 py-1.5 text-left font-medium border border-[#2060a0] min-w-[80px]">Agentsic ID</th>
+              <th className="px-2 py-1.5 text-left font-medium border border-[#2060a0] min-w-[80px]">Student ID</th>
+              <th className="px-2 py-1.5 text-left font-medium border border-[#2060a0] min-w-[120px]">Student Name</th>
+              <th className="px-2 py-1.5 text-left font-medium border border-[#2060a0] min-w-[120px]">Provider</th>
+              <th className="px-2 py-1.5 text-left font-medium border border-[#2060a0] min-w-[60px]">Country</th>
+              <th className="px-2 py-1.5 text-left font-medium border border-[#2060a0] min-w-[80px]">Intake</th>
+              <th className="px-2 py-1.5 text-left font-medium border border-[#2060a0] min-w-[70px]">Status</th>
+              <th className="px-2 py-1.5 text-right font-medium border border-[#2060a0] min-w-[70px]">Comm. %</th>
+              <th className="px-2 py-1.5 text-center font-medium border border-[#2060a0] min-w-[50px]">GST</th>
+              <th className="px-2 py-1.5 text-left font-medium border border-[#2060a0] min-w-[80px]">Scholarship</th>
+              <th className="px-2 py-1.5 text-right font-medium border border-[#2060a0] min-w-[80px]">Total Comm.</th>
+              <th className="px-2 py-1.5 text-left font-medium border border-[#2060a0] min-w-[120px]">Notes</th>
+              {canDeleteMaster && <th className="px-2 py-1.5 text-center font-medium border border-[#2060a0] w-10"></th>}
+            </tr>
+          </thead>
+          <tbody>
+            {isLoading ? (
+              Array.from({ length: 5 }).map((_, i) => (
+                <tr key={i}>
+                  {Array.from({ length: canDeleteMaster ? 15 : 14 }).map((_, j) => (
+                    <td key={j} className="px-2 py-1 border border-gray-200"><Skeleton className="h-3 w-full" /></td>
+                  ))}
+                </tr>
+              ))
+            ) : students.length > 0 ? (
+              (() => {
+                const rows: any[] = [];
+                let sn = 0;
+                for (const s of students) {
                   const statusBg = STATUS_ROW_BG[s.status || ""] || "transparent";
-                  return (
-                    <tr key={s.id} style={{ backgroundColor: statusBg }} data-testid={`row-dashboard-${s.id}`}>
-                      <td className="px-2 py-1 border border-gray-200 text-center">{idx + 1}</td>
-                      <td className="px-2 py-1 border border-gray-200">{s.agentName}</td>
-                      <td className="px-2 py-1 border border-gray-200 font-mono">{s.agentsicId || "-"}</td>
-                      <td className="px-2 py-1 border border-gray-200 font-mono">{s.studentId || "-"}</td>
-                      <td className="px-2 py-1 border border-gray-200">{s.studentName}</td>
+                  const additionalProviders = providersByStudent[s.id] || [];
+                  const totalRows = 1 + additionalProviders.length;
+                  sn++;
+
+                  rows.push(
+                    <tr key={s.id} style={{ backgroundColor: statusBg }} data-testid={`row-master-${s.id}`}>
+                      <td className="px-2 py-1 border border-gray-200 text-center" rowSpan={totalRows > 1 ? totalRows : undefined}>{sn}</td>
+                      <td className="px-2 py-1 border border-gray-200" rowSpan={totalRows > 1 ? totalRows : undefined}>{s.agentName}</td>
+                      <td className="px-2 py-1 border border-gray-200 font-mono" rowSpan={totalRows > 1 ? totalRows : undefined}>{s.agentsicId || "-"}</td>
+                      <td className="px-2 py-1 border border-gray-200 font-mono" rowSpan={totalRows > 1 ? totalRows : undefined}>{s.studentId || "-"}</td>
+                      <td className="px-2 py-1 border border-gray-200" rowSpan={totalRows > 1 ? totalRows : undefined}>{s.studentName}</td>
                       <td className="px-2 py-1 border border-gray-200">
                         <div className="flex items-center gap-1">
                           <span>{s.provider}</span>
-                          {canEdit && (
-                            <AddProviderButton studentId={s.id} studentName={s.studentName} />
-                          )}
+                          {canEdit && <AddProviderButton studentId={s.id} studentName={s.studentName} />}
                         </div>
-                        {providersByStudent[s.id]?.map((ap: any) => (
-                          <div key={ap.id} className="text-[10px] text-blue-600 mt-0.5 flex items-center gap-1">
-                            <span>{ap.provider}{ap.studentId ? ` (${ap.studentId})` : ""}</span>
-                            {canEdit && (
-                              <button onClick={() => onRemoveProvider(s.id, ap.id)} className="text-red-400 hover:text-red-600" data-testid={`button-remove-provider-${ap.id}`}>
-                                <X className="h-2.5 w-2.5" />
-                              </button>
-                            )}
-                          </div>
-                        ))}
                       </td>
                       <td className="px-2 py-1 border border-gray-200">{s.country}</td>
                       <td className="px-2 py-1 border border-gray-200">{s.startIntake || "-"}</td>
                       <td className="px-2 py-1 border border-gray-200">
-                        <Badge className={`${STATUS_COLORS[s.status || ""] || "bg-gray-100 text-gray-800"} text-[10px] px-1.5 py-0`}>
-                          {s.status}
-                        </Badge>
+                        <Badge className={`${STATUS_COLORS[s.status || ""] || "bg-gray-100 text-gray-800"} text-[10px] px-1.5 py-0`}>{s.status}</Badge>
                       </td>
                       <EditableCell value={s.commissionRatePct?.toString() || ""} readOnly={!canEdit} onSave={(v) => onUpdateStudent(s.id, { commissionRatePct: v })} type="number" align="right" mono width="70px" />
                       <EditableCell value={s.gstApplicable || "Yes"} readOnly={!canEdit} onSave={(v) => onUpdateStudent(s.id, { gstApplicable: v })} type="select" options={["Yes", "No"]} width="50px" />
@@ -707,29 +860,51 @@ function YearDashboard({ dashboard, year, students, allEntries, isLoading, canEd
                         ) : "-"}
                       </td>
                       {canDeleteMaster && (
-                        <td className="px-1 py-1 border border-gray-200 text-center">
-                          <button
-                            className="text-red-500 hover:text-red-700 p-0.5"
-                            onClick={() => setDeleteTarget(s)}
-                            data-testid={`button-delete-master-${s.id}`}
-                          >
+                        <td className="px-1 py-1 border border-gray-200 text-center" rowSpan={totalRows > 1 ? totalRows : undefined}>
+                          <button className="text-red-500 hover:text-red-700 p-0.5" onClick={() => setDeleteTarget(s)} data-testid={`button-delete-master-${s.id}`}>
                             <Trash2 className="w-3 h-3" />
                           </button>
                         </td>
                       )}
                     </tr>
                   );
-                })
-              ) : (
-                <tr>
-                  <td colSpan={canDeleteMaster ? 15 : 14} className="px-3 py-6 text-center text-muted-foreground text-sm">
-                    No students found for this year.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+
+                  for (const ap of additionalProviders) {
+                    rows.push(
+                      <tr key={`${s.id}-ap-${ap.id}`} style={{ backgroundColor: statusBg }}>
+                        <td className="px-2 py-1 border border-gray-200">
+                          <div className="flex items-center gap-1 text-blue-600">
+                            <span>{ap.provider}{ap.studentId ? ` (${ap.studentId})` : ""}</span>
+                            {canEdit && (
+                              <button onClick={() => onRemoveProvider(s.id, ap.id)} className="text-red-400 hover:text-red-600" data-testid={`button-remove-provider-${ap.id}`}>
+                                <X className="h-2.5 w-2.5" />
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                        <td className="px-2 py-1 border border-gray-200 text-blue-600">{ap.country || s.country}</td>
+                        <td className="px-2 py-1 border border-gray-200 text-blue-600">{ap.startIntake || "-"}</td>
+                        <td className="px-2 py-1 border border-gray-200"></td>
+                        <td className="px-2 py-1 border border-gray-200"></td>
+                        <td className="px-2 py-1 border border-gray-200"></td>
+                        <td className="px-2 py-1 border border-gray-200"></td>
+                        <td className="px-2 py-1 border border-gray-200"></td>
+                        <td className="px-2 py-1 border border-gray-200"></td>
+                      </tr>
+                    );
+                  }
+                }
+                return rows;
+              })()
+            ) : (
+              <tr>
+                <td colSpan={canDeleteMaster ? 15 : 14} className="px-3 py-6 text-center text-muted-foreground text-sm">
+                  No students found.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
       </div>
 
       <Dialog open={!!deleteTarget} onOpenChange={(open) => { if (!open && !isDeleting) setDeleteTarget(null); }}>
@@ -757,20 +932,8 @@ function YearDashboard({ dashboard, year, students, allEntries, isLoading, canEd
             </div>
           )}
           <DialogFooter className="gap-2 sm:gap-0">
-            <Button variant="outline" onClick={() => setDeleteTarget(null)} disabled={isDeleting} data-testid="button-cancel-delete">
-              Cancel
-            </Button>
-            <Button
-              variant="destructive"
-              disabled={isDeleting}
-              data-testid="button-confirm-delete"
-              onClick={() => {
-                if (deleteTarget) {
-                  onDeleteStudent(deleteTarget.id);
-                  setDeleteTarget(null);
-                }
-              }}
-            >
+            <Button variant="outline" onClick={() => setDeleteTarget(null)} disabled={isDeleting} data-testid="button-cancel-delete">Cancel</Button>
+            <Button variant="destructive" disabled={isDeleting} data-testid="button-confirm-delete" onClick={() => { if (deleteTarget) { onDeleteStudent(deleteTarget.id); setDeleteTarget(null); } }}>
               {isDeleting ? "Deleting..." : "Delete"}
             </Button>
           </DialogFooter>
