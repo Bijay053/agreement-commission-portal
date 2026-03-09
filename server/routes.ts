@@ -2010,13 +2010,12 @@ export async function registerRoutes(
       const headers = [
         "Agent Name", "Agentsic ID (mandatory)", "Student ID", "Student Name",
         "Provider", "Country", "Start Intake", "Course Level", "Course Name",
-        "Duration (Years)", "Commission Rate (%)", "GST Applicable (Yes/No)",
-        "Scholarship Type (None/Percent/Fixed)", "Scholarship Value"
+        "Duration (Years)"
       ];
       const sampleRow = [
         "Sample Agent", "AG-001", "STU-001", "John Doe",
         "University of Newcastle", "Australia", "T1 2025", "Bachelor", "Computer Science",
-        "3", "15", "Yes", "None", "0"
+        "3"
       ];
       const csv = [headers.join(","), sampleRow.join(",")].join("\n");
       res.setHeader("Content-Type", "text/csv");
