@@ -13,7 +13,7 @@ RUN mkdir -p uploads && npm run build
 FROM base AS production
 ENV NODE_ENV=production
 COPY package.json ./
-RUN npm install && npm install drizzle-kit tsx && npm cache clean --force
+RUN npm install --production=false && npm cache clean --force
 COPY --from=build /app/dist ./dist
 COPY --from=build /app/drizzle.config.ts ./drizzle.config.ts
 COPY --from=build /app/shared ./shared
