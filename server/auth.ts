@@ -8,6 +8,9 @@ import { pool } from "./db";
 const PgStore = pgSession(session);
 
 export function setupAuth(app: any) {
+  if (process.env.NODE_ENV === "production") {
+    app.set("trust proxy", 1);
+  }
   app.use(
     session({
       store: new PgStore({
