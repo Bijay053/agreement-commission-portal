@@ -20,6 +20,8 @@ import AuditLogsPage from "@/pages/audit-logs";
 import RolesManagementPage from "@/pages/roles-management";
 import ContactsListPage from "@/pages/contacts-list";
 import CommissionTablePage from "@/pages/commission-table";
+import CommissionTrackerPage from "@/pages/commission-tracker";
+import CommissionTrackerDetailPage from "@/pages/commission-tracker-detail";
 import ForgotPasswordPage from "@/pages/forgot-password";
 import ResetPasswordPage from "@/pages/reset-password";
 
@@ -70,6 +72,16 @@ function Router() {
       <Route path="/roles">
         <AccessGuard permission="security.role.manage">
           <RolesManagementPage />
+        </AccessGuard>
+      </Route>
+      <Route path="/commission-tracker">
+        <AccessGuard permission="commission_tracker.view">
+          <CommissionTrackerPage />
+        </AccessGuard>
+      </Route>
+      <Route path="/commission-tracker/:id">
+        <AccessGuard permission="commission_tracker.view">
+          <CommissionTrackerDetailPage />
         </AccessGuard>
       </Route>
       <Route path="/audit-logs">

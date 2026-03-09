@@ -35,6 +35,7 @@ A secure internal portal for Study Info Centre — managing provider (university
 - Fine-grained RBAC with module.resource.action permission codes
 - Audit logging for all key actions including role/permission changes
 - Confidentiality level hidden (defaults to "high" for all agreements)
+- **Commission Tracker** — Student enrollment tracking across 3 terms (T1, T2, T3) with auto-calculated commissions, scholarships, GST, bonuses, cascade logic (Withdrawn/Complete blocks downstream terms), payment tracking, and dashboard stats
 
 ## Data Model
 - `countries` — Reference table for territories and provider countries
@@ -50,6 +51,8 @@ A secure internal portal for Study Info Centre — managing provider (university
 - `agreement_contacts` — Provider contacts for renewals
 - `agreement_documents` — Versioned document uploads
 - `audit_logs` — System activity tracking
+- `commission_students` — Master student enrollment records for commission tracking
+- `commission_entries` — Per-term (T1/T2/T3) fee & commission entries with auto-calculations
 
 ## Default Users (Seeded)
 - **Super Admin**: admin@studyinfocentre.com / admin123
@@ -103,6 +106,19 @@ A secure internal portal for Study Info Centre — managing provider (university
 - `GET /api/documents/:id/view` — Secure document view (streams via blob, audit logged, permission: document.view_in_portal)
 - `GET /api/documents/:id/download` — Download document (audit logged, permission: document.download)
 
+### Commission Tracker
+- `GET /api/commission-tracker/students` — List students with filters (search, agent, provider, country, status)
+- `POST /api/commission-tracker/students` — Create student
+- `GET /api/commission-tracker/students/:id` — Student detail with entries
+- `PATCH /api/commission-tracker/students/:id` — Update student
+- `DELETE /api/commission-tracker/students/:id` — Delete student
+- `POST /api/commission-tracker/students/:id/entries` — Add term entry
+- `PATCH /api/commission-tracker/entries/:id` — Update term entry
+- `DELETE /api/commission-tracker/entries/:id` — Delete term entry
+- `POST /api/commission-tracker/students/:id/recalculate` — Recalculate all auto fields
+- `GET /api/commission-tracker/dashboard` — Summary stats
+- `GET /api/commission-tracker/filters` — Distinct filter values
+
 ## Project Structure
 ```
 client/src/
@@ -124,11 +140,14 @@ client/src/
     agreement-detail.tsx   # 6-tab detail view
     agreement-form.tsx     # Create/edit with inline provider add, multi-territory
     providers-list.tsx     # Provider management
+    commission-tracker.tsx        # Commission tracker student list with dashboard stats
+    commission-tracker-detail.tsx # Student detail with T1/T2/T3 term entry tabs
     roles-management.tsx   # Role CRUD + permission grid editor
     users-management.tsx   # User management with multi-role assignment
     audit-logs.tsx
 server/
   auth.ts            # Auth middleware, session, password utilities
+  commission-calc.ts # Commission calculation engine (mirrors Google Sheet formulas)
   db.ts              # Database connection
   routes.ts          # API endpoints with validation
   seed.ts            # Database seed data with permission registry

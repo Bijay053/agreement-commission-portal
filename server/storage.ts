@@ -5,6 +5,7 @@ import {
   countries, universities, agreements, agreementTerritories, agreementTargets,
   agreementCommissionRules, agreementContacts, agreementDocuments, auditLogs,
   targetBonusRules, targetBonusTiers, targetBonusCountry, passwordResetTokens,
+  commissionStudents, commissionEntries,
   type User, type InsertUser, type Agreement, type InsertAgreement,
   type AgreementTarget, type InsertTarget, type AgreementCommissionRule,
   type InsertCommissionRule, type AgreementContact, type InsertContact,
@@ -12,6 +13,8 @@ import {
   type Country, type Role, type Permission, type AuditLog,
   type TargetBonusRule, type TargetBonusTier, type TargetBonusCountryEntry,
   type PasswordResetToken,
+  type CommissionStudent, type InsertCommissionStudent,
+  type CommissionEntry, type InsertCommissionEntry,
 } from "@shared/schema";
 
 export interface IStorage {
@@ -96,6 +99,28 @@ export interface IStorage {
   invalidateUserPasswordResetTokens(userId: number): Promise<void>;
   updateUserPassword(userId: number, passwordHash: string): Promise<void>;
   invalidateUserSessions(userId: number): Promise<void>;
+
+  getCommissionStudents(filters?: { search?: string; agent?: string; provider?: string; country?: string; status?: string }): Promise<CommissionStudent[]>;
+  getCommissionStudent(id: number): Promise<CommissionStudent | undefined>;
+  createCommissionStudent(data: InsertCommissionStudent): Promise<CommissionStudent>;
+  updateCommissionStudent(id: number, data: Partial<InsertCommissionStudent>): Promise<CommissionStudent>;
+  deleteCommissionStudent(id: number): Promise<void>;
+
+  getCommissionEntries(studentId: number): Promise<CommissionEntry[]>;
+  getCommissionEntry(id: number): Promise<CommissionEntry | undefined>;
+  createCommissionEntry(data: InsertCommissionEntry): Promise<CommissionEntry>;
+  updateCommissionEntry(id: number, data: Partial<InsertCommissionEntry>): Promise<CommissionEntry>;
+  deleteCommissionEntry(id: number): Promise<void>;
+  getCommissionEntriesByTerm(termName: string): Promise<CommissionEntry[]>;
+
+  getCommissionTrackerDashboard(): Promise<{
+    totalStudents: number;
+    totalCommission: number;
+    totalReceived: number;
+    byStatus: Record<string, number>;
+    byAgent: { agent: string; count: number; total: number }[];
+    byProvider: { provider: string; count: number; total: number }[];
+  }>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -231,7 +256,23 @@ export class DatabaseStorage implements IStorage {
       .innerJoin(rolePermissions, eq(userRoles.roleId, rolePermissions.roleId))
       .innerJoin(permissions, eq(rolePermissions.permissionId, permissions.id))
       .where(eq(userRoles.userId, userId));
-    return [...new Set(result.map(r => r.code))];
+    const dbCodes = [...new Set(result.map(r => r.code))];
+    const { LEGACY_PERMISSION_MAP } = await import("@shared/schema");
+    const reverseLegacy: Record<string, string> = {};
+    for (const [legacyCode, newCode] of Object.entries(LEGACY_PERMISSION_MAP)) {
+      reverseLegacy[newCode] = legacyCode;
+    }
+    const allCodes = new Set(dbCodes);
+    for (const code of dbCodes) {
+      if (reverseLegacy[code]) {
+        allCodes.add(reverseLegacy[code]);
+      }
+      const legacyTarget = LEGACY_PERMISSION_MAP[code];
+      if (legacyTarget) {
+        allCodes.add(legacyTarget);
+      }
+    }
+    return [...allCodes];
   }
 
   async assignRole(userId: number, roleId: number): Promise<void> {
@@ -947,6 +988,138 @@ export class DatabaseStorage implements IStorage {
     await db.execute(
       sql`DELETE FROM "session" WHERE sess->>'userId' = ${String(userId)}`
     );
+  }
+
+  async getCommissionStudents(filters?: { search?: string; agent?: string; provider?: string; country?: string; status?: string }): Promise<CommissionStudent[]> {
+    const conditions = [];
+    if (filters?.search) {
+      conditions.push(or(
+        ilike(commissionStudents.studentName, `%${filters.search}%`),
+        ilike(commissionStudents.studentId, `%${filters.search}%`),
+        ilike(commissionStudents.agentsicId, `%${filters.search}%`),
+        ilike(commissionStudents.agentName, `%${filters.search}%`)
+      ));
+    }
+    if (filters?.agent) conditions.push(eq(commissionStudents.agentName, filters.agent));
+    if (filters?.provider) conditions.push(eq(commissionStudents.provider, filters.provider));
+    if (filters?.country) conditions.push(eq(commissionStudents.country, filters.country));
+    if (filters?.status) conditions.push(eq(commissionStudents.status, filters.status));
+
+    if (conditions.length > 0) {
+      return db.select().from(commissionStudents)
+        .where(and(...conditions))
+        .orderBy(asc(commissionStudents.id));
+    }
+    return db.select().from(commissionStudents).orderBy(asc(commissionStudents.id));
+  }
+
+  async getCommissionStudent(id: number): Promise<CommissionStudent | undefined> {
+    const [student] = await db.select().from(commissionStudents).where(eq(commissionStudents.id, id));
+    return student;
+  }
+
+  async createCommissionStudent(data: InsertCommissionStudent): Promise<CommissionStudent> {
+    const [created] = await db.insert(commissionStudents).values(data).returning();
+    return created;
+  }
+
+  async updateCommissionStudent(id: number, data: Partial<InsertCommissionStudent>): Promise<CommissionStudent> {
+    const [updated] = await db.update(commissionStudents)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(commissionStudents.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteCommissionStudent(id: number): Promise<void> {
+    await db.delete(commissionStudents).where(eq(commissionStudents.id, id));
+  }
+
+  async getCommissionEntries(studentId: number): Promise<CommissionEntry[]> {
+    return db.select().from(commissionEntries)
+      .where(eq(commissionEntries.commissionStudentId, studentId))
+      .orderBy(asc(commissionEntries.termName));
+  }
+
+  async getCommissionEntry(id: number): Promise<CommissionEntry | undefined> {
+    const [entry] = await db.select().from(commissionEntries).where(eq(commissionEntries.id, id));
+    return entry;
+  }
+
+  async createCommissionEntry(data: InsertCommissionEntry): Promise<CommissionEntry> {
+    const [created] = await db.insert(commissionEntries).values(data).returning();
+    return created;
+  }
+
+  async updateCommissionEntry(id: number, data: Partial<InsertCommissionEntry>): Promise<CommissionEntry> {
+    const [updated] = await db.update(commissionEntries)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(commissionEntries.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteCommissionEntry(id: number): Promise<void> {
+    await db.delete(commissionEntries).where(eq(commissionEntries.id, id));
+  }
+
+  async getCommissionEntriesByTerm(termName: string): Promise<CommissionEntry[]> {
+    return db.select().from(commissionEntries)
+      .where(eq(commissionEntries.termName, termName))
+      .orderBy(asc(commissionEntries.id));
+  }
+
+  async getCommissionTrackerDashboard(): Promise<{
+    totalStudents: number;
+    totalCommission: number;
+    totalReceived: number;
+    byStatus: Record<string, number>;
+    byAgent: { agent: string; count: number; total: number }[];
+    byProvider: { provider: string; count: number; total: number }[];
+  }> {
+    const students = await db.select().from(commissionStudents);
+
+    const byStatus: Record<string, number> = {};
+    let totalCommission = 0;
+    let totalReceived = 0;
+    const agentMap: Record<string, { count: number; total: number }> = {};
+    const providerMap: Record<string, { count: number; total: number }> = {};
+
+    for (const s of students) {
+      const st = s.status || "Under Enquiry";
+      byStatus[st] = (byStatus[st] || 0) + 1;
+
+      const tr = Number(s.totalReceived) || 0;
+      totalCommission += tr;
+
+      const entries = await db.select().from(commissionEntries)
+        .where(eq(commissionEntries.commissionStudentId, s.id));
+
+      let received = 0;
+      for (const e of entries) {
+        if (e.paymentStatus === "Received") {
+          received += Number(e.totalAmount) || 0;
+        }
+      }
+      totalReceived += received;
+
+      if (!agentMap[s.agentName]) agentMap[s.agentName] = { count: 0, total: 0 };
+      agentMap[s.agentName].count++;
+      agentMap[s.agentName].total += tr;
+
+      if (!providerMap[s.provider]) providerMap[s.provider] = { count: 0, total: 0 };
+      providerMap[s.provider].count++;
+      providerMap[s.provider].total += tr;
+    }
+
+    return {
+      totalStudents: students.length,
+      totalCommission,
+      totalReceived,
+      byStatus,
+      byAgent: Object.entries(agentMap).map(([agent, v]) => ({ agent, ...v })).sort((a, b) => b.total - a.total),
+      byProvider: Object.entries(providerMap).map(([provider, v]) => ({ provider, ...v })).sort((a, b) => b.total - a.total),
+    };
   }
 }
 

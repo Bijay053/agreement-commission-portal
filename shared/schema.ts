@@ -195,6 +195,63 @@ export const agreementDocuments = pgTable("agreement_documents", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+export const commissionStudents = pgTable("commission_students", {
+  id: serial("id").primaryKey(),
+  agentName: varchar("agent_name", { length: 255 }).notNull(),
+  studentId: varchar("student_id", { length: 64 }),
+  agentsicId: varchar("agentsic_id", { length: 64 }),
+  studentName: varchar("student_name", { length: 255 }).notNull(),
+  provider: varchar("provider", { length: 255 }).notNull(),
+  country: varchar("country", { length: 64 }).notNull().default("AU"),
+  startIntake: varchar("start_intake", { length: 32 }),
+  courseLevel: varchar("course_level", { length: 64 }),
+  courseName: varchar("course_name", { length: 500 }),
+  courseDurationYears: numeric("course_duration_years", { precision: 4, scale: 1 }),
+  commissionRatePct: numeric("commission_rate_pct", { precision: 8, scale: 4 }),
+  gstRatePct: numeric("gst_rate_pct", { precision: 5, scale: 2 }).default("10"),
+  gstApplicable: varchar("gst_applicable", { length: 3 }).notNull().default("Yes"),
+  scholarshipType: varchar("scholarship_type", { length: 16 }).default("None"),
+  scholarshipValue: numeric("scholarship_value", { precision: 12, scale: 2 }).default("0"),
+  status: varchar("status", { length: 32 }).default("Under Enquiry"),
+  notes: text("notes"),
+  totalReceived: numeric("total_received", { precision: 14, scale: 2 }).default("0"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const commissionEntries = pgTable("commission_entries", {
+  id: serial("id").primaryKey(),
+  commissionStudentId: integer("commission_student_id").notNull().references(() => commissionStudents.id, { onDelete: "cascade" }),
+  termName: varchar("term_name", { length: 16 }).notNull(),
+  academicYear: varchar("academic_year", { length: 16 }),
+  feeGross: numeric("fee_gross", { precision: 12, scale: 2 }).default("0"),
+  commissionRateAuto: numeric("commission_rate_auto", { precision: 8, scale: 4 }),
+  commissionRateOverridePct: numeric("commission_rate_override_pct", { precision: 8, scale: 4 }),
+  commissionRateUsedPct: numeric("commission_rate_used_pct", { precision: 8, scale: 4 }),
+  commissionAmount: numeric("commission_amount", { precision: 12, scale: 2 }).default("0"),
+  bonus: numeric("bonus", { precision: 12, scale: 2 }).default("0"),
+  gstAmount: numeric("gst_amount", { precision: 12, scale: 2 }).default("0"),
+  totalAmount: numeric("total_amount", { precision: 12, scale: 2 }).default("0"),
+  paymentStatus: varchar("payment_status", { length: 16 }).default("Pending"),
+  paidDate: date("paid_date"),
+  invoiceNo: varchar("invoice_no", { length: 64 }),
+  paymentRef: varchar("payment_ref", { length: 128 }),
+  notes: text("notes"),
+  studentStatus: varchar("student_status", { length: 32 }).default("Under Enquiry"),
+  rateChangeWarning: varchar("rate_change_warning", { length: 128 }),
+  scholarshipTypeAuto: varchar("scholarship_type_auto", { length: 16 }),
+  scholarshipValueAuto: numeric("scholarship_value_auto", { precision: 12, scale: 2 }),
+  scholarshipTypeOverride: varchar("scholarship_type_override", { length: 16 }),
+  scholarshipValueOverride: numeric("scholarship_value_override", { precision: 12, scale: 2 }),
+  scholarshipTypeUsed: varchar("scholarship_type_used", { length: 16 }),
+  scholarshipValueUsed: numeric("scholarship_value_used", { precision: 12, scale: 2 }),
+  scholarshipChangeWarning: varchar("scholarship_change_warning", { length: 128 }),
+  scholarshipAmount: numeric("scholarship_amount", { precision: 12, scale: 2 }).default("0"),
+  feeAfterScholarship: numeric("fee_after_scholarship", { precision: 12, scale: 2 }).default("0"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
 export const passwordResetTokens = pgTable("password_reset_tokens", {
   id: serial("id").primaryKey(),
   userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
@@ -272,6 +329,18 @@ export const insertBonusCountrySchema = createInsertSchema(targetBonusCountry).o
   id: true,
 });
 
+export const insertCommissionStudentSchema = createInsertSchema(commissionStudents).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertCommissionEntrySchema = createInsertSchema(commissionEntries).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
 export const loginSchema = z.object({
   email: z.string().email(),
   password: z.string().min(6),
@@ -293,6 +362,10 @@ export type AuditLog = typeof auditLogs.$inferSelect;
 export type TargetBonusRule = typeof targetBonusRules.$inferSelect;
 export type TargetBonusTier = typeof targetBonusTiers.$inferSelect;
 export type TargetBonusCountryEntry = typeof targetBonusCountry.$inferSelect;
+export type CommissionStudent = typeof commissionStudents.$inferSelect;
+export type CommissionEntry = typeof commissionEntries.$inferSelect;
+export type InsertCommissionStudent = z.infer<typeof insertCommissionStudentSchema>;
+export type InsertCommissionEntry = z.infer<typeof insertCommissionEntrySchema>;
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type InsertAgreement = z.infer<typeof insertAgreementSchema>;
 export type InsertTarget = z.infer<typeof insertTargetSchema>;
@@ -363,6 +436,14 @@ export const PERMISSION_REGISTRY = [
     ],
   },
   {
+    module: "commission_tracker",
+    label: "Commission Tracker",
+    resources: [
+      { resource: "student", label: "Commission Students", actions: ["read", "add", "update", "delete", "export"] },
+      { resource: "entry", label: "Term Entries", actions: ["read", "add", "update", "delete"] },
+    ],
+  },
+  {
     module: "documents",
     label: "Documents",
     resources: [
@@ -413,6 +494,15 @@ export const LEGACY_PERMISSION_MAP: Record<string, string> = {
   "bonus.edit": "bonus.bonus_rule.update",
   "bonus.delete": "bonus.bonus_rule.delete",
   "bonus.export": "bonus.bonus_rule.export",
+  "commission_tracker.view": "commission_tracker.student.read",
+  "commission_tracker.create": "commission_tracker.student.add",
+  "commission_tracker.edit": "commission_tracker.student.update",
+  "commission_tracker.delete": "commission_tracker.student.delete",
+  "commission_tracker.export": "commission_tracker.student.export",
+  "commission_tracker.entry.view": "commission_tracker.entry.read",
+  "commission_tracker.entry.create": "commission_tracker.entry.add",
+  "commission_tracker.entry.edit": "commission_tracker.entry.update",
+  "commission_tracker.entry.delete": "commission_tracker.entry.delete",
   "contacts.view": "contacts.contact.read",
   "contacts.create": "contacts.contact.add",
   "contacts.edit": "contacts.contact.update",

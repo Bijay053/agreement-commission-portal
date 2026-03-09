@@ -5,6 +5,7 @@ import { setupAuth, hashPassword, comparePassword, requireAuth, requirePermissio
 import { seedDatabase } from "./seed";
 import { loginSchema, insertAgreementSchema, insertTargetSchema, insertCommissionRuleSchema, insertContactSchema, insertUniversitySchema, PERMISSION_REGISTRY, LEGACY_PERMISSION_MAP } from "@shared/schema";
 import { sendPasswordResetEmail, verifyEmailConnection } from "./email";
+import { calculateEntry, computeMasterFromEntries, TERM_NAMES, STUDENT_STATUSES, PAYMENT_STATUSES } from "./commission-calc";
 import multer from "multer";
 import path from "path";
 import fs from "fs";
@@ -1096,6 +1097,297 @@ export async function registerRoutes(
       }));
 
       res.json({ modules });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.get("/api/commission-tracker/students", requireAuth, requirePermission("commission_tracker.view"), async (req, res) => {
+    try {
+      const filters: any = {};
+      if (req.query.search) filters.search = String(req.query.search);
+      if (req.query.agent) filters.agent = String(req.query.agent);
+      if (req.query.provider) filters.provider = String(req.query.provider);
+      if (req.query.country) filters.country = String(req.query.country);
+      if (req.query.status) filters.status = String(req.query.status);
+      const students = await storage.getCommissionStudents(filters);
+      res.json(students);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.get("/api/commission-tracker/students/:id", requireAuth, requirePermission("commission_tracker.view"), async (req, res) => {
+    try {
+      const student = await storage.getCommissionStudent(Number(req.params.id));
+      if (!student) return res.status(404).json({ message: "Student not found" });
+      const entries = await storage.getCommissionEntries(student.id);
+      res.json({ ...student, entries });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.post("/api/commission-tracker/students", requireAuth, requirePermission("commission_tracker.create"), async (req, res) => {
+    try {
+      const country = (req.body.country || "AU").trim();
+      const isAU = country.toLowerCase() === "au" || country.toLowerCase() === "australia";
+      const data = {
+        ...req.body,
+        gstRatePct: isAU ? "10" : "0",
+        gstApplicable: req.body.gstApplicable || (isAU ? "Yes" : "No"),
+      };
+      const student = await storage.createCommissionStudent(data);
+
+      const clientIp = req.headers["x-forwarded-for"] || req.socket.remoteAddress || "unknown";
+      await storage.createAuditLog({
+        userId: req.session.userId!,
+        action: "create",
+        entityType: "commission_student",
+        entityId: student.id,
+        ipAddress: String(clientIp),
+        userAgent: req.headers["user-agent"],
+      });
+
+      res.status(201).json(student);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.patch("/api/commission-tracker/students/:id", requireAuth, requirePermission("commission_tracker.edit"), async (req, res) => {
+    try {
+      const id = Number(req.params.id);
+      const existing = await storage.getCommissionStudent(id);
+      if (!existing) return res.status(404).json({ message: "Student not found" });
+
+      const country = (req.body.country || existing.country).trim();
+      const isAU = country.toLowerCase() === "au" || country.toLowerCase() === "australia";
+      const updateData = { ...req.body };
+      if (req.body.country) {
+        updateData.gstRatePct = isAU ? "10" : "0";
+        if (!req.body.gstApplicable) updateData.gstApplicable = isAU ? "Yes" : "No";
+      }
+
+      const student = await storage.updateCommissionStudent(id, updateData);
+
+      const entries = await storage.getCommissionEntries(id);
+      for (const entry of entries) {
+        const calc = calculateEntry(student, entry);
+        await storage.updateCommissionEntry(entry.id, calc as any);
+      }
+
+      const updatedEntries = await storage.getCommissionEntries(id);
+      const master = computeMasterFromEntries(updatedEntries);
+      await storage.updateCommissionStudent(id, {
+        status: master.status,
+        notes: master.notes,
+        totalReceived: master.totalReceived,
+      });
+
+      const final = await storage.getCommissionStudent(id);
+      res.json(final);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.delete("/api/commission-tracker/students/:id", requireAuth, requirePermission("commission_tracker.delete"), async (req, res) => {
+    try {
+      await storage.deleteCommissionStudent(Number(req.params.id));
+      res.json({ message: "Student deleted" });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.get("/api/commission-tracker/students/:id/entries", requireAuth, requirePermission("commission_tracker.entry.view"), async (req, res) => {
+    try {
+      const entries = await storage.getCommissionEntries(Number(req.params.id));
+      res.json(entries);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.post("/api/commission-tracker/students/:id/entries", requireAuth, requirePermission("commission_tracker.entry.create"), async (req, res) => {
+    try {
+      const studentId = Number(req.params.id);
+      const student = await storage.getCommissionStudent(studentId);
+      if (!student) return res.status(404).json({ message: "Student not found" });
+
+      const termName = req.body.termName;
+      if (!TERM_NAMES.includes(termName)) {
+        return res.status(400).json({ message: `Invalid term: ${termName}. Must be one of: ${TERM_NAMES.join(", ")}` });
+      }
+
+      const existingEntries = await storage.getCommissionEntries(studentId);
+      if (existingEntries.find(e => e.termName === termName)) {
+        return res.status(400).json({ message: `Entry for ${termName} already exists` });
+      }
+
+      const termIdx = TERM_NAMES.indexOf(termName);
+      for (let i = 0; i < termIdx; i++) {
+        const prevEntry = existingEntries.find(e => e.termName === TERM_NAMES[i]);
+        if (prevEntry) {
+          const st = prevEntry.studentStatus || "";
+          if (st === "Withdrawn" || st === "Complete") {
+            return res.status(400).json({ message: `Cannot add ${termName} entry: previous term ${TERM_NAMES[i]} has status "${st}" which blocks downstream terms` });
+          }
+        }
+      }
+
+      const calc = calculateEntry(student, req.body);
+      const entryData = {
+        commissionStudentId: studentId,
+        termName,
+        academicYear: req.body.academicYear || null,
+        feeGross: req.body.feeGross || "0",
+        bonus: req.body.bonus || "0",
+        commissionRateOverridePct: req.body.commissionRateOverridePct || null,
+        paymentStatus: req.body.paymentStatus || "Pending",
+        paidDate: req.body.paidDate || null,
+        invoiceNo: req.body.invoiceNo || null,
+        paymentRef: req.body.paymentRef || null,
+        notes: req.body.notes || null,
+        studentStatus: req.body.studentStatus || "Under Enquiry",
+        scholarshipTypeOverride: req.body.scholarshipTypeOverride || null,
+        scholarshipValueOverride: req.body.scholarshipValueOverride || null,
+        ...calc,
+      };
+
+      const entry = await storage.createCommissionEntry(entryData);
+
+      const allEntries = await storage.getCommissionEntries(studentId);
+      const master = computeMasterFromEntries(allEntries);
+      await storage.updateCommissionStudent(studentId, {
+        status: master.status,
+        notes: master.notes,
+        totalReceived: master.totalReceived,
+      });
+
+      res.status(201).json(entry);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.patch("/api/commission-tracker/entries/:id", requireAuth, requirePermission("commission_tracker.entry.edit"), async (req, res) => {
+    try {
+      const entryId = Number(req.params.id);
+      const existing = await storage.getCommissionEntry(entryId);
+      if (!existing) return res.status(404).json({ message: "Entry not found" });
+
+      const student = await storage.getCommissionStudent(existing.commissionStudentId);
+      if (!student) return res.status(404).json({ message: "Student not found" });
+
+      const merged = { ...existing, ...req.body };
+      const calc = calculateEntry(student, merged);
+
+      const updateData = {
+        academicYear: merged.academicYear,
+        feeGross: merged.feeGross,
+        bonus: merged.bonus,
+        commissionRateOverridePct: merged.commissionRateOverridePct,
+        paymentStatus: merged.paymentStatus,
+        paidDate: merged.paidDate || null,
+        invoiceNo: merged.invoiceNo || null,
+        paymentRef: merged.paymentRef || null,
+        notes: merged.notes || null,
+        studentStatus: merged.studentStatus,
+        scholarshipTypeOverride: merged.scholarshipTypeOverride || null,
+        scholarshipValueOverride: merged.scholarshipValueOverride || null,
+        ...calc,
+      };
+
+      const entry = await storage.updateCommissionEntry(entryId, updateData);
+
+      const allEntries = await storage.getCommissionEntries(student.id);
+      const master = computeMasterFromEntries(allEntries);
+      await storage.updateCommissionStudent(student.id, {
+        status: master.status,
+        notes: master.notes,
+        totalReceived: master.totalReceived,
+      });
+
+      res.json(entry);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.delete("/api/commission-tracker/entries/:id", requireAuth, requirePermission("commission_tracker.entry.delete"), async (req, res) => {
+    try {
+      const entryId = Number(req.params.id);
+      const existing = await storage.getCommissionEntry(entryId);
+      if (!existing) return res.status(404).json({ message: "Entry not found" });
+
+      const studentId = existing.commissionStudentId;
+      await storage.deleteCommissionEntry(entryId);
+
+      const allEntries = await storage.getCommissionEntries(studentId);
+      const master = computeMasterFromEntries(allEntries);
+      await storage.updateCommissionStudent(studentId, {
+        status: master.status,
+        notes: master.notes,
+        totalReceived: master.totalReceived,
+      });
+
+      res.json({ message: "Entry deleted" });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.post("/api/commission-tracker/students/:id/recalculate", requireAuth, requirePermission("commission_tracker.edit"), async (req, res) => {
+    try {
+      const studentId = Number(req.params.id);
+      const student = await storage.getCommissionStudent(studentId);
+      if (!student) return res.status(404).json({ message: "Student not found" });
+
+      const entries = await storage.getCommissionEntries(studentId);
+      for (const entry of entries) {
+        const calc = calculateEntry(student, entry);
+        await storage.updateCommissionEntry(entry.id, calc as any);
+      }
+
+      const updatedEntries = await storage.getCommissionEntries(studentId);
+      const master = computeMasterFromEntries(updatedEntries);
+      const updated = await storage.updateCommissionStudent(studentId, {
+        status: master.status,
+        notes: master.notes,
+        totalReceived: master.totalReceived,
+      });
+
+      res.json({ ...updated, entries: updatedEntries });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.get("/api/commission-tracker/dashboard", requireAuth, requirePermission("commission_tracker.view"), async (_req, res) => {
+    try {
+      const dashboard = await storage.getCommissionTrackerDashboard();
+      res.json(dashboard);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.get("/api/commission-tracker/filters", requireAuth, requirePermission("commission_tracker.view"), async (_req, res) => {
+    try {
+      const students = await storage.getCommissionStudents();
+      const agents = [...new Set(students.map(s => s.agentName))].sort();
+      const providers = [...new Set(students.map(s => s.provider))].sort();
+      const countries = [...new Set(students.map(s => s.country))].sort();
+      res.json({
+        agents,
+        providers,
+        countries,
+        statuses: [...STUDENT_STATUSES],
+        paymentStatuses: [...PAYMENT_STATUSES],
+        termNames: [...TERM_NAMES],
+      });
     } catch (err: any) {
       res.status(500).json({ message: err.message });
     }
