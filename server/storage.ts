@@ -152,9 +152,11 @@ export interface IStorage {
   syncSubAgentFromMain(): Promise<{ added: number; updated: number; removed: number }>;
   recalcSubAgentMasterTotals(commissionStudentId: number): Promise<SubAgentEntry>;
 
-  getSubAgentDashboard(year?: number): Promise<{
+  getSubAgentDashboard(year?: number, intake?: string): Promise<{
     totalStudents: number;
+    totalAgents: number;
     totalPaid: number;
+    totalPending: number;
     totalMargin: number;
     byStatus: Record<string, number>;
     byAgent: { agent: string; count: number; totalPaid: number }[];
@@ -1554,9 +1556,11 @@ export class DatabaseStorage implements IStorage {
     return updated;
   }
 
-  async getSubAgentDashboard(year?: number): Promise<{
+  async getSubAgentDashboard(year?: number, intake?: string): Promise<{
     totalStudents: number;
+    totalAgents: number;
     totalPaid: number;
+    totalPending: number;
     totalMargin: number;
     byStatus: Record<string, number>;
     byAgent: { agent: string; count: number; totalPaid: number }[];
@@ -1566,25 +1570,44 @@ export class DatabaseStorage implements IStorage {
       .from(subAgentEntries)
       .innerJoin(commissionStudents, eq(subAgentEntries.commissionStudentId, commissionStudents.id));
 
-    const yearTermNames = year
-      ? (await db.select().from(commissionTerms).where(eq(commissionTerms.year, year))).map(t => t.termName)
-      : null;
+    let yearTermNames: string[] | null = null;
+    if (year) {
+      const yearTerms = await db.select().from(commissionTerms).where(eq(commissionTerms.year, year));
+      yearTermNames = yearTerms.map(t => t.termName);
+    }
 
-    const allTermEntries = yearTermNames
-      ? await db.select().from(subAgentTermEntries).where(inArray(subAgentTermEntries.termName, yearTermNames.length > 0 ? yearTermNames : ["__none__"]))
+    let filteredTermNames: string[] | null = null;
+    if (intake && intake !== "All") {
+      if (yearTermNames) {
+        filteredTermNames = yearTermNames.filter(tn => tn.startsWith(intake));
+      } else {
+        const allTerms = await db.select().from(commissionTerms);
+        filteredTermNames = allTerms.filter(t => t.termName.startsWith(intake)).map(t => t.termName);
+      }
+    } else {
+      filteredTermNames = yearTermNames;
+    }
+
+    const termQuery = filteredTermNames
+      ? await db.select().from(subAgentTermEntries).where(inArray(subAgentTermEntries.termName, filteredTermNames.length > 0 ? filteredTermNames : ["__none__"]))
       : await db.select().from(subAgentTermEntries);
 
     const termPaidByStudent: Record<number, number> = {};
-    for (const te of allTermEntries) {
+    const termMainCommByStudent: Record<number, number> = {};
+    for (const te of termQuery) {
       const sid = te.commissionStudentId;
       termPaidByStudent[sid] = (termPaidByStudent[sid] || 0) + (Number(te.totalPaid) || 0);
+      termMainCommByStudent[sid] = (termMainCommByStudent[sid] || 0) + (Number(te.mainCommission) || 0);
     }
 
-    const relevantStudentIds = year ? new Set(Object.keys(termPaidByStudent).map(Number)) : null;
+    const useTermFilter = !!(year || (intake && intake !== "All"));
+    const relevantStudentIds = useTermFilter ? new Set(Object.keys(termPaidByStudent).map(Number)) : null;
 
     const byStatus: Record<string, number> = {};
     let totalPaid = 0;
     let totalMargin = 0;
+    let totalPending = 0;
+    const agentSet = new Set<string>();
     const agentMap: Record<string, { count: number; totalPaid: number }> = {};
     const providerMap: Record<string, { count: number; totalPaid: number }> = {};
 
@@ -1597,11 +1620,15 @@ export class DatabaseStorage implements IStorage {
       const st = entry.status || "Under Enquiry";
       byStatus[st] = (byStatus[st] || 0) + 1;
 
-      const paid = year ? (termPaidByStudent[entry.commissionStudentId] || 0) : (Number(entry.subAgentPaidTotal) || 0);
+      const paid = useTermFilter ? (termPaidByStudent[entry.commissionStudentId] || 0) : (Number(entry.subAgentPaidTotal) || 0);
+      const mainComm = useTermFilter ? (termMainCommByStudent[entry.commissionStudentId] || 0) : (Number(entry.sicReceivedTotal) || 0);
       totalPaid += paid;
-      const margin = year ? 0 : (Number(entry.margin) || 0);
+      const margin = mainComm - paid;
       totalMargin += margin;
+      const pending = mainComm - paid;
+      if (pending > 0) totalPending += pending;
 
+      agentSet.add(student.agentName);
       if (!agentMap[student.agentName]) agentMap[student.agentName] = { count: 0, totalPaid: 0 };
       agentMap[student.agentName].count++;
       agentMap[student.agentName].totalPaid += paid;
@@ -1611,9 +1638,13 @@ export class DatabaseStorage implements IStorage {
       providerMap[student.provider].totalPaid += paid;
     }
 
+    const totalStudents = relevantStudentIds ? relevantStudentIds.size : rows.length;
+
     return {
-      totalStudents: year ? (relevantStudentIds?.size || 0) : rows.length,
+      totalStudents,
+      totalAgents: agentSet.size,
       totalPaid: Math.round((totalPaid + Number.EPSILON) * 100) / 100,
+      totalPending: Math.round((totalPending + Number.EPSILON) * 100) / 100,
       totalMargin: Math.round((totalMargin + Number.EPSILON) * 100) / 100,
       byStatus,
       byAgent: Object.entries(agentMap).map(([agent, v]) => ({ agent, ...v })).sort((a, b) => b.totalPaid - a.totalPaid),
