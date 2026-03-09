@@ -108,7 +108,7 @@ export interface IStorage {
   createCommissionTerm(data: { termName: string; termLabel: string; year: number; termNumber: number; sortOrder: number }): Promise<CommissionTerm>;
   deleteCommissionTerm(id: number): Promise<void>;
 
-  getCommissionStudents(filters?: { search?: string; agent?: string; provider?: string; country?: string; status?: string }): Promise<CommissionStudent[]>;
+  getCommissionStudents(filters?: { search?: string; agent?: string; provider?: string; country?: string; status?: string; agents?: string[]; providers?: string[]; statuses?: string[] }): Promise<CommissionStudent[]>;
   getCommissionStudent(id: number): Promise<CommissionStudent | undefined>;
   createCommissionStudent(data: InsertCommissionStudent): Promise<CommissionStudent>;
   updateCommissionStudent(id: number, data: Partial<InsertCommissionStudent>): Promise<CommissionStudent>;
@@ -988,17 +988,13 @@ export class DatabaseStorage implements IStorage {
       ));
   }
 
-  async updateUserPassword(userId: number, passwordHash: string): Promise<void> {
-    await db.update(users).set({ passwordHash, updatedAt: new Date() }).where(eq(users.id, userId));
-  }
-
   async invalidateUserSessions(userId: number): Promise<void> {
     await db.execute(
       sql`DELETE FROM "session" WHERE sess->>'userId' = ${String(userId)}`
     );
   }
 
-  async getCommissionStudents(filters?: { search?: string; agent?: string; provider?: string; country?: string; status?: string }): Promise<CommissionStudent[]> {
+  async getCommissionStudents(filters?: { search?: string; agent?: string; provider?: string; country?: string; status?: string; agents?: string[]; providers?: string[]; statuses?: string[] }): Promise<CommissionStudent[]> {
     const conditions = [];
     if (filters?.search) {
       conditions.push(or(
@@ -1008,10 +1004,13 @@ export class DatabaseStorage implements IStorage {
         ilike(commissionStudents.agentName, `%${filters.search}%`)
       ));
     }
-    if (filters?.agent) conditions.push(eq(commissionStudents.agentName, filters.agent));
-    if (filters?.provider) conditions.push(eq(commissionStudents.provider, filters.provider));
+    if (filters?.agents && filters.agents.length > 0) conditions.push(inArray(commissionStudents.agentName, filters.agents));
+    else if (filters?.agent) conditions.push(eq(commissionStudents.agentName, filters.agent));
+    if (filters?.providers && filters.providers.length > 0) conditions.push(inArray(commissionStudents.provider, filters.providers));
+    else if (filters?.provider) conditions.push(eq(commissionStudents.provider, filters.provider));
     if (filters?.country) conditions.push(eq(commissionStudents.country, filters.country));
-    if (filters?.status) conditions.push(eq(commissionStudents.status, filters.status));
+    if (filters?.statuses && filters.statuses.length > 0) conditions.push(inArray(commissionStudents.status, filters.statuses));
+    else if (filters?.status) conditions.push(eq(commissionStudents.status, filters.status));
 
     if (conditions.length > 0) {
       return db.select().from(commissionStudents)

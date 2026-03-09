@@ -1531,10 +1531,22 @@ export async function registerRoutes(
     try {
       const filters: any = {};
       if (req.query.search) filters.search = String(req.query.search);
-      if (req.query.agent) filters.agent = String(req.query.agent);
-      if (req.query.provider) filters.provider = String(req.query.provider);
+      if (req.query.agent) {
+        const agents = String(req.query.agent).split(",").filter(Boolean);
+        if (agents.length === 1) filters.agent = agents[0];
+        else if (agents.length > 1) filters.agents = agents;
+      }
+      if (req.query.provider) {
+        const providers = String(req.query.provider).split(",").filter(Boolean);
+        if (providers.length === 1) filters.provider = providers[0];
+        else if (providers.length > 1) filters.providers = providers;
+      }
       if (req.query.country) filters.country = String(req.query.country);
-      if (req.query.status) filters.status = String(req.query.status);
+      if (req.query.status) {
+        const statuses = String(req.query.status).split(",").filter(Boolean);
+        if (statuses.length === 1) filters.status = statuses[0];
+        else if (statuses.length > 1) filters.statuses = statuses;
+      }
       const students = await storage.getCommissionStudents(filters);
       res.json(students);
     } catch (err: any) {

@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { SearchableSelect } from "@/components/ui/searchable-select";
+import { MultiSearchableSelect } from "@/components/ui/multi-searchable-select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
@@ -60,16 +60,16 @@ export default function CommissionTablePage() {
   const [activeTab, setActiveTab] = useState(canViewCommission ? "commission" : "bonus");
 
   const [commSearch, setCommSearch] = useState("");
-  const [commProvider, setCommProvider] = useState("all");
-  const [commProviderCountry, setCommProviderCountry] = useState("all");
-  const [commStatus, setCommStatus] = useState("all");
-  const [commMode, setCommMode] = useState("all");
+  const [commProviders, setCommProviders] = useState<string[]>([]);
+  const [commProviderCountries, setCommProviderCountries] = useState<string[]>([]);
+  const [commStatuses, setCommStatuses] = useState<string[]>([]);
+  const [commModes, setCommModes] = useState<string[]>([]);
 
   const [bonusSearch, setBonusSearch] = useState("");
-  const [bonusProvider, setBonusProvider] = useState("all");
-  const [bonusProviderCountry, setBonusProviderCountry] = useState("all");
-  const [bonusStatus, setBonusStatus] = useState("all");
-  const [bonusType, setBonusType] = useState("all");
+  const [bonusProviders, setBonusProviders] = useState<string[]>([]);
+  const [bonusProviderCountries, setBonusProviderCountries] = useState<string[]>([]);
+  const [bonusStatuses, setBonusStatuses] = useState<string[]>([]);
+  const [bonusTypes, setBonusTypes] = useState<string[]>([]);
 
   const { data: countries } = useQuery<any[]>({ queryKey: ["/api/countries"] });
   const { data: providers } = useQuery<any[]>({
@@ -83,10 +83,10 @@ export default function CommissionTablePage() {
 
   const commParams = new URLSearchParams();
   if (commSearch) commParams.set("search", commSearch);
-  if (commProvider !== "all") commParams.set("providerId", commProvider);
-  if (commProviderCountry !== "all") commParams.set("providerCountryId", commProviderCountry);
-  if (commStatus !== "all") commParams.set("agreementStatus", commStatus);
-  if (commMode !== "all") commParams.set("commissionMode", commMode);
+  if (commProviders.length > 0) commParams.set("providerId", commProviders.join(","));
+  if (commProviderCountries.length > 0) commParams.set("providerCountryId", commProviderCountries.join(","));
+  if (commStatuses.length > 0) commParams.set("agreementStatus", commStatuses.join(","));
+  if (commModes.length > 0) commParams.set("commissionMode", commModes.join(","));
 
   const { data: commissionRules, isLoading: commLoading } = useQuery<any[]>({
     queryKey: ["/api/commission-rules", commParams.toString()],
@@ -100,10 +100,10 @@ export default function CommissionTablePage() {
 
   const bonusParams = new URLSearchParams();
   if (bonusSearch) bonusParams.set("search", bonusSearch);
-  if (bonusProvider !== "all") bonusParams.set("providerId", bonusProvider);
-  if (bonusProviderCountry !== "all") bonusParams.set("providerCountryId", bonusProviderCountry);
-  if (bonusStatus !== "all") bonusParams.set("agreementStatus", bonusStatus);
-  if (bonusType !== "all") bonusParams.set("bonusType", bonusType);
+  if (bonusProviders.length > 0) bonusParams.set("providerId", bonusProviders.join(","));
+  if (bonusProviderCountries.length > 0) bonusParams.set("providerCountryId", bonusProviderCountries.join(","));
+  if (bonusStatuses.length > 0) bonusParams.set("agreementStatus", bonusStatuses.join(","));
+  if (bonusTypes.length > 0) bonusParams.set("bonusType", bonusTypes.join(","));
 
   const { data: bonusRules, isLoading: bonusLoading } = useQuery<any[]>({
     queryKey: ["/api/bonus-rules", bonusParams.toString()],
@@ -115,45 +115,30 @@ export default function CommissionTablePage() {
     enabled: hasPermission("bonus.view"),
   });
 
-  const commFiltersActive = commSearch !== "" || commProvider !== "all" || commProviderCountry !== "all" || commStatus !== "all" || commMode !== "all";
-  const bonusFiltersActive = bonusSearch !== "" || bonusProvider !== "all" || bonusProviderCountry !== "all" || bonusStatus !== "all" || bonusType !== "all";
+  const commFiltersActive = commSearch !== "" || commProviders.length > 0 || commProviderCountries.length > 0 || commStatuses.length > 0 || commModes.length > 0;
+  const bonusFiltersActive = bonusSearch !== "" || bonusProviders.length > 0 || bonusProviderCountries.length > 0 || bonusStatuses.length > 0 || bonusTypes.length > 0;
 
   const resetCommFilters = () => {
     setCommSearch("");
-    setCommProvider("all");
-    setCommProviderCountry("all");
-    setCommStatus("all");
-    setCommMode("all");
+    setCommProviders([]);
+    setCommProviderCountries([]);
+    setCommStatuses([]);
+    setCommModes([]);
   };
 
   const resetBonusFilters = () => {
     setBonusSearch("");
-    setBonusProvider("all");
-    setBonusProviderCountry("all");
-    setBonusStatus("all");
-    setBonusType("all");
+    setBonusProviders([]);
+    setBonusProviderCountries([]);
+    setBonusStatuses([]);
+    setBonusTypes([]);
   };
 
-  const providerOptions = [
-    { value: "all", label: "All Providers" },
-    ...(providers?.map((p: any) => ({ value: String(p.id), label: `${p.name}${p.countryName ? ` (${p.countryName})` : ""}` })) || []),
-  ];
-  const countryOptions = [
-    { value: "all", label: "All Countries" },
-    ...(countries?.map((c: any) => ({ value: String(c.id), label: c.name })) || []),
-  ];
-  const statusOptions = [
-    { value: "all", label: "All Statuses" },
-    ...AGREEMENT_STATUSES.map(s => ({ value: s, label: s.replace(/_/g, " ").replace(/\b\w/g, l => l.toUpperCase()) })),
-  ];
-  const modeOptions = [
-    { value: "all", label: "All Types" },
-    ...COMMISSION_MODES.map(m => ({ value: m, label: commissionModeLabels[m] })),
-  ];
-  const bonusTypeOptions = [
-    { value: "all", label: "All Types" },
-    ...BONUS_TYPES.map(t => ({ value: t, label: bonusTypeLabels[t] })),
-  ];
+  const providerOptions = providers?.map((p: any) => ({ value: String(p.id), label: `${p.name}${p.countryName ? ` (${p.countryName})` : ""}` })) || [];
+  const countryOptions = countries?.map((c: any) => ({ value: String(c.id), label: c.name })) || [];
+  const statusOptions = AGREEMENT_STATUSES.map(s => ({ value: s, label: s.replace(/_/g, " ").replace(/\b\w/g, l => l.toUpperCase()) }));
+  const modeOptions = COMMISSION_MODES.map(m => ({ value: m, label: commissionModeLabels[m] }));
+  const bonusTypeOptions = BONUS_TYPES.map(t => ({ value: t, label: bonusTypeLabels[t] }));
 
   function formatCommissionValue(rule: any) {
     if (rule.commissionMode === "percentage") {
@@ -217,36 +202,36 @@ export default function CommissionTablePage() {
                     data-testid="input-search-commission"
                   />
                 </div>
-                <SearchableSelect
-                  value={commProvider}
-                  onValueChange={setCommProvider}
+                <MultiSearchableSelect
+                  values={commProviders}
+                  onValuesChange={setCommProviders}
                   options={providerOptions}
                   placeholder="Provider"
                   searchPlaceholder="Search providers..."
                   className="w-[180px]"
                   data-testid="select-comm-provider"
                 />
-                <SearchableSelect
-                  value={commProviderCountry}
-                  onValueChange={setCommProviderCountry}
+                <MultiSearchableSelect
+                  values={commProviderCountries}
+                  onValuesChange={setCommProviderCountries}
                   options={countryOptions}
                   placeholder="Provider Country"
                   searchPlaceholder="Search countries..."
                   className="w-[170px]"
                   data-testid="select-comm-country"
                 />
-                <SearchableSelect
-                  value={commStatus}
-                  onValueChange={setCommStatus}
+                <MultiSearchableSelect
+                  values={commStatuses}
+                  onValuesChange={setCommStatuses}
                   options={statusOptions}
                   placeholder="Agreement Status"
                   searchPlaceholder="Search statuses..."
                   className="w-[160px]"
                   data-testid="select-comm-status"
                 />
-                <SearchableSelect
-                  value={commMode}
-                  onValueChange={setCommMode}
+                <MultiSearchableSelect
+                  values={commModes}
+                  onValuesChange={setCommModes}
                   options={modeOptions}
                   placeholder="Commission Type"
                   searchPlaceholder="Search types..."
@@ -383,36 +368,36 @@ export default function CommissionTablePage() {
                     data-testid="input-search-bonus"
                   />
                 </div>
-                <SearchableSelect
-                  value={bonusProvider}
-                  onValueChange={setBonusProvider}
+                <MultiSearchableSelect
+                  values={bonusProviders}
+                  onValuesChange={setBonusProviders}
                   options={providerOptions}
                   placeholder="Provider"
                   searchPlaceholder="Search providers..."
                   className="w-[180px]"
                   data-testid="select-bonus-provider"
                 />
-                <SearchableSelect
-                  value={bonusProviderCountry}
-                  onValueChange={setBonusProviderCountry}
+                <MultiSearchableSelect
+                  values={bonusProviderCountries}
+                  onValuesChange={setBonusProviderCountries}
                   options={countryOptions}
                   placeholder="Provider Country"
                   searchPlaceholder="Search countries..."
                   className="w-[170px]"
                   data-testid="select-bonus-country"
                 />
-                <SearchableSelect
-                  value={bonusStatus}
-                  onValueChange={setBonusStatus}
+                <MultiSearchableSelect
+                  values={bonusStatuses}
+                  onValuesChange={setBonusStatuses}
                   options={statusOptions}
                   placeholder="Agreement Status"
                   searchPlaceholder="Search statuses..."
                   className="w-[160px]"
                   data-testid="select-bonus-status"
                 />
-                <SearchableSelect
-                  value={bonusType}
-                  onValueChange={setBonusType}
+                <MultiSearchableSelect
+                  values={bonusTypes}
+                  onValuesChange={setBonusTypes}
                   options={bonusTypeOptions}
                   placeholder="Bonus Type"
                   searchPlaceholder="Search types..."

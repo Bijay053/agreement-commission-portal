@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { MultiSearchableSelect } from "@/components/ui/multi-searchable-select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -126,9 +127,9 @@ export default function CommissionTrackerPage() {
   const [selectedYear, setSelectedYear] = useState<number | null>(null);
   const [activeTab, setActiveTab] = useState("DASHBOARD");
   const [search, setSearch] = useState("");
-  const [agentFilter, setAgentFilter] = useState("");
-  const [providerFilter, setProviderFilter] = useState("");
-  const [statusFilter, setStatusFilter] = useState("");
+  const [agentFilters, setAgentFilters] = useState<string[]>([]);
+  const [providerFilters, setProviderFilters] = useState<string[]>([]);
+  const [statusFilters, setStatusFilters] = useState<string[]>([]);
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [showTermDialog, setShowTermDialog] = useState(false);
   const [showBulkUpload, setShowBulkUpload] = useState(false);
@@ -155,13 +156,13 @@ export default function CommissionTrackerPage() {
   const yearTerms = terms.filter(t => t.year === selectedYear);
 
   const { data: students, isLoading } = useQuery<CommissionStudent[]>({
-    queryKey: ["/api/commission-tracker/students", { search, agent: agentFilter, provider: providerFilter, status: statusFilter }],
+    queryKey: ["/api/commission-tracker/students", { search, agents: agentFilters, providers: providerFilters, statuses: statusFilters }],
     queryFn: async () => {
       const params = new URLSearchParams();
       if (search) params.set("search", search);
-      if (agentFilter) params.set("agent", agentFilter);
-      if (providerFilter) params.set("provider", providerFilter);
-      if (statusFilter) params.set("status", statusFilter);
+      if (agentFilters.length) params.set("agent", agentFilters.join(","));
+      if (providerFilters.length) params.set("provider", providerFilters.join(","));
+      if (statusFilters.length) params.set("status", statusFilters.join(","));
       const res = await fetch(`/api/commission-tracker/students?${params}`, { credentials: "include" });
       if (!res.ok) throw new Error("Failed to fetch");
       return res.json();
@@ -357,39 +358,15 @@ export default function CommissionTrackerPage() {
                 data-testid="input-search"
               />
             </div>
-            <Select value={agentFilter || "_all"} onValueChange={(v) => setAgentFilter(v === "_all" ? "" : v)}>
-              <SelectTrigger className="w-[160px] h-8 text-xs" data-testid="select-agent">
-                <SelectValue placeholder="All Agents" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="_all">All Agents</SelectItem>
-                {filters?.agents?.map((a) => <SelectItem key={a} value={a}>{a}</SelectItem>)}
-              </SelectContent>
-            </Select>
-            <Select value={providerFilter || "_all"} onValueChange={(v) => setProviderFilter(v === "_all" ? "" : v)}>
-              <SelectTrigger className="w-[160px] h-8 text-xs" data-testid="select-provider">
-                <SelectValue placeholder="All Providers" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="_all">All Providers</SelectItem>
-                {filters?.providers?.map((p) => <SelectItem key={p} value={p}>{p}</SelectItem>)}
-              </SelectContent>
-            </Select>
-            <Select value={statusFilter || "_all"} onValueChange={(v) => setStatusFilter(v === "_all" ? "" : v)}>
-              <SelectTrigger className="w-[140px] h-8 text-xs" data-testid="select-status">
-                <SelectValue placeholder="All Statuses" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="_all">All Statuses</SelectItem>
-                {filters?.statuses?.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
-              </SelectContent>
-            </Select>
-            {(search || agentFilter || providerFilter || statusFilter) && (
+            <MultiSearchableSelect values={agentFilters} onValuesChange={setAgentFilters} options={(filters?.agents || []).map(a => ({ value: a, label: a }))} placeholder="All Agents" searchPlaceholder="Search agents..." className="w-[160px] h-8 text-xs" data-testid="select-agent" />
+            <MultiSearchableSelect values={providerFilters} onValuesChange={setProviderFilters} options={(filters?.providers || []).map(p => ({ value: p, label: p }))} placeholder="All Providers" searchPlaceholder="Search providers..." className="w-[160px] h-8 text-xs" data-testid="select-provider" />
+            <MultiSearchableSelect values={statusFilters} onValuesChange={setStatusFilters} options={(filters?.statuses || []).map(s => ({ value: s, label: s }))} placeholder="All Statuses" searchPlaceholder="Search statuses..." className="w-[140px] h-8 text-xs" data-testid="select-status" />
+            {(search || agentFilters.length > 0 || providerFilters.length > 0 || statusFilters.length > 0) && (
               <Button
                 variant="ghost"
                 size="sm"
                 className="h-8 px-2 text-xs text-muted-foreground hover:text-foreground"
-                onClick={() => { setSearch(""); setAgentFilter(""); setProviderFilter(""); setStatusFilter(""); }}
+                onClick={() => { setSearch(""); setAgentFilters([]); setProviderFilters([]); setStatusFilters([]); }}
                 data-testid="button-reset-filters"
               >
                 <RotateCcw className="w-3.5 h-3.5 mr-1" />

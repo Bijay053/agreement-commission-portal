@@ -1,0 +1,101 @@
+MULTI-SELECT FILTER REQUIREMENT
+
+Update all filter systems across the application to support selecting multiple options instead of only a single option.
+
+CURRENT ISSUE
+Many filters currently allow selecting only one value at a time, which makes filtering inefficient when users need to view data across multiple categories.
+
+REQUIRED IMPROVEMENT
+All dropdown filters should support multi-select functionality.
+
+APPLIES TO
+All filtering systems across the application including but not limited to:
+- Provider filter
+- Country filter
+- Intake filter
+- Agreement status filter
+- User role filter
+- Contact location filter
+- Commission filters
+- Agent filters
+- Any table or dashboard filter
+
+FEATURE BEHAVIOR
+
+1. Multi-select dropdown
+Users should be able to select multiple options in the same filter.
+
+Example:
+Country filter:
+User can select:
+✔ Australia  
+✔ UK  
+✔ Canada
+
+System shows results matching any of those countries.
+
+2. Checkbox style dropdown
+Options inside dropdown should include checkboxes.
+
+Example:
+
+Country
+☐ Australia  
+☐ UK  
+☐ Canada  
+☐ USA  
+☐ New Zealand  
+
+3. Selected value display
+When multiple options are selected:
+- Show selected tags OR
+- Show summary like:
+
+Australia, UK +2
+
+4. Search inside dropdown
+Each filter dropdown should allow typing to search options.
+
+Example:
+User types "Aus"
+Results show:
+Australia
+
+5. Select All option
+Add a **Select All / Deselect All** option at the top of the dropdown.
+
+Example:
+
+☐ Select All  
+☐ Australia  
+☐ UK  
+☐ Canada  
+
+6. Clear filter option
+Each filter should have a quick **Clear** option to remove selected values.
+
+7. Filter logic
+Default logic should be:
+
+OR logic inside a filter  
+AND logic between different filters
+
+Example:
+
+Country: Australia + UK  
+Provider: Kaplan
+
+Result:
+Kaplan in Australia OR Kaplan in UK.
+
+8. Tag removal
+Users should be able to remove selected filters quickly by clicking the small “x” on the tag.
+
+9. Performance
+Filtering should update instantly without page reload.
+
+10. Consistency
+All filters across the entire application must behave the same way.
+
+EXPECTED RESULT
+Users can easily filter data using multiple selections without repeatedly reopening the filter dropdown. This improves usability for dashboards, commission tables, agreements, contacts, and user management.

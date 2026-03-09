@@ -13,6 +13,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { SearchableSelect } from "@/components/ui/searchable-select";
+import { MultiSearchableSelect } from "@/components/ui/multi-searchable-select";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
@@ -79,9 +80,9 @@ export default function ContactsListPage() {
   const canManage = canCreate || canEdit || canDelete;
 
   const [search, setSearch] = useState("");
-  const [providerCountryFilter, setProviderCountryFilter] = useState("all");
-  const [contactCountryFilter, setContactCountryFilter] = useState("all");
-  const [statusFilter, setStatusFilter] = useState("all");
+  const [providerCountryFilters, setProviderCountryFilters] = useState<string[]>([]);
+  const [contactCountryFilters, setContactCountryFilters] = useState<string[]>([]);
+  const [statusFilters, setStatusFilters] = useState<string[]>([]);
 
   const [editContact, setEditContact] = useState<ContactRow | null>(null);
   const [deleteContact, setDeleteContact] = useState<ContactRow | null>(null);
@@ -110,9 +111,9 @@ export default function ContactsListPage() {
 
   const queryParams = new URLSearchParams();
   if (search) queryParams.set("q", search);
-  if (providerCountryFilter !== "all") queryParams.set("providerCountryId", providerCountryFilter);
-  if (contactCountryFilter !== "all") queryParams.set("contactCountryId", contactCountryFilter);
-  if (statusFilter !== "all") queryParams.set("agreementStatus", statusFilter);
+  if (providerCountryFilters.length > 0) queryParams.set("providerCountryId", providerCountryFilters.join(","));
+  if (contactCountryFilters.length > 0) queryParams.set("contactCountryId", contactCountryFilters.join(","));
+  if (statusFilters.length > 0) queryParams.set("agreementStatus", statusFilters.join(","));
   const queryString = queryParams.toString();
   const contactsUrl = `/api/contacts${queryString ? `?${queryString}` : ""}`;
 
@@ -216,40 +217,31 @@ export default function ContactsListPage() {
                 data-testid="input-search-contacts"
               />
             </div>
-            <SearchableSelect
-              value={providerCountryFilter}
-              onValueChange={setProviderCountryFilter}
-              options={[
-                { value: "all", label: "All Provider Countries" },
-                ...(countries?.map((c: any) => ({ value: String(c.id), label: c.name })) || []),
-              ]}
+            <MultiSearchableSelect
+              values={providerCountryFilters}
+              onValuesChange={setProviderCountryFilters}
+              options={countries?.map((c: any) => ({ value: String(c.id), label: c.name })) || []}
               placeholder="Provider Country"
               searchPlaceholder="Search countries..."
               className="w-[180px]"
               data-testid="select-provider-country-filter"
             />
-            <SearchableSelect
-              value={contactCountryFilter}
-              onValueChange={setContactCountryFilter}
-              options={[
-                { value: "all", label: "All Contact Countries" },
-                ...(countries?.map((c: any) => ({ value: String(c.id), label: c.name })) || []),
-              ]}
+            <MultiSearchableSelect
+              values={contactCountryFilters}
+              onValuesChange={setContactCountryFilters}
+              options={countries?.map((c: any) => ({ value: String(c.id), label: c.name })) || []}
               placeholder="Contact Country"
               searchPlaceholder="Search countries..."
               className="w-[180px]"
               data-testid="select-contact-country-filter"
             />
-            <SearchableSelect
-              value={statusFilter}
-              onValueChange={setStatusFilter}
-              options={[
-                { value: "all", label: "All Statuses" },
-                ...AGREEMENT_STATUSES.map((s) => ({
-                  value: s,
-                  label: s.replace(/_/g, " ").replace(/\b\w/g, l => l.toUpperCase()),
-                })),
-              ]}
+            <MultiSearchableSelect
+              values={statusFilters}
+              onValuesChange={setStatusFilters}
+              options={AGREEMENT_STATUSES.map((s) => ({
+                value: s,
+                label: s.replace(/_/g, " ").replace(/\b\w/g, l => l.toUpperCase()),
+              }))}
               placeholder="Agreement Status"
               searchPlaceholder="Search statuses..."
               className="w-[170px]"
@@ -260,11 +252,11 @@ export default function ContactsListPage() {
               size="default"
               onClick={() => {
                 setSearch("");
-                setProviderCountryFilter("all");
-                setContactCountryFilter("all");
-                setStatusFilter("all");
+                setProviderCountryFilters([]);
+                setContactCountryFilters([]);
+                setStatusFilters([]);
               }}
-              disabled={!search && providerCountryFilter === "all" && contactCountryFilter === "all" && statusFilter === "all"}
+              disabled={!search && providerCountryFilters.length === 0 && contactCountryFilters.length === 0 && statusFilters.length === 0}
               data-testid="button-reset-filters"
             >
               <RotateCcw className="w-4 h-4 mr-2" />
@@ -411,8 +403,8 @@ export default function ContactsListPage() {
             <Users className="w-12 h-12 mx-auto text-muted-foreground/50 mb-3" />
             <h3 className="text-lg font-medium">No contacts found</h3>
             <p className="text-sm text-muted-foreground mt-1">
-              {search || providerCountryFilter !== "all" || contactCountryFilter !== "all" || statusFilter !== "all"
-                ? <>Try adjusting your filters or <span className="text-foreground underline cursor-pointer" data-testid="link-reset-filters" onClick={() => { setSearch(""); setProviderCountryFilter("all"); setContactCountryFilter("all"); setStatusFilter("all"); }}>Reset filters</span></>
+              {search || providerCountryFilters.length > 0 || contactCountryFilters.length > 0 || statusFilters.length > 0
+                ? <>Try adjusting your filters or <span className="text-foreground underline cursor-pointer" data-testid="link-reset-filters" onClick={() => { setSearch(""); setProviderCountryFilters([]); setContactCountryFilters([]); setStatusFilters([]); }}>Reset filters</span></>
                 : "Contacts will appear here once added to agreements"}
             </p>
           </CardContent>
