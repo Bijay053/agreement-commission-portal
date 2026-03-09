@@ -7,15 +7,23 @@ import { pool } from "./db";
 
 const PgStore = pgSession(session);
 
-export function setupAuth(app: any) {
+export async function setupAuth(app: any) {
   if (process.env.NODE_ENV === "production") {
     app.set("trust proxy", 1);
   }
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS "session" (
+      "sid" varchar NOT NULL COLLATE "default",
+      "sess" json NOT NULL,
+      "expire" timestamp(6) NOT NULL,
+      CONSTRAINT "session_pkey" PRIMARY KEY ("sid") NOT DEFERRABLE INITIALLY IMMEDIATE
+    );
+    CREATE INDEX IF NOT EXISTS "IDX_session_expire" ON "session" ("expire");
+  `);
   app.use(
     session({
       store: new PgStore({
         pool: pool,
-        createTableIfMissing: true,
       }),
       secret: process.env.SESSION_SECRET!,
       resave: false,

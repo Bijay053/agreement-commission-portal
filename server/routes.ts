@@ -96,7 +96,7 @@ export async function registerRoutes(
   httpServer: Server,
   app: Express
 ): Promise<Server> {
-  setupAuth(app);
+  await setupAuth(app);
   await seedDatabase();
 
   app.use("/api", requireActivePassword);
