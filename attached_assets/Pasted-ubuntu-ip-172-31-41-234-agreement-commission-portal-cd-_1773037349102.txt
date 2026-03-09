@@ -1,0 +1,183 @@
+ubuntu@ip-172-31-41-234:~/agreement-commission-portal$ cd ~/agreement-commission-portal
+
+cat > /tmp/fix_session.py << 'PYEOF'
+import re
+
+with open('server/routes.ts', 'r') as f:
+    content = f.read()
+
+old = '''      req.session.pendingUserId = user.id;
+      req.session.otpRequired = true;
+
+      if (!otpSent) {'''
+
+new = '''      req.session.pendingUserId = user.id;
+      req.session.otpRequired = true;
+
+      await new Promise<void>((resolve, reject) => {
+        req.session.save((err) => {
+          if (err) reject(err);
+          else resolve();
+        });
+      });
+
+      if (!otpSent) {'''
+
+content = content.replace(old, new)
+
+with open('server/routes.ts', 'w') as f:
+    f.write(content)
+
+print("Fixed!")
+PYEOF
+
+python3 /tmp/fix_session.py
+Fixed!
+ubuntu@ip-172-31-41-234:~/agreement-commission-portal$ grep -n "trust proxy" server/auth.ts || echo "Missing - need to add"
+12:    app.set("trust proxy", 1);
+ubuntu@ip-172-31-41-234:~/agreement-commission-portal$ docker compose down && docker compose build --no-cache app && docker compose up -d && sleep 15 && docker logs agreement-commission-portal-app-1 --tail 5
+WARN[0000] /home/ubuntu/agreement-commission-portal/docker-compose.yml: the attribute `version` is obsolete, it will be ignored, please remove it to avoid potential confusion 
+[+] down 3/3
+ ✔ Container agreement-commission-portal-app-1 Removed                                                                                                                                                        10.6s
+ ✔ Container agreement-commission-portal-db-1  Removed                                                                                                                                                        0.3s
+ ✔ Network agreement-commission-portal_default Removed                                                                                                                                                        0.1s
+WARN[0000] /home/ubuntu/agreement-commission-portal/docker-compose.yml: the attribute `version` is obsolete, it will be ignored, please remove it to avoid potential confusion 
+[+] Building 237.2s (20/20) FINISHED                                                                                                                                                                               
+ => [internal] load local bake definitions                                                                                                                                                                    0.0s
+ => => reading from stdin 584B                                                                                                                                                                                0.0s
+ => [internal] load build definition from Dockerfile                                                                                                                                                          0.1s
+ => => transferring dockerfile: 700B                                                                                                                                                                          0.0s
+ => [internal] load metadata for docker.io/library/node:20-alpine                                                                                                                                             0.1s
+ => [internal] load .dockerignore                                                                                                                                                                             0.0s
+ => => transferring context: 121B                                                                                                                                                                             0.0s
+ => [base 1/2] FROM docker.io/library/node:20-alpine@sha256:b88333c42c23fbd91596ebd7fd10de239cedab9617de04142dde7315e3bc0afa                                                                                  0.2s
+ => => resolve docker.io/library/node:20-alpine@sha256:b88333c42c23fbd91596ebd7fd10de239cedab9617de04142dde7315e3bc0afa                                                                                       0.1s
+ => [internal] load build context                                                                                                                                                                             0.2s
+ => => transferring context: 96.96kB                                                                                                                                                                          0.1s
+ => CACHED [base 2/2] WORKDIR /app                                                                                                                                                                            0.0s
+ => [deps 1/2] COPY package.json ./                                                                                                                                                                           0.1s
+ => [deps 2/2] RUN npm install                                                                                                                                                                              136.5s
+ => [production 2/8] RUN npm install && npm install drizzle-kit tsx && npm cache clean --force                                                                                                              142.7s
+ => [build 1/2] COPY . .                                                                                                                                                                                      5.6s
+ => [build 2/2] RUN mkdir -p uploads && npm run build                                                                                                                                                        28.4s 
+ => [production 3/8] COPY --from=build /app/dist ./dist                                                                                                                                                       2.5s 
+ => [production 4/8] COPY --from=build /app/drizzle.config.ts ./drizzle.config.ts                                                                                                                             0.1s 
+ => [production 5/8] COPY --from=build /app/shared ./shared                                                                                                                                                   0.1s 
+ => [production 6/8] COPY --from=build /app/tsconfig.json ./tsconfig.json                                                                                                                                     0.1s 
+ => [production 7/8] COPY docker-entrypoint.sh ./                                                                                                                                                             0.1s 
+ => [production 8/8] RUN mkdir -p uploads && chmod +x docker-entrypoint.sh                                                                                                                                    0.7s 
+ => exporting to image                                                                                                                                                                                       47.9s 
+ => => exporting layers                                                                                                                                                                                      40.0s 
+ => => exporting manifest sha256:9ebb4c6fb95e79dac404fa14c457586fd63e8064bc23f205dae0e699effc05c9                                                                                                             0.0s 
+ => => exporting config sha256:b30513b5e03ec6378fe708ac4188da556e266f14ef6c0b2996900a0133b5fadc                                                                                                               0.0s 
+ => => exporting attestation manifest sha256:5b5b0d260682b94c3ef41f9776ee32062bdf048bbf5ba5bab42ebfc78f29a428                                                                                                 0.0s
+ => => exporting manifest list sha256:24253eb12af08adccc7d7bd9629da04d8fe7d5f3d54e11fc305b3620242599e2                                                                                                        0.0s
+ => => naming to docker.io/library/agreement-commission-portal-app:latest                                                                                                                                     0.0s
+ => => unpacking to docker.io/library/agreement-commission-portal-app:latest                                                                                                                                  7.4s
+ => resolving provenance for metadata file                                                                                                                                                                    0.3s
+[+] build 1/1
+ ✔ Image agreement-commission-portal-app Built                                                                                                                                                               237.3s
+WARN[0000] /home/ubuntu/agreement-commission-portal/docker-compose.yml: the attribute `version` is obsolete, it will be ignored, please remove it to avoid potential confusion 
+[+] up 3/3
+ ✔ Network agreement-commission-portal_default Created                                                                                                                                                         0.1s
+ ✔ Container agreement-commission-portal-db-1  Healthy                                                                                                                                                         8.1s
+ ✔ Container agreement-commission-portal-app-1 Started                                                                                                                                                         7.6s
+- /root/.npm/_npx/7c7555b0b81cc7e0/node_modules/drizzle-kit/bin.cjs
+Migration warning (may already be applied)
+Starting application...
+Database already seeded, skipping...
+6:11:50 AM [express] serving on port 5000
+ubuntu@ip-172-31-41-234:~/agreement-commission-portal$ cd ~/agreement-commission-portal
+
+# Fix 1: Replace createTableIfMissing with manual table creation in auth.ts
+python3 << 'PYEOF'
+with open('server/auth.ts', 'r') as f:
+    content = f.read()
+
+old = '''export function setupAuth(app: any) {
+  if (process.env.NODE_ENV === "production") {
+    app.set("trust proxy", 1);
+  }
+  app.use(
+    session({
+      store: new PgStore({
+        pool: pool,
+        createTableIfMissing: true,
+      }),'''
+
+new = '''export async function setupAuth(app: any) {
+  if (process.env.NODE_ENV === "production") {
+    app.set("trust proxy", 1);
+  }
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS "session" (
+      "sid" varchar NOT NULL COLLATE "default",
+      "sess" json NOT NULL,
+      "expire" timestamp(6) NOT NULL,
+      CONSTRAINT "session_pkey" PRIMARY KEY ("sid") NOT DEFERRABLE INITIALLY IMMEDIATE
+    );
+    CREATE INDEX IF NOT EXISTS "IDX_session_expire" ON "session" ("expire");
+  `);
+  app.use(
+    session({
+      store: new PgStore({
+        pool: pool,
+      }),'''
+
+content = content.replace(old, new)
+
+with open('server/auth.ts', 'w') as f:
+PYEOF("routes.ts fixed!")ts', 'w') as f:reject) => {< 'PYEOF'f not already done)
+auth.ts fixed!
+ubuntu@ip-172-31-41-234:~/agreement-commission-portal$ docker compose down && docker compose build --no-cache app && docker compose up -d && sleep 15 && docker logs agreement-commission-portal-app-1 --tail 5
+WARN[0000] /home/ubuntu/agreement-commission-portal/docker-compose.yml: the attribute `version` is obsolete, it will be ignored, please remove it to avoid potential confusion 
+[+] down 3/3
+ ✔ Container agreement-commission-portal-app-1 Removed                                                                                                                                                        12.2s
+ ✔ Container agreement-commission-portal-db-1  Removed                                                                                                                                                        1.1s
+ ✔ Network agreement-commission-portal_default Removed                                                                                                                                                        0.2s
+WARN[0000] /home/ubuntu/agreement-commission-portal/docker-compose.yml: the attribute `version` is obsolete, it will be ignored, please remove it to avoid potential confusion 
+[+] Building 192.2s (10/18)                                                                                                                                                                                        
+ => [internal] load local bake definitions                                                                                                                                                                    0.0s
+ => => reading from stdin 584B                                                                                                                                                                                0.0s
+ => [internal] load build definition from Dockerfile                                                                                                                                                          0.2s
+ => => transferring dockerfile: 700B                                                                                                                                                                          0.0s
+ => [internal] load metadata for docker.io/library/node:20-alpine                                                                                                                                             0.3s
+ => [internal] load .dockerignore                                                                                                                                                                             0.2s
+ => => transferring context: 121B                                                                                                                                                                             0.0s
+ => [base 1/2] FROM docker.io/library/node:20-alpine@sha256:b88333c42c23fbd91596ebd7fd10de239cedab9617de04142dde7315e3bc0afa                                                                                  0.4s
+ => => resolve docker.io/library/node:20-alpine@sha256:b88333c42c23fbd91596ebd7fd10de239cedab9617de04142dde7315e3bc0afa                                                                                       0.3s
+ => [internal] load build context                                                                                                                                                                             0.8s
+ => => transferring context: 99.80kB                                                                                                                                                                          0.4s
+ => CACHED [base 2/2] WORKDIR /app                                                                                                                                                                            0.1s
+ => [deps 1/2] COPY package.json ./                                                                                                                                                                           0.4s
+ => ERROR [production 2/8] RUN npm install && npm install drizzle-kit tsx && npm cache clean --force                                                                                                        182.6s
+ => CANCELED [deps 2/2] RUN npm install                                                                                                                                                                     185.5s
+------                                                                                                                                                                                                             
+ > [production 2/8] RUN npm install && npm install drizzle-kit tsx && npm cache clean --force:                                                                                                                     
+180.1 npm warn tar TAR_ENTRY_ERROR ENOSPC: no space left on device, write                                                                                                                                          
+180.1 npm notice                                                                                                                                                                                                   
+180.1 npm notice New major version of npm available! 10.8.2 -> 11.11.0                                                                                                                                             
+180.1 npm notice Changelog: https://github.com/npm/cli/releases/tag/v11.11.0                                                                                                                                       
+180.1 npm notice To update run: npm install -g npm@11.11.0
+180.1 npm notice
+180.1 npm error A complete log of this run can be found in: /root/.npm/_logs/2026-03-09T06_17_11_713Z-debug-0.log
+------
+[+] build 0/1
+ ⠙ Image agreement-commission-portal-app Building                                                                                                                                                            192.4s
+Dockerfile:16
+
+--------------------
+
+  14 |     ENV NODE_ENV=production
+
+  15 |     COPY package.json ./
+
+  16 | >>> RUN npm install && npm install drizzle-kit tsx && npm cache clean --force
+
+  17 |     COPY --from=build /app/dist ./dist
+
+  18 |     COPY --from=build /app/drizzle.config.ts ./drizzle.config.ts
+
+--------------------
+
+failed to solve: process "/bin/sh -c npm install && npm install drizzle-kit tsx && npm cache clean --force" did not complete successfully: exit code: 1
