@@ -1,0 +1,67 @@
+turn{x:i[0],y:i[1]}}mapToDriverValue(e){return`point(${e.x} ${e.y})`}}});function LA(t){return new Xh(t??"")}var Xh,Zh,Jh=I(()=>{B();pe();Xh=class extends V{static[x]="PgRealBuilder";constructor(e,i){super(e,"number","PgReal"),this.config.length=i}build(e){return new Zh(e,this.config)}},Zh=class extends M{static[x]="PgReal";constructor(e,i){super(e,i)}getSQLType(){return"real"}mapFromDriverValue=e=>typeof e=="string"?Number.parseFloat(e):e}});function Ae(t){return new eg(t??"")}var eg,tg,ig=I(()=>{B();pe();eg=class extends V{static[x]="PgSerialBuilder";constructor(e){super(e,"number","PgSerial"),this.config.hasDefault=!0,this.config.notNull=!0}build(e){return new tg(e,this.config)}},tg=class extends M{static[x]="PgSerial";getSQLType(){return"serial"}}});function DA(t){return new ng(t??"")}var ng,ag,rg=I(()=>{B();pe();Hs();ng=class extends rn{static[x]="PgSmallIntBuilder";constructor(e){super(e,"number","PgSmallInt")}build(e){return new ag(e,this.config)}},ag=class extends M{static[x]="PgSmallInt";getSQLType(){return"smallint"}mapFromDriverValue=e=>typeof e=="string"?Number(e):e}});function MA(t){return new sg(t??"")}var sg,og,cg=I(()=>{B();pe();sg=class extends V{static[x]="PgSmallSerialBuilder";constructor(e){super(e,"number","PgSmallSerial"),this.config.hasDefault=!0,this.config.notNull=!0}build(e){return new og(e,this.config)}},og=class extends M{static[x]="PgSmallSerial";getSQLType(){return"smallserial"}}});function Xe(t,e={}){let{name:i,config:n}=me(t,e);return new lg(i,n)}var lg,pg,ug=I(()=>{B();Te();pe();lg=class extends V{static[x]="PgTextBuilder";constructor(e,i){super(e,"string","PgText"),this.config.enumValues=i.enum}build(e){return new pg(e,this.config)}},pg=class extends M{static[x]="PgText";enumValues=this.config.enumValues;getSQLType(){return"text"}}});function BA(t,e={}){let{name:i,config:n}=me(t,e);return new dg(i,n.withTimezone??!1,n.precision)}var dg,Ys,mg=I(()=>{B();Te();pe();Pl();dg=class extends Oi{constructor(e,i,n){super(e,"string","PgTime"),this.withTimezone=i,this.precision=n,this.config.withTimezone=i,this.config.precision=n}static[x]="PgTimeBuilder";build(e){return new Ys(e,this.config)}},Ys=class extends M{static[x]="PgTime";withTimezone;precision;constructor(e,i){super(e,i),this.withTimezone=i.withTimezone,this.precision=i.precision}getSQLType(){return`time${this.precision===void 0?"":`(${this.precision})`}${this.withTimezone?" with time zone":""}`}}});function fe(t,e={}){let{name:i,config:n}=me(t,e);return n?.mode==="string"?new hg(i,n.withTimezone??!1,n.precision):new fg(i,n?.withTimezone??!1,n?.precision)}var fg,Xs,hg,Zs,gg=I(()=>{B();Te();pe();Pl();fg=class extends Oi{static[x]="PgTimestampBuilder";constructor(e,i,n){super(e,"date","PgTimestamp"),this.config.withTimezone=i,this.config.precision=n}build(e){return new Xs(e,this.config)}},Xs=class extends M{static[
+Node.js v20.20.1
+ubuntu@ip-172-31-41-234:~/agreement-commission-portal$ cd ~/agreement-commission-portal
+git pull origin main
+docker compose down
+docker compose build --no-cache
+docker compose up -d
+remote: Enumerating objects: 13, done.
+remote: Counting objects: 100% (13/13), done.
+remote: Compressing objects: 100% (7/7), done.
+remote: Total 8 (delta 5), reused 0 (delta 0), pack-reused 0 (from 0)
+Unpacking objects: 100% (8/8), 869 bytes | 86.00 KiB/s, done.
+From https://github.com/Bijay053/agreement-commission-portal
+ * branch            main       -> FETCH_HEAD
+   5225849..ee16b09  main       -> origin/main
+Updating 5225849..ee16b09
+Fast-forward
+ script/build.ts  | 3 +++
+ server/routes.ts | 6 +++---
+ 2 files changed, 6 insertions(+), 3 deletions(-)
+WARN[0000] /home/ubuntu/agreement-commission-portal/docker-compose.yml: the attribute `version` is obsolete, it will be ignored, please remove it to avoid potential confusion 
+[+] down 3/3
+ ✔ Container agreement-commission-portal-app-1 Removed                                                                                                                                                         0.2s
+ ✔ Container agreement-commission-portal-db-1  Removed                                                                                                                                                         0.3s
+ ✔ Network agreement-commission-portal_default Removed                                                                                                                                                         0.1s
+WARN[0000] /home/ubuntu/agreement-commission-portal/docker-compose.yml: the attribute `version` is obsolete, it will be ignored, please remove it to avoid potential confusion 
+[+] Building 231.5s (20/20) FINISHED                                                                                                                                                                               
+ => [internal] load local bake definitions                                                                                                                                                                    0.0s
+ => => reading from stdin 584B                                                                                                                                                                                0.0s
+ => [internal] load build definition from Dockerfile                                                                                                                                                          0.0s
+ => => transferring dockerfile: 669B                                                                                                                                                                          0.0s
+ => [internal] load metadata for docker.io/library/node:20-alpine                                                                                                                                             0.1s
+ => [internal] load .dockerignore                                                                                                                                                                             0.0s
+ => => transferring context: 121B                                                                                                                                                                             0.0s
+ => [base 1/2] FROM docker.io/library/node:20-alpine@sha256:b88333c42c23fbd91596ebd7fd10de239cedab9617de04142dde7315e3bc0afa                                                                                  0.1s
+ => => resolve docker.io/library/node:20-alpine@sha256:b88333c42c23fbd91596ebd7fd10de239cedab9617de04142dde7315e3bc0afa                                                                                       0.0s
+ => [internal] load build context                                                                                                                                                                             0.0s
+ => => transferring context: 98.27kB                                                                                                                                                                          0.0s
+ => CACHED [base 2/2] WORKDIR /app                                                                                                                                                                            0.0s
+ => [deps 1/2] COPY package.json ./                                                                                                                                                                           0.1s
+ => [production 2/8] RUN npm install && npm cache clean --force                                                                                                                                             149.9s
+ => [deps 2/2] RUN npm install                                                                                                                                                                              148.2s
+ => [build 1/2] COPY . .                                                                                                                                                                                      4.4s
+ => [build 2/2] RUN mkdir -p uploads && npm run build                                                                                                                                                        22.3s 
+ => [production 3/8] COPY --from=build /app/dist ./dist                                                                                                                                                       3.8s 
+ => [production 4/8] COPY --from=build /app/drizzle.config.ts ./drizzle.config.ts                                                                                                                             0.1s 
+ => [production 5/8] COPY --from=build /app/shared ./shared                                                                                                                                                   0.1s 
+ => [production 6/8] COPY --from=build /app/tsconfig.json ./tsconfig.json                                                                                                                                     0.1s 
+ => [production 7/8] COPY docker-entrypoint.sh ./                                                                                                                                                             0.1s 
+ => [production 8/8] RUN mkdir -p uploads && chmod +x docker-entrypoint.sh                                                                                                                                    1.0s 
+ => exporting to image                                                                                                                                                                                       39.8s 
+ => => exporting layers                                                                                                                                                                                      31.6s 
+ => => exporting manifest sha256:8fdd76e1f8d719b5d8b58c0f89179aa57a32993836a09a074d30ffc2e8bfaa02                                                                                                             0.0s 
+ => => exporting config sha256:b8f6ecfbd4a2d9c674cbdf3bbdca932152d387a0c17a3076c247ddb85a1399fe                                                                                                               0.0s 
+ => => exporting attestation manifest sha256:f9f7faaf269f138206f6e047d4cae41d5d28bfe7cbae440102022a7ba1484602                                                                                                 0.1s
+ => => exporting manifest list sha256:fc4750f35edafafef57d4ebd4171b295bbd4e609f3016b95425299053bd79266                                                                                                        0.0s
+ => => naming to docker.io/library/agreement-commission-portal-app:latest                                                                                                                                     0.0s
+ => => unpacking to docker.io/library/agreement-commission-portal-app:latest                                                                                                                                  7.4s
+ => resolving provenance for metadata file                                                                                                                                                                    0.3s
+[+] build 1/1
+ ✔ Image agreement-commission-portal-app Built                                                                                                                                                               236.9s
+WARN[0000] /home/ubuntu/agreement-commission-portal/docker-compose.yml: the attribute `version` is obsolete, it will be ignored, please remove it to avoid potential confusion 
+[+] up 3/3
+ ✔ Network agreement-commission-portal_default Created                                                                                                                                                         0.1s
+ ✔ Container agreement-commission-portal-db-1  Healthy                                                                                                                                                         7.0s
+ ✔ Container agreement-commission-portal-app-1 Started                                                                                                                                                         6.9s
+ubuntu@ip-172-31-41-234:~/agreement-commission-portal$ 
