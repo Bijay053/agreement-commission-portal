@@ -1,0 +1,199 @@
+ubuntu@ip-172-31-41-234:~/agreement-commission-portal$ docker builder prune -f
+docker-compose up -d --build
+ID                                              RECLAIMABLE     SIZE            LAST ACCESSED
+hfv86kpca052pznriqlf6yo2a*                      true            1.855MB         About a minute ago
+forv1oavqtdzvja8bvrfd3epj*                      true    3.097MB         2 hours ago
+3akw8s8a2jyvuyckpz3yv9ef4*                      true    8.192kB         About a minute ago
+wlgzquqm9wtcokvru6o48hga4                       true    24.69kB         3 hours ago
+v85q7lw20hqfaaydlzv58nykw*                      true    8.192kB         About a minute ago
+9o07wkpa6pv9ueg44l8rcnn2v                       true    24.69kB         4 hours ago
+fhm9jgdvy9shga6775ayyihkn*                      true    3.142MB         2 hours ago
+bn1bugclqmg65oo76n8fdup7q                       true    24.69kB         2 hours ago
+7ea9lwu7419w4t07ia8j9jl1d*                      true    3.097MB         3 hours ago
+h0r6l15a88igxsst69q4ecx1y                       true    24.69kB         2 hours ago
+u8d8j7gyq2z0kz4lmszswrqch*                      true    3.088MB         4 hours ago
+0ste6xie4trulqmy3rhtwxv3k                       true    1.757MB         2 hours ago
+qnvb1j4ty5nqfigfjxs3vfs0t                       true    1.757MB         3 hours ago
+on5hxl2iy50p6xo86dgcvzi6h                       true    12.72kB         2 hours ago
+26pdb5z4ixybzdwcv52wxwc1w                       true    12.72kB         2 hours ago
+sq4o3slhewl6gvgvsdv3bb1z9                       true    12.72kB         4 hours ago
+wjm3x2epcaksigyv99nwegm3m                       true    12.72kB         3 hours ago
+4mn2hehpkps5yiw897mg2lav2                       true    24.69kB         4 hours ago
+cz5v7isecu6uyvsuqdtzzzzvr                       true    1.827MB         2 hours ago
+tbakq4242ap4x9jll4lfpethf*                      true    3.162MB         About a minute ago
+lxtey6se6u67zrtibrh23196o                       true    12.76kB         3 hours ago
+r7z0keiyjxz74t2yi8ed0a1ay                       true    12.72kB         4 hours ago
+ffz23qe6nz843k3mr41le3hmv                       true    1.158GB         3 hours ago
+qmzp6wy2gw87ko2k1sfi7uj7q                       true    12.76kB         2 hours ago
+nac75n01soa4dcxewrgsshdaa                       true    12.76kB         4 hours ago
+b7dqk6utsrlc3c5ynakzpxz9q*                      true    3.097MB         4 hours ago
+scpkxl41rotiak5bnr5ecjgnj                       true    12.76kB         2 hours ago
+b9a31l4kym9xhb6448bazlt4g                       true    1.86MB          About a minute ago
+vo94f80d55bjbu9ilezvy4yu4                       true    1.745MB         4 hours ago
+38ap5i6h90yonidgk1enxaq7c                       true    45.85kB         2 hours ago
+7thmhdz5iifvzj4nhecdpxlb6                       true    1.158GB         About a minute ago
+b8wv5vuqkme7ypi6f5yy8cyyb                       true    1.158GB         4 hours ago
+tl06ys9e00jl1b1ul2wvaxagu                       true    45.85kB         3 hours ago
+pjqodmpegkfmn63qqyhq44y7z                       true    50.3kB          2 hours ago
+y9sdyxhzwngjycgdijz4ij36b                       true    45.85kB         4 hours ago
+o8xbv7f4xd08ebqm1tjg0jiir                       true    1.757MB         4 hours ago
+iklg2xqm12tuu5mr1d1ziiold                       true    12.76kB         4 hours ago
+j1ud2calwh4rk8t0333l343ln                       true    1.158GB         4 hours ago
+54fwdcmeoaqtrr5nruu609jl4                       true    12.65kB         3 hours ago
+ptskjynom1e40cn10irffme75                       true    12.65kB         2 hours ago
+cij4ot3vcugfx20mjs6vi2b8f                       true    12.65kB         2 hours ago
+6yeqz3srmgatrzvdvunbjig41                       true    12.65kB         4 hours ago
+1n6m2utbgar1lnlavt337bnyg                       true    45.85kB         4 hours ago
+ujpu5lga4i68r2x39x2w0rx3w                       true    3.946MB         2 hours ago
+7dwzzopdfux4d6wfwhkgole98                       true    3.884MB         4 hours ago
+wxtqs7vqca31v7fnmf8ob14pz                       true    3.893MB         3 hours ago
+pq9gkizxtcs19u5wt6cyx3r8s                       true    12.65kB         4 hours ago
+6f5afb0syizmkat1uj6zpkzhz                       true    3.893MB         2 hours ago
+pajaa4e5ucen1kvasm6g44x5n                       true    3.893MB         4 hours ago
+ub37ho4j127c1je7wqll9sjrn                       true    513.5MB         3 hours ago
+q33541q5pmioo9oao9qrg2nx5                       true    513.5MB         4 hours ago
+fkaqklpbwfoj9tl1hi9diuqxp                       true    13.7kB          3 hours ago
+5p1ji69h85h4m2ii4duyb8mwo                       true    513.5MB         4 hours ago
+71os0dc7bxykxm5120d2xj0zi                       true    13.69kB         4 hours ago
+ib1gxxdgahcis54n30uwvamr4                       true    13.69kB         4 hours ago
+Total:  6.223GB
+WARN[0000] /home/ubuntu/agreement-commission-portal/docker-compose.yml: the attribute `version` is obsolete, it will be ignored, please remove it to avoid potential confusion 
+[+] Building 214.5s (18/19)                                                                                                                                           
+ => [internal] load local bake definitions                                                                                                                       0.0s
+ => => reading from stdin 560B                                                                                                                                   0.0s
+ => [internal] load build definition from Dockerfile                                                                                                             0.1s
+ => => transferring dockerfile: 700B                                                                                                                             0.0s
+ => [internal] load metadata for docker.io/library/node:20-alpine                                                                                                0.8s
+ => [internal] load .dockerignore                                                                                                                                0.1s
+ => => transferring context: 121B                                                                                                                                0.0s
+ => [base 1/2] FROM docker.io/library/node:20-alpine@sha256:b88333c42c23fbd91596ebd7fd10de239cedab9617de04142dde7315e3bc0afa                                     0.5s
+ => => resolve docker.io/library/node:20-alpine@sha256:b88333c42c23fbd91596ebd7fd10de239cedab9617de04142dde7315e3bc0afa                                          0.1s
+ => [internal] load build context                                                                                                                                0.3s
+ => => transferring context: 1.52MB                                                                                                                              0.2s
+ => [base 2/2] WORKDIR /app                                                                                                                                      0.2s
+ => [deps 1/2] COPY package.json ./                                                                                                                              0.1s
+ => [production 2/8] RUN npm install && npm install drizzle-kit tsx && npm cache clean --force                                                                 136.3s
+ => [deps 2/2] RUN npm install                                                                                                                                 109.6s
+ => [build 1/2] COPY . .                                                                                                                                         4.8s 
+ => [build 2/2] RUN mkdir -p uploads && npm run build                                                                                                           36.9s 
+ => [production 3/8] COPY --from=build /app/dist ./dist                                                                                                          2.6s 
+ => [production 4/8] COPY --from=build /app/drizzle.config.ts ./drizzle.config.ts                                                                                0.1s 
+ => [production 5/8] COPY --from=build /app/shared ./shared                                                                                                      0.1s 
+ => [production 6/8] COPY --from=build /app/tsconfig.json ./tsconfig.json                                                                                        0.1s 
+ => [production 7/8] COPY docker-entrypoint.sh ./                                                                                                                0.1s 
+ => [production 8/8] RUN mkdir -p uploads && chmod +x docker-entrypoint.sh                                                                                       0.8s 
+ => exporting to image                                                                                                                                          41.0s 
+ => => exporting layers                                                                                                                                         32.9s 
+ => => exporting manifest sha256:a9a2ad1e51e2e19c3675fdf7c7b80e8908aca4e76e8ffe3305a9075067a5370a                                                                0.0s 
+ => => exporting config sha256:95d6d4b5b9841e44393ebe19d3436cf2a589f5802ace61df241a4b597d3aa7aa                                                                  0.0s 
+ => => exporting attestation manifest sha256:9cdf34edd31bde69cf1f9771e5fe51d1810ea34d0fb2e5b9efcce1355cc8901e                                                    0.0s 
+ => => exporting manifest list sha256:601c10c648d45589ced727493af99636bc4173a344e8634d395715b438fc73ed                                                           0.0s
+ => => naming to docker.io/library/agreement-commission-portal-app:latest                                                                                        0.0s
+ => => unpacking to docker.io/library/agreement-commission-portal-app:latest                                                                                     6.8s
+[+] up 4/4
+ ✔ Image agreement-commission-portal-app       Built                                                                                                            214.7s
+ ✔ Network agreement-commission-portal_default Created                                                                                                          0.1s
+ ✔ Container agreement-commission-portal-db-1  Healthy                                                                                                          6.6s
+ ✔ Container agreement-commission-portal-app-1 Started                                                                                                          6.4s
+ubuntu@ip-172-31-41-234:~/agreement-commission-portal$ cd ~/agreement-commission-portal
+docker system prune -f
+docker builder prune -af
+docker-compose up -d --build
+Deleted build cache objects:
+otsmqoahfjjty72kzcjf4trgg
+hty7kndpi07xlz25zwbc79wa0
+pknmys9yn30m71ju51jiw7if7
+qu4m9vfnw4262pq2fg0yaowxu
+mda92crfey9l5l1h5qwo1tf5e
+imrgqrup6qhcf4ydk9qp7ughl
+cs8ruqmauhjf2i517w5qzp6yv
+xxkei3ff5g7068qc5qyw61157
+4fwlfhojmzl5f7ayrr448t8lm
+lca4s876dh9wxtw9qwjr5l9cy
+kr9qmz6zznkxvdajzc8er85ib
+ol2b7k8lsguj4xfl64qj9dtni
+g51i29uamckbjp4k39p41a2f3
+6e201xa62d9kb0fcc2kqtxjo0
+03nymfczgdtoa6o5loctrworc
+
+Total reclaimed space: 1.682GB
+ID                                              RECLAIMABLE     SIZE            LAST ACCESSED
+8t0hv1bmpay5btwexs0uh1tzh                       true            24.69kB         5 minutes ago
+ry9xqdyjrhyzuzfq2awlbdaao                       true    12.72kB         5 minutes ago
+qiglr9kzcy6gltfbrjbm19cfi                       true    12.76kB         5 minutes ago
+wdlio0t7a2w6xkkqa4aamrr8k                       true    50.39kB         5 minutes ago
+6d5g03zwubi2dec6xrgvy3er1                       true    12.65kB         5 minutes ago
+r8dpy8l45q16f01r6pgu8wkwx                       true    3.971MB         5 minutes ago
+nnt6k0cs1f15fzmax5u3gis55                       true    513.5MB         5 minutes ago
+wp8eq2gqr7sc2kolnqou8o861                       true    13.69kB         5 minutes ago
+jba3w6k4j9ejpmg7f7w543zwf                       true    8.283kB         5 minutes ago
+zsfroj4d1se0hfpcp4pjadz03                       true    445B            5 minutes ago
+68babgr0r5kr2tfjpy8e38b8q                       true    1.262MB         9 minutes ago
+b5r90eutbgyh0f5hlkktmiz1m                       true    43.22MB         9 minutes ago
+495wfdt4fa6notkfjuqvocs2c                       true    3.862MB         9 minutes ago
+Total:  565.9MB
+WARN[0000] /home/ubuntu/agreement-commission-portal/docker-compose.yml: the attribute `version` is obsolete, it will be ignored, please remove it to avoid potential confusion 
+[+] Building 251.2s (19/20)                                                                                                                                           
+ => [internal] load local bake definitions                                                                                                                       0.0s
+ => => reading from stdin 560B                                                                                                                                   0.0s
+ => [internal] load build definition from Dockerfile                                                                                                             0.1s
+ => => transferring dockerfile: 700B                                                                                                                             0.0s
+ => [internal] load metadata for docker.io/library/node:20-alpine                                                                                                2.4s
+ => [internal] load .dockerignore                                                                                                                                0.1s
+ => => transferring context: 121B                                                                                                                                0.0s
+ => [base 1/2] FROM docker.io/library/node:20-alpine@sha256:b88333c42c23fbd91596ebd7fd10de239cedab9617de04142dde7315e3bc0afa                                     0.4s
+ => => resolve docker.io/library/node:20-alpine@sha256:b88333c42c23fbd91596ebd7fd10de239cedab9617de04142dde7315e3bc0afa                                          0.1s
+ => [internal] load build context                                                                                                                                0.3s
+ => => transferring context: 1.52MB                                                                                                                              0.3s
+ => [base 2/2] WORKDIR /app                                                                                                                                      0.1s
+ => [deps 1/2] COPY package.json ./                                                                                                                              0.1s
+ => [production 2/8] RUN npm install && npm install drizzle-kit tsx && npm cache clean --force                                                                 152.2s
+ => [deps 2/2] RUN npm install                                                                                                                                 142.3s
+ => [build 1/2] COPY . .                                                                                                                                         5.9s 
+ => [build 2/2] RUN mkdir -p uploads && npm run build                                                                                                           30.8s 
+ => [production 3/8] COPY --from=build /app/dist ./dist                                                                                                          3.1s 
+ => [production 4/8] COPY --from=build /app/drizzle.config.ts ./drizzle.config.ts                                                                                0.1s 
+ => [production 5/8] COPY --from=build /app/shared ./shared                                                                                                      0.1s 
+ => [production 6/8] COPY --from=build /app/tsconfig.json ./tsconfig.json                                                                                        0.1s 
+ => [production 7/8] COPY docker-entrypoint.sh ./                                                                                                                0.1s 
+ => [production 8/8] RUN mkdir -p uploads && chmod +x docker-entrypoint.sh                                                                                       0.7s 
+ => exporting to image                                                                                                                                          44.6s 
+ => => exporting layers                                                                                                                                         37.1s 
+ => => exporting manifest sha256:b86ab417c0a5447b83bd915d0386c2ae15e7b3cbdec098597020636ee350f816                                                                0.0s
+ => => exporting config sha256:ce0842654c67b1c9077bdecac50b44a55d7b17e87dcc584f5231db7916fd4da8                                                                  0.0s
+ => => exporting attestation manifest sha256:e0da377ccfdff02ec9f2186343195ea730004d080f72720e8a4890af61327df7                                                    0.0s
+ => => exporting manifest list sha256:8e599c4db75f46c55cea6dba8b192e2cf6b842024c16d897e9120fbaf0eca60c                                                           0.0s
+ => => naming to docker.io/library/agreement-commission-portal-app:latest                                                                                        0.0s
+ => => unpacking to docker.io/library/agreement-commission-portal-app:latest                                                                                     6.8s
+ => resolving provenance for metadata file                                                                                                                       4.1s
+[+] up 3/3
+ ✔ Image agreement-commission-portal-app       Built                                                                                                            251.3s
+ ✔ Container agreement-commission-portal-db-1  Healthy                                                                                                          13.6s
+ ✔ Container agreement-commission-portal-app-1 Started                                                                                                          14.1s
+ubuntu@ip-172-31-41-234:~/agreement-commission-portal$ docker system prune -f
+Deleted build cache objects:
+o1lgr1bg42n766d2cspqvopm4
+n8yiaipe7oil3783cqxci8v5g
+lw7jbp8wttscxr4l8mz2ncbav
+vlvdqujzbn4dmly49vw5p8uoe
+wam4s4dn8h6l5a32488be976c
+4xrk7caywzyomz1p7qbz31gjs
+
+Total reclaimed space: 1.165GB
+ubuntu@ip-172-31-41-234:~/agreement-commission-portal$ docker builder prune -af 
+ID                                              RECLAIMABLE     SIZE            LAST ACCESSED
+pfu3dfd23k1wu2y9gmyapjn5j                       true            24.69kB         7 minutes ago
+tpnl5lvr2iaqo0zn7gynhkcij                       true    12.72kB         7 minutes ago
+wxezwymvjzetc4xi1lnzdnt1u                       true    12.76kB         7 minutes ago
+tqv6z25uvoyp14ed1p99j616n                       true    50.39kB         7 minutes ago
+9g3jcqh08bpz09azcotbhsiyl                       true    12.65kB         7 minutes ago
+flviyfzgl67os1h80n5z7048a                       true    3.971MB         7 minutes ago
+pp92513jpv2cgtsou9137j9yc                       true    513.5MB         7 minutes ago
+n6bd1qry9vnm3e95pnel3w5lh                       true    13.69kB         7 minutes ago
+e2if59sqiycixeevlwq1fjldb                       true    8.285kB         7 minutes ago
+8pmw380xa4leomdks4g3l2stn                       true    445B            7 minutes ago
+wq175p3r3u70u2m7c9nitytrl                       true    1.262MB         11 minutes ago
+oxnihiod1jp9ed10y7euewni8                       true    43.22MB         11 minutes ago
+qys6mbdo7v5imt9cmmcesdq23                       true    3.862MB         11 minutes ago
+Total:  565.9MB
+ubuntu@ip-172-31-41-234:~/agreement-commission-portal$ 
