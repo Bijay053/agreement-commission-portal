@@ -10,8 +10,7 @@ import multer from "multer";
 import path from "path";
 import fs from "fs";
 import crypto from "crypto";
-import * as UAParserModule from "ua-parser-js";
-const UAParser = (UAParserModule as any).UAParser || (UAParserModule as any).default || UAParserModule;
+import { UAParser } from "ua-parser-js";
 
 const uploadsDir = path.join(process.cwd(), "uploads");
 if (!fs.existsSync(uploadsDir)) {
@@ -43,7 +42,8 @@ function validatePeriodKey(targetType: string, periodKey: string): string | null
 }
 
 function parseDeviceInfo(userAgent: string) {
-  const result = UAParser(userAgent);
+  const parser = new UAParser(userAgent);
+  const result = parser.getResult();
   const browser = result.browser;
   const os = result.os;
   const device = result.device;
