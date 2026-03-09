@@ -6,6 +6,7 @@ import {
   agreementCommissionRules, agreementContacts, agreementDocuments, auditLogs,
   targetBonusRules, targetBonusTiers, targetBonusCountry, passwordResetTokens,
   commissionStudents, commissionEntries, commissionTerms,
+  subAgentEntries, subAgentTermEntries,
   userSessions, loginVerificationCodes, securityAuditLogs, passwordHistory,
   type User, type InsertUser, type Agreement, type InsertAgreement,
   type AgreementTarget, type InsertTarget, type AgreementCommissionRule,
@@ -17,6 +18,8 @@ import {
   type CommissionStudent, type InsertCommissionStudent,
   type CommissionEntry, type InsertCommissionEntry,
   type CommissionTerm,
+  type SubAgentEntry, type InsertSubAgentEntry,
+  type SubAgentTermEntry, type InsertSubAgentTermEntry,
   type UserSession, type LoginVerificationCode, type SecurityAuditLog,
 } from "@shared/schema";
 
@@ -128,6 +131,29 @@ export interface IStorage {
     byStatus: Record<string, number>;
     byAgent: { agent: string; count: number; total: number }[];
     byProvider: { provider: string; count: number; total: number }[];
+  }>;
+
+  getSubAgentEntries(filters?: { search?: string; agents?: string[]; providers?: string[]; statuses?: string[] }): Promise<(SubAgentEntry & { student: CommissionStudent })[]>;
+  getSubAgentEntry(studentId: number): Promise<(SubAgentEntry & { student: CommissionStudent }) | undefined>;
+  upsertSubAgentEntry(commissionStudentId: number, data: Partial<InsertSubAgentEntry>): Promise<SubAgentEntry>;
+  deleteSubAgentEntry(studentId: number): Promise<void>;
+
+  getSubAgentTermEntries(termName: string, filters?: { search?: string; agents?: string[]; providers?: string[]; statuses?: string[] }): Promise<(SubAgentTermEntry & { student: CommissionStudent })[]>;
+  getSubAgentTermEntry(id: number): Promise<(SubAgentTermEntry & { student: CommissionStudent }) | undefined>;
+  createSubAgentTermEntry(data: InsertSubAgentTermEntry): Promise<SubAgentTermEntry>;
+  updateSubAgentTermEntry(id: number, data: Partial<InsertSubAgentTermEntry>): Promise<SubAgentTermEntry>;
+  deleteSubAgentTermEntry(id: number): Promise<void>;
+
+  syncSubAgentFromMain(): Promise<{ added: number; updated: number; removed: number }>;
+  recalcSubAgentMasterTotals(commissionStudentId: number): Promise<SubAgentEntry>;
+
+  getSubAgentDashboard(year?: number): Promise<{
+    totalStudents: number;
+    totalPaid: number;
+    totalMargin: number;
+    byStatus: Record<string, number>;
+    byAgent: { agent: string; count: number; totalPaid: number }[];
+    byProvider: { provider: string; count: number; totalPaid: number }[];
   }>;
 }
 
@@ -1290,6 +1316,268 @@ export class DatabaseStorage implements IStorage {
       lastLoginAt: new Date(),
       lastLoginIp: ip,
     }).where(eq(users.id, userId));
+  }
+
+  async getSubAgentEntries(filters?: { search?: string; agents?: string[]; providers?: string[]; statuses?: string[] }): Promise<(SubAgentEntry & { student: CommissionStudent })[]> {
+    const conditions: any[] = [];
+    if (filters?.search) {
+      const s = `%${filters.search}%`;
+      conditions.push(or(
+        ilike(commissionStudents.studentName, s),
+        ilike(commissionStudents.agentName, s),
+        ilike(commissionStudents.agentsicId, s),
+        ilike(commissionStudents.provider, s)
+      ));
+    }
+    if (filters?.agents?.length) conditions.push(inArray(commissionStudents.agentName, filters.agents));
+    if (filters?.providers?.length) conditions.push(inArray(commissionStudents.provider, filters.providers));
+    if (filters?.statuses?.length) conditions.push(inArray(subAgentEntries.status, filters.statuses));
+
+    const rows = await db.select()
+      .from(subAgentEntries)
+      .innerJoin(commissionStudents, eq(subAgentEntries.commissionStudentId, commissionStudents.id))
+      .where(conditions.length > 0 ? and(...conditions) : undefined)
+      .orderBy(asc(commissionStudents.agentName), asc(commissionStudents.studentName));
+
+    return rows.map(r => ({ ...r.sub_agent_entries, student: r.commission_students }));
+  }
+
+  async getSubAgentEntry(studentId: number): Promise<(SubAgentEntry & { student: CommissionStudent }) | undefined> {
+    const [row] = await db.select()
+      .from(subAgentEntries)
+      .innerJoin(commissionStudents, eq(subAgentEntries.commissionStudentId, commissionStudents.id))
+      .where(eq(subAgentEntries.commissionStudentId, studentId));
+    if (!row) return undefined;
+    return { ...row.sub_agent_entries, student: row.commission_students };
+  }
+
+  async upsertSubAgentEntry(commissionStudentId: number, data: Partial<InsertSubAgentEntry>): Promise<SubAgentEntry> {
+    const [existing] = await db.select().from(subAgentEntries)
+      .where(eq(subAgentEntries.commissionStudentId, commissionStudentId));
+
+    if (existing) {
+      const [updated] = await db.update(subAgentEntries)
+        .set({ ...data, updatedAt: new Date() })
+        .where(eq(subAgentEntries.commissionStudentId, commissionStudentId))
+        .returning();
+      return updated;
+    } else {
+      const [created] = await db.insert(subAgentEntries)
+        .values({ commissionStudentId, ...data })
+        .returning();
+      return created;
+    }
+  }
+
+  async deleteSubAgentEntry(studentId: number): Promise<void> {
+    await db.delete(subAgentTermEntries).where(eq(subAgentTermEntries.commissionStudentId, studentId));
+    await db.delete(subAgentEntries).where(eq(subAgentEntries.commissionStudentId, studentId));
+  }
+
+  async getSubAgentTermEntries(termName: string, filters?: { search?: string; agents?: string[]; providers?: string[]; statuses?: string[] }): Promise<(SubAgentTermEntry & { student: CommissionStudent })[]> {
+    const conditions: any[] = [eq(subAgentTermEntries.termName, termName)];
+    if (filters?.search) {
+      const s = `%${filters.search}%`;
+      conditions.push(or(
+        ilike(commissionStudents.studentName, s),
+        ilike(commissionStudents.agentName, s),
+        ilike(commissionStudents.agentsicId, s),
+        ilike(commissionStudents.provider, s)
+      ));
+    }
+    if (filters?.agents?.length) conditions.push(inArray(commissionStudents.agentName, filters.agents));
+    if (filters?.providers?.length) conditions.push(inArray(commissionStudents.provider, filters.providers));
+    if (filters?.statuses?.length) conditions.push(inArray(subAgentTermEntries.studentStatus, filters.statuses));
+
+    const rows = await db.select()
+      .from(subAgentTermEntries)
+      .innerJoin(commissionStudents, eq(subAgentTermEntries.commissionStudentId, commissionStudents.id))
+      .where(and(...conditions))
+      .orderBy(asc(commissionStudents.agentName), asc(commissionStudents.studentName));
+
+    return rows.map(r => ({ ...r.sub_agent_term_entries, student: r.commission_students }));
+  }
+
+  async getSubAgentTermEntry(id: number): Promise<(SubAgentTermEntry & { student: CommissionStudent }) | undefined> {
+    const [row] = await db.select()
+      .from(subAgentTermEntries)
+      .innerJoin(commissionStudents, eq(subAgentTermEntries.commissionStudentId, commissionStudents.id))
+      .where(eq(subAgentTermEntries.id, id));
+    if (!row) return undefined;
+    return { ...row.sub_agent_term_entries, student: row.commission_students };
+  }
+
+  async createSubAgentTermEntry(data: InsertSubAgentTermEntry): Promise<SubAgentTermEntry> {
+    const [created] = await db.insert(subAgentTermEntries).values(data).returning();
+    return created;
+  }
+
+  async updateSubAgentTermEntry(id: number, data: Partial<InsertSubAgentTermEntry>): Promise<SubAgentTermEntry> {
+    const [updated] = await db.update(subAgentTermEntries)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(subAgentTermEntries.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteSubAgentTermEntry(id: number): Promise<void> {
+    await db.delete(subAgentTermEntries).where(eq(subAgentTermEntries.id, id));
+  }
+
+  async syncSubAgentFromMain(): Promise<{ added: number; updated: number; removed: number }> {
+    const allStudents = await db.select().from(commissionStudents);
+    const existingEntries = await db.select().from(subAgentEntries);
+    const existingMap = new Map(existingEntries.map(e => [e.commissionStudentId, e]));
+    const studentIds = new Set(allStudents.map(s => s.id));
+
+    let added = 0, updated = 0, removed = 0;
+
+    for (const student of allStudents) {
+      const existing = existingMap.get(student.id);
+      if (!existing) {
+        await db.insert(subAgentEntries).values({
+          commissionStudentId: student.id,
+          sicReceivedTotal: student.totalReceived || "0",
+          status: student.status || "Under Enquiry",
+        });
+        added++;
+      } else {
+        await db.update(subAgentEntries)
+          .set({
+            sicReceivedTotal: student.totalReceived || "0",
+            status: student.status || "Under Enquiry",
+            updatedAt: new Date(),
+          })
+          .where(eq(subAgentEntries.commissionStudentId, student.id));
+        updated++;
+      }
+    }
+
+    for (const entry of existingEntries) {
+      if (!studentIds.has(entry.commissionStudentId)) {
+        await db.delete(subAgentTermEntries).where(eq(subAgentTermEntries.commissionStudentId, entry.commissionStudentId));
+        await db.delete(subAgentEntries).where(eq(subAgentEntries.id, entry.id));
+        removed++;
+      }
+    }
+
+    for (const student of allStudents) {
+      const terms = await db.select().from(commissionTerms).orderBy(asc(commissionTerms.sortOrder));
+      for (const term of terms) {
+        const [existingTermEntry] = await db.select().from(subAgentTermEntries)
+          .where(and(
+            eq(subAgentTermEntries.commissionStudentId, student.id),
+            eq(subAgentTermEntries.termName, term.termName)
+          ));
+
+        const [mainEntry] = await db.select().from(commissionEntries)
+          .where(and(
+            eq(commissionEntries.commissionStudentId, student.id),
+            eq(commissionEntries.termName, term.termName)
+          ));
+
+        const mainComm = mainEntry ? String(Number(mainEntry.commissionAmount) || 0) : "0";
+        const studentStatus = mainEntry?.studentStatus || student.status || "Under Enquiry";
+
+        if (existingTermEntry) {
+          await db.update(subAgentTermEntries)
+            .set({ mainCommission: mainComm, studentStatus, updatedAt: new Date() })
+            .where(eq(subAgentTermEntries.id, existingTermEntry.id));
+        } else {
+          const [subAgentEntry] = await db.select().from(subAgentEntries)
+            .where(eq(subAgentEntries.commissionStudentId, student.id));
+          const autoRate = subAgentEntry?.subAgentCommissionRatePct || "0";
+
+          await db.insert(subAgentTermEntries).values({
+            commissionStudentId: student.id,
+            termName: term.termName,
+            mainCommission: mainComm,
+            commissionRateAuto: autoRate,
+            commissionRateUsedPct: autoRate,
+            studentStatus,
+          });
+        }
+      }
+    }
+
+    return { added, updated, removed };
+  }
+
+  async recalcSubAgentMasterTotals(commissionStudentId: number): Promise<SubAgentEntry> {
+    const termEntries = await db.select().from(subAgentTermEntries)
+      .where(eq(subAgentTermEntries.commissionStudentId, commissionStudentId));
+
+    let totalPaid = 0;
+    for (const te of termEntries) {
+      totalPaid += Number(te.totalPaid) || 0;
+    }
+
+    const [student] = await db.select().from(commissionStudents)
+      .where(eq(commissionStudents.id, commissionStudentId));
+
+    const received = Number(student?.totalReceived) || 0;
+    const margin = Math.round((received - totalPaid + Number.EPSILON) * 100) / 100;
+    const overpayWarning = received > 0 && totalPaid > received ? "❌ Overpaid" : null;
+
+    const [updated] = await db.update(subAgentEntries)
+      .set({
+        subAgentPaidTotal: String(Math.round((totalPaid + Number.EPSILON) * 100) / 100),
+        margin: String(margin),
+        overpayWarning,
+        updatedAt: new Date(),
+      })
+      .where(eq(subAgentEntries.commissionStudentId, commissionStudentId))
+      .returning();
+
+    return updated;
+  }
+
+  async getSubAgentDashboard(year?: number): Promise<{
+    totalStudents: number;
+    totalPaid: number;
+    totalMargin: number;
+    byStatus: Record<string, number>;
+    byAgent: { agent: string; count: number; totalPaid: number }[];
+    byProvider: { provider: string; count: number; totalPaid: number }[];
+  }> {
+    const rows = await db.select()
+      .from(subAgentEntries)
+      .innerJoin(commissionStudents, eq(subAgentEntries.commissionStudentId, commissionStudents.id));
+
+    const byStatus: Record<string, number> = {};
+    let totalPaid = 0;
+    let totalMargin = 0;
+    const agentMap: Record<string, { count: number; totalPaid: number }> = {};
+    const providerMap: Record<string, { count: number; totalPaid: number }> = {};
+
+    for (const r of rows) {
+      const entry = r.sub_agent_entries;
+      const student = r.commission_students;
+
+      const st = entry.status || "Under Enquiry";
+      byStatus[st] = (byStatus[st] || 0) + 1;
+
+      const paid = Number(entry.subAgentPaidTotal) || 0;
+      totalPaid += paid;
+      totalMargin += Number(entry.margin) || 0;
+
+      if (!agentMap[student.agentName]) agentMap[student.agentName] = { count: 0, totalPaid: 0 };
+      agentMap[student.agentName].count++;
+      agentMap[student.agentName].totalPaid += paid;
+
+      if (!providerMap[student.provider]) providerMap[student.provider] = { count: 0, totalPaid: 0 };
+      providerMap[student.provider].count++;
+      providerMap[student.provider].totalPaid += paid;
+    }
+
+    return {
+      totalStudents: rows.length,
+      totalPaid: Math.round((totalPaid + Number.EPSILON) * 100) / 100,
+      totalMargin: Math.round((totalMargin + Number.EPSILON) * 100) / 100,
+      byStatus,
+      byAgent: Object.entries(agentMap).map(([agent, v]) => ({ agent, ...v })).sort((a, b) => b.totalPaid - a.totalPaid),
+      byProvider: Object.entries(providerMap).map(([provider, v]) => ({ provider, ...v })).sort((a, b) => b.totalPaid - a.totalPaid),
+    };
   }
 }
 
