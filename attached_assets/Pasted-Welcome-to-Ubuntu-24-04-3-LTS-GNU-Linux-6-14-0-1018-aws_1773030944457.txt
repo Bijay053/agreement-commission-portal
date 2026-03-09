@@ -1,0 +1,127 @@
+Welcome to Ubuntu 24.04.3 LTS (GNU/Linux 6.14.0-1018-aws x86_64)
+
+ * Documentation:  https://help.ubuntu.com
+ * Management:     https://landscape.canonical.com
+ * Support:        https://ubuntu.com/pro
+
+ System information as of Mon Mar  9 04:35:59 UTC 2026
+
+  System load:  0.09               Temperature:           -273.1 C
+  Usage of /:   51.3% of 18.33GB   Processes:             134
+  Memory usage: 50%                Users logged in:       0
+  Swap usage:   8%                 IPv4 address for ens5: 172.31.41.234
+
+
+Expanded Security Maintenance for Applications is not enabled.
+
+106 updates can be applied immediately.
+55 of these updates are standard security updates.
+To see these additional updates run: apt list --upgradable
+
+Enable ESM Apps to receive additional future security updates.
+See https://ubuntu.com/esm or run: sudo pro status
+
+
+Last login: Mon Mar  9 04:32:32 2026 from 13.233.177.3
+ubuntu@ip-172-31-41-234:~$ cd ~/agreement-commission-portal
+git pull origin main
+remote: Enumerating objects: 60, done.
+remote: Counting objects: 100% (60/60), done.
+remote: Compressing objects: 100% (35/35), done.
+remote: Total 38 (delta 17), reused 0 (delta 0), pack-reused 0 (from 0)
+Unpacking objects: 100% (38/38), 176.84 KiB | 3.21 MiB/s, done.
+From https://github.com/Bijay053/agreement-commission-portal
+ * branch            main       -> FETCH_HEAD
+   79f3168..5225849  main       -> origin/main
+Updating 79f3168..5225849
+Fast-forward
+ .replit                                                                                          |   42 ++++
+ attached_assets/Pasted-1-Forgot-Password-System-Requirements-1-1-Entry-points-_1772760657709.txt |  211 ------------------
+ attached_assets/Pasted-1-Most-Common-Cause-X-Frame-Options-Blocking-the-PDF-If_1772766157958.txt |  142 ------------
+ attached_assets/Pasted-1-Production-ready-Database-Schema-PostgreSQL-Assumptio_1772757348878.txt |  682 ----------------------------------------------------------
+ attached_assets/Pasted-1-Sidebar-Navigation-Agreement-Status-Menu-Requirement-_1772760403144.txt |  169 ---------------
+ attached_assets/Pasted-A-Terminology-Data-Structure-Changes-A1-Rename-Universi_1772759477805.txt |  331 ----------------------------
+ attached_assets/Pasted-Below-are-professional-email-templates-for-Agreement-Ex_1772757333254.txt |  250 ----------------------
+ attached_assets/Pasted-Below-is-a-developer-ready-requirement-PRD-technical-sp_1772757320914.txt |  674 ---------------------------------------------------------
+ attached_assets/Pasted-Commission-Bonus-Master-Table-Purpose-Create-a-new-page_1772764977567.txt |  450 --------------------------------------
+ attached_assets/Pasted-Contact-Edit-Feature-Requirement-1-Add-Edit-Option-on-C_1772763427859.txt |  141 ------------
+ attached_assets/Pasted-Contact-Management-in-Navigation-Tab-1-Add-New-Navigati_1772762655881.txt |  330 ----------------------------
+ attached_assets/Pasted-Granular-Role-Permission-Update-Requirement-Role-manage_1772766137747.txt |  444 --------------------------------------
+ attached_assets/Pasted-Permission-Codes-System-Standard-Agreement-agreement-vi_1772757365887.txt |  246 ---------------------
+ attached_assets/Pasted-Role-Permission-Management-Module-Admin-Controlled-1-Go_1772760452207.txt |  326 ----------------------------
+ attached_assets/Pasted-Role-management-must-support-separate-permissions-by-mo_1772767777867.txt |  437 -------------------------------------
+ attached_assets/Pasted-Since-agreement-documents-are-highly-confidential-you-s_1772765669826.txt |  213 ------------------
+ attached_assets/Pasted-Target-Bonus-System-Full-Specification-1-Purpose-Allow-_1772759464649.txt |  257 ----------------------
+ attached_assets/image_1772761131403.png                                                          |  Bin 55470 -> 0 bytes
+ attached_assets/image_1772764668455.png                                                          |  Bin 78707 -> 0 bytes
+ attached_assets/image_1772765675316.png                                                          |  Bin 86952 -> 0 bytes
+ attached_assets/image_1772766840213.png                                                          |  Bin 56837 -> 0 bytes
+ attached_assets/image_1772767535783.png                                                          |  Bin 37821 -> 0 bytes
+ attached_assets/image_1772768017437.png                                                          |  Bin 186484 -> 0 bytes
+ client/src/App.tsx                                                                               |   75 ++++++-
+ client/src/components/app-sidebar.tsx                                                            |   19 +-
+ client/src/components/inactivity-monitor.tsx                                                     |  127 +++++++++++
+ client/src/lib/auth.tsx                                                                          |   74 ++++++-
+ client/src/pages/account-security.tsx                                                            |  258 ++++++++++++++++++++++
+ client/src/pages/change-password.tsx                                                             |  144 +++++++++++++
+ client/src/pages/commission-tracker-detail.tsx                                                   |  697 +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+ client/src/pages/commission-tracker.tsx                                                          | 1236 +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+ client/src/pages/login.tsx                                                                       |   22 +-
+ client/src/pages/users-management.tsx                                                            |  132 +++++++++++-
+ client/src/pages/verify-otp.tsx                                                                  |  155 ++++++++++++++
+ dist/public/assets/index-MxQ0SYtM.css                                                            |    1 +
+ dist/public/favicon.png                                                                          |  Bin 0 -> 1145 bytes
+ dist/public/index.html                                                                           |   18 ++
+ docker-entrypoint.sh                                                                             |    0
+ final-term-table-override-verify.png                                                             |  Bin 0 -> 118698 bytes
+ final-term-table-verify.png                                                                      |  Bin 0 -> 118698 bytes
+ package-lock.json                                                                                |  220 +++++++++++++++++++
+ package.json                                                                                     |    4 +
+ replit.md                                                                                        |  176 ++++-----------
+ server/auth.ts                                                                                   |   20 ++
+ server/commission-calc.ts                                                                        |  193 +++++++++++++++++
+ server/email.ts                                                                                  |   38 ++++
+ server/routes.ts                                                                                 | 1070 ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++---
+ server/seed.ts                                                                                   |   18 +-
+ server/storage.ts                                                                                |  341 ++++++++++++++++++++++++++++-
+ shared/schema.ts                                                                                 |  157 ++++++++++++++
+ 50 files changed, 5065 insertions(+), 5475 deletions(-)
+ create mode 100644 .replit
+ delete mode 100644 attached_assets/Pasted-1-Forgot-Password-System-Requirements-1-1-Entry-points-_1772760657709.txt
+ delete mode 100644 attached_assets/Pasted-1-Most-Common-Cause-X-Frame-Options-Blocking-the-PDF-If_1772766157958.txt
+ delete mode 100644 attached_assets/Pasted-1-Production-ready-Database-Schema-PostgreSQL-Assumptio_1772757348878.txt
+ delete mode 100644 attached_assets/Pasted-1-Sidebar-Navigation-Agreement-Status-Menu-Requirement-_1772760403144.txt
+ delete mode 100644 attached_assets/Pasted-A-Terminology-Data-Structure-Changes-A1-Rename-Universi_1772759477805.txt
+ delete mode 100644 attached_assets/Pasted-Below-are-professional-email-templates-for-Agreement-Ex_1772757333254.txt
+ delete mode 100644 attached_assets/Pasted-Below-is-a-developer-ready-requirement-PRD-technical-sp_1772757320914.txt
+ delete mode 100644 attached_assets/Pasted-Commission-Bonus-Master-Table-Purpose-Create-a-new-page_1772764977567.txt
+ delete mode 100644 attached_assets/Pasted-Contact-Edit-Feature-Requirement-1-Add-Edit-Option-on-C_1772763427859.txt
+ delete mode 100644 attached_assets/Pasted-Contact-Management-in-Navigation-Tab-1-Add-New-Navigati_1772762655881.txt
+ delete mode 100644 attached_assets/Pasted-Granular-Role-Permission-Update-Requirement-Role-manage_1772766137747.txt
+ delete mode 100644 attached_assets/Pasted-Permission-Codes-System-Standard-Agreement-agreement-vi_1772757365887.txt
+ delete mode 100644 attached_assets/Pasted-Role-Permission-Management-Module-Admin-Controlled-1-Go_1772760452207.txt
+ delete mode 100644 attached_assets/Pasted-Role-management-must-support-separate-permissions-by-mo_1772767777867.txt
+ delete mode 100644 attached_assets/Pasted-Since-agreement-documents-are-highly-confidential-you-s_1772765669826.txt
+ delete mode 100644 attached_assets/Pasted-Target-Bonus-System-Full-Specification-1-Purpose-Allow-_1772759464649.txt
+ delete mode 100644 attached_assets/image_1772761131403.png
+ delete mode 100644 attached_assets/image_1772764668455.png
+ delete mode 100644 attached_assets/image_1772765675316.png
+ delete mode 100644 attached_assets/image_1772766840213.png
+ delete mode 100644 attached_assets/image_1772767535783.png
+ delete mode 100644 attached_assets/image_1772768017437.png
+ create mode 100644 client/src/components/inactivity-monitor.tsx
+ create mode 100644 client/src/pages/account-security.tsx
+ create mode 100644 client/src/pages/change-password.tsx
+ create mode 100644 client/src/pages/commission-tracker-detail.tsx
+ create mode 100644 client/src/pages/commission-tracker.tsx
+ create mode 100644 client/src/pages/verify-otp.tsx
+ create mode 100644 dist/public/assets/index-MxQ0SYtM.css
+ create mode 100644 dist/public/favicon.png
+ create mode 100644 dist/public/index.html
+ mode change 100755 => 100644 docker-entrypoint.sh
+ create mode 100644 final-term-table-override-verify.png
+ create mode 100644 final-term-table-verify.png
+ create mode 100644 server/commission-calc.ts
+ubuntu@ip-172-31-41-234:~/agreement-commission-portal$ find /home/ubuntu -name "package.json" -not -path "*/node_modules/*" 2>/dev/null
+/home/ubuntu/agreement-commission-portal/package.json
+ubuntu@ip-172-31-41-234:~/agreement-commission-portal$ 
