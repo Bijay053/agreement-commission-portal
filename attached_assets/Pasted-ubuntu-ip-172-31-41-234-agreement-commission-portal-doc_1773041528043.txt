@@ -1,0 +1,13 @@
+ubuntu@ip-172-31-41-234:~/agreement-commission-portal$ docker compose down && docker compose up -d
+WARN[0000] /home/ubuntu/agreement-commission-portal/docker-compose.yml: the attribute `version` is obsolete, it will be ignored, please remove it to avoid potential confusion 
+[+] down 3/3
+ ✔ Container agreement-commission-portal-app-1 Removed                                                                                                                                                         0.2s
+ ✔ Container agreement-commission-portal-db-1  Removed                                                                                                                                                         0.3s
+ ✔ Network agreement-commission-portal_default Removed                                                                                                                                                         0.1s
+WARN[0000] /home/ubuntu/agreement-commission-portal/docker-compose.yml: the attribute `version` is obsolete, it will be ignored, please remove it to avoid potential confusion 
+[+] up 2/3
+ ✔ Network agreement-commission-portal_default Created                                                                                                                                                         0.1s
+ ✔ Container agreement-commission-portal-db-1  Healthy                                                                                                                                                         6.2s
+ ⠼ Container agreement-commission-portal-app-1 Starting                                                                                                                                                        6.3s
+Error response from daemon: failed to set up container networking: driver failed programming external connectivity on endpoint agreement-commission-portal-app-1 (48a72514212d9dbaaaf7fa51a67b4db7b6016d45a0e810e14d38e35a78cdc340): failed to bind host port 0.0.0.0:80/tcp: address already in use
+ubuntu@ip-172-31-41-234:~/agreement-commission-portal$ 
