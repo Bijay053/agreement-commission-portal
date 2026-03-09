@@ -721,6 +721,126 @@ export async function registerRoutes(
     res.json(data);
   });
 
+  app.get("/api/agreements/alerts", requireAuth, requirePermission("agreement.view"), async (req, res) => {
+    try {
+      const { db: dbImport } = await import("./db");
+      const { agreements: agr, universities: uni, countries: ctr } = await import("@shared/schema");
+      const { eq, sql: sqlFn, and, lte, gte } = await import("drizzle-orm");
+
+      const allAgreements = await dbImport
+        .select({
+          id: agr.id,
+          title: agr.title,
+          agreementCode: agr.agreementCode,
+          status: agr.status,
+          startDate: agr.startDate,
+          expiryDate: agr.expiryDate,
+          universityName: uni.name,
+          universityId: uni.id,
+          countryName: sqlFn<string>`COALESCE(${ctr.name}, 'N/A')`,
+          countryId: uni.countryId,
+        })
+        .from(agr)
+        .innerJoin(uni, eq(agr.universityId, uni.id))
+        .leftJoin(ctr, eq(uni.countryId, ctr.id))
+        .where(sqlFn`${agr.status} IN ('active', 'renewal_in_progress', 'expired')`);
+
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      const providerFilter = req.query.provider as string | undefined;
+      const countryFilter = req.query.country as string | undefined;
+      const statusFilter = req.query.status as string | undefined;
+
+      const results = allAgreements
+        .map((a) => {
+          const expiry = new Date(a.expiryDate);
+          expiry.setHours(0, 0, 0, 0);
+          const daysUntilExpiry = Math.ceil((expiry.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+          let urgency: string;
+          if (a.status === "renewal_in_progress" && daysUntilExpiry < 0) {
+            urgency = "renewal_pending";
+          } else if (daysUntilExpiry < 0) {
+            urgency = "expired";
+          } else if (daysUntilExpiry <= 30) {
+            urgency = "critical";
+          } else if (daysUntilExpiry <= 90) {
+            urgency = "warning";
+          } else {
+            return null;
+          }
+          return { ...a, daysUntilExpiry, urgency };
+        })
+        .filter((a): a is NonNullable<typeof a> => a !== null)
+        .filter((a) => {
+          if (providerFilter && !a.universityName.toLowerCase().includes(providerFilter.toLowerCase())) return false;
+          if (countryFilter && a.countryName !== countryFilter) return false;
+          if (statusFilter && a.urgency !== statusFilter) return false;
+          return true;
+        })
+        .sort((a, b) => a.daysUntilExpiry - b.daysUntilExpiry);
+
+      const summary = {
+        expiring90: results.filter((a) => a.urgency === "warning").length,
+        expiring30: results.filter((a) => a.urgency === "critical").length,
+        expired: results.filter((a) => a.urgency === "expired").length,
+        renewalPending: results.filter((a) => a.urgency === "renewal_pending").length,
+      };
+
+      res.json({ alerts: results, summary });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.get("/api/agreement-notifications", requireAuth, requirePermission("reminders.view"), async (req, res) => {
+    try {
+      const { db: dbImport } = await import("./db");
+      const { agreementNotifications: an, agreements: agr } = await import("@shared/schema");
+      const { desc, eq } = await import("drizzle-orm");
+
+      const limit = parseInt(req.query.limit as string) || 50;
+      const agreementId = req.query.agreementId ? parseInt(req.query.agreementId as string) : undefined;
+
+      let query = dbImport
+        .select({
+          id: an.id,
+          agreementId: an.agreementId,
+          providerName: an.providerName,
+          notificationType: an.notificationType,
+          sentDate: an.sentDate,
+          daysBeforeExpiry: an.daysBeforeExpiry,
+          status: an.status,
+          recipientEmails: an.recipientEmails,
+          agreementCode: agr.agreementCode,
+          agreementTitle: agr.title,
+        })
+        .from(an)
+        .leftJoin(agr, eq(an.agreementId, agr.id))
+        .orderBy(desc(an.sentDate))
+        .limit(limit);
+
+      if (agreementId) {
+        query = query.where(eq(an.agreementId, agreementId)) as any;
+      }
+
+      const notifications = await query;
+      res.json(notifications);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.post("/api/agreements/trigger-notification-check", requireAuth, requirePermission("reminders.manage"), async (_req, res) => {
+    try {
+      const { checkAndSendExpiryNotifications } = await import("./agreement-notifications");
+      const sentCount = await checkAndSendExpiryNotifications();
+      res.json({ message: `Notification check complete. Sent ${sentCount} notifications.`, sentCount });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
   app.get("/api/agreements/status-counts", requireAuth, requirePermission("agreement.view"), async (_req, res) => {
     const counts = await storage.getAgreementStatusCounts();
     res.json(counts);

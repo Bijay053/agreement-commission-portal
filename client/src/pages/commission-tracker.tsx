@@ -575,12 +575,12 @@ function DashboardView({ dashboard, year, intakeFilter, onIntakeChange, provider
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
         {cards.map((c, i) => (
           <Card key={i} data-testid={`card-${c.label.toLowerCase().replace(/\s+/g, "-")}`}>
-            <CardContent className="p-4">
-              <div className="flex items-center gap-2">
-                <c.icon className={`w-5 h-5 ${c.color}`} />
-                <div>
-                  <p className="text-[10px] text-muted-foreground">{c.label}</p>
-                  <p className="text-lg font-bold">
+            <CardContent className="p-3">
+              <div className="flex items-start gap-2 min-w-0">
+                <c.icon className={`w-4 h-4 ${c.color} shrink-0 mt-0.5`} />
+                <div className="min-w-0 overflow-hidden">
+                  <p className="text-[10px] text-muted-foreground whitespace-nowrap">{c.label}</p>
+                  <p className="text-sm font-bold truncate" title={c.format === "currency" ? `$${Number(c.value).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : String(c.value)}>
                     {c.format === "currency"
                       ? `$${Number(c.value).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
                       : c.value}

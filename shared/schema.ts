@@ -387,6 +387,17 @@ export const passwordHistory = pgTable("password_history", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+export const agreementNotifications = pgTable("agreement_notifications", {
+  id: serial("id").primaryKey(),
+  agreementId: integer("agreement_id").notNull().references(() => agreements.id, { onDelete: "cascade" }),
+  providerName: varchar("provider_name", { length: 255 }).notNull(),
+  notificationType: varchar("notification_type", { length: 64 }).notNull(),
+  sentDate: timestamp("sent_date").defaultNow(),
+  daysBeforeExpiry: integer("days_before_expiry"),
+  status: varchar("status", { length: 32 }).notNull().default("sent"),
+  recipientEmails: text("recipient_emails"),
+});
+
 export const insertUserSchema = createInsertSchema(users).omit({
   id: true,
   createdAt: true,
@@ -458,6 +469,11 @@ export const insertStudentProviderSchema = createInsertSchema(studentProviders).
   createdAt: true,
 });
 
+export const insertAgreementNotificationSchema = createInsertSchema(agreementNotifications).omit({
+  id: true,
+  sentDate: true,
+});
+
 export const insertSubAgentEntrySchema = createInsertSchema(subAgentEntries).omit({
   id: true,
   createdAt: true,
@@ -504,6 +520,8 @@ export type PasswordHistoryEntry = typeof passwordHistory.$inferSelect;
 export type InsertCommissionStudent = z.infer<typeof insertCommissionStudentSchema>;
 export type InsertCommissionEntry = z.infer<typeof insertCommissionEntrySchema>;
 export type InsertStudentProvider = z.infer<typeof insertStudentProviderSchema>;
+export type InsertAgreementNotification = z.infer<typeof insertAgreementNotificationSchema>;
+export type AgreementNotification = typeof agreementNotifications.$inferSelect;
 export type InsertSubAgentEntry = z.infer<typeof insertSubAgentEntrySchema>;
 export type InsertSubAgentTermEntry = z.infer<typeof insertSubAgentTermEntrySchema>;
 export type InsertUser = z.infer<typeof insertUserSchema>;

@@ -384,68 +384,68 @@ function DashboardView({ data }: { data: any }) {
 
   return (
     <div className="space-y-6" data-testid="dashboard-view">
-      <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
         <Card data-testid="card-total-agents">
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-indigo-100 dark:bg-indigo-900/30">
-                <Users className="h-5 w-5 text-indigo-600" />
+          <CardContent className="p-3">
+            <div className="flex items-start gap-2 min-w-0">
+              <div className="p-1.5 rounded-lg bg-indigo-100 dark:bg-indigo-900/30 shrink-0">
+                <Users className="h-4 w-4 text-indigo-600" />
               </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Total Agents</p>
-                <p className="text-2xl font-bold" data-testid="text-total-agents">{data.totalAgents ?? 0}</p>
+              <div className="min-w-0 overflow-hidden">
+                <p className="text-[10px] text-muted-foreground">Total Agents</p>
+                <p className="text-sm font-bold truncate" data-testid="text-total-agents">{data.totalAgents ?? 0}</p>
               </div>
             </div>
           </CardContent>
         </Card>
         <Card data-testid="card-total-students">
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-blue-100 dark:bg-blue-900/30">
-                <Users className="h-5 w-5 text-blue-600" />
+          <CardContent className="p-3">
+            <div className="flex items-start gap-2 min-w-0">
+              <div className="p-1.5 rounded-lg bg-blue-100 dark:bg-blue-900/30 shrink-0">
+                <Users className="h-4 w-4 text-blue-600" />
               </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Total Students</p>
-                <p className="text-2xl font-bold" data-testid="text-total-students">{data.totalStudents}</p>
+              <div className="min-w-0 overflow-hidden">
+                <p className="text-[10px] text-muted-foreground">Total Students</p>
+                <p className="text-sm font-bold truncate" data-testid="text-total-students">{data.totalStudents}</p>
               </div>
             </div>
           </CardContent>
         </Card>
         <Card data-testid="card-total-paid">
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-green-100 dark:bg-green-900/30">
-                <DollarSign className="h-5 w-5 text-green-600" />
+          <CardContent className="p-3">
+            <div className="flex items-start gap-2 min-w-0">
+              <div className="p-1.5 rounded-lg bg-green-100 dark:bg-green-900/30 shrink-0">
+                <DollarSign className="h-4 w-4 text-green-600" />
               </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Total Paid to Sub-Agents</p>
-                <p className="text-2xl font-bold" data-testid="text-total-paid">${fmt(data.totalPaid)}</p>
+              <div className="min-w-0 overflow-hidden">
+                <p className="text-[10px] text-muted-foreground">Total Paid to Sub-Agents</p>
+                <p className="text-sm font-bold truncate" title={`$${fmt(data.totalPaid)}`} data-testid="text-total-paid">${fmt(data.totalPaid)}</p>
               </div>
             </div>
           </CardContent>
         </Card>
         <Card data-testid="card-total-pending">
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-orange-100 dark:bg-orange-900/30">
-                <AlertTriangle className="h-5 w-5 text-orange-600" />
+          <CardContent className="p-3">
+            <div className="flex items-start gap-2 min-w-0">
+              <div className="p-1.5 rounded-lg bg-orange-100 dark:bg-orange-900/30 shrink-0">
+                <AlertTriangle className="h-4 w-4 text-orange-600" />
               </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Total Pending</p>
-                <p className="text-2xl font-bold" data-testid="text-total-pending">${fmt(data.totalPending ?? 0)}</p>
+              <div className="min-w-0 overflow-hidden">
+                <p className="text-[10px] text-muted-foreground">Total Pending</p>
+                <p className="text-sm font-bold truncate" title={`$${fmt(data.totalPending ?? 0)}`} data-testid="text-total-pending">${fmt(data.totalPending ?? 0)}</p>
               </div>
             </div>
           </CardContent>
         </Card>
         <Card data-testid="card-total-margin">
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-purple-100 dark:bg-purple-900/30">
-                <TrendingUp className="h-5 w-5 text-purple-600" />
+          <CardContent className="p-3">
+            <div className="flex items-start gap-2 min-w-0">
+              <div className="p-1.5 rounded-lg bg-purple-100 dark:bg-purple-900/30 shrink-0">
+                <TrendingUp className="h-4 w-4 text-purple-600" />
               </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Total Margin</p>
-                <p className="text-2xl font-bold" data-testid="text-total-margin">${fmt(data.totalMargin)}</p>
+              <div className="min-w-0 overflow-hidden">
+                <p className="text-[10px] text-muted-foreground">Total Margin</p>
+                <p className="text-sm font-bold truncate" title={`$${fmt(data.totalMargin)}`} data-testid="text-total-margin">${fmt(data.totalMargin)}</p>
               </div>
             </div>
           </CardContent>
