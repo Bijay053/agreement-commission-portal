@@ -1,0 +1,55 @@
+ubuntu@ip-172-31-41-234:~/agreement-commission-portal$ cd ~/agreement-commission-portal && docker builder prune -a -f && docker image prune -a -f && git pull origin main && docker compose build --no-cache app && docker compose up -d
+ID                                              RECLAIMABLE     SIZE            LAST ACCESSED
+ouacham5flqftqsgobo9mqzd3*                      true            3.084MB         6 minutes ago
+iisztaaxd5paaloyjhp279uni*                      true    1.729MB         6 minutes ago
+hmqsrzu1tjfe23hs0pbevcxn0*                      true    8.192kB         6 minutes ago
+lycd3tk3nw9x4mrpdxbkmpqeh*                      true    8.192kB         6 minutes ago
+h6txs06xqmz63rkl9tn0bylcm                       true    24.69kB         6 minutes ago
+pojf77fnyf3xq6bgi9rqx23tg                       true    1.733MB         6 minutes ago
+qlv8spc8i74xvvycph3cdo8to                       true    12.72kB         6 minutes ago
+kjbrlq7jethqdgzl7w1a78tgo                       true    1.158GB         6 minutes ago
+3v88r2pb4g69ky8hzswx4ia7j                       true    12.76kB         6 minutes ago
+kn300h1ki0linhs36cubx571z                       true    45.85kB         6 minutes ago
+n44u4jh04x2qe5dl3yks674mv                       true    12.65kB         6 minutes ago
+5e2cc2xv5hbip17aqx9h9sni6                       true    3.878MB         6 minutes ago
+ttqmur1s4crtg4aiqc14zjlpz                       true    513.5MB         6 minutes ago
+9x6ch41hjzv3h5xfje1kdwwhz                       true    13.69kB         6 minutes ago
+z68ldopv2fwkmvzi3ida7v9iu                       true    8.285kB         6 minutes ago
+idczj0skxem6uj25z7f6ora21                       true    445B            6 minutes ago
+2va97q6itp01yoszhy8enzlny                       true    1.262MB         10 minutes ago
+r0lfqq0tvtn4h3vum61dbebtx                       true    43.22MB         10 minutes ago
+kevhzzuvasntpvj3s828oepgh                       true    3.862MB         10 minutes ago
+Total:  1.73GB
+Total reclaimed space: 0B
+remote: Enumerating objects: 60, done.
+remote: Counting objects: 100% (60/60), done.
+remote: Compressing objects: 100% (46/46), done.
+remote: Total 46 (delta 36), reused 0 (delta 0), pack-reused 0 (from 0)
+Unpacking objects: 100% (46/46), 8.20 KiB | 195.00 KiB/s, done.
+From https://github.com/Bijay053/agreement-commission-portal
+ * branch            main       -> FETCH_HEAD
+   8875c77..b12048e  main       -> origin/main
+Updating 28924fc..b12048e
+error: Your local changes to the following files would be overwritten by merge:
+        server/auth.ts
+        server/routes.ts
+Please commit your changes or stash them before you merge.
+Aborting
+ubuntu@ip-172-31-41-234:~/agreement-commission-portal$ cd ~/agreement-commission-portal && docker builder prune -a -f && docker image prune -a -f && git pull origin main && docker compose build --no-cache app && docker compose up -d
+Total:  0B
+Total reclaimed space: 0B
+remote: Enumerating objects: 11, done.
+remote: Counting objects: 100% (11/11), done.
+remote: Compressing objects: 100% (6/6), done.
+remote: Total 6 (delta 5), reused 0 (delta 0), pack-reused 0 (from 0)
+Unpacking objects: 100% (6/6), 627 bytes | 125.00 KiB/s, done.
+From https://github.com/Bijay053/agreement-commission-portal
+ * branch            main       -> FETCH_HEAD
+   b12048e..2430869  main       -> origin/main
+Updating 28924fc..2430869
+error: Your local changes to the following files would be overwritten by merge:
+        server/auth.ts
+        server/routes.ts
+Please commit your changes or stash them before you merge.
+Aborting
+ubuntu@ip-172-31-41-234:~/agreement-commission-portal$ 
