@@ -1,0 +1,267 @@
+Commission Rate Requirement
+Fields Required
+
+Add the following fields in each term tab:
+
+Commission Rate (Auto)
+
+Commission Rate Override (%)
+
+Commission Rate Used (Auto)
+
+Commission (Auto)
+
+Rate Change Warning (Auto)
+
+1. Commission Rate (Auto) Requirement
+Purpose
+
+This field should automatically pull the agreed commission rate from the MASTER record for the same student.
+
+Logic
+
+Fetch commission rate from MASTER tab / main student record
+
+Match student using Internal ID (Auto) as primary key
+
+If Internal ID is not available, fallback logic may use Student ID / Agentsic ID only if system design allows, but Internal ID should be primary
+
+This field should be read-only
+
+This field should auto-update if MASTER commission rate changes
+
+Format
+
+Store the commission rate as percentage value
+
+Example:
+
+10.805% may display as:
+
+10.805 in percent field, or
+
+0.10805 if system stores decimal internally
+
+Frontend should display clearly as percentage to avoid confusion
+
+Example
+
+MASTER Commission Rate = 10.805%
+
+Term tab Commission Rate (Auto) = 10.805%
+
+2. Commission Rate Override (%) Requirement
+Purpose
+
+Allow user to manually override the agreed commission rate for a specific term only.
+
+Logic
+
+User can manually input a different commission percentage
+
+This field is editable
+
+This override should affect only that specific term record
+
+It must not change the MASTER commission rate
+
+If blank or 0, system should use Commission Rate (Auto)
+
+Validation
+
+Must accept numeric percentage only
+
+Should not allow negative value
+
+Should ideally warn or restrict unusually high values based on business rule
+
+Can be left blank
+
+Example
+
+Auto rate = 10.805%
+
+Override entered = 12.5%
+
+Then used rate = 12.5%
+
+3. Commission Rate Used (Auto) Requirement
+Purpose
+
+Show the final commission rate actually used for calculation.
+
+Logic
+
+If Commission Rate Override (%) > 0, use override rate
+
+Otherwise use Commission Rate (Auto)
+
+This field should be auto-calculated
+
+This field should be read-only
+
+Formula
+
+Commission Rate Used = Override Rate if entered, else Auto Rate
+
+Example
+Case 1
+
+Commission Rate (Auto) = 10.805%
+
+Override = blank
+
+Commission Rate Used (Auto) = 10.805%
+
+Case 2
+
+Commission Rate (Auto) = 10.805%
+
+Override = 12%
+
+Commission Rate Used (Auto) = 12%
+
+4. Commission (Auto) Requirement
+Purpose
+
+Calculate commission amount automatically based on final used rate.
+
+Logic
+
+Commission must be calculated using:
+
+Fee (Gross)
+
+Commission Rate Used (Auto)
+
+Formula
+
+Commission = Fee (Gross) × Commission Rate Used
+
+Example
+
+Fee (Gross) = 20,000
+
+Commission Rate Used = 10.805%
+
+Commission = 2,161
+
+If decimal format is used internally:
+
+20,000 × 0.10805 = 2,161
+
+Notes
+
+Commission should auto-recalculate whenever:
+
+Fee changes
+
+Auto rate changes
+
+Override rate changes
+
+5. Rate Change Warning (Auto) Requirement
+Purpose
+
+Alert users when the commission rate used in a term is different from the agreed rate in MASTER.
+
+Logic
+
+If override field is entered and the override rate is different from MASTER auto rate, show warning
+
+If override is blank, no warning
+
+If override equals agreed rate, no warning
+
+This field should be auto-generated and read-only
+
+Warning Text
+
+Use:
+
+⚠ Commission rate changed
+
+When Warning Should Show
+
+Show warning only when:
+
+Commission Rate Override (%) > 0
+
+and
+
+Commission Rate Override (%) ≠ Commission Rate (Auto)
+
+When Warning Should Not Show
+
+Do not show warning when:
+
+override is blank
+
+override is 0
+
+override is same as auto rate
+
+Example
+Case 1
+
+Auto rate = 10.805%
+
+Override = blank
+
+Warning = blank
+
+Case 2
+
+Auto rate = 10.805%
+
+Override = 10.805%
+
+Warning = blank
+
+Case 3
+
+Auto rate = 10.805%
+
+Override = 12%
+
+Warning = ⚠ Commission rate changed
+
+6. UI / Display Requirement
+Display Recommendation
+
+To avoid confusion, CRM should display commission rate in percentage format clearly.
+
+Example display:
+
+10.805%
+instead of
+
+0.10805
+
+Because in your screenshot it is showing decimal style, which can confuse users.
+
+Recommendation
+
+Store internally as decimal if needed
+
+Display on UI as percentage
+
+Keep all rate fields consistent in same format
+
+7. Business Rules Summary
+
+Commission Rate (Auto) comes from MASTER
+
+Commission Rate Override (%) is manual and optional
+
+Commission Rate Used (Auto) uses override if provided, otherwise auto rate
+
+Commission (Auto) = Fee × Used Rate
+
+Rate Change Warning (Auto) appears only if override is different from agreed rate
+
+Override must not update MASTER rate
+
+All auto fields should be read-only
+
+All affected calculations should update instantly after edit

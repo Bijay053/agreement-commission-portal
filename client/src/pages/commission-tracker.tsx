@@ -673,10 +673,20 @@ function TermTable({ termName, students, allEntries, terms, isLoading, canEdit, 
             <th className="px-2 py-1.5 text-left font-medium border border-[#2060a0] min-w-[120px]">Course Name</th>
             <th className="px-2 py-1.5 text-left font-medium border border-[#2060a0] min-w-[80px]">Academic Year</th>
             <th className="px-2 py-1.5 text-right font-medium border border-[#2060a0] min-w-[80px]">Fee (Gross)</th>
-            <th className="px-2 py-1.5 text-right font-medium border border-[#2060a0] min-w-[60px]">Comm % Override</th>
-            <th className="px-2 py-1.5 text-right font-medium border border-[#2060a0] min-w-[60px]">Comm % Used</th>
-            <th className="px-2 py-1.5 text-right font-medium border border-[#2060a0] min-w-[80px]">Commission</th>
+            <th className="px-2 py-1.5 text-right font-medium border border-[#2060a0] min-w-[70px]">Comm Rate (Auto)</th>
+            <th className="px-2 py-1.5 text-right font-medium border border-[#2060a0] min-w-[70px]">Comm Rate Override (%)</th>
+            <th className="px-2 py-1.5 text-right font-medium border border-[#2060a0] min-w-[70px]">Comm Rate Used (Auto)</th>
+            <th className="px-2 py-1.5 text-right font-medium border border-[#2060a0] min-w-[80px]">Commission (Auto)</th>
+            <th className="px-2 py-1.5 text-center font-medium border border-[#2060a0] min-w-[80px]">Rate Change Warning</th>
             <th className="px-2 py-1.5 text-right font-medium border border-[#2060a0] min-w-[60px]">Bonus</th>
+            <th className="px-2 py-1.5 text-left font-medium border border-[#2060a0] min-w-[70px]">Scholarship Type (Auto)</th>
+            <th className="px-2 py-1.5 text-right font-medium border border-[#2060a0] min-w-[70px]">Scholarship Value (Auto)</th>
+            <th className="px-2 py-1.5 text-left font-medium border border-[#2060a0] min-w-[70px]">Scholarship Override Type</th>
+            <th className="px-2 py-1.5 text-right font-medium border border-[#2060a0] min-w-[70px]">Scholarship Override Value</th>
+            <th className="px-2 py-1.5 text-left font-medium border border-[#2060a0] min-w-[70px]">Scholarship Used</th>
+            <th className="px-2 py-1.5 text-right font-medium border border-[#2060a0] min-w-[70px]">Scholarship Amt</th>
+            <th className="px-2 py-1.5 text-right font-medium border border-[#2060a0] min-w-[80px]">Fee After Scholarship</th>
+            <th className="px-2 py-1.5 text-center font-medium border border-[#2060a0] min-w-[70px]">Scholarship Warning</th>
             <th className="px-2 py-1.5 text-right font-medium border border-[#2060a0] min-w-[60px]">GST</th>
             <th className="px-2 py-1.5 text-right font-medium border border-[#2060a0] min-w-[80px]">Total</th>
             <th className="px-2 py-1.5 text-left font-medium border border-[#2060a0] min-w-[80px]">Payment</th>
@@ -692,7 +702,7 @@ function TermTable({ termName, students, allEntries, terms, isLoading, canEdit, 
           {isLoading ? (
             Array.from({ length: 5 }).map((_, i) => (
               <tr key={i}>
-                {Array.from({ length: 24 }).map((_, j) => (
+                {Array.from({ length: 34 }).map((_, j) => (
                   <td key={j} className="px-2 py-1 border border-gray-200"><Skeleton className="h-3 w-full" /></td>
                 ))}
               </tr>
@@ -712,7 +722,7 @@ function TermTable({ termName, students, allEntries, terms, isLoading, canEdit, 
                     <td className="px-2 py-1 border border-gray-200 text-gray-400">{s.studentName}</td>
                     <td className="px-2 py-1 border border-gray-200 text-gray-400">{s.provider}</td>
                     <td className="px-2 py-1 border border-gray-200 text-gray-400">{s.country}</td>
-                    <td colSpan={17} className="px-2 py-1 border border-gray-200 text-center text-gray-400 italic">
+                    <td colSpan={27} className="px-2 py-1 border border-gray-200 text-center text-gray-400 italic">
                       Blocked (previous term Withdrawn/Complete)
                     </td>
                   </tr>
@@ -729,7 +739,7 @@ function TermTable({ termName, students, allEntries, terms, isLoading, canEdit, 
                     <td className="px-2 py-1 border border-gray-200 text-gray-500">{s.studentName}</td>
                     <td className="px-2 py-1 border border-gray-200 text-gray-500">{s.provider}</td>
                     <td className="px-2 py-1 border border-gray-200 text-gray-500">{s.country}</td>
-                    <td colSpan={16} className="px-2 py-1 border border-gray-200 text-center">
+                    <td colSpan={26} className="px-2 py-1 border border-gray-200 text-center">
                       {canEdit ? (
                         <button
                           className="text-blue-600 hover:text-blue-800 text-xs font-medium underline"
@@ -762,10 +772,20 @@ function TermTable({ termName, students, allEntries, terms, isLoading, canEdit, 
                   <EditableCell value={s.courseName || ""} readOnly={!canEdit} onSave={(v) => onUpdateStudent(s.id, { courseName: v })} width="120px" />
                   <EditableCell value={entry.academicYear || ""} readOnly={!canEdit} onSave={(v) => onUpdateEntry(entry.id, { academicYear: v })} type="select" options={ACADEMIC_YEARS} width="80px" />
                   <EditableCell value={entry.feeGross || "0"} readOnly={!canEdit} onSave={(v) => onUpdateEntry(entry.id, { feeGross: v || "0" })} type="number" width="80px" align="right" mono />
-                  <EditableCell value={entry.commissionRateOverridePct || ""} readOnly={!canEdit} onSave={(v) => onUpdateEntry(entry.id, { commissionRateOverridePct: v || null })} type="number" width="60px" align="right" mono />
-                  <td className="px-2 py-1 border border-gray-200 text-right font-mono text-xs">{entry.commissionRateUsedPct || "-"}</td>
-                  <td className="px-2 py-1 border border-gray-200 text-right font-mono text-xs">${Number(entry.commissionAmount || 0).toFixed(2)}</td>
+                  <td className="px-2 py-1 border border-gray-200 text-right font-mono text-xs bg-gray-50">{`${Number(entry.commissionRateAuto || 0)}%`}</td>
+                  <EditableCell value={entry.commissionRateOverridePct || ""} readOnly={!canEdit} onSave={(v) => onUpdateEntry(entry.id, { commissionRateOverridePct: v || "" })} type="number" width="70px" align="right" mono />
+                  <td className="px-2 py-1 border border-gray-200 text-right font-mono text-xs bg-gray-50">{`${Number(entry.commissionRateUsedPct || 0)}%`}</td>
+                  <td className="px-2 py-1 border border-gray-200 text-right font-mono text-xs bg-gray-50">${Number(entry.commissionAmount || 0).toFixed(2)}</td>
+                  <td className="px-2 py-1 border border-gray-200 text-center text-xs">{entry.rateChangeWarning ? <span className="text-amber-600 whitespace-nowrap" title={entry.rateChangeWarning}>⚠ Commission rate changed</span> : ""}</td>
                   <EditableCell value={entry.bonus || "0"} readOnly={!canEdit} onSave={(v) => onUpdateEntry(entry.id, { bonus: v || "0" })} type="number" width="60px" align="right" mono />
+                  <td className="px-2 py-1 border border-gray-200 text-left text-xs bg-gray-50">{entry.scholarshipTypeAuto || "None"}</td>
+                  <td className="px-2 py-1 border border-gray-200 text-right font-mono text-xs bg-gray-50">{entry.scholarshipTypeAuto === "Percent" ? `${Number(entry.scholarshipValueAuto || 0)}%` : Number(entry.scholarshipValueAuto || 0)}</td>
+                  <EditableCell value={entry.scholarshipTypeOverride || ""} readOnly={!canEdit} onSave={(v) => onUpdateEntry(entry.id, { scholarshipTypeOverride: v || null })} type="select" options={["", "None", "Percent", "Fixed"]} width="70px" />
+                  <EditableCell value={entry.scholarshipValueOverride?.toString() || ""} readOnly={!canEdit} onSave={(v) => onUpdateEntry(entry.id, { scholarshipValueOverride: v || null })} type="number" width="70px" align="right" mono />
+                  <td className="px-2 py-1 border border-gray-200 text-left text-xs bg-gray-50">{entry.scholarshipTypeUsed || "None"} {Number(entry.scholarshipValueUsed || 0) > 0 && entry.scholarshipTypeUsed !== "None" ? `(${entry.scholarshipTypeUsed === "Percent" ? `${Number(entry.scholarshipValueUsed)}%` : `$${Number(entry.scholarshipValueUsed)}`})` : ""}</td>
+                  <td className="px-2 py-1 border border-gray-200 text-right font-mono text-xs bg-gray-50">${Number(entry.scholarshipAmount || 0).toFixed(2)}</td>
+                  <td className="px-2 py-1 border border-gray-200 text-right font-mono text-xs bg-gray-50">${Number(entry.feeAfterScholarship || 0).toFixed(2)}</td>
+                  <td className="px-2 py-1 border border-gray-200 text-center text-xs">{entry.scholarshipChangeWarning ? <span className="text-amber-600 whitespace-nowrap" title={entry.scholarshipChangeWarning}>⚠ Scholarship changed</span> : ""}</td>
                   <td className="px-2 py-1 border border-gray-200 text-right font-mono text-xs">${Number(entry.gstAmount || 0).toFixed(2)}</td>
                   <td className="px-2 py-1 border border-gray-200 text-right font-mono text-xs font-semibold">${Number(entry.totalAmount || 0).toFixed(2)}</td>
                   <EditableCell value={entry.paymentStatus || "Pending"} readOnly={!canEdit} onSave={(v) => onUpdateEntry(entry.id, { paymentStatus: v })} type="select" options={PAYMENT_STATUSES} width="80px" />
@@ -790,7 +810,7 @@ function TermTable({ termName, students, allEntries, terms, isLoading, canEdit, 
             })
           ) : (
             <tr>
-              <td colSpan={24} className="px-3 py-8 text-center text-muted-foreground text-sm">
+              <td colSpan={34} className="px-3 py-8 text-center text-muted-foreground text-sm">
                 No students found.
               </td>
             </tr>

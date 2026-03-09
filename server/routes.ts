@@ -1713,6 +1713,7 @@ export async function registerRoutes(
       if (body.feeGross === "" || body.feeGross === null) body.feeGross = "0";
       if (body.bonus === "" || body.bonus === null) body.bonus = "0";
       if (body.commissionRateOverridePct === "") body.commissionRateOverridePct = null;
+      if (body.scholarshipTypeOverride === "") body.scholarshipTypeOverride = null;
       if (body.scholarshipValueOverride === "") body.scholarshipValueOverride = null;
 
       const merged = { ...existing, ...body };
