@@ -147,9 +147,11 @@ export async function registerRoutes(
         await sendLoginOtpEmail(user.email, otpCode, OTP_EXPIRY_MINUTES);
         await storage.createSecurityAuditLog({ userId: user.id, eventType: "OTP_SENT", ipAddress: clientIp, deviceInfo: getUA(req) });
         otpSent = true;
+        console.log(`[OTP] Code for ${user.email}: ${otpCode} (expires in ${OTP_EXPIRY_MINUTES} min)`);
       } catch (emailErr: any) {
         console.error("Failed to send OTP email:", emailErr.message);
         await storage.createSecurityAuditLog({ userId: user.id, eventType: "OTP_SEND_FAILED", ipAddress: clientIp, metadata: { error: emailErr.message } });
+        console.log(`[OTP FALLBACK] Code for ${user.email}: ${otpCode} (email delivery failed)`);
       }
 
       req.session.pendingUserId = user.id;
@@ -288,8 +290,10 @@ export async function registerRoutes(
       try {
         await sendLoginOtpEmail(user.email, otpCode, OTP_EXPIRY_MINUTES);
         await storage.createSecurityAuditLog({ userId, eventType: "OTP_RESENT", ipAddress: clientIp });
+        console.log(`[OTP] Resend code for ${user.email}: ${otpCode} (expires in ${OTP_EXPIRY_MINUTES} min)`);
       } catch (emailErr: any) {
         console.error("Failed to resend OTP:", emailErr.message);
+        console.log(`[OTP FALLBACK] Resend code for ${user.email}: ${otpCode} (email delivery failed)`);
         return res.status(500).json({ message: "Failed to send verification email. Please try again." });
       }
 
