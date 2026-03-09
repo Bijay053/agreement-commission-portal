@@ -13,7 +13,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Plus, Search, Trash2, Users, DollarSign, TrendingUp, AlertCircle,
-  Settings, Save, X, Check
+  Settings, X, Upload, Download, Clock, CheckCircle2, FileSpreadsheet
 } from "lucide-react";
 import type { CommissionStudent, CommissionEntry } from "@shared/schema";
 
@@ -121,21 +121,35 @@ function EditableCell({ value, onSave, type = "text", options, readOnly, width, 
 export default function CommissionTrackerPage() {
   const { hasPermission } = useAuth();
   const { toast } = useToast();
-  const [activeTab, setActiveTab] = useState("MASTER");
+  const [selectedYear, setSelectedYear] = useState<number | null>(null);
+  const [activeTab, setActiveTab] = useState("DASHBOARD");
   const [search, setSearch] = useState("");
   const [agentFilter, setAgentFilter] = useState("");
   const [providerFilter, setProviderFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [showTermDialog, setShowTermDialog] = useState(false);
+  const [showBulkUpload, setShowBulkUpload] = useState(false);
 
   const canCreate = hasPermission("commission_tracker.create");
   const canEdit = hasPermission("commission_tracker.edit");
   const canDelete = hasPermission("commission_tracker.delete");
 
+  const { data: years = [] } = useQuery<number[]>({
+    queryKey: ["/api/commission-tracker/years"],
+  });
+
+  useEffect(() => {
+    if (years.length > 0 && selectedYear === null) {
+      setSelectedYear(years[years.length - 1]);
+    }
+  }, [years, selectedYear]);
+
   const { data: terms = [] } = useQuery<CommissionTerm[]>({
     queryKey: ["/api/commission-tracker/terms"],
   });
+
+  const yearTerms = terms.filter(t => t.year === selectedYear);
 
   const { data: students, isLoading } = useQuery<CommissionStudent[]>({
     queryKey: ["/api/commission-tracker/students", { search, agent: agentFilter, provider: providerFilter, status: statusFilter }],
@@ -152,7 +166,14 @@ export default function CommissionTrackerPage() {
   });
 
   const { data: allEntries = {} } = useQuery<Record<number, CommissionEntry[]>>({
-    queryKey: ["/api/commission-tracker/all-entries"],
+    queryKey: ["/api/commission-tracker/all-entries", selectedYear],
+    queryFn: async () => {
+      const params = selectedYear ? `?year=${selectedYear}` : "";
+      const res = await fetch(`/api/commission-tracker/all-entries${params}`, { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to fetch");
+      return res.json();
+    },
+    enabled: !!selectedYear,
   });
 
   const { data: filters } = useQuery<{
@@ -164,13 +185,22 @@ export default function CommissionTrackerPage() {
     queryKey: ["/api/commission-tracker/filters"],
   });
 
-  const { data: dashboard } = useQuery<{
+  const { data: yearDashboard } = useQuery<{
     totalStudents: number;
     totalCommission: number;
     totalReceived: number;
+    activeCount: number;
+    pendingPayments: number;
+    paidPayments: number;
     byStatus: Record<string, number>;
   }>({
-    queryKey: ["/api/commission-tracker/dashboard"],
+    queryKey: ["/api/commission-tracker/dashboard", selectedYear],
+    queryFn: async () => {
+      const res = await fetch(`/api/commission-tracker/dashboard/${selectedYear}`, { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to fetch");
+      return res.json();
+    },
+    enabled: !!selectedYear,
   });
 
   const invalidateAll = useCallback(() => {
@@ -178,6 +208,8 @@ export default function CommissionTrackerPage() {
     queryClient.invalidateQueries({ queryKey: ["/api/commission-tracker/all-entries"] });
     queryClient.invalidateQueries({ queryKey: ["/api/commission-tracker/dashboard"] });
     queryClient.invalidateQueries({ queryKey: ["/api/commission-tracker/filters"] });
+    queryClient.invalidateQueries({ queryKey: ["/api/commission-tracker/years"] });
+    queryClient.invalidateQueries({ queryKey: ["/api/commission-tracker/terms"] });
   }, []);
 
   const updateStudentMutation = useMutation({
@@ -221,22 +253,59 @@ export default function CommissionTrackerPage() {
     onSuccess: invalidateAll,
   });
 
-  const totalStudents = dashboard?.totalStudents || 0;
-  const totalCommission = dashboard?.totalCommission || 0;
-  const totalReceived = dashboard?.totalReceived || 0;
-  const activeCount = dashboard?.byStatus?.["Active"] || 0;
+  const tabs = ["DASHBOARD", ...yearTerms.map(t => t.termName)];
 
-  const tabs = ["MASTER", ...terms.map(t => t.termName)];
+  useEffect(() => {
+    if (activeTab !== "DASHBOARD" && !yearTerms.find(t => t.termName === activeTab)) {
+      setActiveTab("DASHBOARD");
+    }
+  }, [selectedYear, yearTerms, activeTab]);
 
   return (
     <div className="flex flex-col h-full" data-testid="commission-tracker-page">
       <div className="p-3 pb-0 space-y-3">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-          <div>
-            <h1 className="text-xl font-bold" data-testid="text-page-title">Commission Tracker</h1>
-            <p className="text-xs text-muted-foreground">Track student commissions across terms</p>
+          <div className="flex items-center gap-3">
+            <div>
+              <h1 className="text-xl font-bold" data-testid="text-page-title">Commission Tracker</h1>
+              <p className="text-xs text-muted-foreground">Track student commissions across intakes</p>
+            </div>
+            <div className="flex items-center gap-1.5 ml-4">
+              <Label className="text-xs font-medium text-muted-foreground">Year:</Label>
+              <Select value={selectedYear ? String(selectedYear) : ""} onValueChange={(v) => { setSelectedYear(Number(v)); setActiveTab("DASHBOARD"); }}>
+                <SelectTrigger className="w-24 h-8 text-sm font-semibold" data-testid="select-year">
+                  <SelectValue placeholder="Year" />
+                </SelectTrigger>
+                <SelectContent>
+                  {years.map(y => <SelectItem key={y} value={String(y)}>{y}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
+            {canCreate && (
+              <Button variant="outline" size="sm" onClick={() => window.open("/api/commission-tracker/sample-sheet", "_blank")} data-testid="button-download-sample">
+                <Download className="w-3.5 h-3.5 mr-1" />
+                Sample Sheet
+              </Button>
+            )}
+            {canCreate && (
+              <Dialog open={showBulkUpload} onOpenChange={setShowBulkUpload}>
+                <DialogTrigger asChild>
+                  <Button variant="outline" size="sm" data-testid="button-bulk-upload">
+                    <Upload className="w-3.5 h-3.5 mr-1" />
+                    Bulk Upload
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+                  <DialogHeader>
+                    <DialogTitle>Bulk Upload Students</DialogTitle>
+                    <DialogDescription>Upload a CSV file to import multiple students at once</DialogDescription>
+                  </DialogHeader>
+                  <BulkUploadDialog onSuccess={() => { setShowBulkUpload(false); invalidateAll(); }} />
+                </DialogContent>
+              </Dialog>
+            )}
             {canCreate && (
               <Dialog open={showTermDialog} onOpenChange={setShowTermDialog}>
                 <DialogTrigger asChild>
@@ -265,7 +334,7 @@ export default function CommissionTrackerPage() {
                 <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
                   <DialogHeader>
                     <DialogTitle>Add Student</DialogTitle>
-                    <DialogDescription>Add a new student to the commission tracker</DialogDescription>
+                    <DialogDescription>Add a new student enrolment to the commission tracker</DialogDescription>
                   </DialogHeader>
                   <AddStudentForm onSuccess={() => { setShowAddDialog(false); invalidateAll(); }} />
                 </DialogContent>
@@ -274,98 +343,56 @@ export default function CommissionTrackerPage() {
           </div>
         </div>
 
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-          <Card data-testid="card-total-students">
-            <CardContent className="p-3">
-              <div className="flex items-center gap-2">
-                <Users className="w-4 h-4 text-blue-500" />
-                <div>
-                  <p className="text-[10px] text-muted-foreground">Total Students</p>
-                  <p className="text-lg font-bold">{totalStudents}</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-          <Card data-testid="card-total-commission">
-            <CardContent className="p-3">
-              <div className="flex items-center gap-2">
-                <DollarSign className="w-4 h-4 text-green-500" />
-                <div>
-                  <p className="text-[10px] text-muted-foreground">Total Commission</p>
-                  <p className="text-lg font-bold">${totalCommission.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-          <Card data-testid="card-total-received">
-            <CardContent className="p-3">
-              <div className="flex items-center gap-2">
-                <TrendingUp className="w-4 h-4 text-emerald-500" />
-                <div>
-                  <p className="text-[10px] text-muted-foreground">Total Received</p>
-                  <p className="text-lg font-bold">${totalReceived.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-          <Card data-testid="card-active-students">
-            <CardContent className="p-3">
-              <div className="flex items-center gap-2">
-                <AlertCircle className="w-4 h-4 text-amber-500" />
-                <div>
-                  <p className="text-[10px] text-muted-foreground">Active Students</p>
-                  <p className="text-lg font-bold">{activeCount}</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-
-        <div className="flex flex-col md:flex-row gap-2">
-          <div className="relative flex-1">
-            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
-            <Input
-              placeholder="Search by name, student ID, agent..."
-              className="pl-8 h-8 text-xs"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              data-testid="input-search"
-            />
+        {activeTab !== "DASHBOARD" && (
+          <div className="flex flex-col md:flex-row gap-2">
+            <div className="relative flex-1">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+              <Input
+                placeholder="Search by name, student ID, agent, Agentsic ID..."
+                className="pl-8 h-8 text-xs"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                data-testid="input-search"
+              />
+            </div>
+            <Select value={agentFilter || "_all"} onValueChange={(v) => setAgentFilter(v === "_all" ? "" : v)}>
+              <SelectTrigger className="w-[160px] h-8 text-xs" data-testid="select-agent">
+                <SelectValue placeholder="All Agents" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="_all">All Agents</SelectItem>
+                {filters?.agents?.map((a) => <SelectItem key={a} value={a}>{a}</SelectItem>)}
+              </SelectContent>
+            </Select>
+            <Select value={providerFilter || "_all"} onValueChange={(v) => setProviderFilter(v === "_all" ? "" : v)}>
+              <SelectTrigger className="w-[160px] h-8 text-xs" data-testid="select-provider">
+                <SelectValue placeholder="All Providers" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="_all">All Providers</SelectItem>
+                {filters?.providers?.map((p) => <SelectItem key={p} value={p}>{p}</SelectItem>)}
+              </SelectContent>
+            </Select>
+            <Select value={statusFilter || "_all"} onValueChange={(v) => setStatusFilter(v === "_all" ? "" : v)}>
+              <SelectTrigger className="w-[140px] h-8 text-xs" data-testid="select-status">
+                <SelectValue placeholder="All Statuses" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="_all">All Statuses</SelectItem>
+                {filters?.statuses?.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+              </SelectContent>
+            </Select>
           </div>
-          <Select value={agentFilter || "_all"} onValueChange={(v) => setAgentFilter(v === "_all" ? "" : v)}>
-            <SelectTrigger className="w-[160px] h-8 text-xs" data-testid="select-agent">
-              <SelectValue placeholder="All Agents" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="_all">All Agents</SelectItem>
-              {filters?.agents?.map((a) => <SelectItem key={a} value={a}>{a}</SelectItem>)}
-            </SelectContent>
-          </Select>
-          <Select value={providerFilter || "_all"} onValueChange={(v) => setProviderFilter(v === "_all" ? "" : v)}>
-            <SelectTrigger className="w-[160px] h-8 text-xs" data-testid="select-provider">
-              <SelectValue placeholder="All Providers" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="_all">All Providers</SelectItem>
-              {filters?.providers?.map((p) => <SelectItem key={p} value={p}>{p}</SelectItem>)}
-            </SelectContent>
-          </Select>
-          <Select value={statusFilter || "_all"} onValueChange={(v) => setStatusFilter(v === "_all" ? "" : v)}>
-            <SelectTrigger className="w-[140px] h-8 text-xs" data-testid="select-status">
-              <SelectValue placeholder="All Statuses" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="_all">All Statuses</SelectItem>
-              {filters?.statuses?.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
-            </SelectContent>
-          </Select>
-        </div>
+        )}
       </div>
 
       <div className="flex-1 overflow-hidden flex flex-col mt-2">
         <div className="flex-1 overflow-auto border-t">
-          {activeTab === "MASTER" ? (
-            <MasterTable
+          {activeTab === "DASHBOARD" ? (
+            <YearDashboard dashboard={yearDashboard} year={selectedYear} />
+          ) : (
+            <TermTable
+              termName={activeTab}
               students={students || []}
               allEntries={allEntries}
               terms={terms}
@@ -376,15 +403,6 @@ export default function CommissionTrackerPage() {
               onDeleteStudent={(id) => {
                 if (confirm("Delete this student and all their term entries?")) deleteStudentMutation.mutate(id);
               }}
-            />
-          ) : (
-            <TermTable
-              termName={activeTab}
-              students={students || []}
-              allEntries={allEntries}
-              terms={terms}
-              isLoading={isLoading}
-              canEdit={canEdit}
               onCreateEntry={(studentId, data) => createEntryMutation.mutate({ studentId, data })}
               onUpdateEntry={(id, data) => updateEntryMutation.mutate({ id, data })}
               onDeleteEntry={(id) => deleteEntryMutation.mutate(id)}
@@ -404,13 +422,13 @@ export default function CommissionTrackerPage() {
               onClick={() => setActiveTab(tab)}
               data-testid={`tab-${tab}`}
             >
-              {tab === "MASTER" ? "MASTER" : terms.find(t => t.termName === tab)?.termLabel || tab.replace("_", " ")}
+              {tab === "DASHBOARD" ? `Dashboard ${selectedYear || ""}` : terms.find(t => t.termName === tab)?.termLabel || tab.replace("_", " ")}
             </button>
           ))}
         </div>
       </div>
 
-      {students && (
+      {activeTab !== "DASHBOARD" && students && (
         <div className="px-3 py-1 border-t bg-muted/20">
           <p className="text-[10px] text-muted-foreground" data-testid="text-count">
             {students.length} student{students.length !== 1 ? "s" : ""}
@@ -421,7 +439,96 @@ export default function CommissionTrackerPage() {
   );
 }
 
-function MasterTable({ students, allEntries, terms, isLoading, canEdit, canDelete, onUpdateStudent, onDeleteStudent }: {
+function YearDashboard({ dashboard, year }: { dashboard: any; year: number | null }) {
+  if (!dashboard || !year) {
+    return (
+      <div className="p-6 space-y-4">
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <Card key={i}><CardContent className="p-4"><Skeleton className="h-16 w-full" /></CardContent></Card>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  const cards = [
+    { label: "Total Students", value: dashboard.totalStudents || 0, icon: Users, color: "text-blue-500", format: "number" },
+    { label: "Total Commission", value: dashboard.totalCommission || 0, icon: DollarSign, color: "text-green-500", format: "currency" },
+    { label: "Total Received", value: dashboard.totalReceived || 0, icon: TrendingUp, color: "text-emerald-500", format: "currency" },
+    { label: "Active Students", value: dashboard.activeCount || 0, icon: AlertCircle, color: "text-amber-500", format: "number" },
+    { label: "Pending Payments", value: dashboard.pendingPayments || 0, icon: Clock, color: "text-orange-500", format: "number" },
+    { label: "Paid Payments", value: dashboard.paidPayments || 0, icon: CheckCircle2, color: "text-teal-500", format: "number" },
+  ];
+
+  return (
+    <div className="p-4 space-y-6" data-testid="year-dashboard">
+      <h2 className="text-lg font-semibold">Commission Summary - {year}</h2>
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+        {cards.map((c, i) => (
+          <Card key={i} data-testid={`card-${c.label.toLowerCase().replace(/\s+/g, "-")}`}>
+            <CardContent className="p-4">
+              <div className="flex items-center gap-2">
+                <c.icon className={`w-5 h-5 ${c.color}`} />
+                <div>
+                  <p className="text-[10px] text-muted-foreground">{c.label}</p>
+                  <p className="text-lg font-bold">
+                    {c.format === "currency"
+                      ? `$${Number(c.value).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                      : c.value}
+                  </p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+
+      {dashboard.byStatus && Object.keys(dashboard.byStatus).length > 0 && (
+        <div>
+          <h3 className="text-sm font-medium mb-2">By Status</h3>
+          <div className="flex flex-wrap gap-2">
+            {Object.entries(dashboard.byStatus).map(([status, count]) => (
+              <Badge key={status} className={`${STATUS_COLORS[status] || "bg-gray-100 text-gray-800"} text-xs px-2 py-1`}>
+                {status}: {count as number}
+              </Badge>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {dashboard.byAgent && dashboard.byAgent.length > 0 && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <h3 className="text-sm font-medium mb-2">By Agent</h3>
+            <div className="space-y-1">
+              {dashboard.byAgent.map((a: any) => (
+                <div key={a.agent} className="flex justify-between text-xs py-1 px-2 border rounded">
+                  <span>{a.agent}</span>
+                  <span className="font-mono">{a.count} students / ${Number(a.total).toFixed(2)}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div>
+            <h3 className="text-sm font-medium mb-2">By Provider</h3>
+            <div className="space-y-1">
+              {dashboard.byProvider?.map((p: any) => (
+                <div key={p.provider} className="flex justify-between text-xs py-1 px-2 border rounded">
+                  <span className="truncate max-w-[200px]">{p.provider}</span>
+                  <span className="font-mono">{p.count} students / ${Number(p.total).toFixed(2)}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function TermTable({ termName, students, allEntries, terms, isLoading, canEdit, canDelete, onUpdateStudent, onDeleteStudent, onCreateEntry, onUpdateEntry, onDeleteEntry }: {
+  termName: string;
   students: CommissionStudent[];
   allEntries: Record<number, CommissionEntry[]>;
   terms: CommissionTerm[];
@@ -430,104 +537,6 @@ function MasterTable({ students, allEntries, terms, isLoading, canEdit, canDelet
   canDelete: boolean;
   onUpdateStudent: (id: number, data: Record<string, any>) => void;
   onDeleteStudent: (id: number) => void;
-}) {
-  return (
-    <div className="overflow-auto h-full">
-      <table className="w-full text-xs border-collapse" data-testid="table-master">
-        <thead className="sticky top-0 z-10">
-          <tr className="bg-[#1F4E79] text-white">
-            <th className="px-2 py-1.5 text-left font-medium border border-[#1a4060] w-10">S.No</th>
-            <th className="px-2 py-1.5 text-left font-medium border border-[#1a4060] min-w-[120px]">Agent Name</th>
-            <th className="px-2 py-1.5 text-left font-medium border border-[#1a4060] min-w-[90px]">Student ID</th>
-            <th className="px-2 py-1.5 text-left font-medium border border-[#1a4060] min-w-[80px]">Agentsic ID</th>
-            <th className="px-2 py-1.5 text-left font-medium border border-[#1a4060] min-w-[140px]">Student Name</th>
-            <th className="px-2 py-1.5 text-left font-medium border border-[#1a4060] min-w-[140px]">Provider</th>
-            <th className="px-2 py-1.5 text-left font-medium border border-[#1a4060] min-w-[70px]">Country</th>
-            <th className="px-2 py-1.5 text-left font-medium border border-[#1a4060] min-w-[90px]">Start Intake</th>
-            <th className="px-2 py-1.5 text-left font-medium border border-[#1a4060] min-w-[100px]">Course Level</th>
-            <th className="px-2 py-1.5 text-left font-medium border border-[#1a4060] min-w-[140px]">Course Name</th>
-            <th className="px-2 py-1.5 text-left font-medium border border-[#1a4060] min-w-[50px]">Duration</th>
-            <th className="px-2 py-1.5 text-right font-medium border border-[#1a4060] min-w-[70px]">Comm %</th>
-            <th className="px-2 py-1.5 text-left font-medium border border-[#1a4060] min-w-[50px]">GST</th>
-            <th className="px-2 py-1.5 text-left font-medium border border-[#1a4060] min-w-[80px]">Scholarship</th>
-            <th className="px-2 py-1.5 text-left font-medium border border-[#1a4060] min-w-[80px]">Status</th>
-            <th className="px-2 py-1.5 text-right font-medium border border-[#1a4060] min-w-[90px]">Total Received</th>
-            <th className="px-2 py-1.5 text-left font-medium border border-[#1a4060] min-w-[160px]">Notes</th>
-            {canDelete && <th className="px-2 py-1.5 text-center font-medium border border-[#1a4060] w-10"></th>}
-          </tr>
-        </thead>
-        <tbody>
-          {isLoading ? (
-            Array.from({ length: 5 }).map((_, i) => (
-              <tr key={i}>
-                {Array.from({ length: canDelete ? 18 : 17 }).map((_, j) => (
-                  <td key={j} className="px-2 py-1 border border-gray-200"><Skeleton className="h-3 w-full" /></td>
-                ))}
-              </tr>
-            ))
-          ) : students.length > 0 ? (
-            students.map((s, idx) => (
-              <tr key={s.id} style={{ backgroundColor: STATUS_ROW_BG[s.status || ""] || "transparent" }} data-testid={`row-student-${s.id}`}>
-                <td className="px-2 py-1 border border-gray-200 text-center text-gray-500">{idx + 1}</td>
-                <EditableCell value={s.agentName} readOnly={!canEdit} onSave={(v) => onUpdateStudent(s.id, { agentName: v })} width="120px" />
-                <EditableCell value={s.studentId || ""} readOnly={!canEdit} onSave={(v) => onUpdateStudent(s.id, { studentId: v })} width="90px" mono />
-                <EditableCell value={s.agentsicId || ""} readOnly={!canEdit} onSave={(v) => onUpdateStudent(s.id, { agentsicId: v })} width="80px" mono />
-                <EditableCell value={s.studentName} readOnly={!canEdit} onSave={(v) => onUpdateStudent(s.id, { studentName: v })} width="140px" />
-                <EditableCell value={s.provider} readOnly={!canEdit} onSave={(v) => onUpdateStudent(s.id, { provider: v })} width="140px" />
-                <EditableCell value={s.country} readOnly={!canEdit} onSave={(v) => onUpdateStudent(s.id, { country: v })} width="70px" />
-                <EditableCell value={s.startIntake || ""} readOnly={!canEdit} onSave={(v) => onUpdateStudent(s.id, { startIntake: v })} width="90px" />
-                <EditableCell value={s.courseLevel || ""} readOnly={!canEdit} onSave={(v) => onUpdateStudent(s.id, { courseLevel: v })} type="select" options={COURSE_LEVELS} width="100px" />
-                <EditableCell value={s.courseName || ""} readOnly={!canEdit} onSave={(v) => onUpdateStudent(s.id, { courseName: v })} width="140px" />
-                <EditableCell value={s.courseDurationYears || ""} readOnly={!canEdit} onSave={(v) => onUpdateStudent(s.id, { courseDurationYears: v })} type="number" width="50px" align="right" />
-                <EditableCell value={s.commissionRatePct || ""} readOnly={!canEdit} onSave={(v) => onUpdateStudent(s.id, { commissionRatePct: v })} type="number" width="70px" align="right" mono />
-                <EditableCell value={s.gstApplicable || "No"} readOnly={!canEdit} onSave={(v) => onUpdateStudent(s.id, { gstApplicable: v })} type="select" options={["Yes", "No"]} width="50px" />
-                <td className="px-2 py-1 border border-gray-200 text-xs">
-                  {s.scholarshipType !== "None" ? `${s.scholarshipType}: ${s.scholarshipValue}` : "-"}
-                </td>
-                <td className="px-2 py-1 border border-gray-200">
-                  <Badge className={`${STATUS_COLORS[s.status || ""] || "bg-gray-100 text-gray-800"} text-[10px] px-1.5 py-0`} data-testid={`badge-status-${s.id}`}>
-                    {s.status}
-                  </Badge>
-                </td>
-                <td className="px-2 py-1 border border-gray-200 text-right font-mono text-xs">
-                  ${Number(s.totalReceived || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                </td>
-                <td className="px-2 py-1 border border-gray-200 text-xs text-gray-600 max-w-[160px] truncate" title={s.notes || ""}>
-                  {s.notes || "-"}
-                </td>
-                {canDelete && (
-                  <td className="px-1 py-1 border border-gray-200 text-center">
-                    <button
-                      className="text-red-500 hover:text-red-700 p-0.5"
-                      onClick={() => onDeleteStudent(s.id)}
-                      data-testid={`button-delete-${s.id}`}
-                    >
-                      <Trash2 className="w-3 h-3" />
-                    </button>
-                  </td>
-                )}
-              </tr>
-            ))
-          ) : (
-            <tr>
-              <td colSpan={canDelete ? 18 : 17} className="px-3 py-8 text-center text-muted-foreground text-sm">
-                No students found.
-              </td>
-            </tr>
-          )}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
-function TermTable({ termName, students, allEntries, terms, isLoading, canEdit, onCreateEntry, onUpdateEntry, onDeleteEntry }: {
-  termName: string;
-  students: CommissionStudent[];
-  allEntries: Record<number, CommissionEntry[]>;
-  terms: CommissionTerm[];
-  isLoading: boolean;
-  canEdit: boolean;
   onCreateEntry: (studentId: number, data: Record<string, any>) => void;
   onUpdateEntry: (id: number, data: Record<string, any>) => void;
   onDeleteEntry: (id: number) => void;
@@ -556,11 +565,13 @@ function TermTable({ termName, students, allEntries, terms, isLoading, canEdit, 
           <tr className="bg-[#2E75B6] text-white">
             <th className="px-2 py-1.5 text-left font-medium border border-[#2060a0] w-10">S.No</th>
             <th className="px-2 py-1.5 text-left font-medium border border-[#2060a0] min-w-[100px]">Agent Name</th>
+            <th className="px-2 py-1.5 text-left font-medium border border-[#2060a0] min-w-[80px]">Agentsic ID</th>
             <th className="px-2 py-1.5 text-left font-medium border border-[#2060a0] min-w-[80px]">Student ID</th>
-            <th className="px-2 py-1.5 text-left font-medium border border-[#2060a0] min-w-[70px]">Agentsic ID</th>
             <th className="px-2 py-1.5 text-left font-medium border border-[#2060a0] min-w-[120px]">Student Name</th>
             <th className="px-2 py-1.5 text-left font-medium border border-[#2060a0] min-w-[120px]">Provider</th>
             <th className="px-2 py-1.5 text-left font-medium border border-[#2060a0] min-w-[60px]">Country</th>
+            <th className="px-2 py-1.5 text-left font-medium border border-[#2060a0] min-w-[80px]">Course Level</th>
+            <th className="px-2 py-1.5 text-left font-medium border border-[#2060a0] min-w-[120px]">Course Name</th>
             <th className="px-2 py-1.5 text-left font-medium border border-[#2060a0] min-w-[80px]">Academic Year</th>
             <th className="px-2 py-1.5 text-right font-medium border border-[#2060a0] min-w-[80px]">Fee (Gross)</th>
             <th className="px-2 py-1.5 text-right font-medium border border-[#2060a0] min-w-[60px]">Comm % Override</th>
@@ -582,7 +593,7 @@ function TermTable({ termName, students, allEntries, terms, isLoading, canEdit, 
           {isLoading ? (
             Array.from({ length: 5 }).map((_, i) => (
               <tr key={i}>
-                {Array.from({ length: 22 }).map((_, j) => (
+                {Array.from({ length: 24 }).map((_, j) => (
                   <td key={j} className="px-2 py-1 border border-gray-200"><Skeleton className="h-3 w-full" /></td>
                 ))}
               </tr>
@@ -597,12 +608,12 @@ function TermTable({ termName, students, allEntries, terms, isLoading, canEdit, 
                   <tr key={s.id} className="bg-gray-100 dark:bg-gray-800 opacity-50" data-testid={`row-term-${s.id}`}>
                     <td className="px-2 py-1 border border-gray-200 text-center text-gray-400">{idx + 1}</td>
                     <td className="px-2 py-1 border border-gray-200 text-gray-400">{s.agentName}</td>
-                    <td className="px-2 py-1 border border-gray-200 text-gray-400 font-mono">{s.studentId || "-"}</td>
                     <td className="px-2 py-1 border border-gray-200 text-gray-400 font-mono">{s.agentsicId || "-"}</td>
+                    <td className="px-2 py-1 border border-gray-200 text-gray-400 font-mono">{s.studentId || "-"}</td>
                     <td className="px-2 py-1 border border-gray-200 text-gray-400">{s.studentName}</td>
                     <td className="px-2 py-1 border border-gray-200 text-gray-400">{s.provider}</td>
                     <td className="px-2 py-1 border border-gray-200 text-gray-400">{s.country}</td>
-                    <td colSpan={15} className="px-2 py-1 border border-gray-200 text-center text-gray-400 italic">
+                    <td colSpan={17} className="px-2 py-1 border border-gray-200 text-center text-gray-400 italic">
                       Blocked (previous term Withdrawn/Complete)
                     </td>
                   </tr>
@@ -614,12 +625,12 @@ function TermTable({ termName, students, allEntries, terms, isLoading, canEdit, 
                   <tr key={s.id} className="bg-gray-50 dark:bg-gray-900" data-testid={`row-term-${s.id}`}>
                     <td className="px-2 py-1 border border-gray-200 text-center text-gray-500">{idx + 1}</td>
                     <td className="px-2 py-1 border border-gray-200 text-gray-500">{s.agentName}</td>
-                    <td className="px-2 py-1 border border-gray-200 text-gray-500 font-mono">{s.studentId || "-"}</td>
                     <td className="px-2 py-1 border border-gray-200 text-gray-500 font-mono">{s.agentsicId || "-"}</td>
+                    <td className="px-2 py-1 border border-gray-200 text-gray-500 font-mono">{s.studentId || "-"}</td>
                     <td className="px-2 py-1 border border-gray-200 text-gray-500">{s.studentName}</td>
                     <td className="px-2 py-1 border border-gray-200 text-gray-500">{s.provider}</td>
                     <td className="px-2 py-1 border border-gray-200 text-gray-500">{s.country}</td>
-                    <td colSpan={14} className="px-2 py-1 border border-gray-200 text-center">
+                    <td colSpan={16} className="px-2 py-1 border border-gray-200 text-center">
                       {canEdit ? (
                         <button
                           className="text-blue-600 hover:text-blue-800 text-xs font-medium underline"
@@ -632,7 +643,13 @@ function TermTable({ termName, students, allEntries, terms, isLoading, canEdit, 
                         <span className="text-gray-400 text-xs">No entry</span>
                       )}
                     </td>
-                    <td className="px-1 py-1 border border-gray-200"></td>
+                    <td className="px-1 py-1 border border-gray-200">
+                      {canDelete && (
+                        <button className="text-red-500 hover:text-red-700 p-0.5" onClick={() => onDeleteStudent(s.id)} data-testid={`button-delete-${s.id}`}>
+                          <Trash2 className="w-3 h-3" />
+                        </button>
+                      )}
+                    </td>
                   </tr>
                 );
               }
@@ -643,11 +660,13 @@ function TermTable({ termName, students, allEntries, terms, isLoading, canEdit, 
                 <tr key={s.id} style={{ backgroundColor: statusBg }} data-testid={`row-term-${s.id}`}>
                   <td className="px-2 py-1 border border-gray-200 text-center text-gray-500">{idx + 1}</td>
                   <td className="px-2 py-1 border border-gray-200 text-xs">{s.agentName}</td>
-                  <td className="px-2 py-1 border border-gray-200 text-xs font-mono">{s.studentId || "-"}</td>
                   <td className="px-2 py-1 border border-gray-200 text-xs font-mono">{s.agentsicId || "-"}</td>
+                  <td className="px-2 py-1 border border-gray-200 text-xs font-mono">{s.studentId || "-"}</td>
                   <td className="px-2 py-1 border border-gray-200 text-xs">{s.studentName}</td>
                   <td className="px-2 py-1 border border-gray-200 text-xs">{s.provider}</td>
                   <td className="px-2 py-1 border border-gray-200 text-xs">{s.country}</td>
+                  <EditableCell value={s.courseLevel || ""} readOnly={!canEdit} onSave={(v) => onUpdateStudent(s.id, { courseLevel: v })} type="select" options={COURSE_LEVELS} width="80px" />
+                  <EditableCell value={s.courseName || ""} readOnly={!canEdit} onSave={(v) => onUpdateStudent(s.id, { courseName: v })} width="120px" />
                   <EditableCell value={entry.academicYear || ""} readOnly={!canEdit} onSave={(v) => onUpdateEntry(entry.id, { academicYear: v })} type="select" options={ACADEMIC_YEARS} width="80px" />
                   <EditableCell value={entry.feeGross || "0"} readOnly={!canEdit} onSave={(v) => onUpdateEntry(entry.id, { feeGross: v || "0" })} type="number" width="80px" align="right" mono />
                   <EditableCell value={entry.commissionRateOverridePct || ""} readOnly={!canEdit} onSave={(v) => onUpdateEntry(entry.id, { commissionRateOverridePct: v || null })} type="number" width="60px" align="right" mono />
@@ -663,30 +682,211 @@ function TermTable({ termName, students, allEntries, terms, isLoading, canEdit, 
                   <EditableCell value={entry.studentStatus || "Under Enquiry"} readOnly={!canEdit} onSave={(v) => onUpdateEntry(entry.id, { studentStatus: v })} type="select" options={STUDENT_STATUSES} width="80px" />
                   <EditableCell value={entry.notes || ""} readOnly={!canEdit} onSave={(v) => onUpdateEntry(entry.id, { notes: v || null })} width="120px" />
                   <td className="px-1 py-1 border border-gray-200 text-center">
-                    {canEdit && (
-                      <button
-                        className="text-red-500 hover:text-red-700 p-0.5"
-                        onClick={() => {
-                          if (confirm("Delete this entry?")) onDeleteEntry(entry.id);
-                        }}
-                        data-testid={`button-delete-entry-${entry.id}`}
-                      >
-                        <Trash2 className="w-3 h-3" />
-                      </button>
-                    )}
+                    <div className="flex items-center gap-0.5">
+                      {canEdit && (
+                        <button
+                          className="text-red-500 hover:text-red-700 p-0.5"
+                          onClick={() => { if (confirm("Delete this entry?")) onDeleteEntry(entry.id); }}
+                          data-testid={`button-delete-entry-${entry.id}`}
+                        >
+                          <Trash2 className="w-3 h-3" />
+                        </button>
+                      )}
+                      {canDelete && (
+                        <button
+                          className="text-gray-400 hover:text-red-600 p-0.5"
+                          onClick={() => onDeleteStudent(s.id)}
+                          title="Delete student"
+                          data-testid={`button-delete-${s.id}`}
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      )}
+                    </div>
                   </td>
                 </tr>
               );
             })
           ) : (
             <tr>
-              <td colSpan={22} className="px-3 py-8 text-center text-muted-foreground text-sm">
+              <td colSpan={24} className="px-3 py-8 text-center text-muted-foreground text-sm">
                 No students found.
               </td>
             </tr>
           )}
         </tbody>
       </table>
+    </div>
+  );
+}
+
+function BulkUploadDialog({ onSuccess }: { onSuccess: () => void }) {
+  const { toast } = useToast();
+  const [file, setFile] = useState<File | null>(null);
+  const [preview, setPreview] = useState<{ valid: any[]; invalid: any[]; duplicates: any[]; totalRows: number } | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handlePreview = async () => {
+    if (!file) return;
+    setUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      const res = await fetch("/api/commission-tracker/bulk-upload/preview", {
+        method: "POST",
+        body: formData,
+        credentials: "include",
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.message || "Upload failed");
+      }
+      const data = await res.json();
+      setPreview(data);
+    } catch (err: any) {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleConfirm = async () => {
+    if (!preview?.valid.length) return;
+    setImporting(true);
+    try {
+      const res = await apiRequest("POST", "/api/commission-tracker/bulk-upload/confirm", { rows: preview.valid });
+      const result = await res.json();
+      toast({
+        title: "Import Complete",
+        description: `${result.imported} imported, ${result.failed} failed`,
+      });
+      if (result.imported > 0) onSuccess();
+    } catch (err: any) {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
+    } finally {
+      setImporting(false);
+    }
+  };
+
+  const downloadFailed = () => {
+    if (!preview) return;
+    const failed = [...preview.invalid, ...preview.duplicates];
+    if (failed.length === 0) return;
+    const headers = Object.keys(failed[0].data);
+    const rows = failed.map(f => [...headers.map(h => f.data[h] || ""), f.errors.join("; ")]);
+    const csv = [[...headers, "Error"].join(","), ...rows.map(r => r.map((v: string) => `"${(v || "").replace(/"/g, '""')}"`).join(","))].join("\n");
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "failed_rows.csv";
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  return (
+    <div className="space-y-4" data-testid="bulk-upload-dialog">
+      <div className="flex items-center gap-2">
+        <Button variant="outline" size="sm" onClick={() => window.open("/api/commission-tracker/sample-sheet", "_blank")} data-testid="button-download-template">
+          <Download className="w-3.5 h-3.5 mr-1" />
+          Download Sample Template
+        </Button>
+      </div>
+
+      {!preview ? (
+        <div className="space-y-3">
+          <div className="border-2 border-dashed rounded-lg p-6 text-center">
+            <FileSpreadsheet className="w-8 h-8 mx-auto text-muted-foreground mb-2" />
+            <p className="text-sm text-muted-foreground mb-2">Upload a CSV file with student data</p>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".csv"
+              className="hidden"
+              onChange={(e) => setFile(e.target.files?.[0] || null)}
+              data-testid="input-file"
+            />
+            <Button variant="outline" size="sm" onClick={() => fileInputRef.current?.click()} data-testid="button-choose-file">
+              Choose File
+            </Button>
+            {file && <p className="text-xs text-muted-foreground mt-2">{file.name}</p>}
+          </div>
+          <div className="flex justify-end">
+            <Button size="sm" disabled={!file || uploading} onClick={handlePreview} data-testid="button-preview">
+              {uploading ? "Validating..." : "Preview & Validate"}
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          <div className="flex items-center gap-4 text-sm">
+            <span className="font-medium">Total rows: {preview.totalRows}</span>
+            <Badge className="bg-green-100 text-green-800" data-testid="badge-valid">Valid: {preview.valid.length}</Badge>
+            <Badge className="bg-red-100 text-red-800" data-testid="badge-invalid">Invalid: {preview.invalid.length}</Badge>
+            <Badge className="bg-yellow-100 text-yellow-800" data-testid="badge-duplicates">Duplicates: {preview.duplicates.length}</Badge>
+          </div>
+
+          {preview.invalid.length > 0 && (
+            <div>
+              <h4 className="text-xs font-medium text-red-600 mb-1">Invalid Rows</h4>
+              <div className="max-h-32 overflow-y-auto border rounded text-xs">
+                {preview.invalid.map((r, i) => (
+                  <div key={i} className="flex justify-between py-1 px-2 border-b bg-red-50">
+                    <span>Row {r.row}: {r.data["Student Name"] || "?"}</span>
+                    <span className="text-red-600">{r.errors.join(", ")}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {preview.duplicates.length > 0 && (
+            <div>
+              <h4 className="text-xs font-medium text-yellow-600 mb-1">Duplicate Rows</h4>
+              <div className="max-h-32 overflow-y-auto border rounded text-xs">
+                {preview.duplicates.map((r, i) => (
+                  <div key={i} className="flex justify-between py-1 px-2 border-b bg-yellow-50">
+                    <span>Row {r.row}: {r.data["Student Name"] || "?"}</span>
+                    <span className="text-yellow-600">{r.errors.join(", ")}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {preview.valid.length > 0 && (
+            <div>
+              <h4 className="text-xs font-medium text-green-600 mb-1">Valid Rows (will be imported)</h4>
+              <div className="max-h-32 overflow-y-auto border rounded text-xs">
+                {preview.valid.map((r, i) => (
+                  <div key={i} className="py-1 px-2 border-b bg-green-50">
+                    Row {r.row}: {r.data.studentName} ({r.data.agentsicId}) — {r.data.provider}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <div className="flex items-center justify-between">
+            <div className="flex gap-2">
+              {(preview.invalid.length > 0 || preview.duplicates.length > 0) && (
+                <Button variant="outline" size="sm" onClick={downloadFailed} data-testid="button-download-failed">
+                  <Download className="w-3.5 h-3.5 mr-1" />
+                  Download Failed Rows
+                </Button>
+              )}
+              <Button variant="outline" size="sm" onClick={() => { setPreview(null); setFile(null); }} data-testid="button-reset-upload">
+                Upload Different File
+              </Button>
+            </div>
+            <Button size="sm" disabled={preview.valid.length === 0 || importing} onClick={handleConfirm} data-testid="button-confirm-import">
+              {importing ? "Importing..." : `Import ${preview.valid.length} Students`}
+            </Button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -713,6 +913,7 @@ function ManageTermsDialog({ terms, onClose }: { terms: CommissionTerm[]; onClos
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/commission-tracker/terms"] });
       queryClient.invalidateQueries({ queryKey: ["/api/commission-tracker/filters"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/commission-tracker/years"] });
       toast({ title: "Term added" });
     },
     onError: (err: Error) => toast({ title: "Error", description: err.message, variant: "destructive" }),
@@ -725,6 +926,7 @@ function ManageTermsDialog({ terms, onClose }: { terms: CommissionTerm[]; onClos
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/commission-tracker/terms"] });
       queryClient.invalidateQueries({ queryKey: ["/api/commission-tracker/filters"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/commission-tracker/years"] });
       toast({ title: "Term removed" });
     },
     onError: (err: Error) => toast({ title: "Error", description: err.message, variant: "destructive" }),
@@ -735,7 +937,7 @@ function ManageTermsDialog({ terms, onClose }: { terms: CommissionTerm[]; onClos
       <div className="space-y-2">
         {terms.map(t => (
           <div key={t.id} className="flex items-center justify-between py-1 px-2 border rounded text-sm">
-            <span>{t.termLabel}</span>
+            <span>{t.termLabel} ({t.year})</span>
             {canDeleteTerms && (
               <button
                 className="text-red-500 hover:text-red-700"
@@ -803,6 +1005,10 @@ function AddStudentForm({ onSuccess }: { onSuccess: () => void }) {
   const createMutation = useMutation({
     mutationFn: async (data: typeof form) => {
       const res = await apiRequest("POST", "/api/commission-tracker/students", data);
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.message || "Failed to add student");
+      }
       return res.json();
     },
     onSuccess: () => {
@@ -828,16 +1034,16 @@ function AddStudentForm({ onSuccess }: { onSuccess: () => void }) {
           <Input value={form.agentName} onChange={(e) => update("agentName", e.target.value)} required data-testid="input-agent-name" className="h-8 text-sm" />
         </div>
         <div>
+          <Label className="text-xs">Agentsic ID *</Label>
+          <Input value={form.agentsicId} onChange={(e) => update("agentsicId", e.target.value)} required data-testid="input-agentsic-id" className="h-8 text-sm" />
+        </div>
+        <div>
           <Label className="text-xs">Student Name *</Label>
           <Input value={form.studentName} onChange={(e) => update("studentName", e.target.value)} required data-testid="input-student-name" className="h-8 text-sm" />
         </div>
         <div>
           <Label className="text-xs">Student ID</Label>
           <Input value={form.studentId} onChange={(e) => update("studentId", e.target.value)} data-testid="input-student-id" className="h-8 text-sm" />
-        </div>
-        <div>
-          <Label className="text-xs">Agentsic ID</Label>
-          <Input value={form.agentsicId} onChange={(e) => update("agentsicId", e.target.value)} data-testid="input-agentsic-id" className="h-8 text-sm" />
         </div>
         <div>
           <Label className="text-xs">Provider *</Label>

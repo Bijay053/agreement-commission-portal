@@ -1,0 +1,453 @@
+Build and update the Agreement Portal > Commission Tracker module with the following requirements.
+
+Project context:
+This is an internal portal for Study Info Centre. The Commission Tracker currently tracks student commissions across terms/intakes. We need to improve year/intake navigation, validation rules, duplicate prevention logic, Agentsic ID enforcement, and bulk upload.
+
+====================================
+1. YEAR-BASED INTAKE STRUCTURE
+====================================
+
+Inside Commission Tracker, intakes must be grouped by year.
+
+Add a Year selector/dropdown at the top.
+
+Behavior:
+- If user selects 2025, show only:
+  - T1 2025
+  - T2 2025
+  - T3 2025
+- If user selects 2026, show only:
+  - T1 2026
+  - T2 2026
+  - T3 2026
+
+This should work dynamically for any available year in the database.
+
+Each intake tab must show only records for that intake and selected year.
+
+Examples:
+- Year = 2025, Tab = T1 → show only T1 2025 records
+- Year = 2026, Tab = T3 → show only T3 2026 records
+
+====================================
+2. REMOVE “MASTER” TAB
+====================================
+
+Do not show “MASTER” inside Commission Tracker.
+
+The current MASTER tab is actually a dashboard/summary view.
+Replace MASTER with a proper dashboard view for the selected year.
+
+Default landing view:
+- Dashboard summary for selected year
+
+Suggested dashboard cards:
+- Total Students
+- Total Commission
+- Total Received
+- Active Students
+- Pending Payments
+- Paid Payments
+
+Do not label this view as MASTER anywhere.
+
+====================================
+3. AGENTSIC ID IS MANDATORY
+====================================
+
+Make Agentsic ID compulsory everywhere relevant.
+
+This applies to:
+- Add Student form
+- Edit Student form
+- Commission Tracker records
+- Commission Table records
+- Bulk upload rows
+- Any import sheet
+- Any intake-specific table
+
+Validation:
+- No student record can be saved without Agentsic ID
+- No uploaded row can be imported without Agentsic ID
+- Show a clear validation message if missing
+
+====================================
+4. FILTERING BY AGENTSIC ID
+====================================
+
+Add Agentsic ID as a searchable/filterable field everywhere relevant.
+
+This includes:
+- Commission Tracker
+- Commission Table
+- All intake tables
+- Any student commission listing
+
+User should be able to:
+- Search by full Agentsic ID
+- Search by partial Agentsic ID
+- Combine Agentsic ID with filters such as:
+  - Year
+  - Intake
+  - Agent
+  - Provider
+  - Status
+
+Update global search placeholder to:
+“Search by name, student ID, agent, Agentsic ID...”
+
+====================================
+5. BULK UPLOAD STUDENTS BY SHEET
+====================================
+
+Add a bulk upload feature to upload student details by CSV/XLSX sheet.
+
+Add button:
+- Bulk Upload Students
+
+Required upload flow:
+1. Download sample sheet
+2. Fill in student details
+3. Upload file
+4. System validates each row
+5. Show preview before final import
+6. Show import result summary:
+   - Successful rows
+   - Failed rows
+   - Duplicate rows
+   - Validation errors
+
+Also provide downloadable sample sheet/template.
+
+====================================
+6. SAMPLE SHEET REQUIREMENTS
+====================================
+
+Provide a downloadable sample CSV/XLSX template.
+
+Suggested columns:
+- Agent Name
+- Agentsic ID (mandatory)
+- Student ID
+- Student Name
+- Provider
+- Country
+- Academic Year
+- Intake Year
+- Intake Term
+- Course Level
+- Course Name
+- Duration
+- Fee (Gross)
+- Comm % Override
+- Comm % Used
+- Commission
+- Bonus
+- GST
+- Total
+- Payment Status
+- Notes / Remarks
+
+If some fields are system-calculated, mark them clearly in the sample sheet.
+
+====================================
+7. DUPLICATE PREVENTION RULES
+====================================
+
+Do not allow duplicate student records based on the following rules.
+
+When creating or uploading a student record, block save/import if any of these duplicate conditions are true:
+
+Rule A:
+- If Student Name + Agentsic ID match an existing record
+→ do not allow add
+
+Rule B:
+- If Student Name + Provider + Student ID match an existing record
+→ do not allow add
+
+Rule C:
+- If Provider + Student ID match an existing record
+→ do not allow add
+
+These checks must work in:
+- Add Student form
+- Edit Student logic where relevant
+- Bulk upload validation
+- API/backend validation
+
+Important:
+Show proper row-level or form-level error messages describing which duplicate rule failed.
+
+Example error messages:
+- Duplicate blocked: Student Name + Agentsic ID already exists
+- Duplicate blocked: Student Name + Provider + Student ID already exists
+- Duplicate blocked: Provider + Student ID already exists
+
+====================================
+8. ALLOW MULTIPLE PROVIDERS / MULTIPLE ENROLMENTS FOR SAME STUDENT
+====================================
+
+The system must support one student enrolling with multiple providers and/or multiple courses.
+
+Business cases:
+- One student may enroll in 2 providers at the same time
+  Example:
+  - Diploma at one college
+  - Bachelor at another college
+- One student may do:
+  - EAP at one provider
+  - Bachelor/Master at another provider
+- Provider may be same or different depending on the course structure
+
+So:
+- Do NOT block all repeated student names globally
+- Do NOT block all repeated Agentsic IDs globally
+- Allow the same student to exist in multiple valid enrolment records where duplicate rules are not violated
+
+Required data model approach:
+Create student-enrolment style records rather than assuming one student can only have one provider/course.
+
+Recommended structure:
+- Student master profile
+- Enrolment records linked to student
+- Each enrolment contains:
+  - Provider
+  - Intake Year
+  - Intake Term
+  - Course Level
+  - Course Name
+  - Duration
+  - Commission details
+  - Status
+  - Notes
+
+This way one student can have:
+- Multiple providers
+- Multiple courses
+- Same provider with multiple valid course/enrolment rows if not duplicate by blocked rules
+
+====================================
+9. SAME PROVIDER, MULTIPLE COURSE DETAILS
+====================================
+
+Also allow multiple course details under the same provider for the same student where valid.
+
+Examples:
+- Same provider, different course/package
+- EAP + main course
+- Diploma + bachelor package
+- Multi-stage progression
+
+Required behavior:
+- System should support one student having multiple enrolment/course records even under same provider when those represent different valid course details
+- Duplicate check should not wrongly block valid multiple-course cases
+- To support this properly, include course-level detail in enrolment records
+
+Important implementation note:
+Duplicate blocking must follow the exact rules above, not broad assumptions.
+
+====================================
+10. RECOMMENDED DUPLICATE LOGIC DESIGN
+====================================
+
+To avoid blocking valid multi-provider or multi-course records, use enrolment-level uniqueness checks.
+
+Recommended logic:
+1. Student profile can exist once or be reused
+2. Each provider/course/intake combination becomes an enrolment row
+3. Duplicate validation runs before insert/update
+
+Suggested backend validation flow:
+- Normalize values before comparing:
+  - trim spaces
+  - lowercase for comparison
+  - remove duplicate internal spacing where relevant
+- Check duplicate rules in order:
+  1. Student Name + Agentsic ID
+  2. Student Name + Provider + Student ID
+  3. Provider + Student ID
+- Return exact rule failure
+
+Important:
+Because valid multi-provider and multi-course cases exist, design database carefully so real enrolments are stored separately from summary student profile.
+
+====================================
+11. BULK UPLOAD VALIDATIONS
+====================================
+
+Before import, validate:
+- Agentsic ID required
+- Student Name required
+- Provider required
+- Intake Year required
+- Intake Term required
+
+Also validate duplicate rules:
+- Student Name + Agentsic ID
+- Student Name + Provider + Student ID
+- Provider + Student ID
+
+Also validate against duplicates within the uploaded file itself, not only against database.
+
+Preview screen must show:
+- Valid rows
+- Invalid rows
+- Duplicate rows
+- Error reason for each failed row
+
+Allow user to download failed rows with remarks.
+
+====================================
+12. UI / UX REQUIREMENTS
+====================================
+
+Keep UI consistent with the current Agreement Portal design.
+
+Required updates:
+- Year selector clearly visible above intake tabs
+- Dashboard view shown by default
+- No MASTER tab shown
+- Intake tabs refresh instantly when year changes
+- Add Agentsic ID filter/search
+- Add Bulk Upload Students button
+- Add Download Sample Sheet button
+
+Student table should support:
+- Same student across multiple valid enrolments
+- Clear provider/course visibility
+- Better readability for duplicate-prone fields
+
+Recommended extra columns:
+- Intake Year
+- Intake Term
+- Course Level
+- Course Name
+- Enrolment Type / Package Type if needed
+
+====================================
+13. BACKEND REQUIREMENTS
+====================================
+
+Update backend and database logic to support:
+
+A. Year-based intake grouping
+- Dynamic year/intake tabs from data
+
+B. Agentsic ID mandatory validation
+- Server-side enforced
+
+C. Duplicate prevention rules
+- Enforced server-side
+- Also used in bulk upload validation
+
+D. Student + enrolment structure
+Recommended tables/entities:
+- students
+- student_enrolments / commission_enrolments
+
+Suggested student fields:
+- id
+- agentsic_id
+- student_name
+- student_id
+- agent_name
+- country
+- created_at
+- updated_at
+
+Suggested enrolment fields:
+- id
+- student_id / linked student ref
+- provider
+- intake_year
+- intake_term
+- academic_year
+- course_level
+- course_name
+- duration
+- fee_gross
+- comm_override
+- comm_used
+- commission
+- bonus
+- gst
+- total
+- payment_status
+- status
+- notes
+- created_at
+- updated_at
+
+If current architecture already stores everything in one table, refactor carefully or implement equivalent normalized logic.
+
+====================================
+14. API / VALIDATION REQUIREMENTS
+====================================
+
+Please update/create APIs for:
+- Get available years
+- Get terms/intakes by year
+- Get dashboard summary by year
+- Get enrolments by year + intake + filters
+- Add student / enrolment
+- Edit student / enrolment
+- Bulk upload preview
+- Bulk upload confirm import
+- Download sample sheet
+
+Validation must happen in backend even if frontend also validates.
+
+====================================
+15. PERMISSIONS
+====================================
+
+Respect existing role/permission logic.
+
+Only authorized users should be able to:
+- Add student
+- Edit student
+- Bulk upload students
+- Download import template if needed by permission
+
+View-only users should not be able to modify records.
+
+====================================
+16. EXPECTED BEHAVIOR SUMMARY
+====================================
+
+Expected final behavior:
+
+- Select 2025 → show only T1 2025 / T2 2025 / T3 2025
+- Select 2026 → show only T1 2026 / T2 2026 / T3 2026
+- No MASTER tab
+- Dashboard shown by default
+- Agentsic ID mandatory everywhere
+- Agentsic ID filter available everywhere relevant
+- Bulk upload works with sample sheet
+- Duplicate prevention blocks only based on these rules:
+  - Student Name + Agentsic ID
+  - Student Name + Provider + Student ID
+  - Provider + Student ID
+- Same student can still have multiple valid enrolments
+- One student can enroll with multiple providers
+- One student can have multiple course details under same provider if valid
+
+====================================
+17. DELIVERABLES
+====================================
+
+Please implement and provide:
+- Updated Commission Tracker UI
+- Year selector + dynamic intake tabs
+- Dashboard replacing MASTER
+- Agentsic ID mandatory validation
+- Agentsic ID search/filter
+- Bulk upload feature
+- Downloadable sample sheet
+- Duplicate prevention logic
+- Student multi-provider / multi-course enrolment support
+- Database migration if required
+- API changes
+- Frontend changes
+- Short technical notes explaining duplicate logic and enrolment structure

@@ -1131,6 +1131,22 @@ export async function registerRoutes(
 
   app.post("/api/commission-tracker/students", requireAuth, requirePermission("commission_tracker.create"), async (req, res) => {
     try {
+      const { studentName, agentsicId, provider, studentId } = req.body;
+      if (!studentName || !(studentName || "").trim()) {
+        return res.status(400).json({ message: "Student Name is required" });
+      }
+      if (!agentsicId || !(agentsicId || "").trim()) {
+        return res.status(400).json({ message: "Agentsic ID is required" });
+      }
+      if (!provider || !(provider || "").trim()) {
+        return res.status(400).json({ message: "Provider is required" });
+      }
+
+      const dupMsg = await storage.checkCommissionStudentDuplicates(studentName, agentsicId, provider, studentId || "");
+      if (dupMsg) {
+        return res.status(409).json({ message: dupMsg });
+      }
+
       const country = (req.body.country || "AU").trim();
       const isAU = country.toLowerCase() === "au" || country.toLowerCase() === "australia";
       const data = {
@@ -1161,6 +1177,20 @@ export async function registerRoutes(
       const id = Number(req.params.id);
       const existing = await storage.getCommissionStudent(id);
       if (!existing) return res.status(404).json({ message: "Student not found" });
+
+      if (req.body.agentsicId !== undefined && !req.body.agentsicId?.trim()) {
+        return res.status(400).json({ message: "Agentsic ID cannot be empty" });
+      }
+
+      const mergedName = (req.body.studentName || existing.studentName).trim();
+      const mergedAgentsicId = (req.body.agentsicId || existing.agentsicId || "").trim();
+      const mergedProvider = (req.body.provider || existing.provider).trim();
+      const mergedStudentId = (req.body.studentId !== undefined ? req.body.studentId : existing.studentId || "").trim();
+
+      const dupMsg = await storage.checkCommissionStudentDuplicates(mergedName, mergedAgentsicId, mergedProvider, mergedStudentId, id);
+      if (dupMsg) {
+        return res.status(409).json({ message: dupMsg });
+      }
 
       const country = (req.body.country || existing.country).trim();
       const isAU = country.toLowerCase() === "au" || country.toLowerCase() === "australia";
@@ -1449,14 +1479,250 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/commission-tracker/all-entries", requireAuth, requirePermission("commission_tracker.view"), async (_req, res) => {
+  app.get("/api/commission-tracker/all-entries", requireAuth, requirePermission("commission_tracker.view"), async (req, res) => {
     try {
+      const year = req.query.year ? Number(req.query.year) : undefined;
       const students = await storage.getCommissionStudents();
+      const terms = await storage.getCommissionTerms();
+      const yearTermNames = year ? terms.filter(t => t.year === year).map(t => t.termName) : null;
+
       const result: Record<number, any[]> = {};
       for (const s of students) {
-        result[s.id] = await storage.getCommissionEntries(s.id);
+        const entries = await storage.getCommissionEntries(s.id);
+        result[s.id] = yearTermNames ? entries.filter(e => yearTermNames.includes(e.termName)) : entries;
       }
       res.json(result);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.get("/api/commission-tracker/years", requireAuth, requirePermission("commission_tracker.view"), async (_req, res) => {
+    try {
+      const terms = await storage.getCommissionTerms();
+      const years = [...new Set(terms.map(t => t.year))].sort((a, b) => a - b);
+      res.json(years);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.get("/api/commission-tracker/dashboard/:year", requireAuth, requirePermission("commission_tracker.view"), async (req, res) => {
+    try {
+      const year = Number(req.params.year);
+      const terms = await storage.getCommissionTerms();
+      const yearTermNames = terms.filter(t => t.year === year).map(t => t.termName);
+
+      const students = await storage.getCommissionStudents();
+      let totalStudents = 0;
+      let totalCommission = 0;
+      let totalReceived = 0;
+      let activeCount = 0;
+      let pendingPayments = 0;
+      let paidPayments = 0;
+      const byStatus: Record<string, number> = {};
+      const byAgent: Record<string, { count: number; total: number }> = {};
+      const byProvider: Record<string, { count: number; total: number }> = {};
+
+      for (const s of students) {
+        const entries = await storage.getCommissionEntries(s.id);
+        const yearEntries = entries.filter(e => yearTermNames.includes(e.termName));
+        if (yearEntries.length === 0) continue;
+
+        totalStudents++;
+        for (const e of yearEntries) {
+          const amt = Number(e.totalAmount || 0);
+          totalCommission += amt;
+          if (e.paymentStatus === "Received") {
+            totalReceived += amt;
+            paidPayments++;
+          }
+          if (e.paymentStatus === "Pending") pendingPayments++;
+          const st = e.studentStatus || "Under Enquiry";
+          byStatus[st] = (byStatus[st] || 0) + 1;
+          if (st === "Active") activeCount++;
+        }
+
+        if (!byAgent[s.agentName]) byAgent[s.agentName] = { count: 0, total: 0 };
+        byAgent[s.agentName].count++;
+        byAgent[s.agentName].total += yearEntries.reduce((sum, e) => sum + Number(e.totalAmount || 0), 0);
+
+        if (!byProvider[s.provider]) byProvider[s.provider] = { count: 0, total: 0 };
+        byProvider[s.provider].count++;
+        byProvider[s.provider].total += yearEntries.reduce((sum, e) => sum + Number(e.totalAmount || 0), 0);
+      }
+
+      res.json({
+        totalStudents,
+        totalCommission: Math.round(totalCommission * 100) / 100,
+        totalReceived: Math.round(totalReceived * 100) / 100,
+        activeCount,
+        pendingPayments,
+        paidPayments,
+        byStatus,
+        byAgent: Object.entries(byAgent).map(([agent, v]) => ({ agent, ...v })),
+        byProvider: Object.entries(byProvider).map(([provider, v]) => ({ provider, ...v })),
+      });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.get("/api/commission-tracker/sample-sheet", requireAuth, requirePermission("commission_tracker.view"), async (_req, res) => {
+    try {
+      const headers = [
+        "Agent Name", "Agentsic ID (mandatory)", "Student ID", "Student Name",
+        "Provider", "Country", "Start Intake", "Course Level", "Course Name",
+        "Duration (Years)", "Commission Rate (%)", "GST Applicable (Yes/No)",
+        "Scholarship Type (None/Percent/Fixed)", "Scholarship Value"
+      ];
+      const sampleRow = [
+        "Sample Agent", "AG-001", "STU-001", "John Doe",
+        "University of Newcastle", "Australia", "T1 2025", "Bachelor", "Computer Science",
+        "3", "15", "Yes", "None", "0"
+      ];
+      const csv = [headers.join(","), sampleRow.join(",")].join("\n");
+      res.setHeader("Content-Type", "text/csv");
+      res.setHeader("Content-Disposition", "attachment; filename=commission_tracker_sample.csv");
+      res.send(csv);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  const csvUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } }).single("file");
+  app.post("/api/commission-tracker/bulk-upload/preview", requireAuth, requirePermission("commission_tracker.create"), csvUpload, async (req, res) => {
+    try {
+      if (!req.file) return res.status(400).json({ message: "No file uploaded" });
+
+      const { parse } = await import("csv-parse/sync");
+      const content = req.file.buffer.toString("utf-8");
+      const records = parse(content, { columns: true, skip_empty_lines: true, trim: true });
+
+      const valid: any[] = [];
+      const invalid: any[] = [];
+      const duplicates: any[] = [];
+
+      const seenInFile: Array<{ studentName: string; agentsicId: string; provider: string; studentId: string }> = [];
+
+      for (let i = 0; i < records.length; i++) {
+        const row = records[i];
+        const rowNum = i + 2;
+        const studentName = (row["Student Name"] || "").trim();
+        const agentsicId = (row["Agentsic ID (mandatory)"] || row["Agentsic ID"] || "").trim();
+        const provider = (row["Provider"] || "").trim();
+        const studentId = (row["Student ID"] || "").trim();
+        const agentName = (row["Agent Name"] || "").trim();
+
+        const errors: string[] = [];
+        if (!agentsicId) errors.push("Agentsic ID is required");
+        if (!studentName) errors.push("Student Name is required");
+        if (!provider) errors.push("Provider is required");
+        if (!agentName) errors.push("Agent Name is required");
+
+        if (errors.length > 0) {
+          invalid.push({ row: rowNum, data: row, errors });
+          continue;
+        }
+
+        const norm = (s: string) => s.toLowerCase().replace(/\s+/g, " ").trim();
+        const filedup = seenInFile.find(s => {
+          if (norm(s.studentName) === norm(studentName) && norm(s.agentsicId) === norm(agentsicId)) return true;
+          if (norm(s.studentName) === norm(studentName) && norm(s.provider) === norm(provider) && s.studentId && norm(s.studentId) === norm(studentId)) return true;
+          if (norm(s.provider) === norm(provider) && s.studentId && norm(s.studentId) === norm(studentId)) return true;
+          return false;
+        });
+        if (filedup) {
+          duplicates.push({ row: rowNum, data: row, errors: ["Duplicate within uploaded file"] });
+          continue;
+        }
+
+        const dbDup = await storage.checkCommissionStudentDuplicates(studentName, agentsicId, provider, studentId);
+        if (dbDup) {
+          duplicates.push({ row: rowNum, data: row, errors: [dbDup] });
+          continue;
+        }
+
+        seenInFile.push({ studentName, agentsicId, provider, studentId });
+        valid.push({
+          row: rowNum,
+          data: {
+            agentName,
+            agentsicId,
+            studentId,
+            studentName,
+            provider,
+            country: (row["Country"] || "Australia").trim(),
+            startIntake: (row["Start Intake"] || "").trim(),
+            courseLevel: (row["Course Level"] || "").trim(),
+            courseName: (row["Course Name"] || "").trim(),
+            courseDurationYears: (row["Duration (Years)"] || "").trim(),
+            commissionRatePct: (row["Commission Rate (%)"] || "").trim(),
+            gstApplicable: (row["GST Applicable (Yes/No)"] || "Yes").trim(),
+            scholarshipType: (row["Scholarship Type (None/Percent/Fixed)"] || "None").trim(),
+            scholarshipValue: (row["Scholarship Value"] || "0").trim(),
+          },
+        });
+      }
+
+      res.json({ valid, invalid, duplicates, totalRows: records.length });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.post("/api/commission-tracker/bulk-upload/confirm", requireAuth, requirePermission("commission_tracker.create"), async (req, res) => {
+    try {
+      const { rows } = req.body;
+      if (!rows || !Array.isArray(rows) || rows.length === 0) {
+        return res.status(400).json({ message: "No rows to import" });
+      }
+
+      const results = { imported: 0, failed: 0, errors: [] as string[] };
+      const importedSoFar: Array<{ studentName: string; agentsicId: string; provider: string; studentId: string }> = [];
+      const norm = (s: string) => s.toLowerCase().replace(/\s+/g, " ").trim();
+
+      for (const item of rows) {
+        try {
+          const data = item.data || item;
+          const studentName = (data.studentName || "").trim();
+          const agentsicId = (data.agentsicId || "").trim();
+          const provider = (data.provider || "").trim();
+          const agentName = (data.agentName || "").trim();
+          const studentId = (data.studentId || "").trim();
+
+          if (!agentsicId) throw new Error("Agentsic ID is required");
+          if (!studentName) throw new Error("Student Name is required");
+          if (!provider) throw new Error("Provider is required");
+          if (!agentName) throw new Error("Agent Name is required");
+
+          const batchDup = importedSoFar.find(s => {
+            if (norm(s.studentName) === norm(studentName) && norm(s.agentsicId) === norm(agentsicId)) return true;
+            if (norm(s.studentName) === norm(studentName) && norm(s.provider) === norm(provider) && s.studentId && norm(s.studentId) === norm(studentId)) return true;
+            if (norm(s.provider) === norm(provider) && s.studentId && norm(s.studentId) === norm(studentId)) return true;
+            return false;
+          });
+          if (batchDup) throw new Error("Duplicate within import batch");
+
+          const dbDup = await storage.checkCommissionStudentDuplicates(studentName, agentsicId, provider, studentId);
+          if (dbDup) throw new Error(dbDup);
+
+          const country = (data.country || "Australia").trim();
+          const isAU = country.toLowerCase() === "au" || country.toLowerCase() === "australia";
+          await storage.createCommissionStudent({
+            ...data,
+            gstRatePct: isAU ? "10" : "0",
+            gstApplicable: data.gstApplicable || (isAU ? "Yes" : "No"),
+          });
+          importedSoFar.push({ studentName, agentsicId, provider, studentId });
+          results.imported++;
+        } catch (e: any) {
+          results.failed++;
+          results.errors.push(`Row ${item.row || "?"}: ${e.message}`);
+        }
+      }
+
+      res.json(results);
     } catch (err: any) {
       res.status(500).json({ message: err.message });
     }

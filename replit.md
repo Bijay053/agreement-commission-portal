@@ -35,7 +35,7 @@ A secure internal portal for Study Info Centre — managing provider (university
 - Fine-grained RBAC with module.resource.action permission codes
 - Audit logging for all key actions including role/permission changes
 - Confidentiality level hidden (defaults to "high" for all agreements)
-- **Commission Tracker v2** — Spreadsheet-style student enrollment tracking with dynamic terms (T1_2025, T2_2025, T3_2025, extendable to 2026+). MASTER tab shows all student info in spreadsheet layout. Term tabs show per-term commission entries with inline editing. Dynamic term management via "Manage Terms" dialog. Auto-calculated commissions, scholarships, GST, bonuses, cascade logic (Withdrawn/Complete blocks downstream terms), payment tracking, and dashboard stats
+- **Commission Tracker v2** — Spreadsheet-style student enrollment tracking with dynamic terms (T1_2025, T2_2025, T3_2025, extendable to 2026+). Year-based navigation with year selector dropdown. Dashboard tab replaces MASTER tab (6 stat cards: Total Students, Total Commission, Total Received, Active Students, Pending Payments, Paid Payments + by-agent/by-provider breakdowns). Term tabs filtered by selected year. Mandatory Agentsic ID on all student records. Duplicate prevention (3 rules: Name+AgentsicID, Name+Provider+StudentID, Provider+StudentID). Bulk CSV upload with preview/validate/confirm flow and failed-row download. Dynamic term management via "Manage Terms" dialog. Auto-calculated commissions, scholarships, GST, bonuses, cascade logic (Withdrawn/Complete blocks downstream terms), payment tracking
 
 ## Data Model
 - `countries` — Reference table for territories and provider countries
@@ -109,20 +109,24 @@ A secure internal portal for Study Info Centre — managing provider (university
 
 ### Commission Tracker
 - `GET /api/commission-tracker/students` — List students with filters (search, agent, provider, country, status)
-- `POST /api/commission-tracker/students` — Create student
+- `POST /api/commission-tracker/students` — Create student (Agentsic ID mandatory, duplicate prevention)
 - `GET /api/commission-tracker/students/:id` — Student detail with entries
-- `PATCH /api/commission-tracker/students/:id` — Update student
+- `PATCH /api/commission-tracker/students/:id` — Update student (duplicate prevention + Agentsic ID enforcement)
 - `DELETE /api/commission-tracker/students/:id` — Delete student
 - `POST /api/commission-tracker/students/:id/entries` — Add term entry
 - `PATCH /api/commission-tracker/entries/:id` — Update term entry
 - `DELETE /api/commission-tracker/entries/:id` — Delete term entry
 - `POST /api/commission-tracker/students/:id/recalculate` — Recalculate all auto fields
-- `GET /api/commission-tracker/dashboard` — Summary stats
+- `GET /api/commission-tracker/dashboard/:year` — Year-specific dashboard stats
+- `GET /api/commission-tracker/years` — Distinct years from commission_terms
 - `GET /api/commission-tracker/filters` — Distinct filter values
 - `GET /api/commission-tracker/terms` — List dynamic terms
 - `POST /api/commission-tracker/terms` — Add new term
 - `DELETE /api/commission-tracker/terms/:id` — Delete term (blocked if entries exist)
-- `GET /api/commission-tracker/all-entries` — All entries grouped by student ID
+- `GET /api/commission-tracker/all-entries` — All entries grouped by student ID (optional `?year=` filter)
+- `GET /api/commission-tracker/sample-sheet` — Download CSV template
+- `POST /api/commission-tracker/bulk-upload/preview` — Upload CSV, validate, return valid/invalid/duplicate rows
+- `POST /api/commission-tracker/bulk-upload/confirm` — Import validated rows (server-side re-validation)
 
 ## Project Structure
 ```
@@ -145,7 +149,7 @@ client/src/
     agreement-detail.tsx   # 6-tab detail view
     agreement-form.tsx     # Create/edit with inline provider add, multi-territory
     providers-list.tsx     # Provider management
-    commission-tracker.tsx        # Spreadsheet-style commission tracker with MASTER + dynamic term tabs, inline editing, term management
+    commission-tracker.tsx        # Commission Tracker v2: year selector, dashboard, term tabs, inline editing, bulk upload, term management
     commission-tracker-detail.tsx # Legacy student detail view (kept for backward compatibility)
     roles-management.tsx   # Role CRUD + permission grid editor
     users-management.tsx   # User management with multi-role assignment

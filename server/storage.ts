@@ -1031,6 +1031,34 @@ export class DatabaseStorage implements IStorage {
     await db.delete(commissionTerms).where(eq(commissionTerms.id, id));
   }
 
+  async checkCommissionStudentDuplicates(studentName: string, agentsicId: string, provider: string, studentId: string, excludeId?: number): Promise<string | null> {
+    const norm = (s: string) => (s || "").trim().toLowerCase().replace(/\s+/g, " ");
+    const nameN = norm(studentName);
+    const agentsicN = norm(agentsicId);
+    const providerN = norm(provider);
+    const studentIdN = norm(studentId);
+
+    const allStudents = await this.getCommissionStudents();
+    for (const s of allStudents) {
+      if (excludeId && s.id === excludeId) continue;
+      const sName = norm(s.studentName);
+      const sAgentsic = norm(s.agentsicId || "");
+      const sProvider = norm(s.provider);
+      const sStudentId = norm(s.studentId || "");
+
+      if (nameN && agentsicN && sName === nameN && sAgentsic === agentsicN) {
+        return `Duplicate blocked: Student Name + Agentsic ID already exists (${s.studentName}, ${s.agentsicId})`;
+      }
+      if (nameN && providerN && studentIdN && sName === nameN && sProvider === providerN && sStudentId === studentIdN) {
+        return `Duplicate blocked: Student Name + Provider + Student ID already exists (${s.studentName}, ${s.provider}, ${s.studentId})`;
+      }
+      if (providerN && studentIdN && sProvider === providerN && sStudentId === studentIdN) {
+        return `Duplicate blocked: Provider + Student ID already exists (${s.provider}, ${s.studentId})`;
+      }
+    }
+    return null;
+  }
+
   async getCommissionStudent(id: number): Promise<CommissionStudent | undefined> {
     const [student] = await db.select().from(commissionStudents).where(eq(commissionStudents.id, id));
     return student;
