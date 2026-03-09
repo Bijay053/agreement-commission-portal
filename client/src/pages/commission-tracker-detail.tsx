@@ -12,6 +12,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { ConfirmModal } from "@/components/ui/confirm-modal";
 import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ArrowLeft, Edit2, Save, X, Plus, Trash2, AlertTriangle, RefreshCw } from "lucide-react";
@@ -352,6 +353,7 @@ function TermEntryCard({ entry, student, studentId, canEdit, canDelete }: {
   const { toast } = useToast();
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState<Record<string, any>>({});
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   const invalidateAll = () => {
     queryClient.invalidateQueries({ queryKey: ["/api/commission-tracker/students", studentId] });
@@ -419,9 +421,7 @@ function TermEntryCard({ entry, student, studentId, canEdit, canDelete }: {
               variant="outline"
               size="sm"
               className="text-destructive"
-              onClick={() => {
-                if (confirm("Delete this term entry?")) deleteMutation.mutate();
-              }}
+              onClick={() => setShowDeleteConfirm(true)}
               data-testid="button-delete-entry"
             >
               <Trash2 className="w-3.5 h-3.5 mr-1" /> Delete
@@ -582,6 +582,17 @@ function TermEntryCard({ entry, student, studentId, canEdit, canDelete }: {
           </div>
         )}
       </CardContent>
+
+      <ConfirmModal
+        open={showDeleteConfirm}
+        onOpenChange={setShowDeleteConfirm}
+        variant="danger"
+        title="Delete Term Entry?"
+        description="This will permanently remove this term entry and all its associated commission data. This action cannot be undone."
+        confirmText="Delete Entry"
+        onConfirm={() => deleteMutation.mutate()}
+        data-testid="modal-delete-entry"
+      />
     </Card>
   );
 }
