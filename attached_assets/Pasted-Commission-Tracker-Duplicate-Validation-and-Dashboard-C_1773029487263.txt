@@ -1,0 +1,266 @@
+Commission Tracker Duplicate Validation and Dashboard Count Fix Requirement
+1. Same Student Showing Multiple Times in Dashboard
+
+Currently, the same student is appearing multiple times in the dashboard student list even though it looks like the same record.
+
+In the screenshot:
+
+same Agentsic ID is repeated
+
+same Student ID is repeated
+
+same Student Name is repeated
+
+This means duplicate validation is not working correctly, or dashboard is not grouping records properly.
+
+2. Required Duplicate Validation Rule
+
+System must validate and prevent duplicate student creation before saving a new record.
+
+Must check these combinations:
+Rule 1
+
+Do not allow save if:
+
+Student Name + Agentsic ID already exists
+
+Rule 2
+
+Do not allow save if:
+
+Student Name + Provider + Student ID already exists
+
+Rule 3
+
+Do not allow save if:
+
+Provider + Student ID already exists
+
+Additional validation
+
+If both below are same, it should also be treated as same student unless business logic says otherwise:
+
+Agentsic ID
+
+Student ID
+
+If duplicate is found, system must block creation and show error message.
+
+3. Error Message Requirement
+
+When duplicate found, show clear validation error.
+
+Example messages:
+
+This student already exists with the same Agentsic ID.
+
+Duplicate student found with same Student ID and Provider.
+
+This student record already exists. Please edit the existing record instead of creating a new one.
+
+Do not allow record to be saved until duplicate issue is resolved.
+
+4. Dashboard Should Not Show Duplicate Student Rows
+
+Dashboard student table should not show multiple rows for the same master student record unless they are intentionally different valid records.
+
+Required logic
+
+Dashboard must use a unique master key, preferably:
+
+Internal ID as primary key
+
+If one student has one master record, dashboard should show that student once only.
+
+Important
+
+If same student has multiple term records:
+
+dashboard should still show one consolidated student row
+
+not one row per term
+
+notes/status can summarize term data inside that single row
+
+5. Total Students Count Is Wrong
+
+In the screenshot, duplicate rows are visible, but Total Students shows 1.
+
+That means dashboard summary and table are using different counting logic.
+
+Required fix
+
+The following must be calculated using the same unique-student logic:
+
+Total Students
+
+Active Students
+
+Pending Payments
+
+Paid Payments
+
+By Status
+
+By Agent
+
+By Provider
+
+All Students table
+
+Rule
+
+All dashboard counts must be based on unique student master records, not raw term rows.
+
+6. Correct Counting Logic
+
+Use only one unique student record for summary.
+
+Example
+
+If same student appears in:
+
+T1
+
+T2
+
+T3
+
+Dashboard summary should count:
+
+Total Students = 1
+
+not 3
+
+Dashboard table should show:
+
+1 row
+
+not 3 rows
+
+7. If Multiple Valid Records Are Allowed
+
+System should still allow multiple records only when truly valid, such as:
+
+same student with different provider
+
+same student with different course path where business rule allows it
+
+But even then, duplicate validation must still apply according to your rules.
+
+8. Required Backend Logic Fix
+
+Developer should check these possible issues:
+
+A. Save validation missing
+
+duplicate validation not running before insert
+
+B. Dashboard query issue
+
+dashboard may be reading raw term rows instead of unique master rows
+
+C. Aggregation issue
+
+summary cards may count distinct students
+
+table may show non-distinct rows
+
+D. Key mismatch issue
+
+system may not be using Internal ID properly as unique key
+
+9. Required Fix in Dashboard Data Source
+
+Dashboard should be built from:
+
+MASTER / unique student record source
+
+Not directly from:
+
+raw T1/T2/T3 rows combined without deduplication
+
+Dashboard should display
+
+one row per unique student master record with:
+
+Agent
+
+Agentsic ID
+
+Student ID
+
+Student Name
+
+Provider
+
+Country
+
+Intake
+
+Status
+
+Commission %
+
+GST
+
+Scholarship
+
+Total Comm.
+
+Notes
+
+10. Acceptance Criteria
+Duplicate prevention
+
+user cannot create same student twice with same validation rule match
+
+duplicate save is blocked
+
+error message is shown
+
+Dashboard
+
+same student should not appear multiple times unnecessarily
+
+dashboard table and total student count must match
+
+summary cards and student list must use same unique-student logic
+
+one master student = one dashboard row
+
+11. Very Short Developer Task
+
+Fix duplicate validation before saving student commission record
+
+Prevent duplicate based on:
+
+Student Name + Agentsic ID
+
+Student Name + Provider + Student ID
+
+Provider + Student ID
+
+Use Internal ID as main unique key
+
+Build dashboard from unique master student records only
+
+Ensure Total Students card and All Students table use same counting logic
+
+Remove repeated rows for same student in dashboard unless they are truly valid separate records
+
+12. Likely Current Issue
+
+From your screenshot, it looks like:
+
+dashboard summary is counting distinct students
+
+but table is showing duplicate rows from raw data
+
+so the counting and display source are not aligned
+
+That is why:
+
+Total Students = 1
+
+but table still shows repeated student rows

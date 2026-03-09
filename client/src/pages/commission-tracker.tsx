@@ -9,12 +9,13 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   Plus, Search, Trash2, Users, DollarSign, TrendingUp, AlertCircle,
-  Settings, X, Upload, Download, Clock, CheckCircle2, FileSpreadsheet
+  Settings, X, Upload, Download, Clock, CheckCircle2, FileSpreadsheet, AlertTriangle
 } from "lucide-react";
 import type { CommissionStudent, CommissionEntry } from "@shared/schema";
 
@@ -407,10 +408,9 @@ export default function CommissionTrackerPage() {
               isLoading={isLoading}
               canEdit={canEdit}
               canDeleteMaster={canDeleteMaster}
+              isDeleting={deleteStudentMutation.isPending}
               onUpdateStudent={(id, data) => updateStudentMutation.mutate({ id, data })}
-              onDeleteStudent={(id) => {
-                if (confirm("Delete this student and all their term entries?")) deleteStudentMutation.mutate(id);
-              }}
+              onDeleteStudent={(id) => deleteStudentMutation.mutate(id)}
             />
           ) : (
             <TermTable
@@ -442,7 +442,7 @@ export default function CommissionTrackerPage() {
   );
 }
 
-function YearDashboard({ dashboard, year, students, allEntries, isLoading, canEdit, canDeleteMaster, onUpdateStudent, onDeleteStudent }: {
+function YearDashboard({ dashboard, year, students, allEntries, isLoading, canEdit, canDeleteMaster, isDeleting, onUpdateStudent, onDeleteStudent }: {
   dashboard: any;
   year: number | null;
   students: CommissionStudent[];
@@ -450,9 +450,11 @@ function YearDashboard({ dashboard, year, students, allEntries, isLoading, canEd
   isLoading: boolean;
   canEdit: boolean;
   canDeleteMaster: boolean;
+  isDeleting: boolean;
   onUpdateStudent: (id: number, data: Record<string, any>) => void;
   onDeleteStudent: (id: number) => void;
 }) {
+  const [deleteTarget, setDeleteTarget] = useState<CommissionStudent | null>(null);
   if (!dashboard || !year) {
     return (
       <div className="p-6 space-y-4">
@@ -596,12 +598,27 @@ function YearDashboard({ dashboard, year, students, allEntries, isLoading, canEd
                       <EditableCell value={s.gstApplicable || "Yes"} readOnly={!canEdit} onSave={(v) => onUpdateStudent(s.id, { gstApplicable: v })} type="select" options={["Yes", "No"]} width="50px" />
                       <EditableCell value={s.scholarshipType || "None"} readOnly={!canEdit} onSave={(v) => onUpdateStudent(s.id, { scholarshipType: v })} type="select" options={["None", "Percent", "Fixed"]} width="80px" />
                       <td className="px-2 py-1 border border-gray-200 text-right font-mono">${getTotalForStudent(s.id).toFixed(2)}</td>
-                      <td className="px-2 py-1 border border-gray-200 max-w-[150px] truncate" title={s.notes || ""}>{s.notes || "-"}</td>
+                      <td className="px-2 py-1 border border-gray-200 max-w-[200px]">
+                        {s.notes ? (
+                          <TooltipProvider delayDuration={200}>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <span className="block truncate cursor-help" data-testid={`text-notes-${s.id}`}>{s.notes}</span>
+                              </TooltipTrigger>
+                              <TooltipContent side="top" className="max-w-[400px] whitespace-pre-wrap text-xs p-3">
+                                {s.notes.split(" | ").map((part, i) => (
+                                  <div key={i}>{part}</div>
+                                ))}
+                              </TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
+                        ) : "-"}
+                      </td>
                       {canDeleteMaster && (
                         <td className="px-1 py-1 border border-gray-200 text-center">
                           <button
                             className="text-red-500 hover:text-red-700 p-0.5"
-                            onClick={() => onDeleteStudent(s.id)}
+                            onClick={() => setDeleteTarget(s)}
                             data-testid={`button-delete-master-${s.id}`}
                           >
                             <Trash2 className="w-3 h-3" />
@@ -622,6 +639,51 @@ function YearDashboard({ dashboard, year, students, allEntries, isLoading, canEd
           </table>
         </div>
       </div>
+
+      <Dialog open={!!deleteTarget} onOpenChange={(open) => { if (!open && !isDeleting) setDeleteTarget(null); }}>
+        <DialogContent className="sm:max-w-[440px]" data-testid="dialog-delete-student">
+          <DialogHeader>
+            <div className="flex items-center gap-2">
+              <div className="flex items-center justify-center w-10 h-10 rounded-full bg-red-100 dark:bg-red-900/30">
+                <AlertTriangle className="w-5 h-5 text-red-600 dark:text-red-400" />
+              </div>
+              <DialogTitle className="text-lg">Delete Student Record?</DialogTitle>
+            </div>
+            <DialogDescription className="sr-only">Confirm deletion of student record</DialogDescription>
+          </DialogHeader>
+          {deleteTarget && (
+            <div className="space-y-4 pt-1">
+              <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-3 space-y-1.5 text-sm">
+                <div className="flex gap-2"><span className="text-muted-foreground min-w-[80px]">Student:</span><span className="font-medium">{deleteTarget.studentName}</span></div>
+                <div className="flex gap-2"><span className="text-muted-foreground min-w-[80px]">Student ID:</span><span className="font-mono">{deleteTarget.studentId || "-"}</span></div>
+                <div className="flex gap-2"><span className="text-muted-foreground min-w-[80px]">Agentsic ID:</span><span className="font-mono">{deleteTarget.agentsicId || "-"}</span></div>
+                <div className="flex gap-2"><span className="text-muted-foreground min-w-[80px]">Provider:</span><span>{deleteTarget.provider}</span></div>
+              </div>
+              <p className="text-sm text-muted-foreground leading-relaxed">
+                Are you sure you want to delete this student record? This will permanently remove the main student record and all linked term entries. This action cannot be undone.
+              </p>
+            </div>
+          )}
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="outline" onClick={() => setDeleteTarget(null)} disabled={isDeleting} data-testid="button-cancel-delete">
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              disabled={isDeleting}
+              data-testid="button-confirm-delete"
+              onClick={() => {
+                if (deleteTarget) {
+                  onDeleteStudent(deleteTarget.id);
+                  setDeleteTarget(null);
+                }
+              }}
+            >
+              {isDeleting ? "Deleting..." : "Delete"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -695,14 +757,13 @@ function TermTable({ termName, students, allEntries, terms, isLoading, canEdit, 
             <th className="px-2 py-1.5 text-left font-medium border border-[#2060a0] min-w-[80px]">Payment Ref</th>
             <th className="px-2 py-1.5 text-left font-medium border border-[#2060a0] min-w-[80px]">Student Status</th>
             <th className="px-2 py-1.5 text-left font-medium border border-[#2060a0] min-w-[120px]">Notes</th>
-            <th className="px-2 py-1.5 text-center font-medium border border-[#2060a0] w-10"></th>
           </tr>
         </thead>
         <tbody>
           {isLoading ? (
             Array.from({ length: 5 }).map((_, i) => (
               <tr key={i}>
-                {Array.from({ length: 34 }).map((_, j) => (
+                {Array.from({ length: 33 }).map((_, j) => (
                   <td key={j} className="px-2 py-1 border border-gray-200"><Skeleton className="h-3 w-full" /></td>
                 ))}
               </tr>
@@ -722,7 +783,7 @@ function TermTable({ termName, students, allEntries, terms, isLoading, canEdit, 
                     <td className="px-2 py-1 border border-gray-200 text-gray-400">{s.studentName}</td>
                     <td className="px-2 py-1 border border-gray-200 text-gray-400">{s.provider}</td>
                     <td className="px-2 py-1 border border-gray-200 text-gray-400">{s.country}</td>
-                    <td colSpan={27} className="px-2 py-1 border border-gray-200 text-center text-gray-400 italic">
+                    <td colSpan={26} className="px-2 py-1 border border-gray-200 text-center text-gray-400 italic">
                       Blocked (previous term Withdrawn/Complete)
                     </td>
                   </tr>
@@ -743,7 +804,7 @@ function TermTable({ termName, students, allEntries, terms, isLoading, canEdit, 
                       {canEdit ? (
                         <button
                           className="text-blue-600 hover:text-blue-800 text-xs font-medium underline"
-                          onClick={() => onCreateEntry(s.id, { termName, academicYear: "Year 1", feeGross: "0", bonus: "0", studentStatus: "Under Enquiry", paymentStatus: "Pending" })}
+                          onClick={() => onCreateEntry(s.id, { termName, academicYear: "Year 1", feeGross: "0", bonus: "0", studentStatus: s.status || "Under Enquiry", paymentStatus: "Pending" })}
                           data-testid={`button-add-entry-${s.id}`}
                         >
                           + Add Entry for {termName.replace("_", " ")}
@@ -752,7 +813,6 @@ function TermTable({ termName, students, allEntries, terms, isLoading, canEdit, 
                         <span className="text-gray-400 text-xs">No entry</span>
                       )}
                     </td>
-                    <td className="px-1 py-1 border border-gray-200"></td>
                   </tr>
                 );
               }
@@ -794,23 +854,12 @@ function TermTable({ termName, students, allEntries, terms, isLoading, canEdit, 
                   <EditableCell value={entry.paymentRef || ""} readOnly={!canEdit} onSave={(v) => onUpdateEntry(entry.id, { paymentRef: v || null })} width="80px" />
                   <EditableCell value={entry.studentStatus || "Under Enquiry"} readOnly={!canEdit} onSave={(v) => onUpdateEntry(entry.id, { studentStatus: v })} type="select" options={STUDENT_STATUSES} width="80px" />
                   <EditableCell value={entry.notes || ""} readOnly={!canEdit} onSave={(v) => onUpdateEntry(entry.id, { notes: v || null })} width="120px" />
-                  <td className="px-1 py-1 border border-gray-200 text-center">
-                    {canEdit && (
-                      <button
-                        className="text-red-500 hover:text-red-700 p-0.5"
-                        onClick={() => { if (confirm("Delete this entry?")) onDeleteEntry(entry.id); }}
-                        data-testid={`button-delete-entry-${entry.id}`}
-                      >
-                        <Trash2 className="w-3 h-3" />
-                      </button>
-                    )}
-                  </td>
                 </tr>
               );
             })
           ) : (
             <tr>
-              <td colSpan={34} className="px-3 py-8 text-center text-muted-foreground text-sm">
+              <td colSpan={33} className="px-3 py-8 text-center text-muted-foreground text-sm">
                 No students found.
               </td>
             </tr>

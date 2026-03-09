@@ -1,0 +1,256 @@
+Delete Popup Improvement Requirement
+Current Issue
+
+The current delete popup is using the browser default alert/confirm style.
+
+Problems:
+
+looks unprofessional
+
+shows embedded page/replit domain text
+
+poor UI/UX
+
+not consistent with CRM design
+
+message is too basic
+
+does not clearly explain what will be deleted
+
+Required Change
+
+Replace the browser default confirm popup with a custom CRM modal popup.
+
+Do not use:
+
+browser alert()
+
+browser confirm()
+
+browser default popup dialog
+
+Use:
+
+custom modal component matching CRM design system
+
+Delete Popup Requirements
+1. Popup Design
+
+The delete confirmation must open in a styled modal.
+
+UI requirements
+
+centered modal
+
+clean modern design
+
+CRM theme colors
+
+proper spacing and padding
+
+rounded corners
+
+soft shadow
+
+dim background overlay
+
+responsive on desktop and mobile
+
+Icon
+
+Show a warning / delete icon at the top or beside the title.
+
+Suggested:
+
+trash icon
+
+warning triangle
+
+red accent color for destructive action
+
+2. Popup Title
+
+Use a clearer title.
+
+Example:
+Delete Student Record?
+
+Alternative:
+Confirm Deletion
+
+3. Popup Message
+
+Make the delete warning clearer and more professional.
+
+Suggested message:
+
+Are you sure you want to delete this student record? This will also remove all linked term entries for T1, T2, and T3. This action cannot be undone.
+
+If you want shorter version:
+
+Deleting this student will permanently remove the main record and all linked term entries. This action cannot be undone.
+
+4. Buttons
+
+Use two clear buttons:
+
+Primary destructive button
+
+label: Delete
+
+red or destructive style
+
+Secondary button
+
+label: Cancel
+
+neutral style
+
+Do not use:
+
+OK
+
+Because:
+
+“OK” is unclear for destructive action
+
+5. Button Behavior
+Delete button
+
+deletes the student from dashboard
+
+deletes all linked term entries using Internal ID / master-linked record
+
+closes modal after success
+
+refreshes dashboard/table after delete
+
+shows success toast/message after deletion
+
+Cancel button
+
+closes modal only
+
+no data changes
+
+6. Optional Better UX
+
+Recommended extra improvements:
+
+A. Student detail preview
+
+Show short student info inside popup, such as:
+
+Student Name
+
+Student ID
+
+Agentsic ID
+
+Provider
+
+Example:
+Student: John Smith E2E
+Student ID: STU-E2E-001
+Provider: University of Newcastle
+
+This helps prevent accidental deletion of wrong record.
+
+B. Delete scope note
+
+Show what will be removed:
+
+master record
+
+T1 record
+
+T2 record
+
+T3 record
+
+linked commission data
+
+C. Loading state
+
+When delete is processing:
+
+disable buttons
+
+show spinner
+
+change Delete button text to:
+
+Deleting...
+
+D. Success message
+
+After delete:
+
+show toast such as:
+
+Student record deleted successfully
+
+E. Error message
+
+If delete fails:
+
+show proper error toast/message
+
+example:
+
+Unable to delete student record. Please try again.
+
+7. Permission Rule
+
+Delete popup should appear only in Dashboard, since delete is allowed only there.
+
+It should not appear in:
+
+T1
+
+T2
+
+T3
+
+8. Acceptance Criteria
+
+browser default confirm popup is removed
+
+custom styled modal is used
+
+modal matches CRM design
+
+title clearly says delete action
+
+message clearly explains all linked term records will be deleted
+
+destructive button says Delete
+
+secondary button says Cancel
+
+modal only used from dashboard delete action
+
+delete refreshes data after success
+
+success/error feedback is shown
+
+9. Very Short Developer Task
+
+Replace browser confirm popup with a custom delete confirmation modal in dashboard. The modal must clearly state that deleting the student will also delete all linked term records, use Delete and Cancel buttons, match CRM design, and provide loading, success, and error states.
+
+Recommended popup content
+Title
+
+Delete Student Record?
+
+Message
+
+Are you sure you want to delete this student record? This will permanently remove the main student record and all linked term entries. This action cannot be undone.
+
+Buttons
+
+Cancel
+
+Delete
+
+I can also combine this with your previous duplicate validation, dashboard notes, and delete-button restriction into one final full developer prompt.

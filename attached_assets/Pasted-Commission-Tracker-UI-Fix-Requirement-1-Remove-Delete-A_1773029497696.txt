@@ -1,0 +1,146 @@
+Commission Tracker UI Fix Requirement
+1. Remove Delete Action from T1 / T2 / T3 Tabs
+
+Delete option must not be available inside individual term tabs.
+
+Required change
+
+Remove delete icon/button/action from:
+
+T1 tab
+
+T2 tab
+
+T3 tab
+
+Users must not be able to delete records directly from term tabs
+
+Term tabs should be used only for:
+
+viewing
+
+editing allowed fields
+
+updating payment/status/notes
+
+Deletion must be controlled only from the Dashboard / main student list
+
+Rule
+
+If a user wants to delete a student commission record, they must do it only from the Dashboard
+
+Delete action in dashboard should delete the full linked student record properly, based on system logic
+
+Reason
+
+T1/T2/T3 are term-level records and should not allow partial/manual deletion from term views
+
+This prevents accidental deletion of only one term row and protects data consistency
+
+2. Allow Delete Only in Dashboard
+
+Dashboard should remain the only place where delete is allowed.
+
+Required behavior
+
+Keep delete button only in dashboard student table
+
+Delete from dashboard should follow the correct record relationship
+
+System should delete using Internal ID / master-linked record
+
+If needed, show confirmation popup before deleting
+
+Confirmation message
+
+Example:
+Are you sure you want to delete this student commission record? This action cannot be undone.
+
+3. Dashboard Notes Column Text Not Fully Visible
+
+Currently, dashboard notes text is being cut off and not fully shown.
+
+Required fix
+
+Dashboard notes column must display full notes properly.
+
+Options to implement
+
+Any one of these is acceptable, but full text must be accessible:
+
+Option A – Wrap text in Notes column
+
+Enable text wrapping in dashboard Notes column
+
+Row height should auto-expand based on note length
+
+Option B – Show full text on hover
+
+Keep table compact
+
+On hover, show full notes in tooltip/popover
+
+Option C – Expandable notes cell
+
+Show shortened text with ellipsis
+
+Add click-to-expand or “view more” option to see full notes
+
+Recommended
+
+Best option:
+
+show truncated text in table with ellipsis
+
+on hover or click, show full note text
+
+keep full note available without breaking table layout too much
+
+4. Notes Display Rule
+
+Dashboard notes should show the complete note string generated from terms.
+
+Example:
+
+T1 2025: Active
+
+T1 2025: Active | T2 2025: Pending
+
+T1 2025: Complete
+
+T1 2025: Active | T2 2025: Withdrawn
+
+The user must be able to read the full content.
+
+5. Acceptance Criteria
+Delete feature
+
+No delete icon in T1 tab
+
+No delete icon in T2 tab
+
+No delete icon in T3 tab
+
+Delete icon exists only in Dashboard
+
+User cannot delete from term-level tables
+
+Notes display
+
+Dashboard notes text is fully readable
+
+No unwanted cut-off without access to full value
+
+Long notes should either wrap, expand, or show in tooltip/modal
+
+6. Very Short Developer Task
+
+Remove delete action column/button from T1/T2/T3 tables
+
+Keep delete action only in dashboard table
+
+Fix dashboard notes column so full note text can be viewed
+
+Add tooltip / wrap / expandable behavior for long notes
+
+Ensure delete works only from dashboard using master/internal ID logic
