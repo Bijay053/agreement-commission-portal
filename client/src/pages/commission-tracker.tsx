@@ -170,6 +170,16 @@ export default function CommissionTrackerPage() {
     },
   });
 
+  const { data: allStudentProviders = [] } = useQuery<any[]>({
+    queryKey: ["/api/commission-tracker/all-student-providers"],
+  });
+
+  const providersByStudent = allStudentProviders.reduce((acc: Record<number, any[]>, p: any) => {
+    if (!acc[p.commissionStudentId]) acc[p.commissionStudentId] = [];
+    acc[p.commissionStudentId].push(p);
+    return acc;
+  }, {} as Record<number, any[]>);
+
   const { data: allEntries = {} } = useQuery<Record<number, CommissionEntry[]>>({
     queryKey: ["/api/commission-tracker/all-entries", selectedYear],
     queryFn: async () => {
@@ -231,6 +241,17 @@ export default function CommissionTrackerPage() {
       await apiRequest("DELETE", `/api/commission-tracker/students/${id}`);
     },
     onSuccess: () => { invalidateAll(); toast({ title: "Student deleted" }); },
+  });
+
+  const removeProviderMutation = useMutation({
+    mutationFn: async ({ studentId, providerId }: { studentId: number; providerId: number }) => {
+      await apiRequest("DELETE", `/api/commission-tracker/students/${studentId}/providers/${providerId}`);
+    },
+    onSuccess: () => {
+      invalidateAll();
+      queryClient.invalidateQueries({ queryKey: ["/api/commission-tracker/all-student-providers"] });
+      toast({ title: "Provider removed" });
+    },
   });
 
   const createEntryMutation = useMutation({
@@ -399,6 +420,8 @@ export default function CommissionTrackerPage() {
               canEdit={canEdit}
               canDeleteMaster={canDeleteMaster}
               isDeleting={deleteStudentMutation.isPending}
+              providersByStudent={providersByStudent}
+              onRemoveProvider={(studentId, providerId) => removeProviderMutation.mutate({ studentId, providerId })}
               onUpdateStudent={(id, data) => updateStudentMutation.mutate({ id, data })}
               onDeleteStudent={(id) => deleteStudentMutation.mutate(id)}
             />
@@ -411,6 +434,7 @@ export default function CommissionTrackerPage() {
               isLoading={isLoading}
               canEdit={canEdit}
               canDelete={false}
+              providersByStudent={providersByStudent}
               onUpdateStudent={(id, data) => updateStudentMutation.mutate({ id, data })}
               onDeleteStudent={() => {}}
               onCreateEntry={(studentId, data) => createEntryMutation.mutate({ studentId, data })}
@@ -432,7 +456,66 @@ export default function CommissionTrackerPage() {
   );
 }
 
-function YearDashboard({ dashboard, year, students, allEntries, isLoading, canEdit, canDeleteMaster, isDeleting, onUpdateStudent, onDeleteStudent }: {
+function AddProviderButton({ studentId, studentName }: { studentId: number; studentName: string }) {
+  const { toast } = useToast();
+  const [open, setOpen] = useState(false);
+  const [provider, setProvider] = useState("");
+  const [studentIdVal, setStudentIdVal] = useState("");
+
+  const addMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", `/api/commission-tracker/students/${studentId}/providers`, { provider, studentId: studentIdVal });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.message || "Failed");
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      toast({ title: "Provider added" });
+      queryClient.invalidateQueries({ queryKey: ["/api/commission-tracker/all-student-providers"] });
+      setOpen(false);
+      setProvider("");
+      setStudentIdVal("");
+    },
+    onError: (err: Error) => {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
+    },
+  });
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <button className="text-blue-500 hover:text-blue-700 shrink-0" title="Add another provider" data-testid={`button-add-provider-${studentId}`}>
+          <Plus className="h-3 w-3" />
+        </button>
+      </DialogTrigger>
+      <DialogContent className="max-w-sm">
+        <DialogHeader>
+          <DialogTitle className="text-sm">Add Provider for {studentName}</DialogTitle>
+          <DialogDescription className="text-xs">Add another provider and student ID for this student.</DialogDescription>
+        </DialogHeader>
+        <div className="space-y-3">
+          <div>
+            <Label className="text-xs">Provider *</Label>
+            <Input value={provider} onChange={(e) => setProvider(e.target.value)} required className="h-8 text-sm" data-testid="input-new-provider" />
+          </div>
+          <div>
+            <Label className="text-xs">Student ID</Label>
+            <Input value={studentIdVal} onChange={(e) => setStudentIdVal(e.target.value)} className="h-8 text-sm" data-testid="input-new-provider-student-id" />
+          </div>
+        </div>
+        <DialogFooter>
+          <Button size="sm" onClick={() => addMutation.mutate()} disabled={!provider.trim() || addMutation.isPending} data-testid="button-submit-new-provider">
+            {addMutation.isPending ? "Adding..." : "Add Provider"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function YearDashboard({ dashboard, year, students, allEntries, isLoading, canEdit, canDeleteMaster, isDeleting, providersByStudent, onRemoveProvider, onUpdateStudent, onDeleteStudent }: {
   dashboard: any;
   year: number | null;
   students: CommissionStudent[];
@@ -441,6 +524,8 @@ function YearDashboard({ dashboard, year, students, allEntries, isLoading, canEd
   canEdit: boolean;
   canDeleteMaster: boolean;
   isDeleting: boolean;
+  providersByStudent: Record<number, any[]>;
+  onRemoveProvider: (studentId: number, providerId: number) => void;
   onUpdateStudent: (id: number, data: Record<string, any>) => void;
   onDeleteStudent: (id: number) => void;
 }) {
@@ -576,7 +661,24 @@ function YearDashboard({ dashboard, year, students, allEntries, isLoading, canEd
                       <td className="px-2 py-1 border border-gray-200 font-mono">{s.agentsicId || "-"}</td>
                       <td className="px-2 py-1 border border-gray-200 font-mono">{s.studentId || "-"}</td>
                       <td className="px-2 py-1 border border-gray-200">{s.studentName}</td>
-                      <td className="px-2 py-1 border border-gray-200">{s.provider}</td>
+                      <td className="px-2 py-1 border border-gray-200">
+                        <div className="flex items-center gap-1">
+                          <span>{s.provider}</span>
+                          {canEdit && (
+                            <AddProviderButton studentId={s.id} studentName={s.studentName} />
+                          )}
+                        </div>
+                        {providersByStudent[s.id]?.map((ap: any) => (
+                          <div key={ap.id} className="text-[10px] text-blue-600 mt-0.5 flex items-center gap-1">
+                            <span>{ap.provider}{ap.studentId ? ` (${ap.studentId})` : ""}</span>
+                            {canEdit && (
+                              <button onClick={() => onRemoveProvider(s.id, ap.id)} className="text-red-400 hover:text-red-600" data-testid={`button-remove-provider-${ap.id}`}>
+                                <X className="h-2.5 w-2.5" />
+                              </button>
+                            )}
+                          </div>
+                        ))}
+                      </td>
                       <td className="px-2 py-1 border border-gray-200">{s.country}</td>
                       <td className="px-2 py-1 border border-gray-200">{s.startIntake || "-"}</td>
                       <td className="px-2 py-1 border border-gray-200">
@@ -678,7 +780,7 @@ function YearDashboard({ dashboard, year, students, allEntries, isLoading, canEd
   );
 }
 
-function TermTable({ termName, students, allEntries, terms, isLoading, canEdit, canDelete, onUpdateStudent, onDeleteStudent, onCreateEntry, onUpdateEntry, onDeleteEntry }: {
+function TermTable({ termName, students, allEntries, terms, isLoading, canEdit, canDelete, providersByStudent, onUpdateStudent, onDeleteStudent, onCreateEntry, onUpdateEntry, onDeleteEntry }: {
   termName: string;
   students: CommissionStudent[];
   allEntries: Record<number, CommissionEntry[]>;
@@ -686,6 +788,7 @@ function TermTable({ termName, students, allEntries, terms, isLoading, canEdit, 
   isLoading: boolean;
   canEdit: boolean;
   canDelete: boolean;
+  providersByStudent?: Record<number, any[]>;
   onUpdateStudent: (id: number, data: Record<string, any>) => void;
   onDeleteStudent: (id: number) => void;
   onCreateEntry: (studentId: number, data: Record<string, any>) => void;
@@ -771,7 +874,12 @@ function TermTable({ termName, students, allEntries, terms, isLoading, canEdit, 
                     <td className="px-2 py-1 border border-gray-200 text-gray-400 font-mono">{s.agentsicId || "-"}</td>
                     <td className="px-2 py-1 border border-gray-200 text-gray-400 font-mono">{s.studentId || "-"}</td>
                     <td className="px-2 py-1 border border-gray-200 text-gray-400">{s.studentName}</td>
-                    <td className="px-2 py-1 border border-gray-200 text-gray-400">{s.provider}</td>
+                    <td className="px-2 py-1 border border-gray-200 text-gray-400">
+                      <div>{s.provider}</div>
+                      {providersByStudent?.[s.id]?.map((ap: any) => (
+                        <div key={ap.id} className="text-[10px] text-blue-400 mt-0.5">{ap.provider}{ap.studentId ? ` (${ap.studentId})` : ""}</div>
+                      ))}
+                    </td>
                     <td className="px-2 py-1 border border-gray-200 text-gray-400">{s.country}</td>
                     <td colSpan={26} className="px-2 py-1 border border-gray-200 text-center text-gray-400 italic">
                       Blocked (previous term Withdrawn/Complete)
@@ -788,7 +896,12 @@ function TermTable({ termName, students, allEntries, terms, isLoading, canEdit, 
                     <td className="px-2 py-1 border border-gray-200 text-gray-500 font-mono">{s.agentsicId || "-"}</td>
                     <td className="px-2 py-1 border border-gray-200 text-gray-500 font-mono">{s.studentId || "-"}</td>
                     <td className="px-2 py-1 border border-gray-200 text-gray-500">{s.studentName}</td>
-                    <td className="px-2 py-1 border border-gray-200 text-gray-500">{s.provider}</td>
+                    <td className="px-2 py-1 border border-gray-200 text-gray-500">
+                      <div>{s.provider}</div>
+                      {providersByStudent?.[s.id]?.map((ap: any) => (
+                        <div key={ap.id} className="text-[10px] text-blue-400 mt-0.5">{ap.provider}{ap.studentId ? ` (${ap.studentId})` : ""}</div>
+                      ))}
+                    </td>
                     <td className="px-2 py-1 border border-gray-200 text-gray-500">{s.country}</td>
                     <td colSpan={26} className="px-2 py-1 border border-gray-200 text-center">
                       {canEdit ? (
@@ -816,7 +929,12 @@ function TermTable({ termName, students, allEntries, terms, isLoading, canEdit, 
                   <td className="px-2 py-1 border border-gray-200 text-xs font-mono">{s.agentsicId || "-"}</td>
                   <td className="px-2 py-1 border border-gray-200 text-xs font-mono">{s.studentId || "-"}</td>
                   <td className="px-2 py-1 border border-gray-200 text-xs">{s.studentName}</td>
-                  <td className="px-2 py-1 border border-gray-200 text-xs">{s.provider}</td>
+                  <td className="px-2 py-1 border border-gray-200 text-xs">
+                    <div>{s.provider}</div>
+                    {providersByStudent?.[s.id]?.map((ap: any) => (
+                      <div key={ap.id} className="text-[10px] text-blue-600 mt-0.5">{ap.provider}{ap.studentId ? ` (${ap.studentId})` : ""}</div>
+                    ))}
+                  </td>
                   <td className="px-2 py-1 border border-gray-200 text-xs">{s.country}</td>
                   <EditableCell value={s.courseLevel || ""} readOnly={!canEdit} onSave={(v) => onUpdateStudent(s.id, { courseLevel: v })} type="select" options={COURSE_LEVELS} width="80px" />
                   <EditableCell value={s.courseName || ""} readOnly={!canEdit} onSave={(v) => onUpdateStudent(s.id, { courseName: v })} width="120px" />
@@ -1199,9 +1317,10 @@ function AddStudentForm({ onSuccess }: { onSuccess: () => void }) {
     courseName: "",
     courseDurationYears: "",
   });
+  const [additionalProviders, setAdditionalProviders] = useState<Array<{ provider: string; studentId: string; country: string; courseLevel: string; courseName: string; courseDurationYears: string; startIntake: string }>>([]);
 
   const createMutation = useMutation({
-    mutationFn: async (data: typeof form) => {
+    mutationFn: async (data: any) => {
       const res = await apiRequest("POST", "/api/commission-tracker/students", data);
       if (!res.ok) {
         const err = await res.json();
@@ -1220,10 +1339,24 @@ function AddStudentForm({ onSuccess }: { onSuccess: () => void }) {
 
   const update = (field: string, value: string) => setForm({ ...form, [field]: value });
 
+  const addProvider = () => {
+    setAdditionalProviders([...additionalProviders, { provider: "", studentId: "", country: "Australia", courseLevel: "", courseName: "", courseDurationYears: "", startIntake: "" }]);
+  };
+
+  const updateProvider = (index: number, field: string, value: string) => {
+    const updated = [...additionalProviders];
+    (updated[index] as any)[field] = value;
+    setAdditionalProviders(updated);
+  };
+
+  const removeProvider = (index: number) => {
+    setAdditionalProviders(additionalProviders.filter((_, i) => i !== index));
+  };
+
   return (
     <form
-      onSubmit={(e) => { e.preventDefault(); createMutation.mutate(form); }}
-      className="space-y-4"
+      onSubmit={(e) => { e.preventDefault(); createMutation.mutate({ ...form, additionalProviders }); }}
+      className="space-y-4 max-h-[70vh] overflow-y-auto pr-1"
       data-testid="form-add-student"
     >
       <div className="grid grid-cols-2 gap-3">
@@ -1243,41 +1376,105 @@ function AddStudentForm({ onSuccess }: { onSuccess: () => void }) {
           <Label className="text-xs">Student ID</Label>
           <Input value={form.studentId} onChange={(e) => update("studentId", e.target.value)} data-testid="input-student-id" className="h-8 text-sm" />
         </div>
-        <div>
-          <Label className="text-xs">Provider *</Label>
-          <Input value={form.provider} onChange={(e) => update("provider", e.target.value)} required data-testid="input-provider" className="h-8 text-sm" />
+      </div>
+
+      <div className="border rounded-md p-3 space-y-3 bg-muted/30">
+        <div className="flex items-center justify-between">
+          <Label className="text-xs font-semibold">Primary Provider</Label>
         </div>
-        <div>
-          <Label className="text-xs">Country</Label>
-          <Input value={form.country} onChange={(e) => update("country", e.target.value)} data-testid="input-country" className="h-8 text-sm" />
-        </div>
-        <div>
-          <Label className="text-xs">Start Intake</Label>
-          <Input value={form.startIntake} onChange={(e) => update("startIntake", e.target.value)} placeholder="e.g. T1 2025" data-testid="input-start-intake" className="h-8 text-sm" />
-        </div>
-        <div>
-          <Label className="text-xs">Course Level</Label>
-          <Select value={form.courseLevel || "_none"} onValueChange={(v) => update("courseLevel", v === "_none" ? "" : v)}>
-            <SelectTrigger data-testid="select-course-level" className="h-8 text-sm">
-              <SelectValue placeholder="Select level" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="_none">Select level</SelectItem>
-              {COURSE_LEVELS.map((l) => (
-                <SelectItem key={l} value={l}>{l}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="col-span-2">
-          <Label className="text-xs">Course Name</Label>
-          <Input value={form.courseName} onChange={(e) => update("courseName", e.target.value)} data-testid="input-course-name" className="h-8 text-sm" />
-        </div>
-        <div>
-          <Label className="text-xs">Course Duration (Years)</Label>
-          <Input type="number" step="0.5" value={form.courseDurationYears} onChange={(e) => update("courseDurationYears", e.target.value)} data-testid="input-duration" className="h-8 text-sm" />
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <Label className="text-xs">Provider *</Label>
+            <Input value={form.provider} onChange={(e) => update("provider", e.target.value)} required data-testid="input-provider" className="h-8 text-sm" />
+          </div>
+          <div>
+            <Label className="text-xs">Country</Label>
+            <Input value={form.country} onChange={(e) => update("country", e.target.value)} data-testid="input-country" className="h-8 text-sm" />
+          </div>
+          <div>
+            <Label className="text-xs">Start Intake</Label>
+            <Input value={form.startIntake} onChange={(e) => update("startIntake", e.target.value)} placeholder="e.g. T1 2025" data-testid="input-start-intake" className="h-8 text-sm" />
+          </div>
+          <div>
+            <Label className="text-xs">Course Level</Label>
+            <Select value={form.courseLevel || "_none"} onValueChange={(v) => update("courseLevel", v === "_none" ? "" : v)}>
+              <SelectTrigger data-testid="select-course-level" className="h-8 text-sm">
+                <SelectValue placeholder="Select level" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="_none">Select level</SelectItem>
+                {COURSE_LEVELS.map((l) => (
+                  <SelectItem key={l} value={l}>{l}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="col-span-2">
+            <Label className="text-xs">Course Name</Label>
+            <Input value={form.courseName} onChange={(e) => update("courseName", e.target.value)} data-testid="input-course-name" className="h-8 text-sm" />
+          </div>
+          <div>
+            <Label className="text-xs">Course Duration (Years)</Label>
+            <Input type="number" step="0.5" value={form.courseDurationYears} onChange={(e) => update("courseDurationYears", e.target.value)} data-testid="input-duration" className="h-8 text-sm" />
+          </div>
         </div>
       </div>
+
+      {additionalProviders.map((ap, idx) => (
+        <div key={idx} className="border rounded-md p-3 space-y-3 bg-blue-50/50 dark:bg-blue-950/20">
+          <div className="flex items-center justify-between">
+            <Label className="text-xs font-semibold">Additional Provider {idx + 1}</Label>
+            <Button type="button" variant="ghost" size="sm" onClick={() => removeProvider(idx)} className="h-6 px-2 text-xs text-red-500 hover:text-red-700" data-testid={`button-remove-provider-${idx}`}>
+              <X className="h-3 w-3 mr-1" /> Remove
+            </Button>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label className="text-xs">Provider *</Label>
+              <Input value={ap.provider} onChange={(e) => updateProvider(idx, "provider", e.target.value)} required data-testid={`input-addl-provider-${idx}`} className="h-8 text-sm" />
+            </div>
+            <div>
+              <Label className="text-xs">Student ID</Label>
+              <Input value={ap.studentId} onChange={(e) => updateProvider(idx, "studentId", e.target.value)} data-testid={`input-addl-student-id-${idx}`} className="h-8 text-sm" />
+            </div>
+            <div>
+              <Label className="text-xs">Country</Label>
+              <Input value={ap.country} onChange={(e) => updateProvider(idx, "country", e.target.value)} data-testid={`input-addl-country-${idx}`} className="h-8 text-sm" />
+            </div>
+            <div>
+              <Label className="text-xs">Start Intake</Label>
+              <Input value={ap.startIntake} onChange={(e) => updateProvider(idx, "startIntake", e.target.value)} placeholder="e.g. T1 2025" data-testid={`input-addl-intake-${idx}`} className="h-8 text-sm" />
+            </div>
+            <div>
+              <Label className="text-xs">Course Level</Label>
+              <Select value={ap.courseLevel || "_none"} onValueChange={(v) => updateProvider(idx, "courseLevel", v === "_none" ? "" : v)}>
+                <SelectTrigger data-testid={`select-addl-course-level-${idx}`} className="h-8 text-sm">
+                  <SelectValue placeholder="Select level" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="_none">Select level</SelectItem>
+                  {COURSE_LEVELS.map((l) => (
+                    <SelectItem key={l} value={l}>{l}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label className="text-xs">Course Duration (Years)</Label>
+              <Input type="number" step="0.5" value={ap.courseDurationYears} onChange={(e) => updateProvider(idx, "courseDurationYears", e.target.value)} data-testid={`input-addl-duration-${idx}`} className="h-8 text-sm" />
+            </div>
+            <div className="col-span-2">
+              <Label className="text-xs">Course Name</Label>
+              <Input value={ap.courseName} onChange={(e) => updateProvider(idx, "courseName", e.target.value)} data-testid={`input-addl-course-${idx}`} className="h-8 text-sm" />
+            </div>
+          </div>
+        </div>
+      ))}
+
+      <Button type="button" variant="outline" size="sm" onClick={addProvider} className="w-full text-xs" data-testid="button-add-another-provider">
+        <Plus className="h-3 w-3 mr-1" /> Add Another Provider
+      </Button>
+
       <div className="flex justify-end gap-2">
         <Button type="submit" size="sm" disabled={createMutation.isPending} data-testid="button-submit-student">
           {createMutation.isPending ? "Adding..." : "Add Student"}

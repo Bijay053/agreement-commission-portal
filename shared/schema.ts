@@ -267,6 +267,19 @@ export const commissionEntries = pgTable("commission_entries", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
+export const studentProviders = pgTable("student_providers", {
+  id: serial("id").primaryKey(),
+  commissionStudentId: integer("commission_student_id").notNull().references(() => commissionStudents.id, { onDelete: "cascade" }),
+  provider: varchar("provider", { length: 255 }).notNull(),
+  studentId: varchar("student_id", { length: 64 }),
+  country: varchar("country", { length: 64 }).default("Australia"),
+  courseLevel: varchar("course_level", { length: 64 }),
+  courseName: varchar("course_name", { length: 500 }),
+  courseDurationYears: numeric("course_duration_years", { precision: 4, scale: 1 }),
+  startIntake: varchar("start_intake", { length: 32 }),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
 export const subAgentEntries = pgTable("sub_agent_entries", {
   id: serial("id").primaryKey(),
   commissionStudentId: integer("commission_student_id").notNull().references(() => commissionStudents.id, { onDelete: "cascade" }),
@@ -440,6 +453,11 @@ export const insertCommissionEntrySchema = createInsertSchema(commissionEntries)
   updatedAt: true,
 });
 
+export const insertStudentProviderSchema = createInsertSchema(studentProviders).omit({
+  id: true,
+  createdAt: true,
+});
+
 export const insertSubAgentEntrySchema = createInsertSchema(subAgentEntries).omit({
   id: true,
   createdAt: true,
@@ -476,6 +494,7 @@ export type TargetBonusCountryEntry = typeof targetBonusCountry.$inferSelect;
 export type CommissionTerm = typeof commissionTerms.$inferSelect;
 export type CommissionStudent = typeof commissionStudents.$inferSelect;
 export type CommissionEntry = typeof commissionEntries.$inferSelect;
+export type StudentProvider = typeof studentProviders.$inferSelect;
 export type SubAgentEntry = typeof subAgentEntries.$inferSelect;
 export type SubAgentTermEntry = typeof subAgentTermEntries.$inferSelect;
 export type UserSession = typeof userSessions.$inferSelect;
@@ -484,6 +503,7 @@ export type SecurityAuditLog = typeof securityAuditLogs.$inferSelect;
 export type PasswordHistoryEntry = typeof passwordHistory.$inferSelect;
 export type InsertCommissionStudent = z.infer<typeof insertCommissionStudentSchema>;
 export type InsertCommissionEntry = z.infer<typeof insertCommissionEntrySchema>;
+export type InsertStudentProvider = z.infer<typeof insertStudentProviderSchema>;
 export type InsertSubAgentEntry = z.infer<typeof insertSubAgentEntrySchema>;
 export type InsertSubAgentTermEntry = z.infer<typeof insertSubAgentTermEntrySchema>;
 export type InsertUser = z.infer<typeof insertUserSchema>;
