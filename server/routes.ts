@@ -96,7 +96,7 @@ export async function registerRoutes(
   httpServer: Server,
   app: Express
 ): Promise<Server> {
-  setupAuth(app);
+  await setupAuth(app);
   await seedDatabase();
 
   app.use("/api", requireActivePassword);
@@ -157,6 +157,13 @@ export async function registerRoutes(
 
       req.session.pendingUserId = user.id;
       req.session.otpRequired = true;
+
+      await new Promise<void>((resolve, reject) => {
+        req.session.save((err) => {
+          if (err) reject(err);
+          else resolve();
+        });
+      });
 
       if (!otpSent) {
         return res.status(500).json({
@@ -1452,6 +1459,29 @@ export async function registerRoutes(
         metadata: { oldRoles: oldRoles.map(r => r.name), newRoleIds: roleIds },
       });
       res.json({ message: "User roles updated" });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.patch("/api/users/:id/status", requireAuth, requirePermission("security.user.manage"), async (req, res) => {
+    try {
+      const userId = parseInt(req.params.id);
+      const { isActive } = req.body;
+      if (typeof isActive !== "boolean") return res.status(400).json({ message: "isActive must be a boolean" });
+      if (userId === req.session.userId) return res.status(400).json({ message: "You cannot deactivate your own account" });
+      await storage.updateUserActiveStatus(userId, isActive);
+      if (!isActive) {
+        await storage.deactivateUserSessions(userId, "account_deactivated");
+      }
+      await storage.createAuditLog({
+        userId: req.session.userId,
+        action: isActive ? "USER_ACTIVATED" : "USER_DEACTIVATED",
+        entityType: "user",
+        entityId: userId,
+        ipAddress: req.ip,
+      });
+      res.json({ message: isActive ? "User activated" : "User deactivated" });
     } catch (err: any) {
       res.status(500).json({ message: err.message });
     }
