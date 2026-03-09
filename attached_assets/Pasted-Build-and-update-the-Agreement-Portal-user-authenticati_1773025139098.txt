@@ -1,0 +1,386 @@
+Build and update the Agreement Portal user authentication and session security system with the following requirements.
+
+Project context:
+This portal currently does not have enough account security features. We need to add password management, login verification, device tracking, inactivity handling, and periodic password reset enforcement.
+
+====================================
+1. ADD CHANGE PASSWORD OPTION
+====================================
+
+There is currently no Change Password option for users.
+
+Add a Change Password feature for all users.
+
+Required behavior:
+- User can open Profile / Account Settings
+- User can change password manually
+- Require:
+  - Current password
+  - New password
+  - Confirm new password
+
+Validation:
+- Current password must match existing password
+- New password and confirm password must match
+- New password must meet minimum password policy
+- Do not allow reuse of recent password(s) if possible
+
+Recommended password policy:
+- Minimum 8 characters
+- At least 1 uppercase letter
+- At least 1 lowercase letter
+- At least 1 number
+- At least 1 special character
+
+Add proper success and error messages.
+
+====================================
+2. TRACK USER DEVICE
+====================================
+
+Track user device/session information for security and audit purposes.
+
+For each login/session, capture as much as reasonably possible:
+- User ID
+- Login timestamp
+- Logout timestamp
+- Device type
+- Browser
+- OS
+- IP address
+- Approximate location if available from IP
+- Session ID
+- Login status
+- Verification status
+- Last activity timestamp
+
+Required features:
+- Show current active sessions
+- Show recent login history
+- Allow admin to view device/login history for users
+- Optionally allow user to view their own recent login activity
+
+Recommended admin audit fields:
+- Successful login
+- Failed login
+- Verification code sent
+- Verification success/failure
+- Forced logout
+- Password changed
+- Password expired/reset required
+
+====================================
+3. INACTIVITY AUTO-LOGOUT
+====================================
+
+If user is inactive for 15 minutes, show warning popup.
+
+Required behavior:
+- Detect no activity for 15 minutes
+- Then show warning popup with countdown of 5 minutes
+- Popup message should say user will be logged out due to inactivity
+- If user clicks Continue / Stay Logged In, reset inactivity timer
+- If no action during 5-minute popup countdown, auto logout user
+
+Activity should reset timer when user:
+- Moves mouse
+- Clicks
+- Types
+- Scrolls
+- Interacts with application
+
+Required flow:
+- 15 minutes inactive → warning popup appears
+- Popup shows 5-minute countdown
+- If no response in 5 minutes → logout automatically
+- Redirect to login page
+- Show message:
+  “You were logged out due to inactivity.”
+
+Important:
+- This should work securely on frontend and backend/session layer
+- Token/session should be invalidated on forced logout
+
+====================================
+4. EMAIL VERIFICATION CODE ON EVERY LOGIN
+====================================
+
+For every login, after user enters correct email/username and password, send a verification code to their email.
+
+User must enter the code received in email before login is completed.
+
+Required login flow:
+1. User enters username/email + password
+2. System validates credentials
+3. If correct, generate one-time verification code
+4. Send code to user’s registered email
+5. Redirect user to verification screen
+6. User enters received code
+7. If code is correct and not expired, complete login
+8. If wrong or expired, show error and allow resend
+
+Verification code requirements:
+- Numeric or alphanumeric OTP
+- Expire after short time (recommended 5–10 minutes)
+- Single use only
+- Limit number of attempts
+- Allow resend with cooldown timer
+
+Required protections:
+- Code should be securely generated
+- Store hashed or securely managed OTP where possible
+- Invalidate old code when resend happens
+- Rate limit resend attempts
+- Log verification events
+
+Required email content:
+- Subject like: Login Verification Code
+- Message should clearly state:
+  - verification code
+  - validity period
+  - ignore if user did not attempt login
+
+====================================
+5. FORCE PASSWORD CHANGE EVERY 3 MONTHS
+====================================
+
+Request user to change password every 3 months.
+
+Required behavior:
+- Track date of last password change
+- If 90 days have passed, force password update
+- User should not continue normal portal use until password is changed
+- On login, after authentication and OTP verification, check password age
+- If password expired:
+  - redirect user to Change Password screen
+  - block access to dashboard until password updated
+
+Required messages:
+- “Your password has expired. Please change your password to continue.”
+- After successful update:
+  - continue to dashboard/login completion
+
+Recommended reminders:
+- Show warning before expiry, for example:
+  - 14 days before expiry
+  - 7 days before expiry
+  - 3 days before expiry
+  - 1 day before expiry
+
+====================================
+6. RECOMMENDED SECURITY FEATURES
+====================================
+
+Please also include these security best practices where possible:
+
+A. Password storage
+- Never store plain text passwords
+- Use secure password hashing (bcrypt/argon2)
+
+B. OTP security
+- Expire OTP after 5–10 minutes
+- Single-use OTP only
+- Invalidate previous OTP on resend
+
+C. Rate limiting
+- Limit failed login attempts
+- Limit OTP resend attempts
+- Optional temporary lock after too many failures
+
+D. Session security
+- Secure session/token handling
+- Invalidate session on logout
+- Invalidate session on forced inactivity logout
+- Track last activity time server-side if possible
+
+E. Audit logs
+Log:
+- Login success
+- Login failure
+- OTP sent
+- OTP verified
+- OTP failed
+- Password changed
+- Password expiry forced reset
+- Logout
+- Forced inactivity logout
+- New device login if detected
+
+====================================
+7. DEVICE / SESSION MANAGEMENT
+====================================
+
+Add device/session management features.
+
+Recommended features:
+- Show list of active sessions for the user
+- Show:
+  - device/browser
+  - IP
+  - login time
+  - last activity
+  - current/other sessions
+- Allow logout of other sessions if needed
+- Admin can inspect suspicious login history
+
+Optional but recommended:
+- Mark “new device” if device/browser combination is not recognized
+- Send email alert for login from new device or new IP
+
+====================================
+8. UI / UX REQUIREMENTS
+====================================
+
+Add/update these screens:
+
+1. Login page
+- Email/username
+- Password
+- Sign in button
+
+2. OTP verification page
+- Enter verification code
+- Resend code button
+- Countdown / expiry info
+
+3. Change password page
+- Current password
+- New password
+- Confirm password
+
+4. Inactivity warning popup
+- Message: session is about to expire
+- 5-minute countdown
+- Stay Logged In button
+- Logout Now button
+
+5. Profile / Account Security section
+- Change Password option
+- Recent login/device history if allowed
+
+Keep UI clean and consistent with current portal design.
+
+====================================
+9. DATABASE / BACKEND REQUIREMENTS
+====================================
+
+Please add/update backend schema as needed.
+
+Recommended fields for users table:
+- password_hash
+- password_changed_at
+- last_login_at
+- last_login_ip
+- email_verified_login_enabled (if needed)
+
+Recommended tables:
+1. user_sessions
+- id
+- user_id
+- session_id / token id
+- ip_address
+- browser
+- os
+- device_type
+- location
+- login_at
+- last_activity_at
+- logout_at
+- logout_reason
+- is_active
+- otp_verified
+
+2. login_verification_codes
+- id
+- user_id
+- code_hash or secure code storage
+- created_at
+- expires_at
+- used_at
+- attempts
+- resend_count
+- status
+
+3. security_audit_logs
+- id
+- user_id
+- event_type
+- ip_address
+- device_info
+- metadata
+- created_at
+
+====================================
+10. API / LOGIC REQUIREMENTS
+====================================
+
+Implement/update APIs for:
+- Login (step 1: password validation)
+- Send OTP
+- Verify OTP
+- Resend OTP
+- Change password
+- Get active sessions
+- Logout current session
+- Logout other sessions
+- Heartbeat/update last activity
+- Force password expiry check
+
+Required login logic:
+1. Validate username/email + password
+2. If valid, create pending verification state
+3. Send OTP to email
+4. Wait for OTP verification
+5. On success, create active session
+6. Check password age
+7. If password older than 90 days, force change password
+8. Then allow dashboard access
+
+====================================
+11. PERMISSIONS / ADMIN FEATURES
+====================================
+
+Admin should be able to:
+- View user login history
+- View device/session history
+- View forced logout events
+- View password reset/change history metadata
+- Monitor suspicious activity
+
+Regular user should be able to:
+- Change own password
+- View own session history if enabled
+- Be logged out for inactivity
+- Verify login by email OTP
+
+====================================
+12. EXPECTED FINAL BEHAVIOR
+====================================
+
+Expected behavior after implementation:
+
+- User can manually change password from account settings
+- Every login sends verification code to user email
+- User must enter OTP before login completes
+- System tracks user device/session details
+- If user is inactive for 15 minutes, show popup
+- Popup gives 5-minute warning countdown
+- If still inactive, user is auto logged out
+- User must change password every 3 months
+- Expired password blocks access until changed
+
+====================================
+13. DELIVERABLES
+====================================
+
+Please implement and provide:
+- Change Password feature
+- Login OTP by email on every login
+- Device/session tracking
+- Inactivity warning popup + auto logout
+- 90-day forced password change
+- Required database migration
+- Backend APIs
+- Frontend screens/components
+- Audit logging
+- Technical notes on session timeout, OTP flow, and password expiry logic
