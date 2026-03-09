@@ -1074,8 +1074,8 @@ export class DatabaseStorage implements IStorage {
       const sProvider = norm(s.provider);
       const sStudentId = norm(s.studentId || "");
 
-      if (nameN && agentsicN && sName === nameN && sAgentsic === agentsicN) {
-        return `Duplicate blocked: Student Name + Agentsic ID already exists (${s.studentName}, ${s.agentsicId})`;
+      if (nameN && agentsicN && providerN && sName === nameN && sAgentsic === agentsicN && sProvider === providerN) {
+        return `Duplicate blocked: Student Name + Agentsic ID + Provider already exists (${s.studentName}, ${s.agentsicId}, ${s.provider})`;
       }
       if (nameN && providerN && studentIdN && sName === nameN && sProvider === providerN && sStudentId === studentIdN) {
         return `Duplicate blocked: Student Name + Provider + Student ID already exists (${s.studentName}, ${s.provider}, ${s.studentId})`;
