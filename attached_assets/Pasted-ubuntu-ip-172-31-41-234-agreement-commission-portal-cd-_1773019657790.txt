@@ -1,0 +1,28 @@
+ubuntu@ip-172-31-41-234:~/agreement-commission-portal$ cd ~/agreement-commission-portal
+sed -i 's/"80:5000"/"5000:5000"/' docker-compose.yml
+sudo docker-compose down
+sudo docker-compose up -d
+sudo systemctl restart nginx
+sudo certbot --nginx -d portal.studyinfocentre.com --non-interactive --agree-tos -m au@studyinfocentre.com
+WARN[0000] /home/ubuntu/agreement-commission-portal/docker-compose.yml: the attribute `version` is obsolete, it will be ignored, please remove it to avoid potential confusion 
+[+] down 3/3
+ ✔ Container agreement-commission-portal-app-1 Removed                                                                                                                                                        10.4s
+ ✔ Container agreement-commission-portal-db-1  Removed                                                                                                                                                        0.2s
+ ✔ Network agreement-commission-portal_default Removed                                                                                                                                                        0.1s
+WARN[0000] /home/ubuntu/agreement-commission-portal/docker-compose.yml: the attribute `version` is obsolete, it will be ignored, please remove it to avoid potential confusion 
+[+] up 3/3
+ ✔ Network agreement-commission-portal_default Created                                                                                                                                                         0.1s
+ ✔ Container agreement-commission-portal-db-1  Healthy                                                                                                                                                         6.0s
+ ✔ Container agreement-commission-portal-app-1 Started                                                                                                                                                         6.1s
+Saving debug log to /var/log/letsencrypt/letsencrypt.log
+Certificate not yet due for renewal
+Deploying certificate
+Successfully deployed certificate for portal.studyinfocentre.com to /etc/nginx/sites-enabled/portal
+Congratulations! You have successfully enabled HTTPS on https://portal.studyinfocentre.com
+
+- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+If you like Certbot, please consider supporting our work by:
+ * Donating to ISRG / Let's Encrypt:   https://letsencrypt.org/donate
+ * Donating to EFF:                    https://eff.org/donate-le
+- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+ubuntu@ip-172-31-41-234:~/agreement-commission-portal$ 
