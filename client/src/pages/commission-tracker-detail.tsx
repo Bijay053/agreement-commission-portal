@@ -51,6 +51,7 @@ export default function CommissionTrackerDetailPage() {
   const canEditEntry = hasPermission("commission_tracker.entry.edit");
   const canCreateEntry = hasPermission("commission_tracker.entry.create");
   const canDeleteEntry = hasPermission("commission_tracker.entry.delete");
+  const canViewEntry = hasPermission("commission_tracker.entry.view");
 
   const { data: studentData, isLoading } = useQuery<StudentWithEntries>({
     queryKey: ["/api/commission-tracker/students", studentId],

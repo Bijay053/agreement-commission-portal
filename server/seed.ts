@@ -70,15 +70,15 @@ const PERMISSION_CODES = [
   { code: "security.country_scope.manage", module: "administration", resource: "country_scope", action: "update", description: "Manage country access" },
   { code: "reminders.view", module: "reminders", resource: "reminder", action: "read", description: "View reminders" },
   { code: "reminders.manage", module: "reminders", resource: "reminder", action: "update", description: "Manage reminders" },
-  { code: "commission_tracker.student.read", module: "commission_tracker", resource: "student", action: "read", description: "View commission students" },
-  { code: "commission_tracker.student.add", module: "commission_tracker", resource: "student", action: "add", description: "Add commission students" },
-  { code: "commission_tracker.student.update", module: "commission_tracker", resource: "student", action: "update", description: "Edit commission students" },
-  { code: "commission_tracker.student.delete", module: "commission_tracker", resource: "student", action: "delete", description: "Delete commission students" },
+  { code: "commission_tracker.view", module: "commission_tracker", resource: "student", action: "read", description: "View commission tracker" },
+  { code: "commission_tracker.create", module: "commission_tracker", resource: "student", action: "add", description: "Add commission students" },
+  { code: "commission_tracker.edit", module: "commission_tracker", resource: "student", action: "update", description: "Edit commission students" },
+  { code: "commission_tracker.delete", module: "commission_tracker", resource: "student", action: "delete", description: "Delete commission students" },
   { code: "commission_tracker.student.delete_master", module: "commission_tracker", resource: "student", action: "delete_master", description: "Delete students from dashboard (admin only)" },
-  { code: "commission_tracker.student.export", module: "commission_tracker", resource: "student", action: "export", description: "Export commission students" },
-  { code: "commission_tracker.entry.read", module: "commission_tracker", resource: "entry", action: "read", description: "View term entries" },
-  { code: "commission_tracker.entry.add", module: "commission_tracker", resource: "entry", action: "add", description: "Add term entries" },
-  { code: "commission_tracker.entry.update", module: "commission_tracker", resource: "entry", action: "update", description: "Edit term entries" },
+  { code: "commission_tracker.export", module: "commission_tracker", resource: "student", action: "export", description: "Export commission data" },
+  { code: "commission_tracker.entry.view", module: "commission_tracker", resource: "entry", action: "read", description: "View term entries" },
+  { code: "commission_tracker.entry.create", module: "commission_tracker", resource: "entry", action: "add", description: "Add term entries" },
+  { code: "commission_tracker.entry.edit", module: "commission_tracker", resource: "entry", action: "update", description: "Edit term entries" },
   { code: "commission_tracker.entry.delete", module: "commission_tracker", resource: "entry", action: "delete", description: "Delete term entries" },
 ];
 
@@ -143,10 +143,14 @@ const ROLE_PERMISSION_MAP: Record<string, string[]> = {
   ],
   "Commission Viewer": [
     "commission.view", "bonus.view",
+    "commission_tracker.view", "commission_tracker.entry.view",
   ],
   "Commission Manager": [
     "commission.view", "commission.create", "commission.edit", "commission.delete", "commission.export",
     "bonus.view", "bonus.create", "bonus.edit", "bonus.delete", "bonus.export",
+    "commission_tracker.view", "commission_tracker.create", "commission_tracker.edit", "commission_tracker.delete",
+    "commission_tracker.entry.view", "commission_tracker.entry.create", "commission_tracker.entry.edit", "commission_tracker.entry.delete",
+    "commission_tracker.export",
   ],
   "Finance Viewer": [
     "commission.view", "bonus.view",

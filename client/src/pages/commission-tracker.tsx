@@ -15,7 +15,7 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   Plus, Search, Trash2, Users, DollarSign, TrendingUp, AlertCircle,
-  Settings, X, Upload, Download, Clock, CheckCircle2, FileSpreadsheet, AlertTriangle
+  Settings, X, Upload, Download, Clock, CheckCircle2, FileSpreadsheet, AlertTriangle, RotateCcw
 } from "lucide-react";
 import type { CommissionStudent, CommissionEntry } from "@shared/schema";
 
@@ -384,6 +384,18 @@ export default function CommissionTrackerPage() {
                 {filters?.statuses?.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
               </SelectContent>
             </Select>
+            {(search || agentFilter || providerFilter || statusFilter) && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-8 px-2 text-xs text-muted-foreground hover:text-foreground"
+                onClick={() => { setSearch(""); setAgentFilter(""); setProviderFilter(""); setStatusFilter(""); }}
+                data-testid="button-reset-filters"
+              >
+                <RotateCcw className="w-3.5 h-3.5 mr-1" />
+                Reset
+              </Button>
+            )}
           </div>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="mt-1">
