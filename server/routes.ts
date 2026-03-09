@@ -2064,7 +2064,7 @@ export async function registerRoutes(
 
         const norm = (s: string) => s.toLowerCase().replace(/\s+/g, " ").trim();
         const filedup = seenInFile.find(s => {
-          if (norm(s.studentName) === norm(studentName) && norm(s.agentsicId) === norm(agentsicId)) return true;
+          if (norm(s.studentName) === norm(studentName) && norm(s.agentsicId) === norm(agentsicId) && norm(s.provider) === norm(provider)) return true;
           if (norm(s.studentName) === norm(studentName) && norm(s.provider) === norm(provider) && s.studentId && norm(s.studentId) === norm(studentId)) return true;
           if (norm(s.provider) === norm(provider) && s.studentId && norm(s.studentId) === norm(studentId)) return true;
           return false;
@@ -2134,7 +2134,7 @@ export async function registerRoutes(
           if (!agentName) throw new Error("Agent Name is required");
 
           const batchDup = importedSoFar.find(s => {
-            if (norm(s.studentName) === norm(studentName) && norm(s.agentsicId) === norm(agentsicId)) return true;
+            if (norm(s.studentName) === norm(studentName) && norm(s.agentsicId) === norm(agentsicId) && norm(s.provider) === norm(provider)) return true;
             if (norm(s.studentName) === norm(studentName) && norm(s.provider) === norm(provider) && s.studentId && norm(s.studentId) === norm(studentId)) return true;
             if (norm(s.provider) === norm(provider) && s.studentId && norm(s.studentId) === norm(studentId)) return true;
             return false;
