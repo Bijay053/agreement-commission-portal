@@ -11,7 +11,7 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U portal_user -d agreement_portal"]
       interval: 5s
@@ -22,8 +22,6 @@ services:
     image: redis:7-alpine
     restart: unless-stopped
     command: redis-server --maxmemory 128mb --maxmemory-policy allkeys-lru
-    ports:
-      - "6379:6379"
     volumes:
       - redisdata:/data
     healthcheck:
@@ -40,22 +38,13 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+    env_file:
+      - .env
     environment:
       DATABASE_URL: postgresql://portal_user:${DB_PASSWORD:-changeme_in_production}@db:5432/agreement_portal
-      SESSION_SECRET: ${SESSION_SECRET:-generate_a_strong_secret_here}
       DJANGO_SETTINGS_MODULE: config.settings
       DEBUG: "False"
-      ALLOWED_HOSTS: ${ALLOWED_HOSTS:-portal.studyinfocentre.com}
-      CORS_ORIGINS: ${CORS_ORIGINS:-}
       REDIS_URL: redis://redis:6379/0
-      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
-      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
-      AWS_S3_BUCKET: ${AWS_S3_BUCKET:-studyinfocentre-portal-documents}
-      SMTP_HOST: ${SMTP_HOST:-}
-      SMTP_PORT: ${SMTP_PORT:-587}
-      SMTP_USER: ${SMTP_USER:-}
-      SMTP_PASS: ${SMTP_PASS:-}
-      FROM_EMAIL: ${FROM_EMAIL:-}
     expose:
       - "5000"
     volumes:
@@ -70,19 +59,13 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+    env_file:
+      - .env
     environment:
       DATABASE_URL: postgresql://portal_user:${DB_PASSWORD:-changeme_in_production}@db:5432/agreement_portal
       DJANGO_SETTINGS_MODULE: config.settings
       DEBUG: "False"
       REDIS_URL: redis://redis:6379/0
-      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
-      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
-      AWS_S3_BUCKET: ${AWS_S3_BUCKET:-studyinfocentre-portal-documents}
-      SMTP_HOST: ${SMTP_HOST:-}
-      SMTP_PORT: ${SMTP_PORT:-587}
-      SMTP_USER: ${SMTP_USER:-}
-      SMTP_PASS: ${SMTP_PASS:-}
-      FROM_EMAIL: ${FROM_EMAIL:-}
     command: celery -A config worker --loglevel=info
     volumes:
       - uploads:/app/uploads
@@ -95,6 +78,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+    env_file:
+      - .env
     environment:
       DATABASE_URL: postgresql://portal_user:${DB_PASSWORD:-changeme_in_production}@db:5432/agreement_portal
       DJANGO_SETTINGS_MODULE: config.settings

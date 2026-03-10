@@ -1,6 +1,58 @@
+# Dependencies
 node_modules/
-  dist/
-  .env
-  *.log
-  .DS_Store
-  
+.pythonlibs/
+
+# Build output
+dist/
+
+# Environment
+.env
+.env.local
+.env.production
+
+# Logs
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+*.eggs/
+.mypy_cache/
+
+# Replit
+.replit
+.config/
+.cache/
+.local/
+.upm/
+.agents/
+replit.md
+main.py
+pyproject.toml
+uv.lock
+generated-icon.png
+
+# Screenshots / temp images
+*.png
+*.jpg
+*.jpeg
+
+# Uploads
+uploads/
+
+# Docker volumes
+pgdata/
+redisdata/
+
+# Package lock (frontend managed via Dockerfile)
+package-lock.json
