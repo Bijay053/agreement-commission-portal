@@ -22,7 +22,9 @@ export default function AuditTab({ agreementId }: { agreementId: number }) {
     queryFn: async () => {
       const res = await fetch(`/api/audit-logs?entityType=agreement&entityId=${agreementId}`, { credentials: "include" });
       if (!res.ok) throw new Error("Failed");
-      return res.json();
+      const json = await res.json();
+      if (Array.isArray(json)) return json;
+      return json.results || [];
     },
   });
 

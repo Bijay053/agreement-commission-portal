@@ -9,11 +9,12 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { MultiSearchableSelect } from "@/components/ui/multi-searchable-select";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   Search, Users, DollarSign, TrendingUp, AlertCircle,
-  RefreshCw, ArrowDownUp, AlertTriangle
+  RefreshCw, ArrowDownUp, AlertTriangle, CalendarDays
 } from "lucide-react";
 import type { CommissionStudent, SubAgentEntry, SubAgentTermEntry } from "@shared/schema";
 
@@ -257,19 +258,17 @@ export default function SubAgentCommissionPage() {
       <div className="flex items-center justify-between p-4 border-b bg-background">
         <div className="flex items-center gap-3">
           <h1 className="text-xl font-bold" data-testid="text-page-title">Sub-Agent Commission</h1>
-          <div className="flex items-center gap-1">
-            {years.map(y => (
-              <Button
-                key={y}
-                variant={selectedYear === y ? "default" : "outline"}
-                size="sm"
-                onClick={() => setSelectedYear(y)}
-                data-testid={`button-year-${y}`}
-              >
-                {y}
-              </Button>
-            ))}
-          </div>
+          <Select value={String(selectedYear)} onValueChange={(v) => setSelectedYear(Number(v))} data-testid="select-year">
+            <SelectTrigger className="w-[130px] h-9" data-testid="select-year-trigger">
+              <CalendarDays className="h-4 w-4 mr-1.5 text-muted-foreground" />
+              <SelectValue placeholder="Year" />
+            </SelectTrigger>
+            <SelectContent>
+              {years.map(y => (
+                <SelectItem key={y} value={String(y)} data-testid={`select-year-${y}`}>{y}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
           <div className="flex items-center gap-1">
             {["All", "T1", "T2", "T3"].map(i => (
               <Button

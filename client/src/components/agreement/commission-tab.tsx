@@ -67,7 +67,7 @@ export default function CommissionTab({ agreementId }: { agreementId: number }) 
     },
   });
 
-  const [form, setForm] = useState({
+  const defaultForm = {
     label: "",
     studyLevel: "Any",
     commissionMode: "percentage",
@@ -77,7 +77,8 @@ export default function CommissionTab({ agreementId }: { agreementId: number }) 
     basis: "per_subject",
     payEvent: "enrolment",
     conditionsText: "",
-  });
+  };
+  const [form, setForm] = useState(defaultForm);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -96,7 +97,7 @@ export default function CommissionTab({ agreementId }: { agreementId: number }) 
       <div className="flex items-center justify-between gap-2">
         <h3 className="font-medium">Commission Rules</h3>
         {canCreate && (
-          <Dialog open={showDialog} onOpenChange={setShowDialog}>
+          <Dialog open={showDialog} onOpenChange={(open) => { if (open) setForm(defaultForm); setShowDialog(open); }}>
             <DialogTrigger asChild>
               <Button size="sm" data-testid="button-add-commission">
                 <Plus className="w-4 h-4 mr-1" /> Add Rule

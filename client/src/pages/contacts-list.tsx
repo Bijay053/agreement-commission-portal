@@ -117,12 +117,23 @@ export default function ContactsListPage() {
   const queryString = queryParams.toString();
   const contactsUrl = `/api/contacts${queryString ? `?${queryString}` : ""}`;
 
-  const { data: contacts, isLoading } = useQuery<ContactRow[]>({
+  const { data: contactsData, isLoading } = useQuery<any>({
     queryKey: [contactsUrl],
   });
+  const contacts: ContactRow[] | undefined = contactsData?.results ?? contactsData;
 
   const { data: countries } = useQuery<any[]>({ queryKey: ["/api/countries"] });
-  const { data: agreementsList } = useQuery<any[]>({ queryKey: ["/api/agreements"] });
+  const { data: agreementsListData } = useQuery<any>({
+    queryKey: ["/api/agreements"],
+    queryFn: async () => {
+      const res = await fetch("/api/agreements?pageSize=200", { credentials: "include" });
+      if (!res.ok) return [];
+      const json = await res.json();
+      if (Array.isArray(json)) return json;
+      return json.results || [];
+    },
+  });
+  const agreementsList = agreementsListData;
 
   const createMutation = useMutation({
     mutationFn: async (data: any) => {
@@ -449,8 +460,9 @@ export default function ContactsListPage() {
               <div>
                 <Label>Phone</Label>
                 <Input
+                  type="tel"
                   value={editForm.phone}
-                  onChange={e => setEditForm({ ...editForm, phone: e.target.value })}
+                  onChange={e => { const v = e.target.value; if (v === '' || /^[\d\s\+\-\(\)\.]+$/.test(v)) setEditForm({ ...editForm, phone: v }); }}
                   data-testid="input-edit-contact-phone"
                 />
               </div>
@@ -526,7 +538,7 @@ export default function ContactsListPage() {
         </AlertDialogContent>
       </AlertDialog>
 
-      <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
+      <Dialog open={showAddDialog} onOpenChange={(open) => { if (open) setAddForm({ agreementId: "", fullName: "", positionTitle: "", phone: "", email: "", countryId: "", city: "", isPrimary: false, notes: "" }); setShowAddDialog(open); }}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Add Contact</DialogTitle>
@@ -586,8 +598,9 @@ export default function ContactsListPage() {
               <div>
                 <Label>Phone</Label>
                 <Input
+                  type="tel"
                   value={addForm.phone}
-                  onChange={e => setAddForm({ ...addForm, phone: e.target.value })}
+                  onChange={e => { const v = e.target.value; if (v === '' || /^[\d\s\+\-\(\)\.]+$/.test(v)) setAddForm({ ...addForm, phone: v }); }}
                   data-testid="input-add-contact-phone"
                 />
               </div>

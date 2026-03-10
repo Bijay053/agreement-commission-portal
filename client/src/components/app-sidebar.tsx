@@ -43,7 +43,7 @@ export function AppSidebar() {
     { title: "Providers", url: "/providers", icon: Building2, show: hasPermission("providers.provider.read") },
     { title: "Contacts", url: "/contacts", icon: Contact, show: hasPermission("contacts.view") },
     { title: "Commission Table", url: "/commission", icon: DollarSign, show: hasPermission("commission.view") || hasPermission("bonus.view") },
-    { title: "Commission Tracker", url: "/commission-tracker", icon: Calculator, show: hasPermission("commission_tracker.view") },
+    { title: "Commission Tracker", url: "/commission-tracker", icon: Calculator, show: hasPermission("commission_tracker.student.read") },
     { title: "Sub-Agent Commission", url: "/sub-agent-commission", icon: ArrowDownUp, show: hasPermission("sub_agent_commission.view") },
   ];
 

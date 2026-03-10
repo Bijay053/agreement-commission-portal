@@ -66,9 +66,10 @@ export default function AccountSecurityPage() {
     queryKey: ["/api/auth/sessions"],
   });
 
-  const { data: securityLogs, isLoading: logsLoading } = useQuery<SecurityLogEntry[]>({
+  const { data: securityLogsData, isLoading: logsLoading } = useQuery<any>({
     queryKey: ["/api/auth/security-logs"],
   });
+  const securityLogs: SecurityLogEntry[] | undefined = securityLogsData?.results ?? securityLogsData;
 
   const logoutSessionMutation = useMutation({
     mutationFn: async (sessionId: number) => {

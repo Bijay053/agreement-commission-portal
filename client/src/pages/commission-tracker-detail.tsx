@@ -48,11 +48,11 @@ export default function CommissionTrackerDetailPage() {
   const [editing, setEditing] = useState(false);
   const [editForm, setEditForm] = useState<Partial<CommissionStudent>>({});
 
-  const canEdit = hasPermission("commission_tracker.edit");
-  const canEditEntry = hasPermission("commission_tracker.entry.edit");
-  const canCreateEntry = hasPermission("commission_tracker.entry.create");
+  const canEdit = hasPermission("commission_tracker.student.update");
+  const canEditEntry = hasPermission("commission_tracker.entry.update");
+  const canCreateEntry = hasPermission("commission_tracker.entry.add");
   const canDeleteEntry = hasPermission("commission_tracker.entry.delete");
-  const canViewEntry = hasPermission("commission_tracker.entry.view");
+  const canViewEntry = hasPermission("commission_tracker.entry.read");
 
   const { data: studentData, isLoading } = useQuery<StudentWithEntries>({
     queryKey: ["/api/commission-tracker/students", studentId],

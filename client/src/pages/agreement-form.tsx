@@ -356,7 +356,7 @@ export default function AgreementFormPage() {
         </Card>
       </form>
 
-      <Dialog open={showProviderModal} onOpenChange={setShowProviderModal}>
+      <Dialog open={showProviderModal} onOpenChange={(open) => { if (open) setProviderForm({ name: "", providerType: "university", countryId: "", website: "", notes: "" }); setShowProviderModal(open); }}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Add New Provider</DialogTitle>

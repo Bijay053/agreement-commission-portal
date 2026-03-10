@@ -223,7 +223,7 @@ export default function ContactsTab({ agreementId }: { agreementId: number }) {
         </Card>
       )}
 
-      <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
+      <Dialog open={showAddDialog} onOpenChange={(open) => { if (open) setAddForm(emptyForm); setShowAddDialog(open); }}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Add Contact</DialogTitle>
@@ -246,7 +246,7 @@ export default function ContactsTab({ agreementId }: { agreementId: number }) {
               </div>
               <div>
                 <Label>Phone</Label>
-                <Input value={addForm.phone} onChange={e => setAddForm({...addForm, phone: e.target.value})} placeholder="+61 2 1234 5678" data-testid="input-contact-phone" />
+                <Input type="tel" value={addForm.phone} onChange={e => { const v = e.target.value; if (v === '' || /^[\d\s\+\-\(\)\.]+$/.test(v)) setAddForm({...addForm, phone: v}); }} placeholder="+61 2 1234 5678" data-testid="input-contact-phone" />
               </div>
             </div>
             <div className="grid grid-cols-2 gap-3">
@@ -307,7 +307,7 @@ export default function ContactsTab({ agreementId }: { agreementId: number }) {
               </div>
               <div>
                 <Label>Phone</Label>
-                <Input value={editForm.phone} onChange={e => setEditForm({...editForm, phone: e.target.value})} data-testid="input-edit-contact-phone" />
+                <Input type="tel" value={editForm.phone} onChange={e => { const v = e.target.value; if (v === '' || /^[\d\s\+\-\(\)\.]+$/.test(v)) setEditForm({...editForm, phone: v}); }} data-testid="input-edit-contact-phone" />
               </div>
             </div>
             <div className="grid grid-cols-2 gap-3">
