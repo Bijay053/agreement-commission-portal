@@ -12,6 +12,7 @@ import path from "path";
 import fs from "fs";
 import crypto from "crypto";
 import { UAParser } from "ua-parser-js";
+import { uploadToS3, getFromS3, deleteFromS3, isS3Key } from "./s3";
 
 const uploadsDir = path.join(process.cwd(), "uploads");
 if (!fs.existsSync(uploadsDir)) {
@@ -19,7 +20,7 @@ if (!fs.existsSync(uploadsDir)) {
 }
 
 const upload = multer({
-  dest: uploadsDir,
+  storage: multer.memoryStorage(),
   limits: { fileSize: 50 * 1024 * 1024 },
   fileFilter: (_req, file, cb) => {
     const allowed = ["application/pdf", "application/msword", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"];
@@ -1255,13 +1256,16 @@ export async function registerRoutes(
       const agreementId = parseInt(req.params.id);
       const docs = await storage.getDocuments(agreementId);
       const nextVersion = docs.length > 0 ? Math.max(...docs.map(d => d.versionNo)) + 1 : 1;
+
+      const s3Key = await uploadToS3(req.file.buffer, req.file.originalname, req.file.mimetype);
+
       const doc = await storage.createDocument({
         agreementId,
         versionNo: nextVersion,
         originalFilename: req.file.originalname,
         mimeType: req.file.mimetype,
         sizeBytes: req.file.size,
-        storagePath: req.file.path,
+        storagePath: s3Key,
         status: "active",
         uploadedByUserId: req.session.userId,
         uploadNote: req.body.note || null,
@@ -1287,11 +1291,6 @@ export async function registerRoutes(
       const agreement = await storage.getAgreement(doc.agreementId);
       if (!agreement) return res.status(404).json({ message: "Agreement not found" });
 
-      const filePath = doc.storagePath;
-      if (!fs.existsSync(filePath)) {
-        return res.status(404).json({ message: "File not found on server" });
-      }
-
       await storage.createAuditLog({
         userId: req.session.userId,
         action: "DOC_VIEW",
@@ -1304,14 +1303,22 @@ export async function registerRoutes(
 
       res.setHeader("Content-Type", doc.mimeType);
       res.setHeader("Content-Disposition", `inline; filename="${doc.originalFilename}"`);
-      res.setHeader("Content-Length", doc.sizeBytes.toString());
       res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, private");
       res.setHeader("Pragma", "no-cache");
       res.setHeader("Expires", "0");
       res.setHeader("X-Content-Type-Options", "nosniff");
 
-      const fileStream = fs.createReadStream(filePath);
-      fileStream.pipe(res);
+      if (isS3Key(doc.storagePath)) {
+        const s3Stream = await getFromS3(doc.storagePath);
+        s3Stream.pipe(res);
+      } else {
+        if (!fs.existsSync(doc.storagePath)) {
+          return res.status(404).json({ message: "File not found on server" });
+        }
+        res.setHeader("Content-Length", doc.sizeBytes.toString());
+        const fileStream = fs.createReadStream(doc.storagePath);
+        fileStream.pipe(res);
+      }
     } catch (err: any) {
       res.status(500).json({ message: err.message });
     }
@@ -1325,11 +1332,6 @@ export async function registerRoutes(
       const agreement = await storage.getAgreement(doc.agreementId);
       if (!agreement) return res.status(404).json({ message: "Agreement not found" });
 
-      const filePath = doc.storagePath;
-      if (!fs.existsSync(filePath)) {
-        return res.status(404).json({ message: "File not found on server" });
-      }
-
       await storage.createAuditLog({
         userId: req.session.userId,
         action: "DOC_DOWNLOAD",
@@ -1342,12 +1344,20 @@ export async function registerRoutes(
 
       res.setHeader("Content-Type", doc.mimeType);
       res.setHeader("Content-Disposition", `attachment; filename="${doc.originalFilename}"`);
-      res.setHeader("Content-Length", doc.sizeBytes.toString());
       res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, private");
       res.setHeader("Pragma", "no-cache");
 
-      const fileStream = fs.createReadStream(filePath);
-      fileStream.pipe(res);
+      if (isS3Key(doc.storagePath)) {
+        const s3Stream = await getFromS3(doc.storagePath);
+        s3Stream.pipe(res);
+      } else {
+        if (!fs.existsSync(doc.storagePath)) {
+          return res.status(404).json({ message: "File not found on server" });
+        }
+        res.setHeader("Content-Length", doc.sizeBytes.toString());
+        const fileStream = fs.createReadStream(doc.storagePath);
+        fileStream.pipe(res);
+      }
     } catch (err: any) {
       res.status(500).json({ message: err.message });
     }
