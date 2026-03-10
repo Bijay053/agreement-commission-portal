@@ -18,8 +18,8 @@ COPY package.json ./
 RUN npm install
 COPY client/ ./client/
 COPY shared/ ./shared/
-COPY attached_assets/ ./attached_assets/
 COPY vite.config.ts tsconfig.json tailwind.config.ts postcss.config.js components.json ./
+RUN mkdir -p attached_assets
 RUN npx vite build
 
 FROM base AS production
