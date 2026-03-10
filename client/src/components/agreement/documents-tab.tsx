@@ -23,7 +23,13 @@ function formatFileSize(bytes: number) {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-function PdfCanvasViewer({ pdfData, userEmail }: { pdfData: ArrayBuffer; userEmail: string }) {
+interface WatermarkInfo {
+  userName: string;
+  userEmail: string;
+  userIp: string;
+}
+
+function PdfCanvasViewer({ pdfData, watermarkInfo }: { pdfData: ArrayBuffer; watermarkInfo: WatermarkInfo }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [pdfDoc, setPdfDoc] = useState<any>(null);
   const [currentPage, setCurrentPage] = useState(1);
@@ -32,7 +38,6 @@ function PdfCanvasViewer({ pdfData, userEmail }: { pdfData: ArrayBuffer; userEma
   const [rendering, setRendering] = useState(false);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const watermarkCanvasRef = useRef<HTMLCanvasElement>(null);
-  const now = format(new Date(), "dd MMM yyyy HH:mm");
 
   useEffect(() => {
     const loadPdf = async () => {
@@ -67,30 +72,48 @@ function PdfCanvasViewer({ pdfData, userEmail }: { pdfData: ArrayBuffer; userEma
       const wCtx = wCanvas.getContext("2d")!;
       wCtx.clearRect(0, 0, wCanvas.width, wCanvas.height);
       wCtx.save();
-      wCtx.font = "14px monospace";
-      wCtx.fillStyle = "rgba(0, 0, 0, 0.06)";
 
-      const lines = ["Study Info Centre - Confidential", userEmail, now];
-      const lineHeight = 18;
-      const blockHeight = lines.length * lineHeight + 40;
-      const blockWidth = 300;
-      for (let y = -viewport.height * 0.2; y < viewport.height * 1.2; y += blockHeight + 80) {
-        for (let x = -viewport.width * 0.2; x < viewport.width * 1.2; x += blockWidth + 60) {
+      const viewedAt = format(new Date(), "dd MMM yyyy HH:mm:ss");
+      const lines = [
+        `Viewed by: ${watermarkInfo.userName}`,
+        watermarkInfo.userEmail,
+        `IP: ${watermarkInfo.userIp}`,
+        viewedAt,
+      ];
+
+      const fontSize = Math.max(11, Math.min(16, viewport.width / 50));
+      wCtx.font = `${fontSize}px monospace`;
+      const lineHeight = fontSize + 4;
+      const blockHeight = lines.length * lineHeight + 20;
+      const blockWidth = Math.max(...lines.map(l => wCtx.measureText(l).width)) + 30;
+      const spacingX = blockWidth + 40;
+      const spacingY = blockHeight + 50;
+
+      for (let y = -viewport.height * 0.3; y < viewport.height * 1.3; y += spacingY) {
+        for (let x = -viewport.width * 0.3; x < viewport.width * 1.3; x += spacingX) {
           wCtx.save();
           wCtx.translate(x, y);
-          wCtx.rotate(-0.5);
+          wCtx.rotate(-0.45);
+
+          wCtx.fillStyle = "rgba(220, 38, 38, 0.07)";
           lines.forEach((line, i) => {
             wCtx.fillText(line, 0, i * lineHeight);
           });
+
+          wCtx.strokeStyle = "rgba(220, 38, 38, 0.04)";
+          wCtx.lineWidth = 0.5;
+          wCtx.strokeRect(-5, -lineHeight, blockWidth - 20, blockHeight - 10);
+
           wCtx.restore();
         }
       }
+
       wCtx.restore();
     } catch (err) {
       console.error("Render error:", err);
     }
     setRendering(false);
-  }, [pdfDoc, userEmail, now]);
+  }, [pdfDoc, watermarkInfo]);
 
   useEffect(() => {
     if (pdfDoc) renderPage(currentPage, scale);
@@ -139,11 +162,19 @@ function PdfCanvasViewer({ pdfData, userEmail }: { pdfData: ArrayBuffer; userEma
   );
 }
 
-function SecureViewer({ doc, userEmail, onClose }: { doc: any; userEmail: string; onClose: () => void }) {
+function SecureViewer({ doc, userName, userEmail, onClose }: { doc: any; userName: string; userEmail: string; onClose: () => void }) {
   const isPdf = doc.mimeType === "application/pdf";
   const [pdfData, setPdfData] = useState<ArrayBuffer | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [clientIp, setClientIp] = useState("loading...");
+
+  useEffect(() => {
+    fetch("/api/auth/client-info", { credentials: "include" })
+      .then(r => r.json())
+      .then(d => setClientIp(d.ip || "unknown"))
+      .catch(() => setClientIp("unknown"));
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -169,6 +200,12 @@ function SecureViewer({ doc, userEmail, onClose }: { doc: any; userEmail: string
     loadDocument();
     return () => { cancelled = true; };
   }, [doc.id, isPdf]);
+
+  const watermarkInfo: WatermarkInfo = {
+    userName,
+    userEmail,
+    userIp: clientIp,
+  };
 
   const [blurred, setBlurred] = useState(false);
 
@@ -288,7 +325,7 @@ function SecureViewer({ doc, userEmail, onClose }: { doc: any; userEmail: string
               <p className="text-sm text-zinc-400">Loading secure document...</p>
             </div>
           ) : isPdf && pdfData ? (
-            <PdfCanvasViewer pdfData={pdfData} userEmail={userEmail} />
+            <PdfCanvasViewer pdfData={pdfData} watermarkInfo={watermarkInfo} />
           ) : (
             <div className="flex flex-col items-center justify-center h-full text-white">
               <File className="w-16 h-16 text-zinc-500 mb-4" />
@@ -467,6 +504,7 @@ export default function DocumentsTab({ agreementId }: { agreementId: number }) {
       {viewingDoc && (
         <SecureViewer
           doc={viewingDoc}
+          userName={user?.user?.name || "Unknown User"}
           userEmail={user?.user?.email || "Unknown"}
           onClose={() => setViewingDoc(null)}
         />
