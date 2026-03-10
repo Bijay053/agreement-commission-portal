@@ -104,6 +104,7 @@ export interface IStorage {
   getPasswordResetTokenByHash(tokenHash: string): Promise<PasswordResetToken | undefined>;
   markPasswordResetTokenUsed(id: number): Promise<void>;
   invalidateUserPasswordResetTokens(userId: number): Promise<void>;
+  updateUserFullName(userId: number, fullName: string): Promise<void>;
   updateUserPassword(userId: number, passwordHash: string): Promise<void>;
   updateUserActiveStatus(userId: number, isActive: boolean): Promise<void>;
   invalidateUserSessions(userId: number): Promise<void>;
@@ -1346,6 +1347,10 @@ export class DatabaseStorage implements IStorage {
       forcePasswordChange: false,
       updatedAt: new Date(),
     }).where(eq(users.id, userId));
+  }
+
+  async updateUserFullName(userId: number, fullName: string): Promise<void> {
+    await db.update(users).set({ fullName, updatedAt: new Date() }).where(eq(users.id, userId));
   }
 
   async updateUserActiveStatus(userId: number, isActive: boolean): Promise<void> {

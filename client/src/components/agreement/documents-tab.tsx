@@ -592,7 +592,7 @@ export default function DocumentsTab({ agreementId }: { agreementId: number }) {
       {viewingDoc && (
         <SecureViewer
           doc={viewingDoc}
-          userName={user?.user?.name || "Unknown User"}
+          userName={user?.user?.fullName || "Unknown User"}
           userEmail={user?.user?.email || "Unknown"}
           onClose={() => setViewingDoc(null)}
         />

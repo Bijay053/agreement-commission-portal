@@ -1644,6 +1644,31 @@ export async function registerRoutes(
     }
   });
 
+  app.patch("/api/users/:id/name", requireAuth, requirePermission("security.user.manage"), async (req, res) => {
+    try {
+      const userId = parseInt(req.params.id);
+      const { fullName } = req.body;
+      if (!fullName || typeof fullName !== "string" || fullName.trim().length < 1) {
+        return res.status(400).json({ message: "Full name is required" });
+      }
+      const user = await storage.getUser(userId);
+      if (!user) return res.status(404).json({ message: "User not found" });
+      const oldName = user.fullName;
+      await storage.updateUserFullName(userId, fullName.trim());
+      await storage.createAuditLog({
+        userId: req.session.userId,
+        action: "USER_NAME_UPDATE",
+        entityType: "user",
+        entityId: userId,
+        ipAddress: req.ip,
+        metadata: { oldName, newName: fullName.trim() },
+      });
+      res.json({ message: "User name updated" });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
   app.put("/api/users/:id/roles", requireAuth, requirePermission("security.role.manage"), async (req, res) => {
     try {
       const userId = parseInt(req.params.id);
