@@ -4,7 +4,7 @@ hidden = [".config", ".git", "generated-icon.png", "node_modules", "dist"]
 
 [nix]
 channel = "stable-24_05"
-packages = ["cargo", "file", "libiconv", "qpdf", "rustc"]
+packages = ["cargo", "file", "jbig2dec", "libiconv", "mupdf", "qpdf", "rustc"]
 
 [[ports]]
 localPort = 5000

@@ -449,8 +449,9 @@ export default function ContactsListPage() {
               <div>
                 <Label>Phone</Label>
                 <Input
+                  type="tel"
                   value={editForm.phone}
-                  onChange={e => setEditForm({ ...editForm, phone: e.target.value })}
+                  onChange={e => { const v = e.target.value; if (v === '' || /^[\d\s\+\-\(\)\.]+$/.test(v)) setEditForm({ ...editForm, phone: v }); }}
                   data-testid="input-edit-contact-phone"
                 />
               </div>
@@ -586,8 +587,9 @@ export default function ContactsListPage() {
               <div>
                 <Label>Phone</Label>
                 <Input
+                  type="tel"
                   value={addForm.phone}
-                  onChange={e => setAddForm({ ...addForm, phone: e.target.value })}
+                  onChange={e => { const v = e.target.value; if (v === '' || /^[\d\s\+\-\(\)\.]+$/.test(v)) setAddForm({ ...addForm, phone: v }); }}
                   data-testid="input-add-contact-phone"
                 />
               </div>

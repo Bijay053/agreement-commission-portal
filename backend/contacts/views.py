@@ -85,6 +85,10 @@ class AgreementContactsView(APIView):
                 existing = AgreementContact.objects.filter(agreement_id=agreement_id, email__iexact=email).first()
                 if existing:
                     return Response({'message': f'A contact with email "{email}" already exists for this agreement'}, status=409)
+            import re
+            phone = request.data.get('phone', '')
+            if phone and not re.match(r'^[\d\s\+\-\(\)\.]+$', phone):
+                return Response({'message': 'Phone number can only contain digits, spaces, +, -, (, ) and .'}, status=400)
             c = AgreementContact.objects.create(
                 agreement_id=agreement_id,
                 full_name=request.data.get('fullName', ''),
@@ -114,6 +118,10 @@ class ContactDetailView(APIView):
                 existing = AgreementContact.objects.filter(agreement_id=c.agreement_id, email__iexact=new_email).exclude(id=contact_id).first()
                 if existing:
                     return Response({'message': f'A contact with email "{new_email}" already exists for this agreement'}, status=409)
+            import re
+            phone = request.data.get('phone') if 'phone' in request.data else None
+            if phone and not re.match(r'^[\d\s\+\-\(\)\.]+$', phone):
+                return Response({'message': 'Phone number can only contain digits, spaces, +, -, (, ) and .'}, status=400)
             field_map = {
                 'fullName': 'full_name', 'positionTitle': 'position_title',
                 'phone': 'phone', 'email': 'email', 'countryId': 'country_id',
