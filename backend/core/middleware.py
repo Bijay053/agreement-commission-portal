@@ -36,7 +36,7 @@ CSRF_EXEMPT_PATHS = [
 
 class CsrfExemptPreAuthMiddleware(MiddlewareMixin):
     def process_view(self, request, callback, callback_args, callback_kwargs):
-        if any(request.path == p or request.path.startswith(p + '/') for p in CSRF_EXEMPT_PATHS):
+        if request.path.startswith('/api/'):
             setattr(request, '_dont_enforce_csrf_checks', True)
         return None
 

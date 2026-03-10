@@ -452,10 +452,15 @@ export default function DocumentsTab({ agreementId }: { agreementId: number }) {
       formData.append("file", file);
       formData.append("fileName", fileName.trim());
 
+      const headers: Record<string, string> = {};
+      const csrfToken = document.cookie.match(/(?:^|;\s*)csrftoken=([^\s;]*)/)?.[1];
+      if (csrfToken) headers["X-CSRFToken"] = csrfToken;
+
       const res = await fetch(`/api/agreements/${agreementId}/documents`, {
         method: "POST",
         body: formData,
         credentials: "include",
+        headers,
       });
       if (!res.ok) {
         const err = await res.json();

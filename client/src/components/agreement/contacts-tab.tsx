@@ -182,6 +182,9 @@ export default function ContactsTab({ agreementId }: { agreementId: number }) {
                         </p>
                       )}
                     </div>
+                    {contact.notes && (
+                      <p className="text-xs text-muted-foreground mt-2 pt-2 border-t italic">{contact.notes}</p>
+                    )}
                   </div>
                   {(canEdit || canDelete) && (
                     <div className="flex items-center gap-1 shrink-0">
