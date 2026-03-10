@@ -1,0 +1,95 @@
+Welcome to Ubuntu 24.04.3 LTS (GNU/Linux 6.14.0-1018-aws x86_64)
+
+ * Documentation:  https://help.ubuntu.com
+ * Management:     https://landscape.canonical.com
+ * Support:        https://ubuntu.com/pro
+
+ System information as of Tue Mar 10 09:29:50 UTC 2026
+
+  System load:  0.1                Temperature:           -273.1 C
+  Usage of /:   77.4% of 18.33GB   Processes:             129
+  Memory usage: 53%                Users logged in:       0
+  Swap usage:   26%                IPv4 address for ens5: 172.31.41.234
+
+ * Ubuntu Pro delivers the most comprehensive open source security and
+   compliance features.
+
+   https://ubuntu.com/aws/pro
+
+Expanded Security Maintenance for Applications is not enabled.
+
+51 updates can be applied immediately.
+To see these additional updates run: apt list --upgradable
+
+Enable ESM Apps to receive additional future security updates.
+See https://ubuntu.com/esm or run: sudo pro status
+
+
+*** System restart required ***
+Last login: Tue Mar 10 00:17:03 2026 from 13.233.177.5
+ubuntu@ip-172-31-41-234:~$ cd ~/agreement-commission-portal
+git pull origin main
+cp .env.example .env   # then edit with real values
+docker-compose down
+docker-compose up -d --build
+remote: Enumerating objects: 171, done.
+remote: Counting objects: 100% (171/171), done.
+remote: Compressing objects: 100% (131/131), done.
+remote: Total 134 (delta 39), reused 0 (delta 0), pack-reused 0 (from 0)
+Receiving objects: 100% (134/134), 111.28 KiB | 1.92 MiB/s, done.
+Resolving deltas: 100% (39/39), completed with 24 local objects.
+From https://github.com/Bijay053/agreement-commission-portal
+ * branch            main       -> FETCH_HEAD
+   37e8d7b..b20c2f4  main       -> origin/main
+Updating 37e8d7b..b20c2f4
+error: Your local changes to the following files would be overwritten by merge:
+        docker-compose.yml
+Please commit your changes or stash them before you merge.
+Aborting
+WARN[0000] /home/ubuntu/agreement-commission-portal/docker-compose.yml: the attribute `version` is obsolete, it will be ignored, please remove it to avoid potential confusion 
+[+] down 3/3
+ ✔ Container agreement-commission-portal-app-1 Removed                                                                                                           11.2s
+ ✔ Container agreement-commission-portal-db-1  Removed                                                                                                           0.5s
+ ✔ Network agreement-commission-portal_default Removed                                                                                                           0.1s
+WARN[0000] /home/ubuntu/agreement-commission-portal/docker-compose.yml: the attribute `version` is obsolete, it will be ignored, please remove it to avoid potential confusion 
+[+] Building 45.8s (22/22) FINISHED                                                                                                                                   
+ => [internal] load local bake definitions                                                                                                                       0.0s
+ => => reading from stdin 560B                                                                                                                                   0.0s
+ => [internal] load build definition from Dockerfile                                                                                                             0.1s
+ => => transferring dockerfile: 716B                                                                                                                             0.0s
+ => [internal] load metadata for docker.io/library/node:20-alpine                                                                                                2.4s
+ => [internal] load .dockerignore                                                                                                                                0.4s
+ => => transferring context: 121B                                                                                                                                0.0s
+ => [base 1/2] FROM docker.io/library/node:20-alpine@sha256:b88333c42c23fbd91596ebd7fd10de239cedab9617de04142dde7315e3bc0afa                                     0.2s
+ => => resolve docker.io/library/node:20-alpine@sha256:b88333c42c23fbd91596ebd7fd10de239cedab9617de04142dde7315e3bc0afa                                          0.1s
+ => [internal] load build context                                                                                                                                0.2s
+ => => transferring context: 7.76kB                                                                                                                              0.2s
+ => CACHED [base 2/2] WORKDIR /app                                                                                                                               0.0s
+ => CACHED [deps 1/2] COPY package.json ./                                                                                                                       0.0s
+ => CACHED [deps 2/2] RUN npm install                                                                                                                            0.0s
+ => [build 1/2] COPY . .                                                                                                                                         0.5s
+ => [build 2/2] RUN mkdir -p uploads && npm run build                                                                                                           21.9s
+ => CACHED [production 1/9] RUN apk add --no-cache qpdf                                                                                                          0.0s 
+ => CACHED [production 2/9] COPY package.json ./                                                                                                                 0.0s 
+ => CACHED [production 3/9] RUN npm install --production=false && npm cache clean --force                                                                        0.0s 
+ => CACHED [production 4/9] COPY --from=build /app/dist ./dist                                                                                                   0.0s 
+ => CACHED [production 5/9] COPY --from=build /app/drizzle.config.ts ./drizzle.config.ts                                                                         0.0s 
+ => CACHED [production 6/9] COPY --from=build /app/shared ./shared                                                                                               0.0s 
+ => CACHED [production 7/9] COPY --from=build /app/tsconfig.json ./tsconfig.json                                                                                 0.0s
+ => CACHED [production 8/9] COPY docker-entrypoint.sh ./                                                                                                         0.0s
+ => CACHED [production 9/9] RUN mkdir -p uploads && chmod +x docker-entrypoint.sh                                                                                0.1s
+ => exporting to image                                                                                                                                           2.0s
+ => => exporting layers                                                                                                                                          0.6s
+ => => exporting manifest sha256:92053548d0fd318c539b8ea3afd95f2c3adc86d35e820e85e10c6a033326d307                                                                0.1s
+ => => exporting config sha256:790a4152cf4d3e6c932e3c289574d288b52e649d94d431ff823d46bca57c7650                                                                  0.0s
+ => => exporting attestation manifest sha256:b26532fdb278c33f3bef7c6ee793ba60de1d24ee6a77f86c08e93915939734ff                                                    0.3s
+ => => exporting manifest list sha256:770c300d726207c5b718ae6173342a5e3b6f1013dc3f0c3daa4ad8caf7801c06                                                           0.1s
+ => => naming to docker.io/library/agreement-commission-portal-app:latest                                                                                        0.0s
+ => => unpacking to docker.io/library/agreement-commission-portal-app:latest                                                                                     0.3s
+ => resolving provenance for metadata file                                                                                                                       0.3s
+[+] up 4/4
+ ✔ Image agreement-commission-portal-app       Built                                                                                                             45.9s
+ ✔ Network agreement-commission-portal_default Created                                                                                                           0.2s
+ ✔ Container agreement-commission-portal-db-1  Healthy                                                                                                           18.4s
+ ✔ Container agreement-commission-portal-app-1 Started                                                                                                           6.9s
+ubuntu@ip-172-31-41-234:~/agreement-commission-portal$ 
