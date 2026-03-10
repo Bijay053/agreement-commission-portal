@@ -1,0 +1,289 @@
+ubuntu@ip-172-31-41-234:~/agreement-commission-portal$ cd ~/agreement-commission-portal
+
+# Stop the old containers
+docker-compose down
+
+# Discard local changes and pull the new code
+git stash
+git pull origin main
+
+# Rebuild from scratch with the new Python Dockerfile (ignore cached Node.js layers)
+docker-compose up -d --build --no-cache
+WARN[0000] /home/ubuntu/agreement-commission-portal/docker-compose.yml: the attribute `version` is obsolete, it will be ignored, please remove it to avoid potential confusion 
+[+] down 3/3
+ ✔ Container agreement-commission-portal-app-1 Removed                                                                                                            0.1s
+ ✔ Container agreement-commission-portal-db-1  Removed                                                                                                            0.3s
+ ✔ Network agreement-commission-portal_default Removed                                                                                                            0.1s
+Saved working directory and index state WIP on main: 37e8d7b Fix watermark disappearing when scrolling at high zoom
+remote: Enumerating objects: 5, done.
+remote: Counting objects: 100% (5/5), done.
+remote: Compressing objects: 100% (3/3), done.
+remote: Total 3 (delta 2), reused 0 (delta 0), pack-reused 0 (from 0)
+Unpacking objects: 100% (3/3), 301 bytes | 60.00 KiB/s, done.
+From https://github.com/Bijay053/agreement-commission-portal
+ * branch            main       -> FETCH_HEAD
+   b20c2f4..2af5106  main       -> origin/main
+Updating 37e8d7b..2af5106
+Fast-forward
+ .dockerignore                                      |    36 +-
+ .env.example                                       |    32 +-
+ .gitignore                                         |    62 +-
+ .replit                                            |    42 -
+ AWS_DEPLOYMENT.md                                  |   333 ++--
+ Dockerfile                                         |    49 +-
+ backend/accounts/__init__.py                       |     0
+ backend/accounts/models.py                         |   149 ++
+ backend/accounts/urls.py                           |    19 +
+ backend/accounts/views.py                          |  1071 ++++++++++
+ backend/agreements/__init__.py                     |     0
+ backend/agreements/models.py                       |    36 +
+ backend/agreements/urls.py                         |    10 +
+ backend/agreements/views.py                        |   381 ++++
+ backend/audit/__init__.py                          |     0
+ backend/audit/models.py                            |    17 +
+ backend/audit/urls.py                              |     7 +
+ backend/audit/views.py                             |    96 +
+ backend/commission_tracker/__init__.py             |     0
+ backend/commission_tracker/models.py               |   113 ++
+ backend/commission_tracker/services.py             |   170 ++
+ backend/commission_tracker/urls.py                 |    25 +
+ backend/commission_tracker/views.py                |   857 ++++++++
+ backend/commissions/__init__.py                    |     0
+ backend/commissions/models.py                      |    26 +
+ backend/commissions/urls.py                        |     8 +
+ backend/commissions/views.py                       |   124 ++
+ backend/config/__init__.py                         |    13 +
+ backend/config/celery.py                           |    39 +
+ backend/config/settings.py                         |   209 ++
+ backend/config/urls.py                             |    44 +
+ backend/config/wsgi.py                             |     5 +
+ backend/contacts/__init__.py                       |     0
+ backend/contacts/models.py                         |    22 +
+ backend/contacts/urls.py                           |     8 +
+ backend/contacts/views.py                          |   169 ++
+ backend/core/__init__.py                           |     0
+ backend/core/authentication.py                     |    24 +
+ backend/core/exceptions.py                         |     9 +
+ backend/core/exports.py                            |    39 +
+ backend/core/field_permissions.py                  |    60 +
+ backend/core/file_security.py                      |   207 ++
+ backend/core/health.py                             |    99 +
+ backend/core/management/__init__.py                |     0
+ backend/core/management/commands/__init__.py       |     0
+ backend/core/management/commands/deploy_check.py   |   121 ++
+ backend/core/middleware.py                         |    70 +
+ backend/core/models.py                             |    61 +
+ backend/core/object_permissions.py                 |    73 +
+ backend/core/pagination.py                         |     7 +
+ backend/core/permissions.py                        |    76 +
+ backend/core/status_history.py                     |    14 +
+ backend/core/tasks.py                              |    50 +
+ backend/core/throttling.py                         |    17 +
+ backend/core/urls.py                               |     9 +
+ backend/core/views.py                              |   193 ++
+ backend/dashboard/__init__.py                      |     0
+ backend/dashboard/models.py                        |     1 +
+ backend/dashboard/urls.py                          |     8 +
+ backend/dashboard/views.py                         |    90 +
+ backend/documents/__init__.py                      |     0
+ backend/documents/models.py                        |    21 +
+ backend/documents/urls.py                          |     9 +
+ backend/documents/views.py                         |   329 ++++
+ backend/manage.py                                  |    16 +
+ backend/notifications/__init__.py                  |     0
+ backend/notifications/models.py                    |    35 +
+ backend/notifications/tasks.py                     |   166 ++
+ backend/notifications/template_views.py            |   173 ++
+ backend/notifications/urls.py                      |    11 +
+ backend/notifications/views.py                     |   325 ++++
+ backend/providers/__init__.py                      |     0
+ backend/providers/models.py                        |    17 +
+ backend/providers/urls.py                          |     8 +
+ backend/providers/views.py                         |   132 ++
+ backend/requirements.txt                           |    18 +
+ backend/start_django.py                            |   104 +
+ backend/sub_agent/__init__.py                      |     0
+ backend/sub_agent/models.py                        |    47 +
+ backend/sub_agent/services.py                      |    56 +
+ backend/sub_agent/urls.py                          |    11 +
+ backend/sub_agent/views.py                         |   266 +++
+ backend/targets/__init__.py                        |     0
+ backend/targets/models.py                          |    61 +
+ backend/targets/urls.py                            |    11 +
+ backend/targets/views.py                           |   248 +++
+ client/public/apple-touch-icon.png                 |   Bin 18426 -> 0 bytes
+ client/public/favicon-16.png                       |   Bin 1408 -> 0 bytes
+ client/public/favicon-32.png                       |   Bin 2279 -> 0 bytes
+ client/public/favicon-sic.png                      |   Bin 543241 -> 0 bytes
+ client/public/favicon.ico                          |   Bin 3638 -> 0 bytes
+ client/public/favicon.png                          |   Bin 1145 -> 0 bytes
+ client/src/App.tsx                                 |     4 +-
+ client/src/components/agreement/audit-tab.tsx      |     4 +-
+ client/src/components/agreement/commission-tab.tsx |     7 +-
+ client/src/components/agreement/contacts-tab.tsx   |     6 +-
+ client/src/components/agreement/documents-tab.tsx  |    92 +-
+ client/src/components/app-sidebar.tsx              |     2 +-
+ client/src/components/inactivity-monitor.tsx       |    11 +-
+ client/src/components/ui/input.tsx                 |     2 +-
+ client/src/lib/queryClient.ts                      |    19 +-
+ client/src/pages/account-security.tsx              |     3 +-
+ client/src/pages/agreement-form.tsx                |     2 +-
+ client/src/pages/agreements-list.tsx               |     7 +-
+ client/src/pages/audit-logs.tsx                    |    10 +-
+ client/src/pages/commission-tracker-detail.tsx     |     8 +-
+ client/src/pages/commission-tracker.tsx            |    29 +-
+ client/src/pages/contacts-list.tsx                 |    23 +-
+ client/src/pages/dashboard.tsx                     |     3 +-
+ client/src/pages/roles-management.tsx              |     2 +-
+ client/src/pages/sub-agent-commission.tsx          |    27 +-
+ client/src/pages/users-management.tsx              |     5 +-
+ dist/public/assets/index-MxQ0SYtM.css              |     1 -
+ dist/public/favicon.png                            |   Bin 1145 -> 0 bytes
+ dist/public/index.html                             |    18 -
+ docker-compose.yml                                 |    80 +-
+ docker-entrypoint.sh                               |    18 -
+ drizzle.config.ts                                  |    14 -
+ final-term-table-override-verify.png               |   Bin 118698 -> 0 bytes
+ final-term-table-verify.png                        |   Bin 118698 -> 0 bytes
+ nginx/nginx.conf                                   |   125 ++
+ package-lock.json                                  | 11183 ---------------------------------------------------------------------------------------------------------
+ replit.md                                          |    44 -
+ script/build.ts                                    |    70 -
+ scripts/backup.sh                                  |    85 +
+ scripts/restore.sh                                 |   115 ++
+ server/agreement-notifications.ts                  |   183 --
+ server/auth.ts                                     |    95 -
+ server/commission-calc.ts                          |   207 --
+ server/db.ts                                       |    10 -
+ server/email.ts                                    |   322 ---
+ server/index.ts                                    |   106 -
+ server/routes.ts                                   |  2977 ----------------------------
+ server/s3.ts                                       |    65 -
+ server/seed.ts                                     |   421 ----
+ server/static.ts                                   |    19 -
+ server/storage.ts                                  |  1678 ----------------
+ server/sub-agent-calc.ts                           |    87 -
+ server/vite.ts                                     |    58 -
+ shared/schema.ts                                   |   907 ++++-----
+ start_django.sh                                    |    27 +
+ tsconfig.json                                      |     2 +-
+ vite.config.ts                                     |     7 +
+ 143 files changed, 8235 insertions(+), 18419 deletions(-)
+ delete mode 100644 .replit
+ create mode 100644 backend/accounts/__init__.py
+ create mode 100644 backend/accounts/models.py
+ create mode 100644 backend/accounts/urls.py
+ create mode 100644 backend/accounts/views.py
+ create mode 100644 backend/agreements/__init__.py
+ create mode 100644 backend/agreements/models.py
+ create mode 100644 backend/agreements/urls.py
+ create mode 100644 backend/agreements/views.py
+ create mode 100644 backend/audit/__init__.py
+ create mode 100644 backend/audit/models.py
+ create mode 100644 backend/audit/urls.py
+ create mode 100644 backend/audit/views.py
+ create mode 100644 backend/commission_tracker/__init__.py
+ create mode 100644 backend/commission_tracker/models.py
+ create mode 100644 backend/commission_tracker/services.py
+ create mode 100644 backend/commission_tracker/urls.py
+ create mode 100644 backend/commission_tracker/views.py
+ create mode 100644 backend/commissions/__init__.py
+ create mode 100644 backend/commissions/models.py
+ create mode 100644 backend/commissions/urls.py
+ create mode 100644 backend/commissions/views.py
+ create mode 100644 backend/config/__init__.py
+ create mode 100644 backend/config/celery.py
+ create mode 100644 backend/config/settings.py
+ create mode 100644 backend/config/urls.py
+ create mode 100644 backend/config/wsgi.py
+ create mode 100644 backend/contacts/__init__.py
+ create mode 100644 backend/contacts/models.py
+ create mode 100644 backend/contacts/urls.py
+ create mode 100644 backend/contacts/views.py
+ create mode 100644 backend/core/__init__.py
+ create mode 100644 backend/core/authentication.py
+ create mode 100644 backend/core/exceptions.py
+ create mode 100644 backend/core/exports.py
+ create mode 100644 backend/core/field_permissions.py
+ create mode 100644 backend/core/file_security.py
+ create mode 100644 backend/core/health.py
+ create mode 100644 backend/core/management/__init__.py
+ create mode 100644 backend/core/management/commands/__init__.py
+ create mode 100644 backend/core/management/commands/deploy_check.py
+ create mode 100644 backend/core/middleware.py
+ create mode 100644 backend/core/models.py
+ create mode 100644 backend/core/object_permissions.py
+ create mode 100644 backend/core/pagination.py
+ create mode 100644 backend/core/permissions.py
+ create mode 100644 backend/core/status_history.py
+ create mode 100644 backend/core/tasks.py
+ create mode 100644 backend/core/throttling.py
+ create mode 100644 backend/core/urls.py
+ create mode 100644 backend/core/views.py
+ create mode 100644 backend/dashboard/__init__.py
+ create mode 100644 backend/dashboard/models.py
+ create mode 100644 backend/dashboard/urls.py
+ create mode 100644 backend/dashboard/views.py
+ create mode 100644 backend/documents/__init__.py
+ create mode 100644 backend/documents/models.py
+ create mode 100644 backend/documents/urls.py
+ create mode 100644 backend/documents/views.py
+ create mode 100644 backend/manage.py
+ create mode 100644 backend/notifications/__init__.py
+ create mode 100644 backend/notifications/models.py
+ create mode 100644 backend/notifications/tasks.py
+ create mode 100644 backend/notifications/template_views.py
+ create mode 100644 backend/notifications/urls.py
+ create mode 100644 backend/notifications/views.py
+ create mode 100644 backend/providers/__init__.py
+ create mode 100644 backend/providers/models.py
+ create mode 100644 backend/providers/urls.py
+ create mode 100644 backend/providers/views.py
+ create mode 100644 backend/requirements.txt
+ create mode 100644 backend/start_django.py
+ create mode 100644 backend/sub_agent/__init__.py
+ create mode 100644 backend/sub_agent/models.py
+ create mode 100644 backend/sub_agent/services.py
+ create mode 100644 backend/sub_agent/urls.py
+ create mode 100644 backend/sub_agent/views.py
+ create mode 100644 backend/targets/__init__.py
+ create mode 100644 backend/targets/models.py
+ create mode 100644 backend/targets/urls.py
+ create mode 100644 backend/targets/views.py
+ delete mode 100644 client/public/apple-touch-icon.png
+ delete mode 100644 client/public/favicon-16.png
+ delete mode 100644 client/public/favicon-32.png
+ delete mode 100644 client/public/favicon-sic.png
+ delete mode 100644 client/public/favicon.ico
+ delete mode 100644 client/public/favicon.png
+ delete mode 100644 dist/public/assets/index-MxQ0SYtM.css
+ delete mode 100644 dist/public/favicon.png
+ delete mode 100644 dist/public/index.html
+ delete mode 100755 docker-entrypoint.sh
+ delete mode 100644 drizzle.config.ts
+ delete mode 100644 final-term-table-override-verify.png
+ delete mode 100644 final-term-table-verify.png
+ create mode 100644 nginx/nginx.conf
+ delete mode 100644 package-lock.json
+ delete mode 100644 replit.md
+ delete mode 100644 script/build.ts
+ create mode 100755 scripts/backup.sh
+ create mode 100755 scripts/restore.sh
+ delete mode 100644 server/agreement-notifications.ts
+ delete mode 100644 server/auth.ts
+ delete mode 100644 server/commission-calc.ts
+ delete mode 100644 server/db.ts
+ delete mode 100644 server/email.ts
+ delete mode 100644 server/index.ts
+ delete mode 100644 server/routes.ts
+ delete mode 100644 server/s3.ts
+ delete mode 100644 server/seed.ts
+ delete mode 100644 server/static.ts
+ delete mode 100644 server/storage.ts
+ delete mode 100644 server/sub-agent-calc.ts
+ delete mode 100644 server/vite.ts
+ create mode 100755 start_django.sh
+unknown flag: --no-cache
+ubuntu@ip-172-31-41-234:~/agreement-commission-portal$ docker-compose ps
+NAME      IMAGE     COMMAND   SERVICE   CREATED   STATUS    PORTS
+ubuntu@ip-172-31-41-234:~/agreement-commission-portal$ 
