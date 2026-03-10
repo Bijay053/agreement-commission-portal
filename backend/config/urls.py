@@ -1,5 +1,16 @@
-from django.urls import path, include
+import os
+from django.conf import settings
+from django.urls import path, include, re_path
+from django.http import FileResponse, HttpResponseNotFound
 from accounts import views as account_views
+
+
+def spa_view(request):
+    index_path = os.path.join(settings.SPA_ROOT, 'index.html')
+    if os.path.exists(index_path):
+        return FileResponse(open(index_path, 'rb'), content_type='text/html')
+    return HttpResponseNotFound('Frontend not built. Run: npm run build')
+
 
 urlpatterns = [
     path('api/auth/', include('accounts.urls')),
@@ -28,3 +39,6 @@ urlpatterns = [
     path('api/roles/<int:role_id>/permissions', account_views.RolePermissionsView.as_view()),
     path('api/roles/<int:role_id>/duplicate', account_views.RoleDuplicateView.as_view()),
 ]
+
+if not settings.DEBUG or os.path.isdir(settings.SPA_ROOT):
+    urlpatterns += [re_path(r'^(?!api/).*$', spa_view)]

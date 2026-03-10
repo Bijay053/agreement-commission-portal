@@ -1,4 +1,4 @@
-# AWS Deployment Guide — Agreement & Commission Portal
+# AWS Deployment Guide — Agreement & Commission Portal (Django)
 
 ## Prerequisites
 
@@ -20,14 +20,11 @@
    - **SSH (22)** — your IP only
    - **HTTP (80)** — 0.0.0.0/0
    - **HTTPS (443)** — 0.0.0.0/0
-6. Storage: 20GB minimum
 
-### Step 2: Connect and Install Docker
+### Step 2: Install Docker on EC2
 
 ```bash
-ssh -i your-key.pem ec2-user@your-ec2-ip
-
-# Amazon Linux 2023
+# For Amazon Linux 2023
 sudo yum update -y
 sudo yum install -y docker git
 sudo systemctl start docker
@@ -37,211 +34,112 @@ sudo usermod -aG docker ec2-user
 # Install Docker Compose
 sudo curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
 sudo chmod +x /usr/local/bin/docker-compose
-
-# Log out and back in for group changes
-exit
-ssh -i your-key.pem ec2-user@your-ec2-ip
 ```
 
-### Step 3: Deploy the Application
+### Step 3: Clone and Configure
 
 ```bash
+cd ~
 git clone https://github.com/Bijay053/agreement-commission-portal.git
 cd agreement-commission-portal
 
 # Create environment file
-cp .env.example .env
+cat > .env << 'EOF'
+DB_PASSWORD=your_strong_database_password
+SESSION_SECRET=your_strong_session_secret
+ALLOWED_HOSTS=portal.studyinfocentre.com,65.0.18.210
+CORS_ORIGINS=https://portal.studyinfocentre.com
 
-# Edit with strong passwords
-nano .env
-# Set:
-#   DB_PASSWORD=your_strong_password_here
-#   SESSION_SECRET=your_random_64_char_string
-#   DATABASE_URL=postgresql://portal_user:your_strong_password_here@db:5432/agreement_portal
+# AWS S3 for documents
+AWS_ACCESS_KEY_ID=your_aws_key
+AWS_SECRET_ACCESS_KEY=your_aws_secret
+AWS_S3_BUCKET=studyinfocentre-portal-documents
 
-# Start the application
-docker-compose up -d --build
-
-# Check logs
-docker-compose logs -f app
+# Email (SES)
+SMTP_HOST=email-smtp.ap-south-1.amazonaws.com
+SMTP_PORT=587
+SMTP_USER=your_ses_smtp_user
+SMTP_PASS=your_ses_smtp_password
+FROM_EMAIL=noreply@studyinfocentre.com
+EOF
 ```
 
-### Step 4: Initialize the Database
+### Step 4: Deploy
 
 ```bash
-# Run database migrations
-docker-compose exec app node -e "
-const { Pool } = require('pg');
-const pool = new Pool({ connectionString: process.env.DATABASE_URL });
-pool.query('SELECT 1').then(() => console.log('DB connected')).catch(console.error);
-"
-
-# Push the schema (run from host with Node.js, or exec into container)
-docker-compose exec app npx drizzle-kit push
+docker-compose up -d --build
 ```
 
-The seed script runs automatically on first startup and creates the default admin user.
-
-### Step 5: Set Up HTTPS with Nginx (Optional but Recommended)
+### Step 5: Set up Nginx + SSL
 
 ```bash
 sudo yum install -y nginx certbot python3-certbot-nginx
 
-# Configure Nginx as reverse proxy
 sudo tee /etc/nginx/conf.d/portal.conf << 'EOF'
 server {
     listen 80;
-    server_name your-domain.com;
-
-    client_max_body_size 50M;
+    server_name portal.studyinfocentre.com;
 
     location / {
-        proxy_pass http://localhost:5000;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection 'upgrade';
+        proxy_pass http://127.0.0.1:80;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_cache_bypass $http_upgrade;
+        client_max_body_size 50M;
     }
 }
 EOF
 
 sudo systemctl start nginx
-sudo systemctl enable nginx
-
-# Get SSL certificate (requires domain pointing to EC2 IP)
-sudo certbot --nginx -d your-domain.com
+sudo certbot --nginx -d portal.studyinfocentre.com
 ```
 
 ---
 
-## Option 2: AWS Elastic Beanstalk (Easiest AWS Option)
+## Architecture
 
-### Step 1: Install EB CLI
-
-```bash
-pip install awsebcli
+```
+Internet → Nginx (SSL termination, port 443)
+         → Docker Container (port 80)
+           → Gunicorn (3 workers, Django WSGI)
+             → PostgreSQL (Docker, port 5432)
+             → AWS S3 (document storage)
+             → AWS SES (email)
 ```
 
-### Step 2: Initialize and Deploy
+## Stack
+
+- **Backend**: Python 3.12 + Django 6.0.3 + Django REST Framework
+- **Frontend**: React + TypeScript + Vite (pre-built static files served by WhiteNoise)
+- **Database**: PostgreSQL 16
+- **WSGI Server**: Gunicorn (3 workers)
+- **File Storage**: AWS S3 (private bucket)
+- **Email**: AWS SES via SMTP
+- **PDF Protection**: pikepdf
+- **Reverse Proxy**: Nginx with Let's Encrypt SSL
+
+## Deploy Updates
 
 ```bash
-cd agreement-commission-portal
-
-# Initialize Elastic Beanstalk
-eb init -p docker agreement-portal --region us-east-1
-
-# Create an environment with a database
-eb create agreement-portal-prod \
-  --database \
-  --database.engine postgres \
-  --database.instance db.t3.micro \
-  --database.username portal_user \
-  --database.password YOUR_STRONG_PASSWORD \
-  --instance_type t3.small
-
-# Set environment variables
-eb setenv \
-  SESSION_SECRET=your_random_64_char_string \
-  NODE_ENV=production \
-  PORT=5000
-```
-
-Note: Elastic Beanstalk automatically sets `DATABASE_URL` from the RDS instance.
-
-### Step 3: Deploy Updates
-
-```bash
-eb deploy
-```
-
----
-
-## Option 3: AWS ECS with Fargate (Serverless Containers)
-
-### Step 1: Push Docker Image to ECR
-
-```bash
-# Create ECR repository
-aws ecr create-repository --repository-name agreement-portal --region us-east-1
-
-# Login to ECR
-aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin YOUR_ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com
-
-# Build and push
-docker build -t agreement-portal .
-docker tag agreement-portal:latest YOUR_ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com/agreement-portal:latest
-docker push YOUR_ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com/agreement-portal:latest
-```
-
-### Step 2: Create RDS PostgreSQL
-
-1. Go to **AWS Console → RDS → Create Database**
-2. Choose **PostgreSQL 16**
-3. Instance: **db.t3.micro** (free tier eligible)
-4. Set username/password
-5. Note the endpoint URL
-
-### Step 3: Create ECS Service
-
-1. Go to **AWS Console → ECS → Create Cluster** (Fargate)
-2. Create a Task Definition with:
-   - Image: your ECR image URL
-   - Port: 5000
-   - Environment variables:
-     - `DATABASE_URL`: your RDS connection string
-     - `SESSION_SECRET`: your secret
-     - `NODE_ENV`: production
-     - `PORT`: 5000
-   - Memory: 1024 MB
-   - CPU: 512
-3. Create a Service with an Application Load Balancer
-
----
-
-## Default Login Credentials
-
-After deployment, log in with:
-
-- **Admin**: admin@studyinfocentre.com / admin123
-- **Editor**: editor@studyinfocentre.com / editor123
-- **Viewer**: viewer@studyinfocentre.com / viewer123
-
-**IMPORTANT**: Change these passwords immediately after first login.
-
----
-
-## Environment Variables Reference
-
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `DATABASE_URL` | Yes | PostgreSQL connection string |
-| `SESSION_SECRET` | Yes | Random string for session encryption |
-| `PORT` | No | Server port (default: 5000) |
-| `NODE_ENV` | No | Set to `production` for deployment |
-
----
-
-## Updating the Application
-
-```bash
-# Pull latest code
-cd agreement-commission-portal
-git pull
-
-# Rebuild and restart
+cd ~/agreement-commission-portal
+git pull origin main
 docker-compose down
 docker-compose up -d --build
 ```
 
----
+## Monitoring
 
-## Troubleshooting
+```bash
+# View logs
+docker-compose logs -f app
 
-- **Container won't start**: Check logs with `docker-compose logs app`
-- **Database connection fails**: Verify `DATABASE_URL` is correct and database is running
-- **Port already in use**: Change the port mapping in `docker-compose.yml`
-- **File uploads not persisting**: Ensure the `uploads` volume is properly mounted
+# Check status
+docker-compose ps
+
+# Django shell
+docker-compose exec app python manage.py shell
+
+# Database backup
+docker-compose exec db pg_dump -U portal_user agreement_portal > backup_$(date +%Y%m%d).sql
+```

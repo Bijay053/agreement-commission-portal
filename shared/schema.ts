@@ -1,545 +1,372 @@
-import { sql } from "drizzle-orm";
-import {
-  pgTable,
-  text,
-  varchar,
-  integer,
-  boolean,
-  date,
-  timestamp,
-  numeric,
-  jsonb,
-  serial,
-} from "drizzle-orm/pg-core";
-import { createInsertSchema } from "drizzle-zod";
-import { z } from "zod";
+export interface Country {
+  id: number;
+  iso2: string;
+  name: string;
+}
 
-export const countries = pgTable("countries", {
-  id: serial("id").primaryKey(),
-  iso2: varchar("iso2", { length: 2 }).notNull().unique(),
-  name: varchar("name", { length: 128 }).notNull(),
-});
+export interface University {
+  id: number;
+  name: string;
+  providerType: string;
+  countryId: number | null;
+  website: string | null;
+  notes: string | null;
+  status: string;
+  createdAt: string | null;
+  updatedAt: string | null;
+}
 
-export const universities = pgTable("universities", {
-  id: serial("id").primaryKey(),
-  name: varchar("name", { length: 255 }).notNull(),
-  providerType: varchar("provider_type", { length: 32 }).notNull().default("university"),
-  countryId: integer("country_id").references(() => countries.id),
-  website: varchar("website", { length: 255 }),
-  notes: text("notes"),
-  status: varchar("status", { length: 16 }).notNull().default("active"),
-  createdAt: timestamp("created_at").defaultNow(),
-  updatedAt: timestamp("updated_at").defaultNow(),
-});
-
-export const users = pgTable("users", {
-  id: serial("id").primaryKey(),
-  email: varchar("email", { length: 255 }).notNull().unique(),
-  fullName: varchar("full_name", { length: 255 }).notNull(),
-  passwordHash: text("password_hash").notNull(),
-  isActive: boolean("is_active").notNull().default(true),
-  passwordChangedAt: timestamp("password_changed_at"),
-  lastLoginAt: timestamp("last_login_at"),
-  lastLoginIp: varchar("last_login_ip", { length: 45 }),
-  forcePasswordChange: boolean("force_password_change").notNull().default(false),
-  createdAt: timestamp("created_at").defaultNow(),
-  updatedAt: timestamp("updated_at").defaultNow(),
-});
-
-export const roles = pgTable("roles", {
-  id: serial("id").primaryKey(),
-  name: varchar("name", { length: 64 }).notNull().unique(),
-  description: text("description"),
-});
-
-export const permissions = pgTable("permissions", {
-  id: serial("id").primaryKey(),
-  code: varchar("code", { length: 64 }).notNull().unique(),
-  module: varchar("module", { length: 64 }),
-  resource: varchar("resource", { length: 64 }),
-  action: varchar("action", { length: 64 }),
-  description: text("description"),
-});
-
-export const rolePermissions = pgTable("role_permissions", {
-  id: serial("id").primaryKey(),
-  roleId: integer("role_id").notNull().references(() => roles.id, { onDelete: "cascade" }),
-  permissionId: integer("permission_id").notNull().references(() => permissions.id, { onDelete: "cascade" }),
-});
-
-export const userRoles = pgTable("user_roles", {
-  id: serial("id").primaryKey(),
-  userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
-  roleId: integer("role_id").notNull().references(() => roles.id, { onDelete: "cascade" }),
-});
-
-export const userCountryAccess = pgTable("user_country_access", {
-  id: serial("id").primaryKey(),
-  userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
-  countryId: integer("country_id").notNull().references(() => countries.id, { onDelete: "cascade" }),
-});
-
-export const agreements = pgTable("agreements", {
-  id: serial("id").primaryKey(),
-  universityId: integer("university_id").notNull().references(() => universities.id),
-  agreementCode: varchar("agreement_code", { length: 64 }).notNull().unique(),
-  title: varchar("title", { length: 255 }).notNull(),
-  agreementType: varchar("agreement_type", { length: 32 }).notNull(),
-  status: varchar("status", { length: 24 }).notNull().default("draft"),
-  territoryType: varchar("territory_type", { length: 16 }).notNull().default("country_specific"),
-  territoryCountryId: integer("territory_country_id").references(() => countries.id),
-  startDate: date("start_date").notNull(),
-  expiryDate: date("expiry_date").notNull(),
-  autoRenew: boolean("auto_renew").default(false),
-  confidentialityLevel: varchar("confidentiality_level", { length: 16 }).notNull().default("high"),
-  internalNotes: text("internal_notes"),
-  createdByUserId: integer("created_by_user_id").references(() => users.id),
-  updatedByUserId: integer("updated_by_user_id").references(() => users.id),
-  createdAt: timestamp("created_at").defaultNow(),
-  updatedAt: timestamp("updated_at").defaultNow(),
-});
-
-export const agreementTerritories = pgTable("agreement_territories", {
-  id: serial("id").primaryKey(),
-  agreementId: integer("agreement_id").notNull().references(() => agreements.id, { onDelete: "cascade" }),
-  countryId: integer("country_id").notNull().references(() => countries.id),
-});
-
-export const agreementTargets = pgTable("agreement_targets", {
-  id: serial("id").primaryKey(),
-  agreementId: integer("agreement_id").notNull().references(() => agreements.id, { onDelete: "cascade" }),
-  targetType: varchar("target_type", { length: 16 }).notNull(),
-  metric: varchar("metric", { length: 32 }).notNull(),
-  value: numeric("value", { precision: 12, scale: 2 }).notNull(),
-  currency: varchar("currency", { length: 3 }),
-  periodKey: varchar("period_key", { length: 32 }).notNull(),
-  notes: text("notes"),
-  bonusEnabled: boolean("bonus_enabled").default(false),
-  bonusAmount: numeric("bonus_amount", { precision: 12, scale: 2 }),
-  bonusCurrency: varchar("bonus_currency", { length: 3 }),
-  bonusCondition: text("bonus_condition"),
-  bonusNotes: text("bonus_notes"),
-  createdByUserId: integer("created_by_user_id").references(() => users.id),
-  createdAt: timestamp("created_at").defaultNow(),
-  updatedAt: timestamp("updated_at").defaultNow(),
-});
-
-export const targetBonusRules = pgTable("target_bonus_rules", {
-  id: serial("id").primaryKey(),
-  targetId: integer("target_id").notNull().references(() => agreementTargets.id, { onDelete: "cascade" }),
-  bonusType: varchar("bonus_type", { length: 32 }).notNull(),
-  currency: varchar("currency", { length: 3 }).notNull().default("AUD"),
-  createdAt: timestamp("created_at").defaultNow(),
-});
-
-export const targetBonusTiers = pgTable("target_bonus_tiers", {
-  id: serial("id").primaryKey(),
-  bonusRuleId: integer("bonus_rule_id").notNull().references(() => targetBonusRules.id, { onDelete: "cascade" }),
-  minStudents: integer("min_students").notNull(),
-  maxStudents: integer("max_students"),
-  bonusAmount: numeric("bonus_amount", { precision: 12, scale: 2 }).notNull(),
-  calculationType: varchar("calculation_type", { length: 16 }).notNull().default("per_student"),
-});
-
-export const targetBonusCountry = pgTable("target_bonus_country", {
-  id: serial("id").primaryKey(),
-  bonusRuleId: integer("bonus_rule_id").notNull().references(() => targetBonusRules.id, { onDelete: "cascade" }),
-  countryId: integer("country_id").notNull().references(() => countries.id),
-  studentCount: integer("student_count").notNull(),
-  bonusAmount: numeric("bonus_amount", { precision: 12, scale: 2 }).notNull(),
-});
-
-export const agreementCommissionRules = pgTable("agreement_commission_rules", {
-  id: serial("id").primaryKey(),
-  agreementId: integer("agreement_id").notNull().references(() => agreements.id, { onDelete: "cascade" }),
-  label: varchar("label", { length: 255 }).notNull(),
-  studyLevel: varchar("study_level", { length: 32 }),
-  commissionMode: varchar("commission_mode", { length: 16 }).notNull(),
-  percentageValue: numeric("percentage_value", { precision: 6, scale: 3 }),
-  flatAmount: numeric("flat_amount", { precision: 12, scale: 2 }),
-  currency: varchar("currency", { length: 3 }),
-  basis: varchar("basis", { length: 24 }).notNull(),
-  payEvent: varchar("pay_event", { length: 24 }).notNull().default("enrolment"),
-  subjectRules: jsonb("subject_rules"),
-  conditionsText: text("conditions_text"),
-  effectiveFrom: date("effective_from"),
-  effectiveTo: date("effective_to"),
-  priority: integer("priority").notNull().default(100),
-  isActive: boolean("is_active").notNull().default(true),
-  createdAt: timestamp("created_at").defaultNow(),
-  updatedAt: timestamp("updated_at").defaultNow(),
-});
-
-export const agreementContacts = pgTable("agreement_contacts", {
-  id: serial("id").primaryKey(),
-  agreementId: integer("agreement_id").notNull().references(() => agreements.id, { onDelete: "cascade" }),
-  fullName: varchar("full_name", { length: 255 }).notNull(),
-  positionTitle: varchar("position_title", { length: 255 }),
-  phone: varchar("phone", { length: 64 }),
-  email: varchar("email", { length: 255 }),
-  countryId: integer("country_id").references(() => countries.id),
-  city: varchar("city", { length: 255 }),
-  isPrimary: boolean("is_primary").default(false),
-  notes: text("notes"),
-  createdAt: timestamp("created_at").defaultNow(),
-  updatedAt: timestamp("updated_at").defaultNow(),
-});
-
-export const agreementDocuments = pgTable("agreement_documents", {
-  id: serial("id").primaryKey(),
-  agreementId: integer("agreement_id").notNull().references(() => agreements.id, { onDelete: "cascade" }),
-  versionNo: integer("version_no").notNull(),
-  originalFilename: varchar("original_filename", { length: 255 }).notNull(),
-  mimeType: varchar("mime_type", { length: 64 }).notNull(),
-  sizeBytes: integer("size_bytes").notNull(),
-  storagePath: text("storage_path").notNull(),
-  status: varchar("status", { length: 16 }).notNull().default("active"),
-  uploadedByUserId: integer("uploaded_by_user_id").references(() => users.id),
-  uploadNote: text("upload_note"),
-  createdAt: timestamp("created_at").defaultNow(),
-});
-
-export const commissionTerms = pgTable("commission_terms", {
-  id: serial("id").primaryKey(),
-  termName: varchar("term_name", { length: 16 }).notNull().unique(),
-  termLabel: varchar("term_label", { length: 32 }).notNull(),
-  year: integer("year").notNull(),
-  termNumber: integer("term_number").notNull(),
-  sortOrder: integer("sort_order").notNull(),
-  isActive: boolean("is_active").notNull().default(true),
-  createdAt: timestamp("created_at").defaultNow(),
-});
-
-export const commissionStudents = pgTable("commission_students", {
-  id: serial("id").primaryKey(),
-  agentName: varchar("agent_name", { length: 255 }).notNull(),
-  studentId: varchar("student_id", { length: 64 }),
-  agentsicId: varchar("agentsic_id", { length: 64 }),
-  studentName: varchar("student_name", { length: 255 }).notNull(),
-  provider: varchar("provider", { length: 255 }).notNull(),
-  country: varchar("country", { length: 64 }).notNull().default("AU"),
-  startIntake: varchar("start_intake", { length: 32 }),
-  courseLevel: varchar("course_level", { length: 64 }),
-  courseName: varchar("course_name", { length: 500 }),
-  courseDurationYears: numeric("course_duration_years", { precision: 4, scale: 1 }),
-  commissionRatePct: numeric("commission_rate_pct", { precision: 8, scale: 4 }),
-  gstRatePct: numeric("gst_rate_pct", { precision: 5, scale: 2 }).default("10"),
-  gstApplicable: varchar("gst_applicable", { length: 3 }).notNull().default("Yes"),
-  scholarshipType: varchar("scholarship_type", { length: 16 }).default("None"),
-  scholarshipValue: numeric("scholarship_value", { precision: 12, scale: 2 }).default("0"),
-  status: varchar("status", { length: 32 }).default("Under Enquiry"),
-  notes: text("notes"),
-  totalReceived: numeric("total_received", { precision: 14, scale: 2 }).default("0"),
-  createdAt: timestamp("created_at").defaultNow(),
-  updatedAt: timestamp("updated_at").defaultNow(),
-});
-
-export const commissionEntries = pgTable("commission_entries", {
-  id: serial("id").primaryKey(),
-  commissionStudentId: integer("commission_student_id").notNull().references(() => commissionStudents.id, { onDelete: "cascade" }),
-  studentProviderId: integer("student_provider_id").references(() => studentProviders.id, { onDelete: "cascade" }),
-  termName: varchar("term_name", { length: 16 }).notNull(),
-  academicYear: varchar("academic_year", { length: 16 }),
-  feeGross: numeric("fee_gross", { precision: 12, scale: 2 }).default("0"),
-  commissionRateAuto: numeric("commission_rate_auto", { precision: 8, scale: 4 }),
-  commissionRateOverridePct: numeric("commission_rate_override_pct", { precision: 8, scale: 4 }),
-  commissionRateUsedPct: numeric("commission_rate_used_pct", { precision: 8, scale: 4 }),
-  commissionAmount: numeric("commission_amount", { precision: 12, scale: 2 }).default("0"),
-  bonus: numeric("bonus", { precision: 12, scale: 2 }).default("0"),
-  gstAmount: numeric("gst_amount", { precision: 12, scale: 2 }).default("0"),
-  totalAmount: numeric("total_amount", { precision: 12, scale: 2 }).default("0"),
-  paymentStatus: varchar("payment_status", { length: 16 }).default("Pending"),
-  paidDate: date("paid_date"),
-  invoiceNo: varchar("invoice_no", { length: 64 }),
-  paymentRef: varchar("payment_ref", { length: 128 }),
-  notes: text("notes"),
-  studentStatus: varchar("student_status", { length: 32 }).default("Under Enquiry"),
-  rateChangeWarning: varchar("rate_change_warning", { length: 128 }),
-  scholarshipTypeAuto: varchar("scholarship_type_auto", { length: 16 }),
-  scholarshipValueAuto: numeric("scholarship_value_auto", { precision: 12, scale: 2 }),
-  scholarshipTypeOverride: varchar("scholarship_type_override", { length: 16 }),
-  scholarshipValueOverride: numeric("scholarship_value_override", { precision: 12, scale: 2 }),
-  scholarshipTypeUsed: varchar("scholarship_type_used", { length: 16 }),
-  scholarshipValueUsed: numeric("scholarship_value_used", { precision: 12, scale: 2 }),
-  scholarshipChangeWarning: varchar("scholarship_change_warning", { length: 128 }),
-  scholarshipAmount: numeric("scholarship_amount", { precision: 12, scale: 2 }).default("0"),
-  feeAfterScholarship: numeric("fee_after_scholarship", { precision: 12, scale: 2 }).default("0"),
-  createdAt: timestamp("created_at").defaultNow(),
-  updatedAt: timestamp("updated_at").defaultNow(),
-});
-
-export const studentProviders = pgTable("student_providers", {
-  id: serial("id").primaryKey(),
-  commissionStudentId: integer("commission_student_id").notNull().references(() => commissionStudents.id, { onDelete: "cascade" }),
-  provider: varchar("provider", { length: 255 }).notNull(),
-  studentId: varchar("student_id", { length: 64 }),
-  country: varchar("country", { length: 64 }).default("Australia"),
-  courseLevel: varchar("course_level", { length: 64 }),
-  courseName: varchar("course_name", { length: 500 }),
-  courseDurationYears: numeric("course_duration_years", { precision: 4, scale: 1 }),
-  startIntake: varchar("start_intake", { length: 32 }),
-  commissionRatePct: numeric("commission_rate_pct", { precision: 8, scale: 4 }),
-  gstRatePct: numeric("gst_rate_pct", { precision: 5, scale: 2 }).default("10"),
-  gstApplicable: varchar("gst_applicable", { length: 3 }).default("Yes"),
-  scholarshipType: varchar("scholarship_type", { length: 16 }).default("None"),
-  scholarshipValue: numeric("scholarship_value", { precision: 12, scale: 2 }).default("0"),
-  status: varchar("status", { length: 32 }).default("Under Enquiry"),
-  notes: text("notes"),
-  createdAt: timestamp("created_at").defaultNow(),
-});
-
-export const subAgentEntries = pgTable("sub_agent_entries", {
-  id: serial("id").primaryKey(),
-  commissionStudentId: integer("commission_student_id").notNull().references(() => commissionStudents.id, { onDelete: "cascade" }),
-  subAgentCommissionRatePct: numeric("sub_agent_commission_rate_pct", { precision: 8, scale: 4 }).default("0"),
-  gstApplicable: varchar("gst_applicable", { length: 3 }).notNull().default("No"),
-  sicReceivedTotal: numeric("sic_received_total", { precision: 14, scale: 2 }).default("0"),
-  subAgentPaidTotal: numeric("sub_agent_paid_total", { precision: 14, scale: 2 }).default("0"),
-  margin: numeric("margin", { precision: 14, scale: 2 }).default("0"),
-  overpayWarning: varchar("overpay_warning", { length: 128 }),
-  status: varchar("status", { length: 32 }).default("Under Enquiry"),
-  createdAt: timestamp("created_at").defaultNow(),
-  updatedAt: timestamp("updated_at").defaultNow(),
-});
-
-export const subAgentTermEntries = pgTable("sub_agent_term_entries", {
-  id: serial("id").primaryKey(),
-  commissionStudentId: integer("commission_student_id").notNull().references(() => commissionStudents.id, { onDelete: "cascade" }),
-  termName: varchar("term_name", { length: 16 }).notNull(),
-  academicYear: varchar("academic_year", { length: 16 }).default("Year 1"),
-  feeNet: numeric("fee_net", { precision: 12, scale: 2 }).default("0"),
-  mainCommission: numeric("main_commission", { precision: 12, scale: 2 }).default("0"),
-  commissionRateAuto: numeric("commission_rate_auto", { precision: 8, scale: 4 }).default("0"),
-  commissionRateOverridePct: numeric("commission_rate_override_pct", { precision: 8, scale: 4 }),
-  commissionRateUsedPct: numeric("commission_rate_used_pct", { precision: 8, scale: 4 }).default("0"),
-  subAgentCommission: numeric("sub_agent_commission", { precision: 12, scale: 2 }).default("0"),
-  bonusPaid: numeric("bonus_paid", { precision: 12, scale: 2 }).default("0"),
-  gstPct: numeric("gst_pct", { precision: 5, scale: 2 }).default("0"),
-  gstAmount: numeric("gst_amount", { precision: 12, scale: 2 }).default("0"),
-  totalPaid: numeric("total_paid", { precision: 12, scale: 2 }).default("0"),
-  paymentStatus: varchar("payment_status", { length: 32 }).default("Invoice Waiting"),
-  studentStatus: varchar("student_status", { length: 32 }).default("Under Enquiry"),
-  rateOverrideWarning: varchar("rate_override_warning", { length: 128 }),
-  exceedsMainWarning: varchar("exceeds_main_warning", { length: 128 }),
-  notes: text("notes"),
-  createdAt: timestamp("created_at").defaultNow(),
-  updatedAt: timestamp("updated_at").defaultNow(),
-});
-
-export const passwordResetTokens = pgTable("password_reset_tokens", {
-  id: serial("id").primaryKey(),
-  userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
-  tokenHash: varchar("token_hash", { length: 64 }).notNull(),
-  expiresAt: timestamp("expires_at").notNull(),
-  usedAt: timestamp("used_at"),
-  requestIp: varchar("request_ip", { length: 45 }),
-  userAgent: text("user_agent"),
-  createdAt: timestamp("created_at").defaultNow(),
-});
-
-export const auditLogs = pgTable("audit_logs", {
-  id: serial("id").primaryKey(),
-  userId: integer("user_id").references(() => users.id),
-  action: varchar("action", { length: 64 }).notNull(),
-  entityType: varchar("entity_type", { length: 32 }).notNull(),
-  entityId: integer("entity_id"),
-  ipAddress: varchar("ip_address", { length: 45 }),
-  userAgent: text("user_agent"),
-  metadata: jsonb("metadata"),
-  createdAt: timestamp("created_at").defaultNow(),
-});
-
-export const userSessions = pgTable("user_sessions", {
-  id: serial("id").primaryKey(),
-  userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
-  sessionToken: varchar("session_token", { length: 128 }),
-  ipAddress: varchar("ip_address", { length: 45 }),
-  browser: varchar("browser", { length: 128 }),
-  os: varchar("os", { length: 64 }),
-  deviceType: varchar("device_type", { length: 32 }),
-  location: varchar("location", { length: 255 }),
-  loginAt: timestamp("login_at").defaultNow(),
-  lastActivityAt: timestamp("last_activity_at").defaultNow(),
-  logoutAt: timestamp("logout_at"),
-  logoutReason: varchar("logout_reason", { length: 32 }),
-  isActive: boolean("is_active").notNull().default(true),
-  otpVerified: boolean("otp_verified").notNull().default(false),
-});
-
-export const loginVerificationCodes = pgTable("login_verification_codes", {
-  id: serial("id").primaryKey(),
-  userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
-  codeHash: varchar("code_hash", { length: 128 }).notNull(),
-  createdAt: timestamp("created_at").defaultNow(),
-  expiresAt: timestamp("expires_at").notNull(),
-  usedAt: timestamp("used_at"),
-  attempts: integer("attempts").notNull().default(0),
-  resendCount: integer("resend_count").notNull().default(0),
-  status: varchar("status", { length: 16 }).notNull().default("pending"),
-});
-
-export const securityAuditLogs = pgTable("security_audit_logs", {
-  id: serial("id").primaryKey(),
-  userId: integer("user_id").references(() => users.id),
-  eventType: varchar("event_type", { length: 64 }).notNull(),
-  ipAddress: varchar("ip_address", { length: 45 }),
-  deviceInfo: text("device_info"),
-  metadata: jsonb("metadata"),
-  createdAt: timestamp("created_at").defaultNow(),
-});
-
-export const passwordHistory = pgTable("password_history", {
-  id: serial("id").primaryKey(),
-  userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
-  passwordHash: text("password_hash").notNull(),
-  createdAt: timestamp("created_at").defaultNow(),
-});
-
-export const agreementNotifications = pgTable("agreement_notifications", {
-  id: serial("id").primaryKey(),
-  agreementId: integer("agreement_id").notNull().references(() => agreements.id, { onDelete: "cascade" }),
-  providerName: varchar("provider_name", { length: 255 }).notNull(),
-  notificationType: varchar("notification_type", { length: 64 }).notNull(),
-  sentDate: timestamp("sent_date").defaultNow(),
-  daysBeforeExpiry: integer("days_before_expiry"),
-  status: varchar("status", { length: 32 }).notNull().default("sent"),
-  recipientEmails: text("recipient_emails"),
-});
-
-export const insertUserSchema = createInsertSchema(users).omit({
-  id: true,
-  createdAt: true,
-  updatedAt: true,
-});
-
-export const insertAgreementSchema = createInsertSchema(agreements).omit({
-  id: true,
-  createdAt: true,
-  updatedAt: true,
-});
-
-export const insertTargetSchema = createInsertSchema(agreementTargets).omit({
-  id: true,
-  createdAt: true,
-  updatedAt: true,
-});
-
-export const insertCommissionRuleSchema = createInsertSchema(agreementCommissionRules).omit({
-  id: true,
-  createdAt: true,
-  updatedAt: true,
-});
-
-export const insertContactSchema = createInsertSchema(agreementContacts).omit({
-  id: true,
-  createdAt: true,
-  updatedAt: true,
-});
-
-export const insertDocumentSchema = createInsertSchema(agreementDocuments).omit({
-  id: true,
-  createdAt: true,
-});
-
-export const insertUniversitySchema = createInsertSchema(universities).omit({
-  id: true,
-  createdAt: true,
-  updatedAt: true,
-});
-
-export const insertBonusRuleSchema = createInsertSchema(targetBonusRules).omit({
-  id: true,
-  createdAt: true,
-});
-
-export const insertBonusTierSchema = createInsertSchema(targetBonusTiers).omit({
-  id: true,
-});
-
-export const insertBonusCountrySchema = createInsertSchema(targetBonusCountry).omit({
-  id: true,
-});
-
-export const insertCommissionStudentSchema = createInsertSchema(commissionStudents).omit({
-  id: true,
-  createdAt: true,
-  updatedAt: true,
-});
-
-export const insertCommissionEntrySchema = createInsertSchema(commissionEntries).omit({
-  id: true,
-  createdAt: true,
-  updatedAt: true,
-});
-
-export const insertStudentProviderSchema = createInsertSchema(studentProviders).omit({
-  id: true,
-  createdAt: true,
-});
-
-export const insertAgreementNotificationSchema = createInsertSchema(agreementNotifications).omit({
-  id: true,
-  sentDate: true,
-});
-
-export const insertSubAgentEntrySchema = createInsertSchema(subAgentEntries).omit({
-  id: true,
-  createdAt: true,
-  updatedAt: true,
-});
-
-export const insertSubAgentTermEntrySchema = createInsertSchema(subAgentTermEntries).omit({
-  id: true,
-  createdAt: true,
-  updatedAt: true,
-});
-
-export const loginSchema = z.object({
-  email: z.string().email(),
-  password: z.string().min(6),
-});
-
-export type Country = typeof countries.$inferSelect;
-export type University = typeof universities.$inferSelect;
 export type Provider = University;
-export type User = typeof users.$inferSelect;
-export type Role = typeof roles.$inferSelect;
-export type Permission = typeof permissions.$inferSelect;
-export type Agreement = typeof agreements.$inferSelect;
-export type AgreementTarget = typeof agreementTargets.$inferSelect;
-export type AgreementCommissionRule = typeof agreementCommissionRules.$inferSelect;
-export type AgreementContact = typeof agreementContacts.$inferSelect;
-export type AgreementDocument = typeof agreementDocuments.$inferSelect;
-export type PasswordResetToken = typeof passwordResetTokens.$inferSelect;
-export type AuditLog = typeof auditLogs.$inferSelect;
-export type TargetBonusRule = typeof targetBonusRules.$inferSelect;
-export type TargetBonusTier = typeof targetBonusTiers.$inferSelect;
-export type TargetBonusCountryEntry = typeof targetBonusCountry.$inferSelect;
-export type CommissionTerm = typeof commissionTerms.$inferSelect;
-export type CommissionStudent = typeof commissionStudents.$inferSelect;
-export type CommissionEntry = typeof commissionEntries.$inferSelect;
-export type StudentProvider = typeof studentProviders.$inferSelect;
-export type SubAgentEntry = typeof subAgentEntries.$inferSelect;
-export type SubAgentTermEntry = typeof subAgentTermEntries.$inferSelect;
-export type UserSession = typeof userSessions.$inferSelect;
-export type LoginVerificationCode = typeof loginVerificationCodes.$inferSelect;
-export type SecurityAuditLog = typeof securityAuditLogs.$inferSelect;
-export type PasswordHistoryEntry = typeof passwordHistory.$inferSelect;
-export type InsertCommissionStudent = z.infer<typeof insertCommissionStudentSchema>;
-export type InsertCommissionEntry = z.infer<typeof insertCommissionEntrySchema>;
-export type InsertStudentProvider = z.infer<typeof insertStudentProviderSchema>;
-export type InsertAgreementNotification = z.infer<typeof insertAgreementNotificationSchema>;
-export type AgreementNotification = typeof agreementNotifications.$inferSelect;
-export type InsertSubAgentEntry = z.infer<typeof insertSubAgentEntrySchema>;
-export type InsertSubAgentTermEntry = z.infer<typeof insertSubAgentTermEntrySchema>;
-export type InsertUser = z.infer<typeof insertUserSchema>;
-export type InsertAgreement = z.infer<typeof insertAgreementSchema>;
-export type InsertTarget = z.infer<typeof insertTargetSchema>;
-export type InsertCommissionRule = z.infer<typeof insertCommissionRuleSchema>;
-export type InsertContact = z.infer<typeof insertContactSchema>;
-export type InsertDocument = z.infer<typeof insertDocumentSchema>;
-export type InsertUniversity = z.infer<typeof insertUniversitySchema>;
-export type InsertProvider = InsertUniversity;
+
+export interface User {
+  id: number;
+  email: string;
+  fullName: string;
+  passwordHash: string;
+  isActive: boolean;
+  passwordChangedAt: string | null;
+  lastLoginAt: string | null;
+  lastLoginIp: string | null;
+  forcePasswordChange: boolean;
+  createdAt: string | null;
+  updatedAt: string | null;
+}
+
+export interface Role {
+  id: number;
+  name: string;
+  description: string | null;
+}
+
+export interface Permission {
+  id: number;
+  code: string;
+  module: string | null;
+  resource: string | null;
+  action: string | null;
+  description: string | null;
+}
+
+export interface Agreement {
+  id: number;
+  universityId: number;
+  agreementCode: string;
+  title: string;
+  agreementType: string;
+  status: string;
+  territoryType: string;
+  territoryCountryId: number | null;
+  startDate: string;
+  expiryDate: string;
+  autoRenew: boolean | null;
+  confidentialityLevel: string;
+  internalNotes: string | null;
+  createdByUserId: number | null;
+  updatedByUserId: number | null;
+  createdAt: string | null;
+  updatedAt: string | null;
+}
+
+export interface AgreementTarget {
+  id: number;
+  agreementId: number;
+  targetType: string;
+  metric: string;
+  value: string;
+  currency: string | null;
+  periodKey: string;
+  notes: string | null;
+  bonusEnabled: boolean | null;
+  bonusAmount: string | null;
+  bonusCurrency: string | null;
+  bonusCondition: string | null;
+  bonusNotes: string | null;
+  createdByUserId: number | null;
+  createdAt: string | null;
+  updatedAt: string | null;
+}
+
+export interface AgreementCommissionRule {
+  id: number;
+  agreementId: number;
+  label: string;
+  studyLevel: string | null;
+  commissionMode: string;
+  percentageValue: string | null;
+  flatAmount: string | null;
+  currency: string | null;
+  basis: string;
+  payEvent: string;
+  subjectRules: unknown;
+  conditionsText: string | null;
+  effectiveFrom: string | null;
+  effectiveTo: string | null;
+  priority: number;
+  isActive: boolean;
+  createdAt: string | null;
+  updatedAt: string | null;
+}
+
+export interface AgreementContact {
+  id: number;
+  agreementId: number;
+  fullName: string;
+  positionTitle: string | null;
+  phone: string | null;
+  email: string | null;
+  countryId: number | null;
+  city: string | null;
+  isPrimary: boolean | null;
+  notes: string | null;
+  createdAt: string | null;
+  updatedAt: string | null;
+}
+
+export interface AgreementDocument {
+  id: number;
+  agreementId: number;
+  versionNo: number;
+  originalFilename: string;
+  mimeType: string;
+  sizeBytes: number;
+  storagePath: string;
+  status: string;
+  uploadedByUserId: number | null;
+  uploadNote: string | null;
+  createdAt: string | null;
+}
+
+export interface CommissionTerm {
+  id: number;
+  termName: string;
+  termLabel: string;
+  year: number;
+  termNumber: number;
+  sortOrder: number;
+  isActive: boolean;
+  createdAt: string | null;
+}
+
+export interface CommissionStudent {
+  id: number;
+  agentName: string;
+  studentId: string | null;
+  agentsicId: string | null;
+  studentName: string;
+  provider: string;
+  country: string;
+  startIntake: string | null;
+  courseLevel: string | null;
+  courseName: string | null;
+  courseDurationYears: string | null;
+  commissionRatePct: string | null;
+  gstRatePct: string | null;
+  gstApplicable: string;
+  scholarshipType: string | null;
+  scholarshipValue: string | null;
+  status: string | null;
+  notes: string | null;
+  totalReceived: string | null;
+  createdAt: string | null;
+  updatedAt: string | null;
+}
+
+export interface CommissionEntry {
+  id: number;
+  commissionStudentId: number;
+  studentProviderId: number | null;
+  termName: string;
+  academicYear: string | null;
+  feeGross: string | null;
+  commissionRateAuto: string | null;
+  commissionRateOverridePct: string | null;
+  commissionRateUsedPct: string | null;
+  commissionAmount: string | null;
+  bonus: string | null;
+  gstAmount: string | null;
+  totalAmount: string | null;
+  paymentStatus: string | null;
+  paidDate: string | null;
+  invoiceNo: string | null;
+  paymentRef: string | null;
+  notes: string | null;
+  studentStatus: string | null;
+  rateChangeWarning: string | null;
+  scholarshipTypeAuto: string | null;
+  scholarshipValueAuto: string | null;
+  scholarshipTypeOverride: string | null;
+  scholarshipValueOverride: string | null;
+  scholarshipTypeUsed: string | null;
+  scholarshipValueUsed: string | null;
+  scholarshipChangeWarning: string | null;
+  scholarshipAmount: string | null;
+  feeAfterScholarship: string | null;
+  createdAt: string | null;
+  updatedAt: string | null;
+}
+
+export interface StudentProvider {
+  id: number;
+  commissionStudentId: number;
+  provider: string;
+  studentId: string | null;
+  country: string | null;
+  courseLevel: string | null;
+  courseName: string | null;
+  courseDurationYears: string | null;
+  startIntake: string | null;
+  commissionRatePct: string | null;
+  gstRatePct: string | null;
+  gstApplicable: string | null;
+  scholarshipType: string | null;
+  scholarshipValue: string | null;
+  status: string | null;
+  notes: string | null;
+  createdAt: string | null;
+}
+
+export interface SubAgentEntry {
+  id: number;
+  commissionStudentId: number;
+  subAgentCommissionRatePct: string | null;
+  gstApplicable: string;
+  sicReceivedTotal: string | null;
+  subAgentPaidTotal: string | null;
+  margin: string | null;
+  overpayWarning: string | null;
+  status: string | null;
+  createdAt: string | null;
+  updatedAt: string | null;
+}
+
+export interface SubAgentTermEntry {
+  id: number;
+  commissionStudentId: number;
+  termName: string;
+  academicYear: string | null;
+  feeNet: string | null;
+  mainCommission: string | null;
+  commissionRateAuto: string | null;
+  commissionRateOverridePct: string | null;
+  commissionRateUsedPct: string | null;
+  subAgentCommission: string | null;
+  bonusPaid: string | null;
+  gstPct: string | null;
+  gstAmount: string | null;
+  totalPaid: string | null;
+  paymentStatus: string | null;
+  studentStatus: string | null;
+  rateOverrideWarning: string | null;
+  exceedsMainWarning: string | null;
+  notes: string | null;
+  createdAt: string | null;
+  updatedAt: string | null;
+}
+
+export interface PasswordResetToken {
+  id: number;
+  userId: number;
+  tokenHash: string;
+  expiresAt: string;
+  usedAt: string | null;
+  requestIp: string | null;
+  userAgent: string | null;
+  createdAt: string | null;
+}
+
+export interface AuditLog {
+  id: number;
+  userId: number | null;
+  action: string;
+  entityType: string;
+  entityId: number | null;
+  ipAddress: string | null;
+  userAgent: string | null;
+  metadata: unknown;
+  createdAt: string | null;
+}
+
+export interface TargetBonusRule {
+  id: number;
+  targetId: number;
+  bonusType: string;
+  currency: string;
+  createdAt: string | null;
+}
+
+export interface TargetBonusTier {
+  id: number;
+  bonusRuleId: number;
+  minStudents: number;
+  maxStudents: number | null;
+  bonusAmount: string;
+  calculationType: string;
+}
+
+export interface TargetBonusCountryEntry {
+  id: number;
+  bonusRuleId: number;
+  countryId: number;
+  studentCount: number;
+  bonusAmount: string;
+}
+
+export interface UserSession {
+  id: number;
+  userId: number;
+  sessionToken: string | null;
+  ipAddress: string | null;
+  browser: string | null;
+  os: string | null;
+  deviceType: string | null;
+  location: string | null;
+  loginAt: string | null;
+  lastActivityAt: string | null;
+  logoutAt: string | null;
+  logoutReason: string | null;
+  isActive: boolean;
+  otpVerified: boolean;
+}
+
+export interface LoginVerificationCode {
+  id: number;
+  userId: number;
+  codeHash: string;
+  createdAt: string | null;
+  expiresAt: string;
+  usedAt: string | null;
+  attempts: number;
+  resendCount: number;
+  status: string;
+}
+
+export interface SecurityAuditLog {
+  id: number;
+  userId: number | null;
+  eventType: string;
+  ipAddress: string | null;
+  deviceInfo: string | null;
+  metadata: unknown;
+  createdAt: string | null;
+}
+
+export interface PasswordHistoryEntry {
+  id: number;
+  userId: number;
+  passwordHash: string;
+  createdAt: string | null;
+}
+
+export interface AgreementNotification {
+  id: number;
+  agreementId: number;
+  providerName: string;
+  notificationType: string;
+  sentDate: string | null;
+  daysBeforeExpiry: number | null;
+  status: string;
+  recipientEmails: string | null;
+}
 
 export const AGREEMENT_TYPES = ["agency", "commission_schedule", "addendum", "renewal", "mou", "other"] as const;
 export const AGREEMENT_STATUSES = ["draft", "active", "expired", "terminated", "renewal_in_progress"] as const;

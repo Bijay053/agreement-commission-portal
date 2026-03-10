@@ -127,6 +127,13 @@ USE_TZ = True
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
+STATIC_URL = '/assets/'
+STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
+
+SPA_ROOT = os.path.join(os.path.dirname(BASE_DIR), 'dist', 'public')
+WHITENOISE_ROOT = SPA_ROOT if os.path.isdir(SPA_ROOT) else None
+STATICFILES_DIRS = [SPA_ROOT] if os.path.isdir(SPA_ROOT) else []
+
 LOGGING = {
     'version': 1,
     'disable_existing_loggers': False,

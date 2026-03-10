@@ -27,8 +27,18 @@ services:
     environment:
       DATABASE_URL: postgresql://portal_user:${DB_PASSWORD:-changeme_in_production}@db:5432/agreement_portal
       SESSION_SECRET: ${SESSION_SECRET:-generate_a_strong_secret_here}
-      PORT: 5000
-      NODE_ENV: production
+      DJANGO_SETTINGS_MODULE: config.settings
+      DEBUG: "False"
+      ALLOWED_HOSTS: ${ALLOWED_HOSTS:-portal.studyinfocentre.com}
+      CORS_ORIGINS: ${CORS_ORIGINS:-}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
+      AWS_S3_BUCKET: ${AWS_S3_BUCKET:-studyinfocentre-portal-documents}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASS: ${SMTP_PASS:-}
+      FROM_EMAIL: ${FROM_EMAIL:-}
     ports:
       - "80:5000"
     volumes:
