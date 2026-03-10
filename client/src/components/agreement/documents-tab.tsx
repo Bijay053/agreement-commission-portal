@@ -415,7 +415,8 @@ export default function DocumentsTab({ agreementId }: { agreementId: number }) {
         const err = await res.json();
         throw new Error(err.message);
       }
-      queryClient.invalidateQueries({ queryKey: ["/api/agreements", agreementId, "documents"] });
+      await queryClient.invalidateQueries({ queryKey: ["/api/agreements", agreementId, "documents"] });
+      await queryClient.refetchQueries({ queryKey: ["/api/agreements", agreementId, "documents"] });
       toast({ title: "Document deleted" });
     } catch (err: any) {
       toast({ title: "Delete failed", description: err.message, variant: "destructive" });

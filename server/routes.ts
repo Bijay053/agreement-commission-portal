@@ -1254,6 +1254,8 @@ export async function registerRoutes(
 
   app.get("/api/agreements/:id/documents", requireAuth, requirePermission("document.list"), async (req, res) => {
     const data = await storage.getDocuments(parseInt(req.params.id));
+    res.setHeader("Cache-Control", "no-store");
+    res.setHeader("ETag", `docs-${Date.now()}`);
     res.json(data);
   });
 
