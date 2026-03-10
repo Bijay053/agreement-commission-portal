@@ -1,14 +1,18 @@
-modules = ["nodejs-20", "web", "javascript", "postgresql-16"]
+modules = ["nodejs-20", "web", "javascript", "postgresql-16", "python-3.12"]
 run = "npm run dev"
 hidden = [".config", ".git", "generated-icon.png", "node_modules", "dist"]
 
 [nix]
 channel = "stable-24_05"
-packages = ["qpdf"]
+packages = ["cargo", "file", "libiconv", "qpdf", "rustc"]
 
 [[ports]]
 localPort = 5000
 externalPort = 80
+
+[[ports]]
+localPort = 5001
+externalPort = 3000
 
 [[ports]]
 localPort = 5555
@@ -40,8 +44,11 @@ author = "agent"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "npm run dev"
+args = "bash start_django.sh"
 waitForPort = 5000
+
+[workflows.workflow.metadata]
+outputType = "webview"
 
 [agent]
 integrations = ["github:1.0.0"]
