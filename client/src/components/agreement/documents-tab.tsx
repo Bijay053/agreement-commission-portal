@@ -114,15 +114,19 @@ function PdfCanvasViewer({ pdfData, watermarkInfo }: { pdfData: ArrayBuffer; wat
       const lineHeight = fontSize * 1.3;
       const blockHeight = lines.length * lineHeight;
       const blockWidth = Math.max(...lines.map(l => wCtx.measureText(l).width));
-      const spacingX = blockWidth + (30 * zoom);
-      const spacingY = blockHeight + (30 * zoom);
-      const diag = Math.sqrt(viewport.width * viewport.width + viewport.height * viewport.height);
+      const spacingX = blockWidth + (25 * zoom);
+      const spacingY = blockHeight + (25 * zoom);
+      const w = viewport.width;
+      const h = viewport.height;
+      const extent = Math.max(w, h) * 2;
 
-      for (let y = -diag * 0.3; y < diag * 1.3; y += spacingY) {
-        for (let x = -diag * 0.3; x < diag * 1.3; x += spacingX) {
+      for (let y = -extent; y < extent; y += spacingY) {
+        for (let x = -extent; x < extent; x += spacingX) {
           wCtx.save();
-          wCtx.translate(x, y);
+          wCtx.translate(w / 2, h / 2);
           wCtx.rotate(-0.35);
+          wCtx.translate(-w / 2, -h / 2);
+          wCtx.translate(x, y);
 
           wCtx.fillStyle = "rgba(220, 38, 38, 0.14)";
           lines.forEach((line, i) => {
