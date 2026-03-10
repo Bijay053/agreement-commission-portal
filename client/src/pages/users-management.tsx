@@ -69,6 +69,20 @@ export default function UsersManagementPage() {
   };
 
   const [editRoleIds, setEditRoleIds] = useState<number[]>([]);
+  const [editFullName, setEditFullName] = useState("");
+
+  const updateNameMutation = useMutation({
+    mutationFn: async ({ userId, fullName }: { userId: number; fullName: string }) => {
+      const res = await apiRequest("PATCH", `/api/users/${userId}/name`, { fullName });
+      return res.json();
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["/api/users"] });
+      qc.invalidateQueries({ queryKey: ["/api/auth/me"] });
+      toast({ title: "Name updated" });
+    },
+    onError: (err: any) => toast({ title: "Error", description: err.message, variant: "destructive" }),
+  });
 
   const updateRolesMutation = useMutation({
     mutationFn: async ({ userId, roleIds }: { userId: number; roleIds: number[] }) => {
@@ -98,6 +112,7 @@ export default function UsersManagementPage() {
   const openEditDialog = (user: UserWithRoles) => {
     setEditingUser(user);
     setEditRoleIds(user.roles.map(r => r.id));
+    setEditFullName(user.fullName);
   };
 
   const toggleRole = (roleId: number) => {
@@ -106,8 +121,11 @@ export default function UsersManagementPage() {
     );
   };
 
-  const handleSaveRoles = () => {
+  const handleSaveUser = async () => {
     if (!editingUser) return;
+    if (editFullName.trim() !== editingUser.fullName) {
+      updateNameMutation.mutate({ userId: editingUser.id, fullName: editFullName.trim() });
+    }
     updateRolesMutation.mutate({ userId: editingUser.id, roleIds: editRoleIds });
   };
 
@@ -248,18 +266,23 @@ export default function UsersManagementPage() {
       <Dialog open={!!editingUser} onOpenChange={(open) => { if (!open) setEditingUser(null); }}>
         <DialogContent className="max-w-md max-h-[85vh] flex flex-col">
           <DialogHeader>
-            <DialogTitle>Edit User Roles</DialogTitle>
+            <DialogTitle>Edit User</DialogTitle>
           </DialogHeader>
           {editingUser && (
             <div className="space-y-4 flex-1 min-h-0 flex flex-col">
-              <div className="flex items-center gap-3 shrink-0">
-                <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
-                  <User className="w-5 h-5 text-primary" />
-                </div>
+              <div className="shrink-0 space-y-3">
                 <div>
-                  <p className="text-sm font-medium">{editingUser.fullName}</p>
-                  <p className="text-xs text-muted-foreground">{editingUser.email}</p>
+                  <Label className="mb-1 block">Full Name</Label>
+                  <Input
+                    value={editFullName}
+                    onChange={e => setEditFullName(e.target.value)}
+                    placeholder="Enter full name"
+                    data-testid="input-edit-user-name"
+                  />
                 </div>
+                <p className="text-xs text-muted-foreground flex items-center gap-1">
+                  <Mail className="w-3 h-3" /> {editingUser.email}
+                </p>
               </div>
 
               <div className="flex-1 min-h-0 flex flex-col">
@@ -296,11 +319,11 @@ export default function UsersManagementPage() {
               Cancel
             </Button>
             <Button
-              onClick={handleSaveRoles}
-              disabled={updateRolesMutation.isPending}
-              data-testid="button-save-roles"
+              onClick={handleSaveUser}
+              disabled={updateRolesMutation.isPending || updateNameMutation.isPending}
+              data-testid="button-save-user"
             >
-              {updateRolesMutation.isPending ? "Saving..." : "Save Roles"}
+              {(updateRolesMutation.isPending || updateNameMutation.isPending) ? "Saving..." : "Save Changes"}
             </Button>
           </DialogFooter>
         </DialogContent>
