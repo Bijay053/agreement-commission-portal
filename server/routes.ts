@@ -13,6 +13,8 @@ import fs from "fs";
 import crypto from "crypto";
 import { UAParser } from "ua-parser-js";
 import { uploadToS3, getFromS3, deleteFromS3, isS3Key } from "./s3";
+import { execSync } from "child_process";
+import os from "os";
 
 const uploadsDir = path.join(process.cwd(), "uploads");
 if (!fs.existsSync(uploadsDir)) {
@@ -1347,16 +1349,50 @@ export async function registerRoutes(
       res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, private");
       res.setHeader("Pragma", "no-cache");
 
-      if (isS3Key(doc.storagePath)) {
-        const s3Stream = await getFromS3(doc.storagePath);
-        s3Stream.pipe(res);
-      } else {
-        if (!fs.existsSync(doc.storagePath)) {
-          return res.status(404).json({ message: "File not found on server" });
+      const isPdf = doc.mimeType === "application/pdf";
+      const pdfPassword = process.env.PDF_DOWNLOAD_PASSWORD || "Study@2o19";
+
+      if (isPdf) {
+        const tmpDir = os.tmpdir();
+        const tmpInput = path.join(tmpDir, `dl_in_${crypto.randomBytes(8).toString("hex")}.pdf`);
+        const tmpOutput = path.join(tmpDir, `dl_out_${crypto.randomBytes(8).toString("hex")}.pdf`);
+
+        try {
+          if (isS3Key(doc.storagePath)) {
+            const s3Stream = await getFromS3(doc.storagePath);
+            const chunks: Buffer[] = [];
+            for await (const chunk of s3Stream) {
+              chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+            }
+            fs.writeFileSync(tmpInput, Buffer.concat(chunks));
+          } else {
+            if (!fs.existsSync(doc.storagePath)) {
+              return res.status(404).json({ message: "File not found on server" });
+            }
+            fs.copyFileSync(doc.storagePath, tmpInput);
+          }
+
+          execSync(`qpdf --encrypt "${pdfPassword}" "${pdfPassword}" 256 -- "${tmpInput}" "${tmpOutput}"`, { timeout: 30000 });
+
+          const encryptedData = fs.readFileSync(tmpOutput);
+          res.setHeader("Content-Length", encryptedData.length.toString());
+          res.send(encryptedData);
+        } finally {
+          try { fs.unlinkSync(tmpInput); } catch {}
+          try { fs.unlinkSync(tmpOutput); } catch {}
         }
-        res.setHeader("Content-Length", doc.sizeBytes.toString());
-        const fileStream = fs.createReadStream(doc.storagePath);
-        fileStream.pipe(res);
+      } else {
+        if (isS3Key(doc.storagePath)) {
+          const s3Stream = await getFromS3(doc.storagePath);
+          s3Stream.pipe(res);
+        } else {
+          if (!fs.existsSync(doc.storagePath)) {
+            return res.status(404).json({ message: "File not found on server" });
+          }
+          res.setHeader("Content-Length", doc.sizeBytes.toString());
+          const fileStream = fs.createReadStream(doc.storagePath);
+          fileStream.pipe(res);
+        }
       }
     } catch (err: any) {
       res.status(500).json({ message: err.message });

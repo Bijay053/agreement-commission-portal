@@ -182,10 +182,15 @@ function SecureViewer({ doc, userEmail, onClose }: { doc: any; userEmail: string
         (e.ctrlKey && e.shiftKey && (e.key === "s" || e.key === "S")) ||
         (e.metaKey && e.shiftKey && (e.key === "3" || e.key === "4" || e.key === "5")) ||
         (e.key === "F12") ||
-        (e.ctrlKey && e.shiftKey && (e.key === "i" || e.key === "I"))
+        (e.ctrlKey && e.shiftKey && (e.key === "i" || e.key === "I")) ||
+        (e.key === "Snapshot")
       ) {
         e.preventDefault();
         e.stopPropagation();
+        if (e.key === "PrintScreen" || e.key === "Snapshot") {
+          setBlurred(true);
+          navigator.clipboard?.writeText("Screenshots are disabled for confidential documents").catch(() => {});
+        }
       }
     };
     const handleBeforePrint = (e: Event) => e.preventDefault();
@@ -201,7 +206,11 @@ function SecureViewer({ doc, userEmail, onClose }: { doc: any; userEmail: string
 
     const printBlockerStyle = document.createElement("style");
     printBlockerStyle.id = "secure-viewer-print-blocker";
-    printBlockerStyle.textContent = `@media print { body * { display: none !important; visibility: hidden !important; } body::after { content: "Printing is disabled for confidential documents — Study Info Centre"; display: block !important; visibility: visible !important; font-size: 24px; text-align: center; padding: 100px 40px; color: #333; } }`;
+    printBlockerStyle.textContent = `
+      @media print { body * { display: none !important; visibility: hidden !important; } body::after { content: "Printing is disabled for confidential documents — Study Info Centre"; display: block !important; visibility: visible !important; font-size: 24px; text-align: center; padding: 100px 40px; color: #333; } }
+      [data-testid="secure-viewer-overlay"] canvas { -webkit-user-drag: none; }
+      [data-testid="secure-viewer-content"] { -webkit-filter: none; }
+    `;
     document.head.appendChild(printBlockerStyle);
 
     document.addEventListener("contextmenu", handleContextMenu);
