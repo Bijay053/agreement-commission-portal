@@ -1413,10 +1413,14 @@ function BulkUploadDialog({ onSuccess }: { onSuccess: () => void }) {
     try {
       const formData = new FormData();
       formData.append("file", file);
+      const uploadHeaders: Record<string, string> = {};
+      const csrfToken = document.cookie.match(/(?:^|;\s*)csrftoken=([^\s;]*)/)?.[1];
+      if (csrfToken) uploadHeaders["X-CSRFToken"] = csrfToken;
       const res = await fetch("/api/commission-tracker/bulk-upload/preview", {
         method: "POST",
         body: formData,
         credentials: "include",
+        headers: uploadHeaders,
       });
       if (!res.ok) {
         const err = await res.json();
