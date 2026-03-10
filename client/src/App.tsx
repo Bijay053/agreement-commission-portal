@@ -107,6 +107,9 @@ function Router() {
       <Route path="/change-password">
         {() => <ChangePasswordPage />}
       </Route>
+      <Route path="/login">{() => { window.location.href = "/"; return null; }}</Route>
+      <Route path="/forgot-password">{() => { window.location.href = "/"; return null; }}</Route>
+      <Route path="/reset-password">{() => { window.location.href = "/"; return null; }}</Route>
       <Route component={NotFound} />
     </Switch>
   );
