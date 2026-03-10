@@ -12,7 +12,7 @@ import path from "path";
 import fs from "fs";
 import crypto from "crypto";
 import { UAParser } from "ua-parser-js";
-import { uploadToS3, getFromS3, deleteFromS3, isS3Key } from "./s3";
+import { uploadToS3, getFromS3, getBufferFromS3, deleteFromS3, isS3Key } from "./s3";
 import { execSync } from "child_process";
 import os from "os";
 
@@ -1318,14 +1318,9 @@ export async function registerRoutes(
       res.setHeader("X-Content-Type-Options", "nosniff");
 
       if (isS3Key(doc.storagePath)) {
-        const s3Stream = await getFromS3(doc.storagePath);
-        const chunks: Buffer[] = [];
-        for await (const chunk of s3Stream) {
-          chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
-        }
-        const fileBuffer = Buffer.concat(chunks);
+        const fileBuffer = await getBufferFromS3(doc.storagePath);
         res.setHeader("Content-Length", fileBuffer.length.toString());
-        res.send(fileBuffer);
+        res.end(fileBuffer);
       } else {
         if (!fs.existsSync(doc.storagePath)) {
           return res.status(404).json({ message: "File not found on server" });
@@ -1372,12 +1367,8 @@ export async function registerRoutes(
 
         try {
           if (isS3Key(doc.storagePath)) {
-            const s3Stream = await getFromS3(doc.storagePath);
-            const chunks: Buffer[] = [];
-            for await (const chunk of s3Stream) {
-              chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
-            }
-            fs.writeFileSync(tmpInput, Buffer.concat(chunks));
+            const fileBuffer = await getBufferFromS3(doc.storagePath);
+            fs.writeFileSync(tmpInput, fileBuffer);
           } else {
             if (!fs.existsSync(doc.storagePath)) {
               return res.status(404).json({ message: "File not found on server" });
@@ -1396,8 +1387,9 @@ export async function registerRoutes(
         }
       } else {
         if (isS3Key(doc.storagePath)) {
-          const s3Stream = await getFromS3(doc.storagePath);
-          s3Stream.pipe(res);
+          const fileBuffer = await getBufferFromS3(doc.storagePath);
+          res.setHeader("Content-Length", fileBuffer.length.toString());
+          res.end(fileBuffer);
         } else {
           if (!fs.existsSync(doc.storagePath)) {
             return res.status(404).json({ message: "File not found on server" });
