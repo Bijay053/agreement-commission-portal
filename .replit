@@ -44,3 +44,9 @@ waitForPort = 5000
 
 [agent]
 integrations = ["github:1.0.0"]
+
+[userenv]
+
+[userenv.shared]
+AWS_S3_REGION = "ap-south-1"
+AWS_S3_BUCKET = "PLACEHOLDER_BUCKET_NAME"
