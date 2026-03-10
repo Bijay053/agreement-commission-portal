@@ -11,7 +11,11 @@ import { Label } from "@/components/ui/label";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger,
 } from "@/components/ui/dialog";
-import { Upload, FileText, File, Clock, Eye, Download, X, ShieldCheck, ChevronLeft, ChevronRight, ZoomIn, ZoomOut } from "lucide-react";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import { Upload, FileText, File, Clock, Eye, Download, Trash2, X, ShieldCheck, ChevronLeft, ChevronRight, ZoomIn, ZoomOut } from "lucide-react";
 import { format, parseISO } from "date-fns";
 import * as pdfjsLib from "pdfjs-dist";
 
@@ -81,28 +85,24 @@ function PdfCanvasViewer({ pdfData, watermarkInfo }: { pdfData: ArrayBuffer; wat
         viewedAt,
       ];
 
-      const fontSize = Math.max(11, Math.min(16, viewport.width / 50));
-      wCtx.font = `${fontSize}px monospace`;
-      const lineHeight = fontSize + 4;
+      const fontSize = Math.max(12, Math.min(16, viewport.width / 45));
+      wCtx.font = `bold ${fontSize}px monospace`;
+      const lineHeight = fontSize + 5;
       const blockHeight = lines.length * lineHeight + 20;
       const blockWidth = Math.max(...lines.map(l => wCtx.measureText(l).width)) + 30;
-      const spacingX = blockWidth + 40;
-      const spacingY = blockHeight + 50;
+      const spacingX = blockWidth + 60;
+      const spacingY = blockHeight + 60;
 
       for (let y = -viewport.height * 0.3; y < viewport.height * 1.3; y += spacingY) {
         for (let x = -viewport.width * 0.3; x < viewport.width * 1.3; x += spacingX) {
           wCtx.save();
           wCtx.translate(x, y);
-          wCtx.rotate(-0.45);
+          wCtx.rotate(-0.4);
 
-          wCtx.fillStyle = "rgba(220, 38, 38, 0.07)";
+          wCtx.fillStyle = "rgba(220, 38, 38, 0.18)";
           lines.forEach((line, i) => {
             wCtx.fillText(line, 0, i * lineHeight);
           });
-
-          wCtx.strokeStyle = "rgba(220, 38, 38, 0.04)";
-          wCtx.lineWidth = 0.5;
-          wCtx.strokeRect(-5, -lineHeight, blockWidth - 20, blockHeight - 10);
 
           wCtx.restore();
         }
@@ -348,11 +348,13 @@ export default function DocumentsTab({ agreementId }: { agreementId: number }) {
   const canUpload = hasPermission("document.upload");
   const canView = hasPermission("document.view_in_portal");
   const canDownload = hasPermission("document.download");
+  const canDelete = hasPermission("document.delete");
   const [showDialog, setShowDialog] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [note, setNote] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
   const [viewingDoc, setViewingDoc] = useState<any>(null);
+  const [deleting, setDeleting] = useState<number | null>(null);
 
   const { data: documents, isLoading } = useQuery<any[]>({
     queryKey: ["/api/agreements", agreementId, "documents"],
@@ -400,6 +402,26 @@ export default function DocumentsTab({ agreementId }: { agreementId: number }) {
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+  };
+
+  const handleDelete = async (doc: any) => {
+    setDeleting(doc.id);
+    try {
+      const res = await fetch(`/api/documents/${doc.id}`, {
+        method: "DELETE",
+        credentials: "include",
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.message);
+      }
+      queryClient.invalidateQueries({ queryKey: ["/api/agreements", agreementId, "documents"] });
+      toast({ title: "Document deleted" });
+    } catch (err: any) {
+      toast({ title: "Delete failed", description: err.message, variant: "destructive" });
+    } finally {
+      setDeleting(null);
+    }
   };
 
   if (isLoading) return <div className="space-y-3">{Array.from({length: 2}).map((_,i) => <Skeleton key={i} className="h-20" />)}</div>;
@@ -485,6 +507,40 @@ export default function DocumentsTab({ agreementId }: { agreementId: number }) {
                       >
                         <Download className="w-4 h-4" />
                       </Button>
+                    )}
+                    {canDelete && (
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            title="Delete"
+                            className="text-destructive hover:text-destructive"
+                            data-testid={`button-delete-document-${doc.id}`}
+                            disabled={deleting === doc.id}
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>Delete Document</AlertDialogTitle>
+                            <AlertDialogDescription>
+                              Are you sure you want to delete "{doc.originalFilename}" (v{doc.versionNo})? This action cannot be undone and the file will be permanently removed.
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel data-testid="button-cancel-delete">Cancel</AlertDialogCancel>
+                            <AlertDialogAction
+                              onClick={() => handleDelete(doc)}
+                              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                              data-testid="button-confirm-delete"
+                            >
+                              Delete
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
                     )}
                   </div>
                 </div>
