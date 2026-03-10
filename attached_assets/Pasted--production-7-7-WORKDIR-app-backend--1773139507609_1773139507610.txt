@@ -1,0 +1,70 @@
+ => [production 7/7] WORKDIR /app/backend                                                                                                                        0.2s 
+ => exporting to image                                                                                                                                          56.3s 
+ => => exporting layers                                                                                                                                         44.8s 
+ => => exporting manifest sha256:7dbcde195af521612e5bf5fcc84c60c1d1eecc73ad2afc63bca60ceec9c71b2a                                                                0.4s
+ => => exporting config sha256:8b15cf5aa9fbcdf751cb17f8dc60b521a962c01bfc717db895e59f6fd32e8547                                                                  0.0s
+ => => exporting attestation manifest sha256:678616d8ca5554bbeb8e71086105bada8e87f2d65698982d0e56ae5c0e53949d                                                    0.0s
+ => => exporting manifest list sha256:cac3ed2bfee2f8b41911d4d17b734401d8f82c77b8af9f9d3b0f767667205857                                                           0.0s
+ => => naming to docker.io/library/agreement-commission-portal-app:latest                                                                                        0.0s
+ => => unpacking to docker.io/library/agreement-commission-portal-app:latest                                                                                     7.0s
+[+] build 1/1
+ ✔ Image agreement-commission-portal-app Built                                                                                                                  310.5s
+[+] up 5/5
+ ✔ Container agreement-commission-portal-db-1            Healthy                                                                                                 19.2s
+ ✔ Container agreement-commission-portal-redis-1         Healthy                                                                                                 19.2s
+ ✔ Container agreement-commission-portal-celery-worker-1 Running                                                                                                 0.0ss
+ ✔ Container agreement-commission-portal-celery-beat-1   Running                                                                                                 0.0ss
+ ✔ Container agreement-commission-portal-app-1           Started                                                                                                 19.7s
+ubuntu@ip-172-31-41-234:~/agreement-commission-portal$ docker exec -it agreement-commission-portal-db-1 psql -U portal_user -d agreement_portal -c "SELECT COUNT(*) FROM countries;"
+docker exec -it agreement-commission-portal-db-1 psql -U portal_user -d agreement_portal -c "SELECT rp.role_id, p.code FROM role_permissions rp JOIN permissions p ON rp.permission_id = p.id WHERE p.code LIKE '%commission_tracker%';"
+ count 
+-------
+    15
+(1 row)
+
+ role_id |                   code                   
+---------+------------------------------------------
+       1 | commission_tracker.view
+       1 | commission_tracker.create
+       1 | commission_tracker.edit
+       1 | commission_tracker.delete
+       1 | commission_tracker.entry.create
+       1 | commission_tracker.entry.edit
+       1 | commission_tracker.entry.delete
+       1 | commission_tracker.student.delete_master
+      11 | commission_tracker.view
+      11 | commission_tracker.create
+      11 | commission_tracker.edit
+      11 | commission_tracker.delete
+      11 | commission_tracker.student.delete_master
+      11 | commission_tracker.entry.create
+      11 | commission_tracker.entry.edit
+      11 | commission_tracker.entry.delete
+(16 rows)
+
+ubuntu@ip-172-31-41-234:~/agreement-commission-portal$ docker exec -it agreement-commission-portal-db-1 psql -U portal_user -d agreement_portal -c "SELECT COUNT(*) FROM countries;"
+ count 
+-------
+    15
+(1 row)
+
+ubuntu@ip-172-31-41-234:~/agreement-commission-portal$ docker exec -it agreement-commission-portal-db-1 psql -U portal_user -d agreement_portal -c "SELECT id, code FROM permissions WHERE code LIKE 'commission_tracker%';"
+ id |                   code                   
+----+------------------------------------------
+ 45 | commission_tracker.view
+ 46 | commission_tracker.create
+ 47 | commission_tracker.edit
+ 48 | commission_tracker.delete
+ 49 | commission_tracker.entry.create
+ 50 | commission_tracker.entry.edit
+ 51 | commission_tracker.entry.delete
+ 52 | commission_tracker.student.delete_master
+(8 rows)
+
+ubuntu@ip-172-31-41-234:~/agreement-commission-portal$ docker exec -it agreement-commission-portal-db-1 psql -U portal_user -d agreement_portal -c "SELECT r.id, r.name FROM roles r JOIN user_roles ur ON r.id = ur.role_id JOIN users u ON ur.user_id = u.id WHERE u.email = 'au@studyinfocentre.com';"
+ id |    name     
+----+-------------
+  1 | Super Admin
+(1 row)
+
+ubuntu@ip-172-31-41-234:~/agreement-commission-portal$ 
