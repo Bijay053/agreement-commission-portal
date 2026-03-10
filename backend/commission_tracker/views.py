@@ -751,13 +751,10 @@ class SampleSheetView(APIView):
         writer.writerow([
             'Agent Name', 'Student ID', 'AgentSIC ID', 'Student Name', 'Provider',
             'Country', 'Start Intake', 'Course Level', 'Course Name', 'Course Duration (Years)',
-            'Commission Rate %', 'GST Rate %', 'GST Applicable', 'Scholarship Type',
-            'Scholarship Value', 'Status',
         ])
         writer.writerow([
             'Sample Agent', 'STU001', 'SIC001', 'John Doe', 'University of Melbourne',
             'AU', 'T1 2025', 'Bachelor', 'Bachelor of Engineering', '4',
-            '15', '10', 'Yes', 'None', '0', 'Under Enquiry',
         ])
         return response
 
