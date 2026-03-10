@@ -17,9 +17,9 @@ attached_assets/
 .env
 .env.local
 .env.example
-*.png
 *.jpg
 *.jpeg
+!client/public/
 .vscode/
 .idea/
 uploads/

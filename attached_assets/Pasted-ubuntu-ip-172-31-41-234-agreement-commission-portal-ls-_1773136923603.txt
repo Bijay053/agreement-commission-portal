@@ -1,0 +1,114 @@
+ubuntu@ip-172-31-41-234:~/agreement-commission-portal$ ls /etc/nginx/sites-enabled/
+cat /etc/nginx/sites-enabled/*
+portal
+server {
+    server_name portal.studyinfocentre.com;
+
+    client_max_body_size 50M;
+
+    location / {
+        proxy_pass http://localhost:5000;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_cache_bypass $http_upgrade;
+    }
+
+    listen 443 ssl; # managed by Certbot
+    ssl_certificate /etc/letsencrypt/live/portal.studyinfocentre.com/fullchain.pem; # managed by Certbot
+    ssl_certificate_key /etc/letsencrypt/live/portal.studyinfocentre.com/privkey.pem; # managed by Certbot
+    include /etc/letsencrypt/options-ssl-nginx.conf; # managed by Certbot
+    ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem; # managed by Certbot
+
+
+}
+server {
+    if ($host = portal.studyinfocentre.com) {
+        return 301 https://$host$request_uri;
+    } # managed by Certbot
+
+
+    listen 80;
+    server_name portal.studyinfocentre.com;
+    return 404; # managed by Certbot
+
+
+}ubuntu@ip-172-31-41-234:~/agreement-commission-portal$ ls /etc/nginx/conf.d/
+ubuntu@ip-172-31-41-234:~/agreement-commission-portal$ git pull origin main
+docker-compose up -d --build
+From https://github.com/Bijay053/agreement-commission-portal
+ * branch            main       -> FETCH_HEAD
+Already up to date.
+[+] Building 4.6s (31/31) FINISHED                                                                                                                                    
+ => [internal] load local bake definitions                                                                                                                       0.0s
+ => => reading from stdin 1.58kB                                                                                                                                 0.0s
+ => [app internal] load build definition from Dockerfile                                                                                                         0.1s
+ => => transferring dockerfile: 1.34kB                                                                                                                           0.0s
+ => [celery-beat internal] load metadata for docker.io/library/python:3.12-slim                                                                                  1.1s
+ => [celery-beat internal] load .dockerignore                                                                                                                    0.0s
+ => => transferring context: 321B                                                                                                                                0.0s
+ => [celery-worker internal] load build context                                                                                                                  0.2s
+ => => transferring context: 10.08kB                                                                                                                             0.1s
+ => [celery-beat base 1/3] FROM docker.io/library/python:3.12-slim@sha256:ccc7089399c8bb65dd1fb3ed6d55efa538a3f5e7fca3f5988ac3b5b87e593bf0                       0.2s
+ => => resolve docker.io/library/python:3.12-slim@sha256:ccc7089399c8bb65dd1fb3ed6d55efa538a3f5e7fca3f5988ac3b5b87e593bf0                                        0.1s
+ => CACHED [celery-beat base 2/3] WORKDIR /app                                                                                                                   0.0s
+ => CACHED [celery-beat base 3/3] RUN apt-get update && apt-get install -y --no-install-recommends     gcc libpq-dev curl qpdf libmagic1 &&     rm -rf /var/lib  0.0s
+ => CACHED [celery-beat python-deps 1/2] COPY backend/requirements.txt ./backend/requirements.txt                                                                0.0s
+ => CACHED [celery-beat python-deps 2/2] RUN pip install --no-cache-dir -r backend/requirements.txt gunicorn                                                     0.0s
+ => CACHED [celery-beat production 1/7] COPY --from=python-deps /usr/local/lib/python3.12/site-packages /usr/local/lib/python3.12/site-packages                  0.0s
+ => CACHED [celery-beat production 2/7] COPY --from=python-deps /usr/local/bin /usr/local/bin                                                                    0.0s
+ => CACHED [celery-beat production 3/7] COPY backend/ ./backend/                                                                                                 0.0s
+ => CACHED [celery-beat frontend-build 1/8] RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - &&     apt-get install -y --no-install-recommends nod  0.0s
+ => CACHED [celery-beat frontend-build 2/8] COPY package.json ./                                                                                                 0.0s
+ => CACHED [celery-beat frontend-build 3/8] RUN npm install                                                                                                      0.0s
+ => CACHED [celery-beat frontend-build 4/8] COPY client/ ./client/                                                                                               0.0s
+ => CACHED [celery-beat frontend-build 5/8] COPY shared/ ./shared/                                                                                               0.0s
+ => CACHED [celery-beat frontend-build 6/8] COPY vite.config.ts tsconfig.json tailwind.config.ts postcss.config.js components.json ./                            0.0s
+ => CACHED [celery-beat frontend-build 7/8] RUN mkdir -p attached_assets                                                                                         0.0s
+ => CACHED [celery-beat frontend-build 8/8] RUN npx vite build                                                                                                   0.0s
+ => CACHED [celery-beat production 4/7] COPY --from=frontend-build /app/dist/public ./dist/public                                                                0.0s
+ => CACHED [celery-beat production 5/7] COPY scripts/ ./scripts/                                                                                                 0.0s
+ => CACHED [celery-beat production 6/7] RUN mkdir -p uploads                                                                                                     0.0s
+ => CACHED [celery-beat production 7/7] WORKDIR /app/backend                                                                                                     0.0s
+ => [celery-worker] exporting to image                                                                                                                           0.9s
+ => => exporting layers                                                                                                                                          0.1s
+ => => exporting manifest sha256:a5e1b7853d327cfc1a3337f1eb9a234de5379be7b5245e0e394b5ba2708e2e11                                                                0.0s
+ => => exporting config sha256:097dffa01a191d7de161f44f47f48c5dcf01e5f80ece314017a32fc5c156a6c4                                                                  0.0s
+ => => exporting attestation manifest sha256:0f9904fcb17e10f653aaec3e516f617663ffd678bf667dc47ac444cd2321a88b                                                    0.1s
+ => => exporting manifest list sha256:1c8496502114a5d587d1f9bd549dcc6e224eba5bfb2ccd071654246a6f4f34ae                                                           0.0s
+ => => naming to docker.io/library/agreement-commission-portal-celery-worker:latest                                                                              0.0s
+ => => unpacking to docker.io/library/agreement-commission-portal-celery-worker:latest                                                                           0.1s
+ => [celery-beat] exporting to image                                                                                                                             0.8s
+ => => exporting layers                                                                                                                                          0.1s
+ => => exporting manifest sha256:64295ef786a03ac11a41cdbc647ec476f0b5e49b3b8dd2439a64ebe8e09466b4                                                                0.0s
+ => => exporting config sha256:6078d1c903b1c503d282e06a736961bb133028ea359d5da085798c5145a6e508                                                                  0.0s
+ => => exporting attestation manifest sha256:63114c3246bbcaf5173dd8abdd168f0ac3a4f11f192bdce446b456fec5daca4c                                                    0.1s
+ => => exporting manifest list sha256:1aafa35ff403cf2fb4efaca4711bd4522839e8058ca1987e5db351fdb2903fca                                                           0.1s
+ => => naming to docker.io/library/agreement-commission-portal-celery-beat:latest                                                                                0.0s
+ => => unpacking to docker.io/library/agreement-commission-portal-celery-beat:latest                                                                             0.1s
+ => [app] exporting to image                                                                                                                                     0.8s
+ => => exporting layers                                                                                                                                          0.1s
+ => => exporting manifest sha256:043d772579a488bfad61081e5e7f8dbe7a447a53b973acc7e3d5b0a3b20f75f4                                                                0.0s
+ => => exporting config sha256:b6f2cb434ee44226a309ba853af4ca1cb572d22da8855f5dd9a4b30b79991ddc                                                                  0.0s
+ => => exporting attestation manifest sha256:9745d865bbbeac19423bb9fbb3da402d838b382c42fddc4cf17657fb796b490e                                                    0.1s
+ => => exporting manifest list sha256:36b1b0ab8af037152381a39f4c323180006dfc3be53dd5cf619d17d8fef3c4d0                                                           0.1s
+ => => naming to docker.io/library/agreement-commission-portal-app:latest                                                                                        0.0s
+ => => unpacking to docker.io/library/agreement-commission-portal-app:latest                                                                                     0.1s
+ => [celery-beat] resolving provenance for metadata file                                                                                                         0.2s
+ => [celery-worker] resolving provenance for metadata file                                                                                                       0.2s
+ => [app] resolving provenance for metadata file                                                                                                                 0.0s
+[+] up 8/8
+ ✔ Image agreement-commission-portal-app                 Built                                                                                                   4.7ss
+ ✔ Image agreement-commission-portal-celery-worker       Built                                                                                                   4.7ss
+ ✔ Image agreement-commission-portal-celery-beat         Built                                                                                                   4.7ss
+ ✔ Container agreement-commission-portal-redis-1         Healthy                                                                                                 13.7s
+ ✔ Container agreement-commission-portal-db-1            Healthy                                                                                                 13.7s
+ ✔ Container agreement-commission-portal-app-1           Started                                                                                                 14.6s
+ ✔ Container agreement-commission-portal-celery-worker-1 Started                                                                                                 14.5s
+ ✔ Container agreement-commission-portal-celery-beat-1   Started                                                                                                 14.4s
+ubuntu@ip-172-31-41-234:~/agreement-commission-portal$ curl -s -o /dev/null -w "%{http_code}" -H "X-Forwarded-Proto: https" http://localhost:5000/api/health
+503ubuntu@ip-172-31-41-234:~/agreement-commission-portal$ 
