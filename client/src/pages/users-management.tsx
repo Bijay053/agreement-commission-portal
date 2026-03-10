@@ -36,7 +36,8 @@ export default function UsersManagementPage() {
   const [viewingSessionsUser, setViewingSessionsUser] = useState<UserWithRoles | null>(null);
   const [deactivatingUser, setDeactivatingUser] = useState<UserWithRoles | null>(null);
 
-  const { data: users, isLoading } = useQuery<UserWithRoles[]>({ queryKey: ["/api/users"] });
+  const { data: usersData, isLoading } = useQuery<any>({ queryKey: ["/api/users"] });
+  const users: UserWithRoles[] | undefined = usersData?.results ?? usersData;
   const { data: roles } = useQuery<Role[]>({ queryKey: ["/api/roles"] });
 
   const [createForm, setCreateForm] = useState({

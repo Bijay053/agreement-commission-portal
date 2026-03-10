@@ -90,12 +90,13 @@ The portal adopts a client-server architecture:
 - **Field-Level Permissions**: Financial fields and confidential data restricted by permission codes
 
 ### Pagination
-Large list endpoints use `StandardPagination` (50 items/page). Response format:
+`DEFAULT_PAGINATION_CLASS` set to `StandardPagination` (50 items/page). Response format:
 ```json
 {"count": 123, "next": "...", "previous": "...", "results": [...]}
 ```
-Applied to: agreements list, commission tracker students, audit logs, commission tracker all-entries.
-Small/fixed endpoints return flat arrays (no pagination).
+Paginated endpoints: agreements list, commission tracker students, audit logs, contacts (all), users, security logs, notifications.
+Frontend extracts `data.results ?? data` for backward compatibility.
+Small/fixed/config endpoints (roles, terms, sessions, per-agreement contacts/documents) return flat arrays.
 
 ### Export Endpoints
 - `GET /api/agreements/export?format=csv|xlsx`

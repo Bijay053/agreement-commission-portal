@@ -19,6 +19,7 @@ from accounts.models import (
 )
 from audit.models import AuditLog
 from core.permissions import get_user_permissions, require_auth, require_permission
+from core.pagination import StandardPagination
 from core.throttling import LoginRateThrottle
 
 login_attempt_tracker = {}
@@ -357,6 +358,8 @@ class VerifyOtpView(APIView):
 
 
 class ResendOtpView(APIView):
+    throttle_classes = [LoginRateThrottle]
+
     def post(self, request):
         try:
             user_id = request.session.get('pendingUserId')
@@ -490,6 +493,8 @@ class ForgotPasswordView(APIView):
 
 
 class ResetPasswordView(APIView):
+    throttle_classes = [LoginRateThrottle]
+
     def post(self, request):
         try:
             token = request.data.get('token', '')
@@ -711,16 +716,23 @@ class LogoutOthersView(APIView):
 
 
 class SecurityLogsView(APIView):
+    pagination_class = StandardPagination
+
     @require_auth
     def get(self, request):
         try:
             user_id = request.session['userId']
-            logs = SecurityAuditLog.objects.filter(user_id=user_id).order_by('-created_at')[:50]
+            qs = SecurityAuditLog.objects.filter(user_id=user_id).order_by('-created_at')
+            paginator = self.pagination_class()
+            page = paginator.paginate_queryset(qs, request)
+            items = page if page is not None else list(qs)
             result = [{
                 'id': l.id, 'userId': l.user_id, 'eventType': l.event_type,
                 'ipAddress': l.ip_address, 'deviceInfo': l.device_info,
                 'metadata': l.metadata, 'createdAt': l.created_at.isoformat() if l.created_at else None,
-            } for l in logs]
+            } for l in items]
+            if page is not None:
+                return paginator.get_paginated_response(result)
             return Response(result)
         except Exception as e:
             return Response({'message': str(e)}, status=500)
@@ -761,14 +773,21 @@ class AdminUserSecurityLogsView(APIView):
 
 
 class UsersListView(APIView):
+    pagination_class = StandardPagination
+
     @require_permission("security.user.manage")
     def get(self, request):
-        users = User.objects.all().order_by('id')
+        qs = User.objects.all().order_by('id')
+        paginator = self.pagination_class()
+        page = paginator.paginate_queryset(qs, request)
+        items = page if page is not None else list(qs)
         result = []
-        for u in users:
+        for u in items:
             d = user_to_dict(u)
             d['roles'] = get_user_roles_list(u.id)
             result.append(d)
+        if page is not None:
+            return paginator.get_paginated_response(result)
         return Response(result)
 
     @require_permission("security.user.manage")

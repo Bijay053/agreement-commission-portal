@@ -2,6 +2,7 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from django.db.models import Q
 from core.permissions import require_permission
+from core.pagination import StandardPagination
 from core.models import Country
 from providers.models import Provider
 from agreements.models import Agreement
@@ -29,6 +30,8 @@ def contact_to_dict(c, countries_lookup=None):
 
 
 class AllContactsView(APIView):
+    pagination_class = StandardPagination
+
     @require_permission("contacts.view")
     def get(self, request):
         try:
@@ -54,7 +57,11 @@ class AllContactsView(APIView):
                 agr_ids = Agreement.objects.filter(status=agreement_status).values_list('id', flat=True)
                 qs = qs.filter(agreement_id__in=agr_ids)
 
-            contacts = list(qs.order_by('full_name'))
+            qs = qs.order_by('full_name')
+
+            paginator = self.pagination_class()
+            page = paginator.paginate_queryset(qs, request)
+            contacts = page if page is not None else list(qs)
 
             country_ids = set(c.country_id for c in contacts if c.country_id)
             countries_lookup = {c.id: c.name for c in Country.objects.filter(id__in=country_ids)} if country_ids else {}
@@ -75,6 +82,9 @@ class AllContactsView(APIView):
                     prov = providers_lookup.get(agr.university_id)
                     d['providerName'] = prov.name if prov else None
                 result.append(d)
+
+            if page is not None:
+                return paginator.get_paginated_response(result)
             return Response(result)
         except Exception as e:
             return Response({'message': str(e)}, status=500)

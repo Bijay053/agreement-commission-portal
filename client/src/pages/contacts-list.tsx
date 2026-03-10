@@ -117,9 +117,10 @@ export default function ContactsListPage() {
   const queryString = queryParams.toString();
   const contactsUrl = `/api/contacts${queryString ? `?${queryString}` : ""}`;
 
-  const { data: contacts, isLoading } = useQuery<ContactRow[]>({
+  const { data: contactsData, isLoading } = useQuery<any>({
     queryKey: [contactsUrl],
   });
+  const contacts: ContactRow[] | undefined = contactsData?.results ?? contactsData;
 
   const { data: countries } = useQuery<any[]>({ queryKey: ["/api/countries"] });
   const { data: agreementsListData } = useQuery<any>({

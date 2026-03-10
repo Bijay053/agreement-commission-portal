@@ -5,6 +5,7 @@ from django.core.mail import send_mail
 from django.utils import timezone
 from rest_framework.views import APIView
 from rest_framework.response import Response
+from core.pagination import StandardPagination
 from core.permissions import require_auth, require_permission
 from agreements.models import Agreement
 from providers.models import Provider
@@ -220,6 +221,8 @@ def _determine_template_and_tier(days_until):
 
 
 class NotificationListView(APIView):
+    pagination_class = StandardPagination
+
     @require_auth
     def get(self, request):
         try:
@@ -227,15 +230,20 @@ class NotificationListView(APIView):
             agreement_id = request.query_params.get('agreementId')
             if agreement_id:
                 qs = qs.filter(agreement_id=int(agreement_id))
-            limit = int(request.query_params.get('limit', 100))
-            notifs = qs[:limit]
-            return Response([{
+
+            paginator = self.pagination_class()
+            page = paginator.paginate_queryset(qs, request)
+            items = page if page is not None else list(qs)
+            result = [{
                 'id': n.id, 'agreementId': n.agreement_id, 'providerName': n.provider_name,
                 'notificationType': n.notification_type,
                 'sentDate': n.sent_date.isoformat() if n.sent_date else None,
                 'daysBeforeExpiry': n.days_before_expiry, 'status': n.status,
                 'recipientEmails': n.recipient_emails,
-            } for n in notifs])
+            } for n in items]
+            if page is not None:
+                return paginator.get_paginated_response(result)
+            return Response(result)
         except Exception as e:
             return Response({'message': str(e)}, status=500)
 

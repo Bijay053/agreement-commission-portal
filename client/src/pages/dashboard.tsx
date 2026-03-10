@@ -123,9 +123,10 @@ export default function DashboardPage() {
     queryKey: ["/api/agreements/alerts"],
   });
 
-  const { data: notifications, isLoading: notificationsLoading } = useQuery<any[]>({
+  const { data: notificationsData, isLoading: notificationsLoading } = useQuery<any>({
     queryKey: ["/api/agreement-notifications"],
   });
+  const notifications: any[] | undefined = notificationsData?.results ?? notificationsData;
 
   const handleTriggerCheck = async () => {
     setTriggeringCheck(true);
