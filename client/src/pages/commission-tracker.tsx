@@ -1402,7 +1402,7 @@ function TermTable({ termName, students, allEntries, allEntriesGlobal, terms, is
 function BulkUploadDialog({ onSuccess }: { onSuccess: () => void }) {
   const { toast } = useToast();
   const [file, setFile] = useState<File | null>(null);
-  const [preview, setPreview] = useState<{ valid: any[]; invalid: any[]; duplicates: any[]; totalRows: number } | null>(null);
+  const [preview, setPreview] = useState<{ rows: any[]; errors: any[]; totalRows: number } | null>(null);
   const [uploading, setUploading] = useState(false);
   const [importing, setImporting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -1436,10 +1436,10 @@ function BulkUploadDialog({ onSuccess }: { onSuccess: () => void }) {
   };
 
   const handleConfirm = async () => {
-    if (!preview?.valid.length) return;
+    if (!preview?.rows.length) return;
     setImporting(true);
     try {
-      const res = await apiRequest("POST", "/api/commission-tracker/bulk-upload/confirm", { rows: preview.valid });
+      const res = await apiRequest("POST", "/api/commission-tracker/bulk-upload/confirm", { rows: preview.rows });
       const result = await res.json();
       toast({
         title: "Import Complete",
@@ -1454,12 +1454,9 @@ function BulkUploadDialog({ onSuccess }: { onSuccess: () => void }) {
   };
 
   const downloadFailed = () => {
-    if (!preview) return;
-    const failed = [...preview.invalid, ...preview.duplicates];
-    if (failed.length === 0) return;
-    const headers = Object.keys(failed[0].data);
-    const rows = failed.map(f => [...headers.map(h => f.data[h] || ""), f.errors.join("; ")]);
-    const csv = [[...headers, "Error"].join(","), ...rows.map(r => r.map((v: string) => `"${(v || "").replace(/"/g, '""')}"`).join(","))].join("\n");
+    if (!preview?.errors?.length) return;
+    const csvRows = preview.errors.map((e: any) => `Row ${e.row},${e.message}`);
+    const csv = ["Row,Error", ...csvRows].join("\n");
     const blob = new Blob([csv], { type: "text/csv" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -1506,51 +1503,33 @@ function BulkUploadDialog({ onSuccess }: { onSuccess: () => void }) {
         <div className="space-y-3">
           <div className="flex items-center gap-4 text-sm">
             <span className="font-medium">Total rows: {preview.totalRows}</span>
-            <Badge className="bg-green-100 text-green-800" data-testid="badge-valid">Valid: {preview.valid.length}</Badge>
-            <Badge className="bg-red-100 text-red-800" data-testid="badge-invalid">Invalid: {preview.invalid.length}</Badge>
-            <Badge className="bg-yellow-100 text-yellow-800" data-testid="badge-duplicates">Duplicates: {preview.duplicates.length}</Badge>
+            <Badge className="bg-green-100 text-green-800" data-testid="badge-valid">Valid: {preview.rows.length - (preview.errors?.length || 0)}</Badge>
+            {preview.errors?.length > 0 && (
+              <Badge className="bg-red-100 text-red-800" data-testid="badge-invalid">Errors: {preview.errors.length}</Badge>
+            )}
           </div>
 
-          {preview.invalid.length > 0 && (
+          {preview.errors?.length > 0 && (
             <div>
-              <h4 className="text-xs font-medium text-red-600 mb-1">Invalid Rows</h4>
+              <h4 className="text-xs font-medium text-red-600 mb-1">Validation Errors</h4>
               <div className="max-h-32 overflow-y-auto border rounded text-xs">
-                {preview.invalid.map((r, i) => (
+                {preview.errors.map((e: any, i: number) => (
                   <div key={i} className="flex justify-between py-1 px-2 border-b bg-red-50">
-                    <span>Row {r.row}: {r.data["Student Name"] || "?"}</span>
-                    <span className="text-red-600">{r.errors.join(", ")}</span>
+                    <span>Row {e.row}</span>
+                    <span className="text-red-600">{e.message}</span>
                   </div>
                 ))}
               </div>
             </div>
           )}
 
-          {preview.duplicates.length > 0 && (
+          {preview.rows.length > 0 && (
             <div>
-              <h4 className="text-xs font-medium text-yellow-600 mb-1">Duplicate Rows</h4>
+              <h4 className="text-xs font-medium text-green-600 mb-1">Rows to Import</h4>
               <div className="max-h-32 overflow-y-auto border rounded text-xs">
-                {preview.duplicates.map((r, i) => (
-                  <div key={i} className="flex justify-between py-1 px-2 border-b bg-yellow-50">
-                    <span>Row {r.row}: {r.data["Student Name"] || "?"}</span>
-                    <span className="text-yellow-600">{r.errors.join(", ")}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {preview.valid.length > 0 && (
-            <div>
-              <h4 className="text-xs font-medium text-green-600 mb-1">Valid Rows (will be imported)</h4>
-              <div className="max-h-32 overflow-y-auto border rounded text-xs">
-                {preview.valid.map((r, i) => (
+                {preview.rows.map((r: any, i: number) => (
                   <div key={i} className="py-1 px-2 border-b bg-green-50">
-                    Row {r.row}: {r.data.studentName} ({r.data.agentsicId}) — {r.data.provider}
-                    {r.data.additionalProviders?.length > 0 && (
-                      <span className="text-blue-600 ml-1">
-                        + {r.data.additionalProviders.map((ap: any) => ap.provider).join(", ")}
-                      </span>
-                    )}
+                    {r.studentName} ({r.agentsicId || "N/A"}) — {r.provider}
                   </div>
                 ))}
               </div>
@@ -1559,18 +1538,18 @@ function BulkUploadDialog({ onSuccess }: { onSuccess: () => void }) {
 
           <div className="flex items-center justify-between">
             <div className="flex gap-2">
-              {(preview.invalid.length > 0 || preview.duplicates.length > 0) && (
+              {preview.errors?.length > 0 && (
                 <Button variant="outline" size="sm" onClick={downloadFailed} data-testid="button-download-failed">
                   <Download className="w-3.5 h-3.5 mr-1" />
-                  Download Failed Rows
+                  Download Errors
                 </Button>
               )}
               <Button variant="outline" size="sm" onClick={() => { setPreview(null); setFile(null); }} data-testid="button-reset-upload">
                 Upload Different File
               </Button>
             </div>
-            <Button size="sm" disabled={preview.valid.length === 0 || importing} onClick={handleConfirm} data-testid="button-confirm-import">
-              {importing ? "Importing..." : `Import ${preview.valid.length} Students`}
+            <Button size="sm" disabled={preview.rows.length === 0 || importing} onClick={handleConfirm} data-testid="button-confirm-import">
+              {importing ? "Importing..." : `Import ${preview.rows.length} Students`}
             </Button>
           </div>
         </div>
