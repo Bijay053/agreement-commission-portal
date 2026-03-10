@@ -108,10 +108,14 @@ class AgreementDocumentsView(APIView):
             if file.content_type not in allowed_types:
                 return Response({'message': f'File type not allowed: {file.content_type}'}, status=400)
 
+            custom_name = request.data.get('fileName', '').strip()
+            if not custom_name:
+                return Response({'message': 'File Name is required'}, status=400)
+
             from core.file_security import validate_uploaded_file
             is_safe, security_msg = validate_uploaded_file(
                 file, file.content_type,
-                filename=file.name,
+                filename=custom_name,
                 user_id=request.session.get('userId'),
                 ip_address=request.META.get('REMOTE_ADDR', ''),
                 user_agent=request.META.get('HTTP_USER_AGENT', ''),
@@ -140,12 +144,12 @@ class AgreementDocumentsView(APIView):
             doc = AgreementDocument.objects.create(
                 agreement_id=agreement_id,
                 version_no=version_no,
-                original_filename=file.name,
+                original_filename=custom_name,
                 mime_type=file.content_type,
                 size_bytes=file.size,
                 storage_path=storage_key,
                 uploaded_by_user_id=request.session.get('userId'),
-                upload_note=request.data.get('uploadNote', ''),
+                upload_note='',
             )
 
             from audit.models import AuditLog
@@ -157,7 +161,7 @@ class AgreementDocumentsView(APIView):
                     entity_id=doc.id,
                     ip_address=request.META.get('REMOTE_ADDR', ''),
                     user_agent=request.META.get('HTTP_USER_AGENT', ''),
-                    metadata={'agreementId': agreement_id, 'filename': file.name, 'version': version_no},
+                    metadata={'agreementId': agreement_id, 'filename': custom_name, 'version': version_no},
                 )
             except Exception:
                 pass

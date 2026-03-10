@@ -417,7 +417,7 @@ export default function DocumentsTab({ agreementId }: { agreementId: number }) {
   const canDelete = hasPermission("document.delete");
   const [showDialog, setShowDialog] = useState(false);
   const [uploading, setUploading] = useState(false);
-  const [note, setNote] = useState("");
+  const [fileName, setFileName] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
   const [viewingDoc, setViewingDoc] = useState<any>(null);
   const [deleting, setDeleting] = useState<number | null>(null);
@@ -433,13 +433,20 @@ export default function DocumentsTab({ agreementId }: { agreementId: number }) {
 
   const handleUpload = async () => {
     const file = fileRef.current?.files?.[0];
-    if (!file) return;
+    if (!file) {
+      toast({ title: "Please select a file", variant: "destructive" });
+      return;
+    }
+    if (!fileName.trim()) {
+      toast({ title: "File Name is required", variant: "destructive" });
+      return;
+    }
 
     setUploading(true);
     try {
       const formData = new FormData();
       formData.append("file", file);
-      if (note) formData.append("note", note);
+      formData.append("fileName", fileName.trim());
 
       const res = await fetch(`/api/agreements/${agreementId}/documents`, {
         method: "POST",
@@ -452,8 +459,8 @@ export default function DocumentsTab({ agreementId }: { agreementId: number }) {
       }
       queryClient.invalidateQueries({ queryKey: ["/api/agreements", agreementId, "documents"] });
       setShowDialog(false);
-      setNote("");
-      toast({ title: "Document uploaded" });
+      setFileName("");
+      toast({ title: "Document uploaded successfully" });
     } catch (err: any) {
       toast({ title: "Upload failed", description: err.message, variant: "destructive" });
     } finally {
@@ -521,7 +528,7 @@ export default function DocumentsTab({ agreementId }: { agreementId: number }) {
       <div className="flex items-center justify-between gap-2">
         <h3 className="font-medium">Agreement Documents</h3>
         {canUpload && (
-          <Dialog open={showDialog} onOpenChange={(open) => { if (open) { setNote(""); if (fileRef.current) fileRef.current.value = ""; } setShowDialog(open); }}>
+          <Dialog open={showDialog} onOpenChange={(open) => { if (open) { setFileName(""); if (fileRef.current) fileRef.current.value = ""; } setShowDialog(open); }}>
             <DialogTrigger asChild>
               <Button size="sm" data-testid="button-upload-document">
                 <Upload className="w-4 h-4 mr-1" /> Upload
@@ -537,10 +544,10 @@ export default function DocumentsTab({ agreementId }: { agreementId: number }) {
                   <Input type="file" ref={fileRef} accept=".pdf,.doc,.docx" className="mt-1" data-testid="input-file-upload" />
                 </div>
                 <div>
-                  <Label>Upload Note</Label>
-                  <Input value={note} onChange={e => setNote(e.target.value)} placeholder="e.g., Updated commission schedule" data-testid="input-upload-note" />
+                  <Label>File Name <span className="text-red-500">*</span></Label>
+                  <Input value={fileName} onChange={e => setFileName(e.target.value)} placeholder="e.g., Commission Schedule 2026" data-testid="input-file-name" />
                 </div>
-                <Button onClick={handleUpload} className="w-full" disabled={uploading} data-testid="button-submit-upload">
+                <Button onClick={handleUpload} className="w-full" disabled={uploading || !fileName.trim()} data-testid="button-submit-upload">
                   {uploading ? "Uploading..." : "Upload Document"}
                 </Button>
               </div>
@@ -572,7 +579,6 @@ export default function DocumentsTab({ agreementId }: { agreementId: number }) {
                         <Clock className="w-3 h-3" />
                         {doc.createdAt ? format(parseISO(doc.createdAt), "dd MMM yyyy HH:mm") : "Unknown"}
                       </span>
-                      {doc.uploadNote && <span>{doc.uploadNote}</span>}
                     </div>
                   </div>
                   <div className="flex items-center gap-1">

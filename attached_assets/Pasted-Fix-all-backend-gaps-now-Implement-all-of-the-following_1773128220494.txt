@@ -1,0 +1,475 @@
+Fix all backend gaps now
+
+Implement all of the following in the Python CRM backend immediately.
+
+1. Enable CSRF protection
+
+Add django.middleware.csrf.CsrfViewMiddleware back into MIDDLEWARE.
+
+Keep it before middleware that assumes CSRF is already handled.
+
+Make frontend send CSRF token on every POST, PUT, PATCH, and DELETE request.
+
+Ensure authenticated browser requests fail without a valid CSRF token. Django recommends keeping CSRF middleware enabled and documents that it should be in MIDDLEWARE.
+
+2. Add full security middleware and headers
+
+Add django.middleware.clickjacking.XFrameOptionsMiddleware.
+
+Configure:
+
+SECURE_HSTS_SECONDS
+
+SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+
+SECURE_HSTS_PRELOAD = True
+
+SECURE_SSL_REDIRECT = True
+
+SECURE_CONTENT_TYPE_NOSNIFF = True
+
+X_FRAME_OPTIONS = "DENY"
+
+SECURE_REFERRER_POLICY = "same-origin" or stricter if compatible
+
+Add Content Security Policy middleware and configure CSP in settings. Django 6 documents built-in CSP middleware and SECURE_CSP / SECURE_CSP_REPORT_ONLY settings.
+
+3. Add global API throttling
+
+Configure DRF throttling in REST_FRAMEWORK:
+
+DEFAULT_THROTTLE_CLASSES
+
+DEFAULT_THROTTLE_RATES
+
+Create separate throttle classes for:
+
+login
+
+OTP verify
+
+password reset
+
+normal authenticated API
+
+admin API
+
+file download
+
+Return proper throttle error responses. DRF documents built-in throttling and that throttle checks run before the request handler.
+
+4. Add pagination everywhere
+
+Set DEFAULT_PAGINATION_CLASS.
+
+Set a default PAGE_SIZE.
+
+Apply pagination to every list endpoint:
+
+students
+
+agents
+
+agreements
+
+commissions
+
+documents
+
+contacts
+
+notifications
+
+audit logs
+
+security logs
+
+Response must always return:
+
+count
+
+next
+
+previous
+
+results
+DRF officially supports configurable pagination for large result sets.
+
+5. Fix N+1 queries
+
+Review all list and dashboard endpoints.
+
+Add select_related() for single-valued relations.
+
+Add prefetch_related() for many-to-many and reverse relations.
+
+Start with:
+
+agreement list
+
+student list
+
+commission entry list
+
+dashboard metrics
+
+document list
+
+contact list
+
+Profile queries before and after changes. Django’s optimization docs explicitly recommend select_related() and prefetch_related() to reduce unnecessary queries.
+
+6. Add custom database indexes
+
+Create DB indexes for all high-use filter, search, sort, and join fields, especially:
+
+status
+
+created_at
+
+updated_at
+
+provider_id
+
+agent_id
+
+country
+
+intake
+
+expiry_date
+
+student_id
+
+agentsic_id
+
+email
+
+phone
+
+role_id
+
+notification read/status fields
+
+Also add composite indexes where needed, such as:
+
+(country, status)
+
+(provider_id, intake)
+
+(agent_id, intake)
+
+(status, created_at)
+
+7. Audit-log every document access
+
+Log document view.
+
+Log document download.
+
+Store:
+
+user
+
+document id/name
+
+action type
+
+timestamp
+
+IP
+
+browser / OS / device if available
+
+Ensure no download path bypasses audit logging.
+
+8. Put Nginx in front of Gunicorn
+
+Do not expose Gunicorn directly.
+
+Add Nginx reverse proxy for:
+
+SSL termination
+
+request buffering
+
+static/media serving
+
+timeout control
+
+client max body size
+
+security headers if needed at proxy layer
+
+Keep Gunicorn as app server only.
+
+9. Add Redis
+
+Use Redis for:
+
+cache
+
+throttle counters
+
+OTP short-lived storage
+
+session-related temporary state
+
+dashboard/cacheable summaries
+Django officially supports Redis-backed caching through its cache framework.
+
+10. Add Celery
+
+Configure Celery with Redis broker.
+
+Move these jobs out of request/response:
+
+emails
+
+OTP sends
+
+expiry reminders
+
+notification dispatch
+
+report generation
+
+heavy file processing
+
+Add retry logic for failed jobs.
+
+11. Add scheduled background jobs
+
+Create scheduled tasks for:
+
+agreement expiry reminders
+
+urgent expiry reminders
+
+expired agreement emails
+
+password expiry reminders
+
+session cleanup
+
+old log cleanup
+
+daily summaries
+
+monthly reports
+
+12. Add Sentry or equivalent error tracking
+
+Track:
+
+unhandled exceptions
+
+API failures
+
+Celery task failures
+
+file processing failures
+
+auth and OTP errors
+
+slow endpoints
+
+13. Add monitoring and alerts
+
+Monitor:
+
+server CPU/RAM/disk
+
+PostgreSQL health
+
+Redis health
+
+API latency
+
+4xx/5xx spikes
+
+failed login spikes
+
+Celery queue backlog
+
+storage usage
+
+heartbeat endpoint status
+
+14. Add automated backups
+
+Daily PostgreSQL backup
+
+Retention policy
+
+Backup verification
+
+Restore test process
+
+S3 file backup/versioning policy
+
+Disaster recovery note with exact restore steps
+
+15. Add signed S3 access
+
+Keep bucket private.
+
+Prefer short-lived signed URLs for secure file access where practical.
+
+Keep permission checks before issuing URL.
+
+Expire URLs quickly.
+
+16. Add soft delete
+
+Implement soft delete for major business records:
+
+students
+
+agreements
+
+contacts
+
+commission rows
+
+document metadata
+
+notifications
+Do not hard delete sensitive operational records except super admin purge if strictly required.
+
+17. Add status history tables
+
+Create separate history tables for:
+
+student status changes
+
+agreement status changes
+
+commission payment status changes
+
+document review status changes
+Store:
+
+old status
+
+new status
+
+changed by
+
+changed at
+
+reason/comment
+
+18. Add audit fields everywhere
+
+Ensure all major tables have:
+
+created_at
+
+updated_at
+
+created_by
+
+updated_by
+
+19. Add object-level permissions
+
+Support scoped access such as:
+
+by country
+
+by branch
+
+by assigned agents
+
+by own records
+
+by confidential document ownership
+
+20. Add field-level permissions
+
+Support separate control for:
+
+contact details
+
+commission data
+
+payment details
+
+notes
+
+agreement documents
+
+confidential financial fields
+
+21. Add malware scanning for uploads
+
+Scan every uploaded file before final save or before release for viewing/download.
+
+Block infected files.
+
+Log malware detection events.
+
+22. Add email template management
+
+Move hardcoded templates into database-backed templates or admin-managed templates.
+
+Support:
+
+subject
+
+HTML body
+
+text body
+
+variables/placeholders
+
+active/inactive status
+
+preview/test send
+
+23. Add export/report APIs
+
+Support export for:
+
+CSV
+
+Excel
+
+PDF summary where needed
+
+filtered reports
+
+scheduled reports
+
+dashboard summaries
+
+agreement expiry lists
+
+commission summaries
+
+24. Run deployment and system checks
+
+Run Django system checks.
+
+Run deploy checks before release.
+
+Fix all warnings before production rollout. Django’s system check framework and deployment checklist are intended for validating production readiness.
+
+25. Final coding rule
+
+No new endpoint should be added unless it includes:
+
+permission check
+
+throttle rule
+
+pagination if list endpoint
+
+optimized queryset
+
+audit logging where business-critical
+
+validation
+
+timestamp and actor tracking
