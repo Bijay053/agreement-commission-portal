@@ -108,21 +108,21 @@ function PdfCanvasViewer({ pdfData, watermarkInfo }: { pdfData: ArrayBuffer; wat
         viewedAt,
       ];
 
-      const fontSize = Math.max(12, Math.min(16, viewport.width / 45));
+      const fontSize = Math.max(11, Math.min(14, viewport.width / 50));
       wCtx.font = `bold ${fontSize}px monospace`;
-      const lineHeight = fontSize + 5;
-      const blockHeight = lines.length * lineHeight + 20;
-      const blockWidth = Math.max(...lines.map(l => wCtx.measureText(l).width)) + 30;
-      const spacingX = blockWidth + 60;
-      const spacingY = blockHeight + 60;
+      const lineHeight = fontSize + 4;
+      const blockHeight = lines.length * lineHeight;
+      const blockWidth = Math.max(...lines.map(l => wCtx.measureText(l).width));
+      const spacingX = blockWidth + 20;
+      const spacingY = blockHeight + 25;
 
-      for (let y = -viewport.height * 0.3; y < viewport.height * 1.3; y += spacingY) {
-        for (let x = -viewport.width * 0.3; x < viewport.width * 1.3; x += spacingX) {
+      for (let y = -viewport.height * 0.5; y < viewport.height * 1.5; y += spacingY) {
+        for (let x = -viewport.width * 0.5; x < viewport.width * 1.5; x += spacingX) {
           wCtx.save();
           wCtx.translate(x, y);
-          wCtx.rotate(-0.4);
+          wCtx.rotate(-0.35);
 
-          wCtx.fillStyle = "rgba(220, 38, 38, 0.18)";
+          wCtx.fillStyle = "rgba(220, 38, 38, 0.15)";
           lines.forEach((line, i) => {
             wCtx.fillText(line, 0, i * lineHeight);
           });
