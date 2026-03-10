@@ -1,0 +1,53 @@
+ubuntu@ip-172-31-41-234:~$ docker exec agreement-commission-portal-db-1 psql -U portal_user -d agreement_portal -c "SELECT COUNT(*) as agreements FROM agreements;"
+docker exec agreement-commission-portal-db-1 psql -U portal_user -d agreement_portal -c "SELECT COUNT(*) as contacts FROM contacts;"
+docker exec agreement-commission-portal-db-1 psql -U portal_user -d agreement_portal -c "SELECT COUNT(*) as commission_students FROM commission_students;"
+docker exec agreement-commission-portal-db-1 psql -U portal_user -d agreement_portal -c "\dt"
+ agreements 
+------------
+          5
+(1 row)
+
+ERROR:  relation "contacts" does not exist
+LINE 1: SELECT COUNT(*) as contacts FROM contacts;
+                                         ^
+ commission_students 
+---------------------
+                   2
+(1 row)
+
+                     List of relations
+ Schema |            Name            | Type  |    Owner    
+--------+----------------------------+-------+-------------
+ public | agreement_commission_rules | table | portal_user
+ public | agreement_contacts         | table | portal_user
+ public | agreement_documents        | table | portal_user
+ public | agreement_notifications    | table | portal_user
+ public | agreement_targets          | table | portal_user
+ public | agreement_territories      | table | portal_user
+ public | agreements                 | table | portal_user
+ public | audit_logs                 | table | portal_user
+ public | commission_entries         | table | portal_user
+ public | commission_students        | table | portal_user
+ public | commission_terms           | table | portal_user
+ public | countries                  | table | portal_user
+ public | login_verification_codes   | table | portal_user
+ public | password_history           | table | portal_user
+ public | password_reset_tokens      | table | portal_user
+ public | permissions                | table | portal_user
+ public | role_permissions           | table | portal_user
+ public | roles                      | table | portal_user
+ public | security_audit_logs        | table | portal_user
+ public | session                    | table | portal_user
+ public | sub_agent_entries          | table | portal_user
+ public | sub_agent_term_entries     | table | portal_user
+ public | target_bonus_country       | table | portal_user
+ public | target_bonus_rules         | table | portal_user
+ public | target_bonus_tiers         | table | portal_user
+ public | universities               | table | portal_user
+ public | user_country_access        | table | portal_user
+ public | user_roles                 | table | portal_user
+ public | user_sessions              | table | portal_user
+ public | users                      | table | portal_user
+(30 rows)
+
+ubuntu@ip-172-31-41-234:~$ 
