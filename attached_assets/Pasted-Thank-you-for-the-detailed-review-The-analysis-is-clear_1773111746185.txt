@@ -1,0 +1,129 @@
+Thank you for the detailed review. The analysis is clear and I appreciate the transparency around the current architecture.
+
+From a structural perspective, the system has a good foundation. The use of PostgreSQL as the source of truth, RBAC permissions, audit logging, Docker deployment, and S3-based document storage are all correct architectural choices for a CRM platform managing agreements, commissions, and sensitive documents.
+
+However, based on your assessment, the system is functionally correct but not yet production-hardened. Several critical controls that are standard for secure SaaS systems are currently missing. Before we continue expanding features, we need to address these gaps.
+
+I want the focus of the next phase to be security hardening, reliability, and operational maturity, not additional features.
+
+The following areas need to be addressed as priorities:
+
+1. API Security and Input Validation
+
+No API route should trust frontend input. Every endpoint must have strict backend validation.
+Please ensure:
+
+All routes enforce schema validation
+
+Add rate limiting
+
+Implement CSRF protection
+
+Enforce request size limits
+
+Ensure consistent authentication and permission checks on every endpoint
+
+These controls are basic requirements for any production API.
+
+2. Session and Infrastructure Stability
+
+In-memory sessions are not acceptable for production systems.
+We need to introduce:
+
+Redis for session storage
+
+Redis for rate limiting and caching
+
+Proper connection handling and resilience
+
+This will also allow horizontal scaling later.
+
+3. Reverse Proxy and TLS Handling
+
+The application should not be directly exposed.
+We need a proper edge layer:
+
+Nginx or AWS Application Load Balancer
+
+TLS termination
+
+request buffering
+
+security headers
+
+request filtering
+
+This is standard practice for production deployments.
+
+4. Monitoring and Observability
+
+Console logging is insufficient for a system of this type.
+Please implement:
+
+Sentry for error tracking
+
+structured logging
+
+system monitoring and alerting
+
+health check endpoints
+
+We must be able to detect failures before users report them.
+
+5. Document Security
+
+Since this system stores confidential agreements and documents, file handling must be hardened.
+
+Required improvements:
+
+strict file type validation
+
+upload size limits
+
+malware / virus scanning
+
+private S3 access with signed URLs
+
+hardened download headers
+
+improved access control enforcement
+
+6. Background Processing
+
+node-cron is not sufficient for reliable background work.
+
+We need a proper queue system such as:
+
+BullMQ with Redis
+
+This should handle:
+
+notifications
+
+reminders
+
+scheduled agreement checks
+
+report generation
+
+heavy document processing
+
+7. File Delivery and Performance
+
+Introduce CloudFront in front of S3 for secure and efficient document delivery.
+
+This will also allow better control over caching and access policies.
+
+To move forward, please prepare a technical improvement plan that includes:
+
+implementation steps for each of the above items
+
+infrastructure changes required
+
+estimated development effort
+
+deployment plan and rollback strategy
+
+Once we review the plan, we will implement these improvements in phases, starting with security and infrastructure.
+
+Our goal is to ensure the system is secure, resilient, and scalable before further expanding functionality.
