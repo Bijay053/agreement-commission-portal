@@ -14,3 +14,22 @@ class AgreementNotification(models.Model):
     class Meta:
         managed = False
         db_table = 'agreement_notifications'
+
+
+class EmailTemplate(models.Model):
+    id = models.AutoField(primary_key=True)
+    template_key = models.CharField(max_length=128, unique=True)
+    name = models.CharField(max_length=255)
+    subject = models.CharField(max_length=512)
+    html_body = models.TextField()
+    plain_body = models.TextField(null=True, blank=True)
+    variables = models.TextField(null=True, blank=True)
+    is_active = models.BooleanField(default=True)
+    created_by_user_id = models.IntegerField(null=True, blank=True)
+    updated_by_user_id = models.IntegerField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        managed = False
+        db_table = 'email_templates'

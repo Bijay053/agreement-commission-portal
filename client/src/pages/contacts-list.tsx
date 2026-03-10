@@ -122,7 +122,17 @@ export default function ContactsListPage() {
   });
 
   const { data: countries } = useQuery<any[]>({ queryKey: ["/api/countries"] });
-  const { data: agreementsList } = useQuery<any[]>({ queryKey: ["/api/agreements"] });
+  const { data: agreementsListData } = useQuery<any>({
+    queryKey: ["/api/agreements"],
+    queryFn: async () => {
+      const res = await fetch("/api/agreements?pageSize=200", { credentials: "include" });
+      if (!res.ok) return [];
+      const json = await res.json();
+      if (Array.isArray(json)) return json;
+      return json.results || [];
+    },
+  });
+  const agreementsList = agreementsListData;
 
   const createMutation = useMutation({
     mutationFn: async (data: any) => {

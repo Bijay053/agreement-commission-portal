@@ -19,6 +19,7 @@ from accounts.models import (
 )
 from audit.models import AuditLog
 from core.permissions import get_user_permissions, require_auth, require_permission
+from core.throttling import LoginRateThrottle
 
 login_attempt_tracker = {}
 
@@ -191,6 +192,8 @@ def send_otp_email(email, code):
 
 
 class LoginView(APIView):
+    throttle_classes = [LoginRateThrottle]
+
     def post(self, request):
         try:
             email = (request.data.get('email') or '').strip()
@@ -266,6 +269,8 @@ class LoginView(APIView):
 
 
 class VerifyOtpView(APIView):
+    throttle_classes = [LoginRateThrottle]
+
     def post(self, request):
         try:
             code = request.data.get('code', '')
@@ -413,6 +418,7 @@ class LogoutView(APIView):
 
 
 class ForgotPasswordView(APIView):
+    throttle_classes = [LoginRateThrottle]
     forgot_rate_limit = {}
 
     def post(self, request):

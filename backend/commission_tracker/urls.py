@@ -16,6 +16,7 @@ urlpatterns = [
     path('commission-tracker/all-entries', views.AllEntriesView.as_view()),
     path('commission-tracker/terms', views.TermsView.as_view()),
     path('commission-tracker/terms/<int:term_id>', views.TermDeleteView.as_view()),
+    path('commission-tracker/export', views.CommissionTrackerExportView.as_view()),
     path('commission-tracker/filters', views.FiltersView.as_view()),
     path('commission-tracker/years', views.YearsView.as_view()),
     path('commission-tracker/sample-sheet', views.SampleSheetView.as_view()),

@@ -64,14 +64,17 @@ export default function AgreementsListPage() {
   if (providerFilters.length > 0) queryParams.set("providerId", providerFilters.join(","));
   const queryString = queryParams.toString();
 
-  const { data: agreements, isLoading } = useQuery<any[]>({
+  const { data: agreementsData, isLoading } = useQuery<{ count: number; next: string | null; previous: string | null; results: any[] }>({
     queryKey: ["/api/agreements", queryString],
     queryFn: async () => {
       const res = await fetch(`/api/agreements?${queryString}`, { credentials: "include" });
       if (!res.ok) throw new Error("Failed to fetch agreements");
-      return res.json();
+      const json = await res.json();
+      if (Array.isArray(json)) return { count: json.length, next: null, previous: null, results: json };
+      return json;
     },
   });
+  const agreements = agreementsData?.results;
 
   const { data: countries } = useQuery<any[]>({ queryKey: ["/api/countries"] });
   const { data: providers } = useQuery<any[]>({

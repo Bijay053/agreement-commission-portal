@@ -222,6 +222,8 @@ function SecureViewer({ doc, userName, userEmail, onClose }: { doc: any; userNam
       .catch(() => setClientIp("unknown"));
   }, []);
 
+  const [signedViewUrl, setSignedViewUrl] = useState<string | null>(null);
+
   useEffect(() => {
     let cancelled = false;
     const loadDocument = async () => {
@@ -233,9 +235,23 @@ function SecureViewer({ doc, userName, userEmail, onClose }: { doc: any; userNam
           setLoading(false);
           return;
         }
+        const data = await res.json();
+        if (!data.url) {
+          setLoadError("Failed to get document URL");
+          setLoading(false);
+          return;
+        }
         if (isPdf) {
-          const buffer = await res.arrayBuffer();
+          const pdfRes = await fetch(data.url);
+          if (!pdfRes.ok) {
+            setLoadError("Failed to load PDF from storage");
+            setLoading(false);
+            return;
+          }
+          const buffer = await pdfRes.arrayBuffer();
           if (!cancelled) setPdfData(buffer);
+        } else {
+          if (!cancelled) setSignedViewUrl(data.url);
         }
         setLoading(false);
       } catch {
@@ -372,6 +388,10 @@ function SecureViewer({ doc, userName, userEmail, onClose }: { doc: any; userNam
             </div>
           ) : isPdf && pdfData ? (
             <PdfCanvasViewer pdfData={pdfData} watermarkInfo={watermarkInfo} />
+          ) : signedViewUrl && doc.mimeType?.startsWith("image/") ? (
+            <div className="flex items-center justify-center h-full p-4">
+              <img src={signedViewUrl} alt={doc.originalFilename} className="max-w-full max-h-full object-contain" style={{ pointerEvents: "none" }} />
+            </div>
           ) : (
             <div className="flex flex-col items-center justify-center h-full text-white">
               <File className="w-16 h-16 text-zinc-500 mb-4" />
@@ -441,13 +461,36 @@ export default function DocumentsTab({ agreementId }: { agreementId: number }) {
     }
   };
 
-  const handleDownload = (doc: any) => {
-    const link = document.createElement("a");
-    link.href = `/api/documents/${doc.id}/download`;
-    link.download = doc.originalFilename;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+  const handleDownload = async (doc: any) => {
+    const isPdf = doc.mimeType === "application/pdf";
+    if (isPdf) {
+      const link = document.createElement("a");
+      link.href = `/api/documents/${doc.id}/download`;
+      link.download = doc.originalFilename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } else {
+      try {
+        const res = await fetch(`/api/documents/${doc.id}/download`, { credentials: "include" });
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({ message: "Download failed" }));
+          toast({ title: "Download failed", description: err.message, variant: "destructive" });
+          return;
+        }
+        const data = await res.json();
+        if (data.url) {
+          const link = document.createElement("a");
+          link.href = data.url;
+          link.download = data.filename || doc.originalFilename;
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+        }
+      } catch (err: any) {
+        toast({ title: "Download failed", description: err.message, variant: "destructive" });
+      }
+    }
   };
 
   const handleDelete = async (doc: any) => {

@@ -6,7 +6,10 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.parsers import MultiPartParser, FormParser
 from core.permissions import require_auth, require_permission
+from core.status_history import record_status_change
 from .models import CommissionStudent, CommissionEntry, StudentProvider, CommissionTerm
+from core.pagination import StandardPagination
+from core.field_permissions import filter_fields, filter_fields_list
 from .services import calculate_entry, compute_master_from_entries, num, round2
 
 
@@ -81,17 +84,15 @@ def get_term_order():
     return [t.term_name for t in terms]
 
 
-def recalculate_student(student):
+def recalculate_student(student, user_id=None):
     entries = list(CommissionEntry.objects.filter(commission_student_id=student.id))
     term_order = get_term_order()
 
+    provider_ids = set(e.student_provider_id for e in entries if e.student_provider_id)
+    providers_lookup = {sp.id: sp for sp in StudentProvider.objects.filter(id__in=provider_ids)} if provider_ids else {}
+
     for entry in entries:
-        prov_config = None
-        if entry.student_provider_id:
-            try:
-                prov_config = StudentProvider.objects.get(id=entry.student_provider_id)
-            except StudentProvider.DoesNotExist:
-                pass
+        prov_config = providers_lookup.get(entry.student_provider_id) if entry.student_provider_id else None
 
         calc = calculate_entry(student, entry, prov_config)
         entry.commission_rate_auto = calc['commissionRateAuto']
@@ -109,15 +110,19 @@ def recalculate_student(student):
         entry.fee_after_scholarship = calc['feeAfterScholarship']
         entry.save()
 
+    old_status = student.status
     entries = list(CommissionEntry.objects.filter(commission_student_id=student.id))
     master = compute_master_from_entries(entries, term_order)
     student.status = master['status']
     student.notes = master['notes']
     student.total_received = master['totalReceived']
     student.save(update_fields=['status', 'notes', 'total_received'])
+    record_status_change('commission_student', student.id, old_status, student.status, user_id, notes='Recalculated from entries')
 
 
 class StudentsListView(APIView):
+    pagination_class = StandardPagination
+
     @require_permission("commission_tracker.student.read")
     def get(self, request):
         qs = CommissionStudent.objects.all()
@@ -141,12 +146,20 @@ class StudentsListView(APIView):
         if year:
             qs = qs.filter(start_intake__icontains=year)
 
-        return Response([student_to_dict(s) for s in qs.order_by('-id')])
+        qs = qs.order_by('-id')
+        user_perms = request.session.get('userPermissions', [])
+        paginator = self.pagination_class()
+        page = paginator.paginate_queryset(qs, request)
+        if page is not None:
+            data = filter_fields_list([student_to_dict(s) for s in page], 'commission_student', user_perms)
+            return paginator.get_paginated_response(data)
+        return Response(filter_fields_list([student_to_dict(s) for s in qs], 'commission_student', user_perms))
 
     @require_permission("commission_tracker.student.add")
     def post(self, request):
         try:
             d = request.data
+            user_id = request.session.get('userId')
             s = CommissionStudent.objects.create(
                 agent_name=d.get('agentName', ''),
                 student_id=d.get('studentId'),
@@ -165,8 +178,12 @@ class StudentsListView(APIView):
                 scholarship_value=d.get('scholarshipValue', 0),
                 status=d.get('status', 'Under Enquiry'),
                 notes=d.get('notes'),
+                created_by_user_id=user_id,
+                updated_by_user_id=user_id,
             )
-            return Response(student_to_dict(s))
+            record_status_change('commission_student', s.id, None, s.status, user_id, notes='Student created')
+            user_perms = request.session.get('userPermissions', [])
+            return Response(filter_fields(student_to_dict(s), 'commission_student', user_perms))
         except Exception as e:
             return Response({'message': str(e)}, status=500)
 
@@ -178,7 +195,8 @@ class StudentDetailView(APIView):
             s = CommissionStudent.objects.get(id=student_id)
         except CommissionStudent.DoesNotExist:
             return Response({'message': 'Student not found'}, status=404)
-        return Response(student_to_dict(s))
+        user_perms = request.session.get('userPermissions', [])
+        return Response(filter_fields(student_to_dict(s), 'commission_student', user_perms))
 
     @require_permission("commission_tracker.student.update")
     def patch(self, request, student_id):
@@ -188,6 +206,7 @@ class StudentDetailView(APIView):
             except CommissionStudent.DoesNotExist:
                 return Response({'message': 'Student not found'}, status=404)
 
+            old_status = s.status
             field_map = {
                 'agentName': 'agent_name', 'studentId': 'student_id', 'agentsicId': 'agentsic_id',
                 'studentName': 'student_name', 'provider': 'provider', 'country': 'country',
@@ -200,18 +219,26 @@ class StudentDetailView(APIView):
             for js_field, db_field in field_map.items():
                 if js_field in request.data:
                     setattr(s, db_field, request.data[js_field])
+            if 'status' in request.data:
+                record_status_change('commission_student', s.id, old_status, s.status, request.session.get('userId'), notes='Manual status update')
+            s.updated_by_user_id = request.session.get('userId')
             s.save()
 
-            recalculate_student(s)
+            recalculate_student(s, user_id=request.session.get('userId'))
             s.refresh_from_db()
-            return Response(student_to_dict(s))
+            user_perms = request.session.get('userPermissions', [])
+            return Response(filter_fields(student_to_dict(s), 'commission_student', user_perms))
         except Exception as e:
             return Response({'message': str(e)}, status=500)
 
     @require_permission("commission_tracker.student.delete")
     def delete(self, request, student_id):
         try:
-            CommissionStudent.objects.filter(id=student_id).delete()
+            try:
+                s = CommissionStudent.objects.get(id=student_id)
+            except CommissionStudent.DoesNotExist:
+                return Response({'message': 'Student not found'}, status=404)
+            s.delete()
             return Response({'message': 'Deleted'})
         except Exception as e:
             return Response({'message': str(e)}, status=500)
@@ -225,12 +252,13 @@ class StudentRecalculateView(APIView):
                 s = CommissionStudent.objects.get(id=student_id)
             except CommissionStudent.DoesNotExist:
                 return Response({'message': 'Student not found'}, status=404)
-            recalculate_student(s)
+            recalculate_student(s, user_id=request.session.get('userId'))
             s.refresh_from_db()
             entries = CommissionEntry.objects.filter(commission_student_id=student_id)
+            user_perms = request.session.get('userPermissions', [])
             return Response({
-                'student': student_to_dict(s),
-                'entries': [entry_to_dict(e) for e in entries],
+                'student': filter_fields(student_to_dict(s), 'commission_student', user_perms),
+                'entries': filter_fields_list([entry_to_dict(e) for e in entries], 'commission_entry', user_perms),
             })
         except Exception as e:
             return Response({'message': str(e)}, status=500)
@@ -246,6 +274,7 @@ class StudentProvidersView(APIView):
     def post(self, request, student_id):
         try:
             d = request.data
+            user_id = request.session.get('userId')
             sp = StudentProvider.objects.create(
                 commission_student_id=student_id,
                 provider=d.get('provider', ''),
@@ -262,6 +291,8 @@ class StudentProvidersView(APIView):
                 scholarship_value=d.get('scholarshipValue', 0),
                 status=d.get('status', 'Under Enquiry'),
                 notes=d.get('notes'),
+                created_by_user_id=user_id,
+                updated_by_user_id=user_id,
             )
             return Response(provider_to_dict(sp))
         except Exception as e:
@@ -272,7 +303,11 @@ class StudentProviderDeleteView(APIView):
     @require_permission("commission_tracker.student.delete")
     def delete(self, request, student_id, provider_id):
         try:
-            StudentProvider.objects.filter(id=provider_id, commission_student_id=student_id).delete()
+            try:
+                sp = StudentProvider.objects.get(id=provider_id, commission_student_id=student_id)
+            except StudentProvider.DoesNotExist:
+                return Response({'message': 'Provider not found'}, status=404)
+            sp.delete()
             return Response({'message': 'Deleted'})
         except Exception as e:
             return Response({'message': str(e)}, status=500)
@@ -304,12 +339,14 @@ class StudentProviderUpdateView(APIView):
             for js_field, db_field in field_map.items():
                 if js_field in request.data:
                     setattr(sp, db_field, request.data[js_field])
+            sp.updated_by_user_id = request.session.get('userId')
             sp.save()
 
             entries = CommissionEntry.objects.filter(student_provider_id=sp.id)
+            parent_student = CommissionStudent.objects.filter(id=sp.commission_student_id).first()
             for entry in entries:
                 calc = calculate_entry(
-                    CommissionStudent.objects.get(id=sp.commission_student_id),
+                    parent_student,
                     entry, sp
                 )
                 entry.commission_rate_auto = calc['commissionRateAuto']
@@ -336,7 +373,8 @@ class StudentEntriesView(APIView):
     @require_permission("commission_tracker.entry.read")
     def get(self, request, student_id):
         entries = CommissionEntry.objects.filter(commission_student_id=student_id).order_by('term_name')
-        return Response([entry_to_dict(e) for e in entries])
+        user_perms = request.session.get('userPermissions', [])
+        return Response(filter_fields_list([entry_to_dict(e) for e in entries], 'commission_entry', user_perms))
 
     @require_permission("commission_tracker.entry.add")
     def post(self, request, student_id):
@@ -357,6 +395,7 @@ class StudentEntriesView(APIView):
 
             calc = calculate_entry(student, d, provider_config)
 
+            user_id = request.session.get('userId')
             entry = CommissionEntry.objects.create(
                 commission_student_id=student_id,
                 student_provider_id=sp_id,
@@ -386,8 +425,11 @@ class StudentEntriesView(APIView):
                 scholarship_change_warning=calc['scholarshipChangeWarning'],
                 scholarship_amount=calc['scholarshipAmount'],
                 fee_after_scholarship=calc['feeAfterScholarship'],
+                created_by_user_id=user_id,
+                updated_by_user_id=user_id,
             )
 
+            old_student_status = student.status
             entries = list(CommissionEntry.objects.filter(commission_student_id=student_id))
             term_order = get_term_order()
             master = compute_master_from_entries(entries, term_order)
@@ -395,8 +437,10 @@ class StudentEntriesView(APIView):
             student.notes = master['notes']
             student.total_received = master['totalReceived']
             student.save(update_fields=['status', 'notes', 'total_received'])
+            record_status_change('commission_student', student.id, old_student_status, student.status, user_id, notes='Entry added')
 
-            return Response(entry_to_dict(entry))
+            user_perms = request.session.get('userPermissions', [])
+            return Response(filter_fields(entry_to_dict(entry), 'commission_entry', user_perms))
         except Exception as e:
             return Response({'message': str(e)}, status=500)
 
@@ -427,6 +471,7 @@ class EntryDetailView(APIView):
                         val = None
                     setattr(entry, db_field, val)
 
+            entry.updated_by_user_id = request.session.get('userId')
             student = CommissionStudent.objects.get(id=entry.commission_student_id)
             provider_config = None
             if entry.student_provider_id:
@@ -451,6 +496,7 @@ class EntryDetailView(APIView):
             entry.fee_after_scholarship = calc['feeAfterScholarship']
             entry.save()
 
+            old_student_status = student.status
             entries = list(CommissionEntry.objects.filter(commission_student_id=entry.commission_student_id))
             term_order = get_term_order()
             master = compute_master_from_entries(entries, term_order)
@@ -458,8 +504,10 @@ class EntryDetailView(APIView):
             student.notes = master['notes']
             student.total_received = master['totalReceived']
             student.save(update_fields=['status', 'notes', 'total_received'])
+            record_status_change('commission_student', student.id, old_student_status, student.status, request.session.get('userId'), notes='Entry updated')
 
-            return Response(entry_to_dict(entry))
+            user_perms = request.session.get('userPermissions', [])
+            return Response(filter_fields(entry_to_dict(entry), 'commission_entry', user_perms))
         except Exception as e:
             return Response({'message': str(e)}, status=500)
 
@@ -476,6 +524,7 @@ class EntryDetailView(APIView):
 
             try:
                 student = CommissionStudent.objects.get(id=student_id)
+                old_student_status = student.status
                 entries = list(CommissionEntry.objects.filter(commission_student_id=student_id))
                 term_order = get_term_order()
                 master = compute_master_from_entries(entries, term_order)
@@ -483,6 +532,7 @@ class EntryDetailView(APIView):
                 student.notes = master['notes']
                 student.total_received = master['totalReceived']
                 student.save(update_fields=['status', 'notes', 'total_received'])
+                record_status_change('commission_student', student.id, old_student_status, student.status, request.session.get('userId'), notes='Entry deleted')
             except CommissionStudent.DoesNotExist:
                 pass
 
@@ -495,12 +545,15 @@ class AllEntriesView(APIView):
     @require_permission("commission_tracker.entry.read")
     def get(self, request):
         entries = CommissionEntry.objects.all().order_by('commission_student_id', 'term_name')
+        user_perms = request.session.get('userPermissions', [])
         grouped = {}
         for e in entries:
             sid = e.commission_student_id
             if sid not in grouped:
                 grouped[sid] = []
             grouped[sid].append(entry_to_dict(e))
+        for sid in grouped:
+            grouped[sid] = filter_fields_list(grouped[sid], 'commission_entry', user_perms)
         return Response(grouped)
 
 
@@ -567,6 +620,55 @@ class YearsView(APIView):
         return Response(sorted(set(years), reverse=True))
 
 
+class CommissionTrackerExportView(APIView):
+    @require_permission("commission_tracker.student.read")
+    def get(self, request):
+        try:
+            qs = CommissionStudent.objects.all()
+            agent = request.query_params.get('agent')
+            prov = request.query_params.get('provider')
+            country = request.query_params.get('country')
+            status = request.query_params.get('status')
+            year = request.query_params.get('year')
+
+            if agent:
+                qs = qs.filter(agent_name__icontains=agent)
+            if prov:
+                qs = qs.filter(provider__icontains=prov)
+            if country:
+                qs = qs.filter(country__iexact=country)
+            if status:
+                qs = qs.filter(status=status)
+            if year:
+                qs = qs.filter(start_intake__icontains=year)
+
+            qs = qs.order_by('-id')
+            headers = [
+                'ID', 'Agent Name', 'Student ID', 'AgentSIC ID', 'Student Name',
+                'Provider', 'Country', 'Start Intake', 'Course Level', 'Course Name',
+                'Course Duration (Years)', 'Commission Rate %', 'GST Rate %',
+                'GST Applicable', 'Scholarship Type', 'Scholarship Value',
+                'Status', 'Total Received', 'Created At',
+            ]
+            rows = []
+            for s in qs:
+                rows.append([
+                    s.id, s.agent_name, s.student_id, s.agentsic_id, s.student_name,
+                    s.provider, s.country, s.start_intake, s.course_level, s.course_name,
+                    str(s.course_duration_years) if s.course_duration_years is not None else '',
+                    str(s.commission_rate_pct) if s.commission_rate_pct is not None else '',
+                    str(s.gst_rate_pct) if s.gst_rate_pct is not None else '',
+                    s.gst_applicable, s.scholarship_type,
+                    str(s.scholarship_value) if s.scholarship_value is not None else '0',
+                    s.status, str(s.total_received) if s.total_received is not None else '0',
+                    s.created_at.isoformat() if s.created_at else '',
+                ])
+            from core.exports import export_data
+            return export_data(request, 'commission_tracker_export', headers, rows, 'Commission Tracker')
+        except Exception as e:
+            return Response({'message': str(e)}, status=500)
+
+
 class DashboardView(APIView):
     @require_permission("commission_tracker.student.read")
     def get(self, request):
@@ -584,14 +686,17 @@ class DashboardView(APIView):
             total_commission = float(entries.aggregate(total=Sum('commission_amount'))['total'] or 0)
             total_gst = float(entries.aggregate(total=Sum('gst_amount'))['total'] or 0)
 
-            return Response({
+            user_perms = request.session.get('userPermissions', [])
+            result = {
                 'totalStudents': total_students,
-                'totalReceived': round2(total_received),
                 'statusCounts': status_counts,
                 'totalEntries': total_entries,
-                'totalCommission': round2(total_commission),
-                'totalGst': round2(total_gst),
-            })
+            }
+            if 'commission_tracker.field.financials' in user_perms:
+                result['totalReceived'] = round2(total_received)
+                result['totalCommission'] = round2(total_commission)
+                result['totalGst'] = round2(total_gst)
+            return Response(result)
         except Exception as e:
             return Response({'message': str(e)}, status=500)
 
@@ -600,6 +705,8 @@ class DashboardYearView(APIView):
     @require_permission("commission_tracker.student.read")
     def get(self, request, year):
         try:
+            user_perms = request.session.get('userPermissions', [])
+            has_financials = 'commission_tracker.field.financials' in user_perms
             terms = CommissionTerm.objects.filter(year=int(year)).order_by('sort_order')
             term_names = [t.term_name for t in terms]
 
@@ -610,22 +717,26 @@ class DashboardYearView(APIView):
                 total = sum(float(e.total_amount or 0) for e in term_entries)
                 comm = sum(float(e.commission_amount or 0) for e in term_entries)
                 gst = sum(float(e.gst_amount or 0) for e in term_entries)
-                term_stats.append({
+                term_stat = {
                     'termName': t.term_name, 'termLabel': t.term_label,
                     'entryCount': len(term_entries),
-                    'totalAmount': round2(total),
-                    'commissionAmount': round2(comm),
-                    'gstAmount': round2(gst),
-                })
+                }
+                if has_financials:
+                    term_stat['totalAmount'] = round2(total)
+                    term_stat['commissionAmount'] = round2(comm)
+                    term_stat['gstAmount'] = round2(gst)
+                term_stats.append(term_stat)
 
-            return Response({
+            result = {
                 'year': int(year),
                 'terms': term_stats,
-                'totalAmount': round2(sum(ts['totalAmount'] for ts in term_stats)),
-                'totalCommission': round2(sum(ts['commissionAmount'] for ts in term_stats)),
-                'totalGst': round2(sum(ts['gstAmount'] for ts in term_stats)),
                 'totalEntries': sum(ts['entryCount'] for ts in term_stats),
-            })
+            }
+            if has_financials:
+                result['totalAmount'] = round2(sum(ts.get('totalAmount', 0) for ts in term_stats))
+                result['totalCommission'] = round2(sum(ts.get('commissionAmount', 0) for ts in term_stats))
+                result['totalGst'] = round2(sum(ts.get('gstAmount', 0) for ts in term_stats))
+            return Response(result)
         except Exception as e:
             return Response({'message': str(e)}, status=500)
 
@@ -702,6 +813,7 @@ class BulkUploadConfirmView(APIView):
     def post(self, request):
         try:
             rows = request.data.get('rows', [])
+            user_id = request.session.get('userId')
             created = 0
             errors = []
             for i, row in enumerate(rows):
@@ -723,6 +835,8 @@ class BulkUploadConfirmView(APIView):
                         scholarship_type=row.get('scholarshipType', 'None'),
                         scholarship_value=row.get('scholarshipValue', 0),
                         status=row.get('status', 'Under Enquiry'),
+                        created_by_user_id=user_id,
+                        updated_by_user_id=user_id,
                     )
                     created += 1
                 except Exception as e:

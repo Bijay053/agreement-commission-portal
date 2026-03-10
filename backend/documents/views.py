@@ -61,6 +61,11 @@ class AgreementDocumentsView(APIView):
             if file.content_type not in allowed_types:
                 return Response({'message': f'File type not allowed: {file.content_type}'}, status=400)
 
+            from core.file_security import validate_uploaded_file
+            is_safe, security_msg = validate_uploaded_file(file, file.content_type)
+            if not is_safe:
+                return Response({'message': f'File rejected: {security_msg}'}, status=400)
+
             max_size = 25 * 1024 * 1024
             if file.size > max_size:
                 return Response({'message': 'File too large. Maximum size is 25MB.'}, status=400)
@@ -89,6 +94,21 @@ class AgreementDocumentsView(APIView):
                 uploaded_by_user_id=request.session.get('userId'),
                 upload_note=request.data.get('uploadNote', ''),
             )
+
+            from audit.models import AuditLog
+            try:
+                AuditLog.objects.create(
+                    user_id=request.session.get('userId'),
+                    action='DOC_UPLOAD',
+                    entity_type='document',
+                    entity_id=doc.id,
+                    ip_address=request.META.get('REMOTE_ADDR', ''),
+                    user_agent=request.META.get('HTTP_USER_AGENT', ''),
+                    metadata={'agreementId': agreement_id, 'filename': file.name, 'version': version_no},
+                )
+            except Exception:
+                pass
+
             return Response({
                 'id': doc.id, 'agreementId': doc.agreement_id, 'versionNo': doc.version_no,
                 'originalFilename': doc.original_filename, 'mimeType': doc.mime_type,
@@ -102,6 +122,8 @@ class AgreementDocumentsView(APIView):
 
 
 class DocumentViewView(APIView):
+    PRESIGNED_URL_EXPIRY = 900
+
     @require_permission("document.view_in_portal")
     def get(self, request, document_id):
         try:
@@ -127,22 +149,29 @@ class DocumentViewView(APIView):
             except Exception:
                 pass
 
-            s3_obj = s3_client.get_object(Bucket=settings.AWS_S3_BUCKET_NAME, Key=doc.storage_path)
-            file_data = s3_obj['Body'].read()
+            presigned_url = s3_client.generate_presigned_url(
+                'get_object',
+                Params={
+                    'Bucket': settings.AWS_S3_BUCKET_NAME,
+                    'Key': doc.storage_path,
+                    'ResponseContentDisposition': f'inline; filename="{doc.original_filename}"',
+                    'ResponseContentType': doc.mime_type,
+                },
+                ExpiresIn=self.PRESIGNED_URL_EXPIRY,
+            )
 
-            response = HttpResponse(file_data, content_type=doc.mime_type)
-            response['Content-Disposition'] = f'inline; filename="{doc.original_filename}"'
-            response['Content-Length'] = str(len(file_data))
-            response['Cache-Control'] = 'no-store, no-cache, must-revalidate, private'
-            response['Pragma'] = 'no-cache'
-            response['Expires'] = '0'
-            response['X-Content-Type-Options'] = 'nosniff'
-            return response
+            return Response({
+                'url': presigned_url,
+                'filename': doc.original_filename,
+                'mimeType': doc.mime_type,
+            })
         except Exception as e:
             return Response({'message': str(e)}, status=500)
 
 
 class DocumentDownloadView(APIView):
+    PRESIGNED_URL_EXPIRY = 900
+
     @require_permission("document.download")
     def get(self, request, document_id):
         try:
@@ -154,10 +183,26 @@ class DocumentDownloadView(APIView):
             if not s3_client:
                 return Response({'message': 'S3 not configured'}, status=500)
 
-            s3_obj = s3_client.get_object(Bucket=settings.AWS_S3_BUCKET_NAME, Key=doc.storage_path)
-            file_data = s3_obj['Body'].read()
+            from audit.models import AuditLog
+            try:
+                AuditLog.objects.create(
+                    user_id=request.session.get('userId'),
+                    action='DOC_DOWNLOAD',
+                    entity_type='document',
+                    entity_id=doc.id,
+                    ip_address=request.META.get('REMOTE_ADDR', ''),
+                    user_agent=request.META.get('HTTP_USER_AGENT', ''),
+                    metadata={'agreementId': doc.agreement_id, 'filename': doc.original_filename, 'version': doc.version_no},
+                )
+            except Exception:
+                pass
 
-            if doc.mime_type == 'application/pdf' and HAS_PIKEPDF:
+            is_pdf = doc.mime_type == 'application/pdf'
+
+            if is_pdf and HAS_PIKEPDF:
+                s3_obj = s3_client.get_object(Bucket=settings.AWS_S3_BUCKET_NAME, Key=doc.storage_path)
+                file_data = s3_obj['Body'].read()
+
                 try:
                     input_pdf = pikepdf.open(io.BytesIO(file_data))
                     output_buf = io.BytesIO()
@@ -173,12 +218,29 @@ class DocumentDownloadView(APIView):
                 except Exception as e:
                     print(f'PDF encryption failed: {e}')
 
-            response = HttpResponse(file_data, content_type=doc.mime_type)
-            response['Content-Disposition'] = f'attachment; filename="{doc.original_filename}"'
-            response['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
-            response['Pragma'] = 'no-cache'
-            response['X-Content-Type-Options'] = 'nosniff'
-            return response
+                response = HttpResponse(file_data, content_type=doc.mime_type)
+                response['Content-Disposition'] = f'attachment; filename="{doc.original_filename}"'
+                response['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+                response['Pragma'] = 'no-cache'
+                response['X-Content-Type-Options'] = 'nosniff'
+                return response
+
+            presigned_url = s3_client.generate_presigned_url(
+                'get_object',
+                Params={
+                    'Bucket': settings.AWS_S3_BUCKET_NAME,
+                    'Key': doc.storage_path,
+                    'ResponseContentDisposition': f'attachment; filename="{doc.original_filename}"',
+                    'ResponseContentType': doc.mime_type,
+                },
+                ExpiresIn=self.PRESIGNED_URL_EXPIRY,
+            )
+
+            return Response({
+                'url': presigned_url,
+                'filename': doc.original_filename,
+                'mimeType': doc.mime_type,
+            })
         except Exception as e:
             return Response({'message': str(e)}, status=500)
 
@@ -192,12 +254,27 @@ class DocumentDeleteView(APIView):
             except AgreementDocument.DoesNotExist:
                 return Response({'message': 'Document not found'}, status=404)
 
+            from audit.models import AuditLog
+            try:
+                AuditLog.objects.create(
+                    user_id=request.session.get('userId'),
+                    action='DOC_DELETE',
+                    entity_type='document',
+                    entity_id=doc.id,
+                    ip_address=request.META.get('REMOTE_ADDR', ''),
+                    user_agent=request.META.get('HTTP_USER_AGENT', ''),
+                    metadata={'agreementId': doc.agreement_id, 'filename': doc.original_filename, 'version': doc.version_no},
+                )
+            except Exception:
+                pass
+
             if s3_client:
                 try:
                     s3_client.delete_object(Bucket=settings.AWS_S3_BUCKET_NAME, Key=doc.storage_path)
                 except Exception as e:
                     print(f'S3 delete failed: {e}')
 
+            doc.status = 'deleted'
             doc.delete()
             return Response({'message': 'Deleted'})
         except Exception as e:

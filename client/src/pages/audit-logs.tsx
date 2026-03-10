@@ -17,9 +17,17 @@ const actionColors: Record<string, string> = {
 };
 
 export default function AuditLogsPage() {
-  const { data: logs, isLoading } = useQuery<any[]>({
+  const { data: logsData, isLoading } = useQuery<{ count: number; next: string | null; previous: string | null; results: any[] }>({
     queryKey: ["/api/audit-logs"],
+    queryFn: async () => {
+      const res = await fetch("/api/audit-logs", { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to fetch audit logs");
+      const json = await res.json();
+      if (Array.isArray(json)) return { count: json.length, next: null, previous: null, results: json };
+      return json;
+    },
   });
+  const logs = logsData?.results;
 
   return (
     <div className="p-6 space-y-5 max-w-5xl mx-auto">

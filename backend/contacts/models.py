@@ -12,6 +12,8 @@ class AgreementContact(models.Model):
     city = models.CharField(max_length=255, null=True, blank=True)
     is_primary = models.BooleanField(default=False)
     notes = models.TextField(null=True, blank=True)
+    created_by_user_id = models.IntegerField(null=True, blank=True)
+    updated_by_user_id = models.IntegerField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

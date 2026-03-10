@@ -8,13 +8,16 @@ from agreements.models import Agreement
 from .models import AgreementContact
 
 
-def contact_to_dict(c):
+def contact_to_dict(c, countries_lookup=None):
     country_name = None
     if c.country_id:
-        try:
-            country_name = Country.objects.get(id=c.country_id).name
-        except Country.DoesNotExist:
-            pass
+        if countries_lookup is not None:
+            country_name = countries_lookup.get(c.country_id)
+        else:
+            try:
+                country_name = Country.objects.get(id=c.country_id).name
+            except Country.DoesNotExist:
+                pass
     return {
         'id': c.id, 'agreementId': c.agreement_id, 'fullName': c.full_name,
         'positionTitle': c.position_title, 'phone': c.phone, 'email': c.email,
@@ -51,20 +54,26 @@ class AllContactsView(APIView):
                 agr_ids = Agreement.objects.filter(status=agreement_status).values_list('id', flat=True)
                 qs = qs.filter(agreement_id__in=agr_ids)
 
+            contacts = list(qs.order_by('full_name'))
+
+            country_ids = set(c.country_id for c in contacts if c.country_id)
+            countries_lookup = {c.id: c.name for c in Country.objects.filter(id__in=country_ids)} if country_ids else {}
+
+            agreement_ids = set(c.agreement_id for c in contacts if c.agreement_id)
+            agreements_lookup = {a.id: a for a in Agreement.objects.filter(id__in=agreement_ids)} if agreement_ids else {}
+
+            provider_ids = set(a.university_id for a in agreements_lookup.values() if a.university_id)
+            providers_lookup = {p.id: p for p in Provider.objects.filter(id__in=provider_ids)} if provider_ids else {}
+
             result = []
-            for c in qs.order_by('full_name'):
-                d = contact_to_dict(c)
-                try:
-                    agr = Agreement.objects.get(id=c.agreement_id)
+            for c in contacts:
+                d = contact_to_dict(c, countries_lookup)
+                agr = agreements_lookup.get(c.agreement_id)
+                if agr:
                     d['agreementCode'] = agr.agreement_code
                     d['agreementTitle'] = agr.title
-                    try:
-                        prov = Provider.objects.get(id=agr.university_id)
-                        d['providerName'] = prov.name
-                    except Provider.DoesNotExist:
-                        d['providerName'] = None
-                except Agreement.DoesNotExist:
-                    pass
+                    prov = providers_lookup.get(agr.university_id)
+                    d['providerName'] = prov.name if prov else None
                 result.append(d)
             return Response(result)
         except Exception as e:
@@ -74,8 +83,10 @@ class AllContactsView(APIView):
 class AgreementContactsView(APIView):
     @require_permission("contacts.view")
     def get(self, request, agreement_id):
-        contacts = AgreementContact.objects.filter(agreement_id=agreement_id).order_by('full_name')
-        return Response([contact_to_dict(c) for c in contacts])
+        contacts = list(AgreementContact.objects.filter(agreement_id=agreement_id).order_by('full_name'))
+        country_ids = set(c.country_id for c in contacts if c.country_id)
+        countries_lookup = {c.id: c.name for c in Country.objects.filter(id__in=country_ids)} if country_ids else {}
+        return Response([contact_to_dict(c, countries_lookup) for c in contacts])
 
     @require_permission("contacts.create")
     def post(self, request, agreement_id):
@@ -89,6 +100,7 @@ class AgreementContactsView(APIView):
             phone = request.data.get('phone', '')
             if phone and not re.match(r'^[\d\s\+\-\(\)\.]+$', phone):
                 return Response({'message': 'Phone number can only contain digits, spaces, +, -, (, ) and .'}, status=400)
+            user_id = request.session.get('userId')
             c = AgreementContact.objects.create(
                 agreement_id=agreement_id,
                 full_name=request.data.get('fullName', ''),
@@ -99,6 +111,8 @@ class AgreementContactsView(APIView):
                 city=request.data.get('city'),
                 is_primary=request.data.get('isPrimary', False),
                 notes=request.data.get('notes'),
+                created_by_user_id=user_id,
+                updated_by_user_id=user_id,
             )
             return Response(contact_to_dict(c))
         except Exception as e:
@@ -130,6 +144,7 @@ class ContactDetailView(APIView):
             for js_field, db_field in field_map.items():
                 if js_field in request.data:
                     setattr(c, db_field, request.data[js_field])
+            c.updated_by_user_id = request.session.get('userId')
             c.save()
             return Response(contact_to_dict(c))
         except Exception as e:

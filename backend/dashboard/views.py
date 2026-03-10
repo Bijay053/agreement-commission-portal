@@ -5,7 +5,6 @@ from rest_framework.response import Response
 from core.permissions import require_auth
 from agreements.models import Agreement
 from providers.models import Provider
-from core.models import Country
 
 
 class DashboardStatsView(APIView):
@@ -43,18 +42,18 @@ class DashboardExpiringView(APIView):
         try:
             today = date.today()
             cutoff = today + timedelta(days=90)
-            agreements = Agreement.objects.filter(
+            agreements = list(Agreement.objects.filter(
                 status__in=['active', 'renewal_in_progress'],
                 expiry_date__lte=cutoff
-            ).order_by('expiry_date')[:20]
+            ).order_by('expiry_date')[:20])
+
+            provider_ids = set(a.university_id for a in agreements if a.university_id)
+            providers_lookup = {p.id: p for p in Provider.objects.filter(id__in=provider_ids)} if provider_ids else {}
 
             result = []
             for a in agreements:
-                try:
-                    prov = Provider.objects.get(id=a.university_id)
-                    prov_name = prov.name
-                except Provider.DoesNotExist:
-                    prov_name = 'Unknown'
+                prov = providers_lookup.get(a.university_id)
+                prov_name = prov.name if prov else 'Unknown'
 
                 result.append({
                     'id': a.id, 'title': a.title, 'agreementCode': a.agreement_code,
@@ -71,14 +70,15 @@ class DashboardRecentView(APIView):
     @require_auth
     def get(self, request):
         try:
-            agreements = Agreement.objects.all().order_by('-updated_at')[:10]
+            agreements = list(Agreement.objects.all().order_by('-updated_at')[:10])
+
+            provider_ids = set(a.university_id for a in agreements if a.university_id)
+            providers_lookup = {p.id: p for p in Provider.objects.filter(id__in=provider_ids)} if provider_ids else {}
+
             result = []
             for a in agreements:
-                try:
-                    prov = Provider.objects.get(id=a.university_id)
-                    prov_name = prov.name
-                except Provider.DoesNotExist:
-                    prov_name = 'Unknown'
+                prov = providers_lookup.get(a.university_id)
+                prov_name = prov.name if prov else 'Unknown'
 
                 result.append({
                     'id': a.id, 'title': a.title, 'agreementCode': a.agreement_code,

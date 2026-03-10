@@ -1,7 +1,8 @@
 from django.db import models
+from core.models import SoftDeleteMixin
 
 
-class Agreement(models.Model):
+class Agreement(SoftDeleteMixin):
     id = models.AutoField(primary_key=True)
     university_id = models.IntegerField()
     agreement_code = models.CharField(max_length=64, unique=True)

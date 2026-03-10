@@ -1,7 +1,8 @@
 from django.db import models
+from core.models import SoftDeleteMixin
 
 
-class AgreementDocument(models.Model):
+class AgreementDocument(SoftDeleteMixin):
     id = models.AutoField(primary_key=True)
     agreement_id = models.IntegerField()
     version_no = models.IntegerField()
@@ -12,6 +13,7 @@ class AgreementDocument(models.Model):
     status = models.CharField(max_length=16, default='active')
     uploaded_by_user_id = models.IntegerField(null=True, blank=True)
     upload_note = models.TextField(null=True, blank=True)
+    updated_by_user_id = models.IntegerField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

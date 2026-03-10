@@ -248,7 +248,11 @@ class TriggerNotificationCheckView(APIView):
             recipients = ['au@studyinfocentre.com', 'info@studyinfocentre.com', 'partners@studyinfocentre.com']
             notified = 0
 
-            agreements = Agreement.objects.filter(status__in=['active', 'renewal_in_progress'])
+            agreements = list(Agreement.objects.filter(status__in=['active', 'renewal_in_progress']))
+
+            provider_ids = set(a.university_id for a in agreements if a.university_id)
+            providers_lookup = {p.id: p for p in Provider.objects.filter(id__in=provider_ids)} if provider_ids else {}
+
             for agr in agreements:
                 if not agr.expiry_date:
                     continue
@@ -258,11 +262,8 @@ class TriggerNotificationCheckView(APIView):
                 if template_type is None:
                     continue
 
-                try:
-                    prov = Provider.objects.get(id=agr.university_id)
-                    provider_name = prov.name
-                except Provider.DoesNotExist:
-                    provider_name = 'Unknown'
+                prov = providers_lookup.get(agr.university_id)
+                provider_name = prov.name if prov else 'Unknown'
 
                 if template_type == 'expired':
                     existing = AgreementNotification.objects.filter(

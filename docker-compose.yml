@@ -18,11 +18,27 @@ services:
       timeout: 5s
       retries: 5
 
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: redis-server --maxmemory 128mb --maxmemory-policy allkeys-lru
+    ports:
+      - "6379:6379"
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
   app:
     build: .
     restart: unless-stopped
     depends_on:
       db:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     environment:
       DATABASE_URL: postgresql://portal_user:${DB_PASSWORD:-changeme_in_production}@db:5432/agreement_portal
@@ -31,6 +47,7 @@ services:
       DEBUG: "False"
       ALLOWED_HOSTS: ${ALLOWED_HOSTS:-portal.studyinfocentre.com}
       CORS_ORIGINS: ${CORS_ORIGINS:-}
+      REDIS_URL: redis://redis:6379/0
       AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
       AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
       AWS_S3_BUCKET: ${AWS_S3_BUCKET:-studyinfocentre-portal-documents}
@@ -39,11 +56,65 @@ services:
       SMTP_USER: ${SMTP_USER:-}
       SMTP_PASS: ${SMTP_PASS:-}
       FROM_EMAIL: ${FROM_EMAIL:-}
-    ports:
-      - "80:5000"
+    expose:
+      - "5000"
+    volumes:
+      - uploads:/app/uploads
+      - static_files:/app/dist/public
+
+  celery-worker:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://portal_user:${DB_PASSWORD:-changeme_in_production}@db:5432/agreement_portal
+      DJANGO_SETTINGS_MODULE: config.settings
+      DEBUG: "False"
+      REDIS_URL: redis://redis:6379/0
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
+      AWS_S3_BUCKET: ${AWS_S3_BUCKET:-studyinfocentre-portal-documents}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASS: ${SMTP_PASS:-}
+      FROM_EMAIL: ${FROM_EMAIL:-}
+    command: celery -A config worker --loglevel=info
     volumes:
       - uploads:/app/uploads
 
+  celery-beat:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://portal_user:${DB_PASSWORD:-changeme_in_production}@db:5432/agreement_portal
+      DJANGO_SETTINGS_MODULE: config.settings
+      DEBUG: "False"
+      REDIS_URL: redis://redis:6379/0
+    command: celery -A config beat --loglevel=info
+
+  nginx:
+    image: nginx:1.27-alpine
+    restart: unless-stopped
+    depends_on:
+      - app
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - static_files:/app/dist/public:ro
+
 volumes:
   pgdata:
+  redisdata:
   uploads:
+  static_files:

@@ -2,6 +2,7 @@ from django.db.models import Sum
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from core.permissions import require_auth, require_permission
+from core.object_permissions import filter_sub_agent_by_user
 from commission_tracker.models import CommissionStudent, CommissionEntry
 from commission_tracker.services import round2, num
 from .models import SubAgentEntry, SubAgentTermEntry
@@ -64,6 +65,8 @@ class SubAgentDashboardView(APIView):
     def get(self, request):
         try:
             masters = SubAgentEntry.objects.all()
+            user_id = request.session.get('userId')
+            masters = filter_sub_agent_by_user(masters, user_id)
             total = masters.count()
             total_received = float(masters.aggregate(t=Sum('sic_received_total'))['t'] or 0)
             total_paid = float(masters.aggregate(t=Sum('sub_agent_paid_total'))['t'] or 0)
@@ -86,6 +89,8 @@ class SubAgentMasterListView(APIView):
     def get(self, request):
         try:
             masters = SubAgentEntry.objects.all().order_by('-id')
+            user_id = request.session.get('userId')
+            masters = filter_sub_agent_by_user(masters, user_id)
             student_ids = [m.commission_student_id for m in masters]
             students = {s.id: s for s in CommissionStudent.objects.filter(id__in=student_ids)}
             result = [master_to_dict(m, students.get(m.commission_student_id)) for m in masters]

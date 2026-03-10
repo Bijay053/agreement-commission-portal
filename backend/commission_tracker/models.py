@@ -1,4 +1,5 @@
 from django.db import models
+from core.models import SoftDeleteMixin
 
 
 class CommissionTerm(models.Model):
@@ -16,7 +17,7 @@ class CommissionTerm(models.Model):
         db_table = 'commission_terms'
 
 
-class CommissionStudent(models.Model):
+class CommissionStudent(SoftDeleteMixin):
     id = models.AutoField(primary_key=True)
     agent_name = models.CharField(max_length=255)
     student_id = models.CharField(max_length=64, null=True, blank=True)
@@ -36,6 +37,8 @@ class CommissionStudent(models.Model):
     status = models.CharField(max_length=32, default='Under Enquiry')
     notes = models.TextField(null=True, blank=True)
     total_received = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    created_by_user_id = models.IntegerField(null=True, blank=True)
+    updated_by_user_id = models.IntegerField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -44,7 +47,7 @@ class CommissionStudent(models.Model):
         db_table = 'commission_students'
 
 
-class StudentProvider(models.Model):
+class StudentProvider(SoftDeleteMixin):
     id = models.AutoField(primary_key=True)
     commission_student_id = models.IntegerField()
     provider = models.CharField(max_length=255)
@@ -61,6 +64,8 @@ class StudentProvider(models.Model):
     scholarship_value = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     status = models.CharField(max_length=32, default='Under Enquiry')
     notes = models.TextField(null=True, blank=True)
+    created_by_user_id = models.IntegerField(null=True, blank=True)
+    updated_by_user_id = models.IntegerField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -68,7 +73,7 @@ class StudentProvider(models.Model):
         db_table = 'student_providers'
 
 
-class CommissionEntry(models.Model):
+class CommissionEntry(SoftDeleteMixin):
     id = models.AutoField(primary_key=True)
     commission_student_id = models.IntegerField()
     student_provider_id = models.IntegerField(null=True, blank=True)
@@ -98,6 +103,8 @@ class CommissionEntry(models.Model):
     scholarship_change_warning = models.CharField(max_length=128, null=True, blank=True)
     scholarship_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     fee_after_scholarship = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    created_by_user_id = models.IntegerField(null=True, blank=True)
+    updated_by_user_id = models.IntegerField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

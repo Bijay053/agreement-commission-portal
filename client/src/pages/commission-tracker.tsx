@@ -160,7 +160,7 @@ export default function CommissionTrackerPage() {
 
   const yearTerms = terms.filter(t => t.year === selectedYear);
 
-  const { data: students, isLoading } = useQuery<CommissionStudent[]>({
+  const { data: studentsData, isLoading } = useQuery<{ count: number; next: string | null; previous: string | null; results: CommissionStudent[] }>({
     queryKey: ["/api/commission-tracker/students", { search, agents: agentFilters, providers: providerFilters, statuses: statusFilters }],
     queryFn: async () => {
       const params = new URLSearchParams();
@@ -170,9 +170,12 @@ export default function CommissionTrackerPage() {
       if (statusFilters.length) params.set("status", statusFilters.join(","));
       const res = await fetch(`/api/commission-tracker/students?${params}`, { credentials: "include" });
       if (!res.ok) throw new Error("Failed to fetch");
-      return res.json();
+      const json = await res.json();
+      if (Array.isArray(json)) return { count: json.length, next: null, previous: null, results: json };
+      return json;
     },
   });
+  const students = studentsData?.results;
 
   const { data: allStudentProviders = [] } = useQuery<any[]>({
     queryKey: ["/api/commission-tracker/all-student-providers"],
