@@ -1,0 +1,140 @@
+ => [base 3/3] RUN apt-get update && apt-get install -y --no-install-recommends     gcc libpq-dev curl qpdf libmagic1 &&     rm -rf /var/lib/apt/lists/*        17.6s
+ => [python-deps 1/2] COPY backend/requirements.txt ./backend/requirements.txt                                                                                   0.3s 
+ => [python-deps 2/2] RUN pip install --no-cache-dir -r backend/requirements.txt gunicorn                                                                       18.4s 
+ => [frontend-build 1/8] RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - &&     apt-get install -y --no-install-recommends nodejs &&     rm -rf   25.4s 
+ => [frontend-build 2/8] COPY package.json ./                                                                                                                    1.5s 
+ => [frontend-build 3/8] RUN npm install                                                                                                                       144.4s 
+ => [production 1/7] COPY --from=python-deps /usr/local/lib/python3.12/site-packages /usr/local/lib/python3.12/site-packages                                    30.1s 
+ => [production 2/7] COPY --from=python-deps /usr/local/bin /usr/local/bin                                                                                       1.2s 
+ => [production 3/7] COPY backend/ ./backend/                                                                                                                    0.2s 
+ => [frontend-build 4/8] COPY client/ ./client/                                                                                                                  4.5s 
+ => [frontend-build 5/8] COPY shared/ ./shared/                                                                                                                  0.3s 
+ => [frontend-build 6/8] COPY vite.config.ts tsconfig.json tailwind.config.ts postcss.config.js components.json ./                                               0.5s 
+ => [frontend-build 7/8] RUN mkdir -p attached_assets                                                                                                            2.1s 
+ => [frontend-build 8/8] RUN npx vite build                                                                                                                     31.2s 
+ => [production 4/7] COPY --from=frontend-build /app/dist/public ./dist/public                                                                                   1.4s 
+ => [production 5/7] COPY scripts/ ./scripts/                                                                                                                    0.2s 
+ => [production 6/7] RUN mkdir -p uploads                                                                                                                        1.4s 
+ => [production 7/7] WORKDIR /app/backend                                                                                                                        0.1s 
+ => exporting to image                                                                                                                                          43.9s 
+ => => exporting layers                                                                                                                                         31.5s 
+ => => exporting manifest sha256:c23fce261776ff15be84ac6cfbe50cc52e34ee4062f7b686724110456470df87                                                                0.0s
+ => => exporting config sha256:51f61a3c5755b0705106f99d1d0fb74ab8cb550f6c963770f9010b88599088ec                                                                  0.0s
+ => => exporting attestation manifest sha256:6d4ee3ccbc06d19f1a07e72015916f993179609e8b226d3ca8ffbdcdb25bc102                                                    0.0s
+ => => exporting manifest list sha256:eae6744c011d9233475f4df0a02d700d023c6d06d56ced3f10361338844c8fcd                                                           0.0s
+ => => naming to docker.io/library/agreement-commission-portal-app:latest                                                                                        0.0s
+ => => unpacking to docker.io/library/agreement-commission-portal-app:latest                                                                                     7.1s
+[+] build 1/1
+ ✔ Image agreement-commission-portal-app Built                                                                                                                  297.9s
+[+] up 5/5
+ ✔ Container agreement-commission-portal-db-1            Healthy                                                                                                 23.5s
+ ✔ Container agreement-commission-portal-redis-1         Healthy                                                                                                 23.5s
+ ✔ Container agreement-commission-portal-celery-beat-1   Running                                                                                                 0.0ss
+ ✔ Container agreement-commission-portal-app-1           Started                                                                                                 24.0s
+ ✔ Container agreement-commission-portal-celery-worker-1 Running                                                                                                 0.0ss
+ubuntu@ip-172-31-41-234:~/agreement-commission-portal$ docker exec agreement-commission-portal-db-1 psql -U portal_user -d agreement_portal -c "
+ALTER TABLE agreements ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN DEFAULT false;
+ALTER TABLE agreements ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMP;
+ALTER TABLE agreement_documents ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN DEFAULT false;
+ALTER TABLE agreement_documents ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMP;
+"
+ALTER TABLE
+ALTER TABLE
+ALTER TABLE
+ALTER TABLE
+ubuntu@ip-172-31-41-234:~/agreement-commission-portal$ docker exec agreement-commission-portal-db-1 psql -U portal_user -d agreement_portal -c "
+ALTER TABLE agreements ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN DEFAULT false;
+ALTER TABLE agreements ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMP;
+ALTER TABLE agreement_documents ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN DEFAULT false;
+ALTER TABLE agreement_documents ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMP;
+"
+NOTICE:  column "is_deleted" of relation "agreements" already exists, skipping
+NOTICE:  column "deleted_at" of relation "agreements" already exists, skipping
+NOTICE:  column "is_deleted" of relation "agreement_documents" already exists, skipping
+ALTER TABLE
+ALTER TABLE
+NOTICE:  column "deleted_at" of relation "agreement_documents" already exists, skipping
+ALTER TABLE
+ALTER TABLE
+ubuntu@ip-172-31-41-234:~/agreement-commission-portal$ docker exec agreement-commission-portal-db-1 psql -U portal_user -d agreement_portal -c "\d agreement_contacts" 
+docker exec agreement-commission-portal-db-1 psql -U portal_user -d agreement_portal -c "\d universities"
+docker exec agreement-commission-portal-db-1 psql -U portal_user -d agreement_portal -c "\d agreements"
+                                          Table "public.agreement_contacts"
+     Column     |            Type             | Collation | Nullable |                    Default                     
+----------------+-----------------------------+-----------+----------+------------------------------------------------
+ id             | integer                     |           | not null | nextval('agreement_contacts_id_seq'::regclass)
+ agreement_id   | integer                     |           | not null | 
+ full_name      | character varying(255)      |           | not null | 
+ position_title | character varying(255)      |           |          | 
+ phone          | character varying(64)       |           |          | 
+ email          | character varying(255)      |           |          | 
+ country_id     | integer                     |           |          | 
+ city           | character varying(255)      |           |          | 
+ is_primary     | boolean                     |           |          | false
+ notes          | text                        |           |          | 
+ created_at     | timestamp without time zone |           |          | now()
+ updated_at     | timestamp without time zone |           |          | now()
+Indexes:
+    "agreement_contacts_pkey" PRIMARY KEY, btree (id)
+Foreign-key constraints:
+    "agreement_contacts_agreement_id_agreements_id_fk" FOREIGN KEY (agreement_id) REFERENCES agreements(id) ON DELETE CASCADE
+    "agreement_contacts_country_id_countries_id_fk" FOREIGN KEY (country_id) REFERENCES countries(id)
+
+                                          Table "public.universities"
+    Column     |            Type             | Collation | Nullable |                 Default                  
+---------------+-----------------------------+-----------+----------+------------------------------------------
+ id            | integer                     |           | not null | nextval('universities_id_seq'::regclass)
+ name          | character varying(255)      |           | not null | 
+ provider_type | character varying(32)       |           | not null | 'university'::character varying
+ country_id    | integer                     |           |          | 
+ website       | character varying(255)      |           |          | 
+ notes         | text                        |           |          | 
+ status        | character varying(16)       |           | not null | 'active'::character varying
+ created_at    | timestamp without time zone |           |          | now()
+ updated_at    | timestamp without time zone |           |          | now()
+Indexes:
+    "universities_pkey" PRIMARY KEY, btree (id)
+Foreign-key constraints:
+    "universities_country_id_countries_id_fk" FOREIGN KEY (country_id) REFERENCES countries(id)
+Referenced by:
+    TABLE "agreements" CONSTRAINT "agreements_university_id_universities_id_fk" FOREIGN KEY (university_id) REFERENCES universities(id)
+
+                                              Table "public.agreements"
+        Column         |            Type             | Collation | Nullable |                Default                 
+-----------------------+-----------------------------+-----------+----------+----------------------------------------
+ id                    | integer                     |           | not null | nextval('agreements_id_seq'::regclass)
+ university_id         | integer                     |           | not null | 
+ agreement_code        | character varying(64)       |           | not null | 
+ title                 | character varying(255)      |           | not null | 
+ agreement_type        | character varying(32)       |           | not null | 
+ status                | character varying(24)       |           | not null | 'draft'::character varying
+ territory_type        | character varying(16)       |           | not null | 'country_specific'::character varying
+ territory_country_id  | integer                     |           |          | 
+ start_date            | date                        |           | not null | 
+ expiry_date           | date                        |           | not null | 
+ auto_renew            | boolean                     |           |          | false
+ confidentiality_level | character varying(16)       |           | not null | 'high'::character varying
+ internal_notes        | text                        |           |          | 
+ created_by_user_id    | integer                     |           |          | 
+ updated_by_user_id    | integer                     |           |          | 
+ created_at            | timestamp without time zone |           |          | now()
+ updated_at            | timestamp without time zone |           |          | now()
+ is_deleted            | boolean                     |           |          | false
+ deleted_at            | timestamp without time zone |           |          | 
+Indexes:
+    "agreements_pkey" PRIMARY KEY, btree (id)
+    "agreements_agreement_code_unique" UNIQUE CONSTRAINT, btree (agreement_code)
+Foreign-key constraints:
+    "agreements_created_by_user_id_users_id_fk" FOREIGN KEY (created_by_user_id) REFERENCES users(id)
+    "agreements_territory_country_id_countries_id_fk" FOREIGN KEY (territory_country_id) REFERENCES countries(id)
+    "agreements_university_id_universities_id_fk" FOREIGN KEY (university_id) REFERENCES universities(id)
+    "agreements_updated_by_user_id_users_id_fk" FOREIGN KEY (updated_by_user_id) REFERENCES users(id)
+Referenced by:
+    TABLE "agreement_commission_rules" CONSTRAINT "agreement_commission_rules_agreement_id_agreements_id_fk" FOREIGN KEY (agreement_id) REFERENCES agreements(id) ON DELETE CASCADE
+    TABLE "agreement_contacts" CONSTRAINT "agreement_contacts_agreement_id_agreements_id_fk" FOREIGN KEY (agreement_id) REFERENCES agreements(id) ON DELETE CASCADE
+    TABLE "agreement_documents" CONSTRAINT "agreement_documents_agreement_id_agreements_id_fk" FOREIGN KEY (agreement_id) REFERENCES agreements(id) ON DELETE CASCADE
+    TABLE "agreement_notifications" CONSTRAINT "agreement_notifications_agreement_id_fkey" FOREIGN KEY (agreement_id) REFERENCES agreements(id) ON DELETE CASCADE
+    TABLE "agreement_targets" CONSTRAINT "agreement_targets_agreement_id_agreements_id_fk" FOREIGN KEY (agreement_id) REFERENCES agreements(id) ON DELETE CASCADE
+    TABLE "agreement_territories" CONSTRAINT "agreement_territories_agreement_id_agreements_id_fk" FOREIGN KEY (agreement_id) REFERENCES agreements(id) ON DELETE CASCADE
+
+ubuntu@ip-172-31-41-234:~/agreement-commission-portal$ 
