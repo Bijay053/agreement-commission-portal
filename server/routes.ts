@@ -1319,7 +1319,13 @@ export async function registerRoutes(
 
       if (isS3Key(doc.storagePath)) {
         const s3Stream = await getFromS3(doc.storagePath);
-        s3Stream.pipe(res);
+        const chunks: Buffer[] = [];
+        for await (const chunk of s3Stream) {
+          chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+        }
+        const fileBuffer = Buffer.concat(chunks);
+        res.setHeader("Content-Length", fileBuffer.length.toString());
+        res.send(fileBuffer);
       } else {
         if (!fs.existsSync(doc.storagePath)) {
           return res.status(404).json({ message: "File not found on server" });
