@@ -48,7 +48,8 @@ function PdfCanvasViewer({ pdfData, watermarkInfo }: { pdfData: ArrayBuffer; wat
   useEffect(() => {
     const loadPdf = async () => {
       try {
-        const loadingTask = pdfjsLib.getDocument({ data: pdfData });
+        const uint8 = new Uint8Array(pdfData);
+        const loadingTask = pdfjsLib.getDocument({ data: uint8.slice(0) });
         loadingTask.onPassword = (callback: (password: string) => void, reason: number) => {
           const pwd = prompt(
             reason === 1
@@ -66,10 +67,10 @@ function PdfCanvasViewer({ pdfData, watermarkInfo }: { pdfData: ArrayBuffer; wat
         setTotalPages(doc.numPages);
         setPdfError(null);
       } catch (err: any) {
+        console.error("PDF load error:", err?.name, err?.message, err);
         if (err?.name === "PasswordException") {
           setPdfError("Password required to view this document");
         } else {
-          console.error("Failed to load PDF", err);
           setPdfError("Failed to load PDF");
         }
       }

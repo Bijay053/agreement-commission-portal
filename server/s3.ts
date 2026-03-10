@@ -43,6 +43,16 @@ export async function getFromS3(s3Key: string): Promise<Readable> {
   return response.Body as Readable;
 }
 
+export async function getBufferFromS3(s3Key: string): Promise<Buffer> {
+  const response = await s3Client.send(new GetObjectCommand({
+    Bucket: BUCKET_NAME,
+    Key: s3Key,
+  }));
+
+  const byteArray = await response.Body!.transformToByteArray();
+  return Buffer.from(byteArray);
+}
+
 export async function deleteFromS3(s3Key: string): Promise<void> {
   await s3Client.send(new DeleteObjectCommand({
     Bucket: BUCKET_NAME,
