@@ -113,20 +113,30 @@ class DocumentViewView(APIView):
             if not s3_client:
                 return Response({'message': 'S3 not configured'}, status=500)
 
-            url = s3_client.generate_presigned_url(
-                'get_object',
-                Params={
-                    'Bucket': settings.AWS_S3_BUCKET_NAME,
-                    'Key': doc.storage_path,
-                    'ResponseContentType': doc.mime_type,
-                    'ResponseContentDisposition': f'inline; filename="{doc.original_filename}"',
-                },
-                ExpiresIn=3600,
-            )
-            response = HttpResponse(status=302)
-            response['Location'] = url
-            response['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+            from audit.models import AuditLog
+            try:
+                AuditLog.objects.create(
+                    user_id=request.session.get('userId'),
+                    action='DOC_VIEW',
+                    entity_type='document',
+                    entity_id=doc.id,
+                    ip_address=request.META.get('REMOTE_ADDR', ''),
+                    user_agent=request.META.get('HTTP_USER_AGENT', ''),
+                    metadata={'agreementId': doc.agreement_id, 'filename': doc.original_filename, 'version': doc.version_no},
+                )
+            except Exception:
+                pass
+
+            s3_obj = s3_client.get_object(Bucket=settings.AWS_S3_BUCKET_NAME, Key=doc.storage_path)
+            file_data = s3_obj['Body'].read()
+
+            response = HttpResponse(file_data, content_type=doc.mime_type)
+            response['Content-Disposition'] = f'inline; filename="{doc.original_filename}"'
+            response['Content-Length'] = str(len(file_data))
+            response['Cache-Control'] = 'no-store, no-cache, must-revalidate, private'
             response['Pragma'] = 'no-cache'
+            response['Expires'] = '0'
+            response['X-Content-Type-Options'] = 'nosniff'
             return response
         except Exception as e:
             return Response({'message': str(e)}, status=500)
