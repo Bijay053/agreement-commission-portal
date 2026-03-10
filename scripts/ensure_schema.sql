@@ -1,21 +1,65 @@
+-- commission_students
 ALTER TABLE commission_students ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN DEFAULT false;
 ALTER TABLE commission_students ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMP;
+ALTER TABLE commission_students ADD COLUMN IF NOT EXISTS created_by_user_id INTEGER;
+ALTER TABLE commission_students ADD COLUMN IF NOT EXISTS updated_by_user_id INTEGER;
+ALTER TABLE commission_students ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT NOW();
+ALTER TABLE commission_students ADD COLUMN IF NOT EXISTS notes TEXT;
+ALTER TABLE commission_students ADD COLUMN IF NOT EXISTS total_received DECIMAL(14,2) DEFAULT 0;
+ALTER TABLE commission_students ADD COLUMN IF NOT EXISTS course_name VARCHAR(500);
+ALTER TABLE commission_students ADD COLUMN IF NOT EXISTS course_duration_years DECIMAL(4,1);
+ALTER TABLE commission_students ADD COLUMN IF NOT EXISTS commission_rate_pct DECIMAL(8,4);
+ALTER TABLE commission_students ADD COLUMN IF NOT EXISTS gst_rate_pct DECIMAL(5,2) DEFAULT 10;
+ALTER TABLE commission_students ADD COLUMN IF NOT EXISTS gst_applicable VARCHAR(3) DEFAULT 'Yes';
+ALTER TABLE commission_students ADD COLUMN IF NOT EXISTS scholarship_type VARCHAR(16) DEFAULT 'None';
+ALTER TABLE commission_students ADD COLUMN IF NOT EXISTS scholarship_value DECIMAL(12,2) DEFAULT 0;
+
+-- commission_entries
 ALTER TABLE commission_entries ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN DEFAULT false;
 ALTER TABLE commission_entries ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMP;
-ALTER TABLE student_providers ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN DEFAULT false;
-ALTER TABLE student_providers ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMP;
+ALTER TABLE commission_entries ADD COLUMN IF NOT EXISTS created_by_user_id INTEGER;
+ALTER TABLE commission_entries ADD COLUMN IF NOT EXISTS updated_by_user_id INTEGER;
+ALTER TABLE commission_entries ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT NOW();
+ALTER TABLE commission_entries ADD COLUMN IF NOT EXISTS student_provider_id INTEGER;
+ALTER TABLE commission_entries ADD COLUMN IF NOT EXISTS academic_year VARCHAR(16);
+ALTER TABLE commission_entries ADD COLUMN IF NOT EXISTS commission_rate_auto DECIMAL(8,4);
+ALTER TABLE commission_entries ADD COLUMN IF NOT EXISTS commission_rate_override_pct DECIMAL(8,4);
+ALTER TABLE commission_entries ADD COLUMN IF NOT EXISTS commission_rate_used_pct DECIMAL(8,4);
+ALTER TABLE commission_entries ADD COLUMN IF NOT EXISTS bonus DECIMAL(12,2) DEFAULT 0;
+ALTER TABLE commission_entries ADD COLUMN IF NOT EXISTS student_status VARCHAR(32) DEFAULT 'Under Enquiry';
+ALTER TABLE commission_entries ADD COLUMN IF NOT EXISTS rate_change_warning VARCHAR(128);
+ALTER TABLE commission_entries ADD COLUMN IF NOT EXISTS scholarship_type_auto VARCHAR(16);
+ALTER TABLE commission_entries ADD COLUMN IF NOT EXISTS scholarship_value_auto DECIMAL(12,2);
+ALTER TABLE commission_entries ADD COLUMN IF NOT EXISTS scholarship_type_override VARCHAR(16);
+ALTER TABLE commission_entries ADD COLUMN IF NOT EXISTS scholarship_value_override DECIMAL(12,2);
+ALTER TABLE commission_entries ADD COLUMN IF NOT EXISTS scholarship_type_used VARCHAR(16);
+ALTER TABLE commission_entries ADD COLUMN IF NOT EXISTS scholarship_value_used DECIMAL(12,2);
+ALTER TABLE commission_entries ADD COLUMN IF NOT EXISTS scholarship_change_warning VARCHAR(128);
+ALTER TABLE commission_entries ADD COLUMN IF NOT EXISTS scholarship_amount DECIMAL(12,2) DEFAULT 0;
+ALTER TABLE commission_entries ADD COLUMN IF NOT EXISTS fee_after_scholarship DECIMAL(12,2) DEFAULT 0;
+
+-- sub_agent_entries
 ALTER TABLE sub_agent_entries ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN DEFAULT false;
 ALTER TABLE sub_agent_entries ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMP;
+
+-- sub_agent_term_entries
 ALTER TABLE sub_agent_term_entries ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN DEFAULT false;
 ALTER TABLE sub_agent_term_entries ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMP;
+
+-- agreements
 ALTER TABLE agreements ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN DEFAULT false;
 ALTER TABLE agreements ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMP;
+
+-- agreement_documents
 ALTER TABLE agreement_documents ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN DEFAULT false;
 ALTER TABLE agreement_documents ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMP;
 ALTER TABLE agreement_documents ADD COLUMN IF NOT EXISTS updated_by_user_id INTEGER;
+
+-- agreement_contacts
 ALTER TABLE agreement_contacts ADD COLUMN IF NOT EXISTS created_by_user_id INTEGER;
 ALTER TABLE agreement_contacts ADD COLUMN IF NOT EXISTS updated_by_user_id INTEGER;
 
+-- create missing tables
 CREATE TABLE IF NOT EXISTS student_providers (
     id SERIAL PRIMARY KEY,
     commission_student_id INTEGER NOT NULL,
