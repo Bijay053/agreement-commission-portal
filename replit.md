@@ -82,7 +82,7 @@ The portal adopts a client-server architecture:
 - **Security Headers**: HSTS (1 year), X-Frame-Options DENY, Content-Type nosniff, Referrer-Policy
 - **CSP**: Content-Security-Policy header in production (not DEBUG)
 - **Rate Limiting**: DRF throttling — 30/min anonymous, 120/min authenticated, 5/min login endpoints
-- **File Security**: Magic-byte validation on uploads, ClamAV scanning when available
+- **Malware Scanning**: Every upload (documents + bulk CSV) scanned before save: magic-byte validation, malicious signature detection (web shells, executables, suspicious PDF patterns), ClamAV antivirus when available. Scan-on-serve checks files from S3 before view/download — infected files quarantined and permanently blocked. Scan failures are fail-closed (access denied). All detections logged to `audit_logs` with action `MALWARE_BLOCKED` including filename, content type, user, IP, and check type
 - **Soft Deletes**: Key tables use `is_deleted` flag instead of hard deletes
 - **Status History**: All status transitions tracked in `status_history` table
 - **Audit Logging**: All document operations (upload, view, download, delete) logged

@@ -772,6 +772,17 @@ class BulkUploadPreviewView(APIView):
             if not file:
                 return Response({'message': 'No file provided'}, status=400)
 
+            from core.file_security import validate_uploaded_file
+            is_safe, security_msg = validate_uploaded_file(
+                file, file.content_type or 'text/csv',
+                filename=getattr(file, 'name', ''),
+                user_id=request.session.get('userId'),
+                ip_address=request.META.get('REMOTE_ADDR', ''),
+                user_agent=request.META.get('HTTP_USER_AGENT', ''),
+            )
+            if not is_safe:
+                return Response({'message': f'File rejected: {security_msg}'}, status=400)
+
             content = file.read().decode('utf-8-sig')
             reader = csv.DictReader(io.StringIO(content))
             rows = []

@@ -27,6 +27,53 @@ except ImportError:
     HAS_PIKEPDF = False
 
 
+import logging
+
+doc_logger = logging.getLogger(__name__)
+
+MAX_SCAN_ON_SERVE_SIZE = 50 * 1024 * 1024
+
+
+def _scan_s3_document(doc, request):
+    if doc.status == 'quarantined':
+        return True, 'This file has been quarantined and cannot be accessed'
+
+    if not s3_client:
+        return False, ''
+    try:
+        head = s3_client.head_object(
+            Bucket=settings.AWS_S3_BUCKET_NAME, Key=doc.storage_path
+        )
+        size = head.get('ContentLength', 0)
+        if size > MAX_SCAN_ON_SERVE_SIZE:
+            doc_logger.info('Skipping scan-on-serve for large file %s (%d bytes)', doc.storage_path, size)
+            return False, ''
+
+        s3_obj = s3_client.get_object(
+            Bucket=settings.AWS_S3_BUCKET_NAME, Key=doc.storage_path
+        )
+        file_bytes = s3_obj['Body'].read()
+
+        from core.file_security import validate_uploaded_file
+        file_obj = io.BytesIO(file_bytes)
+        file_obj.size = len(file_bytes)
+        is_safe, msg = validate_uploaded_file(
+            file_obj, doc.mime_type,
+            filename=doc.original_filename,
+            user_id=request.session.get('userId'),
+            ip_address=request.META.get('REMOTE_ADDR', ''),
+            user_agent=request.META.get('HTTP_USER_AGENT', ''),
+        )
+        if not is_safe:
+            doc.status = 'quarantined'
+            doc.save(update_fields=['status'])
+            return True, f'File blocked: {msg}'
+    except Exception as e:
+        doc_logger.error('Scan-on-serve failed for doc %s: %s', doc.id, e)
+        return True, 'File scan failed — access denied for safety'
+    return False, ''
+
+
 class AgreementDocumentsView(APIView):
     parser_classes = [MultiPartParser, FormParser]
 
@@ -62,7 +109,13 @@ class AgreementDocumentsView(APIView):
                 return Response({'message': f'File type not allowed: {file.content_type}'}, status=400)
 
             from core.file_security import validate_uploaded_file
-            is_safe, security_msg = validate_uploaded_file(file, file.content_type)
+            is_safe, security_msg = validate_uploaded_file(
+                file, file.content_type,
+                filename=file.name,
+                user_id=request.session.get('userId'),
+                ip_address=request.META.get('REMOTE_ADDR', ''),
+                user_agent=request.META.get('HTTP_USER_AGENT', ''),
+            )
             if not is_safe:
                 return Response({'message': f'File rejected: {security_msg}'}, status=400)
 
@@ -135,6 +188,10 @@ class DocumentViewView(APIView):
             if not s3_client:
                 return Response({'message': 'S3 not configured'}, status=500)
 
+            blocked, block_msg = _scan_s3_document(doc, request)
+            if blocked:
+                return Response({'message': block_msg}, status=403)
+
             from audit.models import AuditLog
             try:
                 AuditLog.objects.create(
@@ -182,6 +239,10 @@ class DocumentDownloadView(APIView):
 
             if not s3_client:
                 return Response({'message': 'S3 not configured'}, status=500)
+
+            blocked, block_msg = _scan_s3_document(doc, request)
+            if blocked:
+                return Response({'message': block_msg}, status=403)
 
             from audit.models import AuditLog
             try:
