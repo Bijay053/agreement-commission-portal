@@ -1,0 +1,200 @@
+Python CRM Backend Checklist
+1. Core backend setup
+
+Django
+
+Django REST Framework
+
+PostgreSQL
+
+Redis
+
+Celery
+
+Nginx
+
+Gunicorn or Uvicorn
+
+PgBouncer
+
+2. Security checklist
+
+HTTPS enabled
+
+Secure login system
+
+Email OTP / 2FA
+
+Strong password policy
+
+Password hashing
+
+Role-based permission
+
+Page-level permission
+
+Action-level permission
+
+Field-level permission
+
+Session timeout
+
+Device/session tracking
+
+Login attempt limit
+
+API rate limiting
+
+CSRF protection
+
+Secure cookies
+
+Security headers
+
+Audit logs
+
+IP monitoring
+
+File upload validation
+
+Private file access only
+
+Temporary signed file URL
+
+Force password change every 90 days
+
+3. Speed/performance checklist
+
+PostgreSQL indexing
+
+Redis cache
+
+Background job queue
+
+Pagination in all tables
+
+Optimized database queries
+
+Lazy loading where needed
+
+API response optimization
+
+Connection pooling
+
+Multiple workers in production
+
+Static/media optimization
+
+4. CRM module checklist
+
+User management
+
+Staff management
+
+Agent management
+
+Student management
+
+Lead/enquiry management
+
+Application management
+
+Document management
+
+Task/reminder system
+
+Email notification system
+
+Commission tracker
+
+Agreement tracker
+
+Notes/comment system
+
+Activity timeline
+
+Dashboard analytics
+
+Search and filters
+
+Export reports
+
+5. Database checklist
+
+UUID for records
+
+Created at / updated at
+
+Created by / updated by
+
+Soft delete
+
+Status history
+
+Audit log table
+
+Proper foreign key relations
+
+Duplicate check validation
+
+Backup plan
+
+6. File/document security checklist
+
+Store files in private bucket/storage
+
+Restrict download permission
+
+Restrict preview permission
+
+Validate file type
+
+Validate file size
+
+Rename uploaded files safely
+
+Virus/malware scan if possible
+
+Log every file view/download
+
+7. Admin/control checklist
+
+Super admin control
+
+Custom roles
+
+Permission management
+
+Staff activity monitoring
+
+Login history
+
+Error logging
+
+System settings page
+
+Email template management
+
+8. Production checklist
+
+Debug off
+
+Secret keys in env
+
+Database backup
+
+Server monitoring
+
+Error tracking
+
+SSL installed
+
+Domain security setup
+
+Deployment pipeline
+
+Disaster recovery plan
+
+Best recommended stack
+
+Django + DRF + PostgreSQL + Redis + Celery + Nginx + PgBouncer
