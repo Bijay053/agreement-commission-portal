@@ -91,11 +91,16 @@ function PdfCanvasViewer({ pdfData, watermarkInfo }: { pdfData: ArrayBuffer; wat
       canvas.width = viewport.width;
       canvas.height = viewport.height;
 
-      await page.render({ canvasContext: ctx, viewport }).promise;
-
       const wCanvas = watermarkCanvasRef.current;
       wCanvas.width = viewport.width;
       wCanvas.height = viewport.height;
+
+      try {
+        await page.render({ canvasContext: ctx, viewport }).promise;
+      } catch (renderErr) {
+        console.error("PDF page render error:", renderErr);
+      }
+
       const wCtx = wCanvas.getContext("2d")!;
       wCtx.clearRect(0, 0, wCanvas.width, wCanvas.height);
       wCtx.save();
@@ -111,30 +116,31 @@ function PdfCanvasViewer({ pdfData, watermarkInfo }: { pdfData: ArrayBuffer; wat
       const baseFontSize = 13;
       const fontSize = baseFontSize * zoom;
       wCtx.font = `bold ${fontSize}px monospace`;
-      const lineHeight = fontSize * 1.3;
+      const lineHeight = fontSize * 1.35;
       const blockHeight = lines.length * lineHeight;
       const blockWidth = Math.max(...lines.map(l => wCtx.measureText(l).width));
-      const gapX = 25 * zoom;
-      const gapY = 25 * zoom;
+      const gapX = 30 * zoom;
+      const gapY = 30 * zoom;
       const stepX = blockWidth + gapX;
       const stepY = blockHeight + gapY;
       const w = viewport.width;
       const h = viewport.height;
       const angle = -0.35;
+      const cosA = Math.abs(Math.cos(angle));
+      const sinA = Math.abs(Math.sin(angle));
+      const rotW = w * cosA + h * sinA;
+      const rotH = w * sinA + h * cosA;
+      const startX = -(rotW / 2) - stepX;
+      const startY = -(rotH / 2) - stepY;
+      const endX = (rotW / 2) + stepX;
+      const endY = (rotH / 2) + stepY;
 
       wCtx.translate(w / 2, h / 2);
       wCtx.rotate(angle);
 
-      const diag = Math.sqrt(w * w + h * h);
-      const half = diag / 2 + stepY;
-      const cols = Math.ceil((diag + stepX) / stepX);
-      const rows = Math.ceil((diag + stepY * 2) / stepY);
-
       wCtx.fillStyle = "rgba(220, 38, 38, 0.14)";
-      for (let row = 0; row < rows; row++) {
-        for (let col = 0; col < cols; col++) {
-          const bx = -diag / 2 + col * stepX;
-          const by = -half + row * stepY;
+      for (let by = startY; by < endY; by += stepY) {
+        for (let bx = startX; bx < endX; bx += stepX) {
           lines.forEach((line, i) => {
             wCtx.fillText(line, bx, by + i * lineHeight);
           });
