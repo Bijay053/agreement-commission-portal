@@ -1404,6 +1404,35 @@ export async function registerRoutes(
     }
   });
 
+  app.delete("/api/documents/:id", requireAuth, requirePermission("document.delete"), async (req, res) => {
+    try {
+      const doc = await storage.getDocument(parseInt(req.params.id));
+      if (!doc) return res.status(404).json({ message: "Document not found" });
+
+      if (isS3Key(doc.storagePath)) {
+        try { await deleteFromS3(doc.storagePath); } catch {}
+      } else {
+        try { if (fs.existsSync(doc.storagePath)) fs.unlinkSync(doc.storagePath); } catch {}
+      }
+
+      await storage.deleteDocument(doc.id);
+
+      await storage.createAuditLog({
+        userId: req.session.userId,
+        action: "DOC_DELETE",
+        entityType: "document",
+        entityId: doc.id,
+        ipAddress: req.ip,
+        userAgent: req.headers["user-agent"],
+        metadata: { agreementId: doc.agreementId, filename: doc.originalFilename, version: doc.versionNo },
+      });
+
+      res.json({ message: "Document deleted" });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
   app.get("/api/audit-logs", requireAuth, requirePermission("audit.view"), async (req, res) => {
     const filters = {
       entityType: req.query.entityType as string | undefined,
