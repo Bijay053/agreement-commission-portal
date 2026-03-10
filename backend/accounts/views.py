@@ -3,12 +3,20 @@ import os
 import re
 import secrets
 import time
-from datetime import timedelta
+from datetime import timedelta, datetime
 
 import bcrypt
 from django.conf import settings
 from django.core.mail import send_mail
 from django.utils import timezone
+
+
+def make_aware_safe(dt):
+    if dt is None:
+        return None
+    if timezone.is_naive(dt):
+        return timezone.make_aware(dt, timezone.utc)
+    return dt
 from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import ensure_csrf_cookie
 from rest_framework.response import Response
@@ -129,7 +137,7 @@ def get_password_expiry_info(user):
     if user.force_password_change:
         password_expired = True
     elif user.password_changed_at:
-        days_since = (timezone.now() - user.password_changed_at).days
+        days_since = (timezone.now() - make_aware_safe(user.password_changed_at)).days
         days_until_expiry = settings.PASSWORD_EXPIRY_DAYS - days_since
         if days_until_expiry <= 0:
             password_expired = True
@@ -526,7 +534,7 @@ class ResetPasswordView(APIView):
 
             if reset_token.used_at:
                 return Response({'message': 'This reset token has already been used'}, status=400)
-            if timezone.now() > reset_token.expires_at:
+            if timezone.now() > make_aware_safe(reset_token.expires_at):
                 return Response({'message': 'This reset token has expired'}, status=400)
 
             try:
