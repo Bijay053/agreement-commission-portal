@@ -18,8 +18,9 @@ import {
 import { Upload, FileText, File, Clock, Eye, Download, Trash2, X, ShieldCheck, ChevronLeft, ChevronRight, ZoomIn, ZoomOut } from "lucide-react";
 import { format, parseISO } from "date-fns";
 import * as pdfjsLib from "pdfjs-dist";
+import pdfjsWorker from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 
-pdfjsLib.GlobalWorkerOptions.workerSrc = "/pdf.worker.min.mjs";
+pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorker;
 
 function formatFileSize(bytes: number) {
   if (bytes < 1024) return `${bytes} B`;
