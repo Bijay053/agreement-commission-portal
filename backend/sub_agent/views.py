@@ -73,12 +73,37 @@ class SubAgentDashboardView(APIView):
             total_margin = float(masters.aggregate(t=Sum('margin'))['t'] or 0)
             overpay_count = masters.filter(overpay_warning__isnull=False).exclude(overpay_warning='').count()
 
+            student_ids = [m.commission_student_id for m in masters]
+            students = {s.id: s for s in CommissionStudent.objects.filter(id__in=student_ids)}
+
+            agent_data = {}
+            status_counts = {}
+            for m in masters:
+                student = students.get(m.commission_student_id)
+                agent = student.agent_name if student and student.agent_name else 'Unknown'
+                status = m.status or 'Unknown'
+                if agent not in agent_data:
+                    agent_data[agent] = {'count': 0, 'totalPaid': 0}
+                agent_data[agent]['count'] += 1
+                agent_data[agent]['totalPaid'] += float(m.sub_agent_paid_total or 0)
+                status_counts[status] = status_counts.get(status, 0) + 1
+
+            by_agent = sorted([
+                {'agent': k, 'count': v['count'], 'totalPaid': round2(v['totalPaid'])}
+                for k, v in agent_data.items()
+            ], key=lambda x: -x['count'])
+
             return Response({
                 'totalStudents': total,
+                'totalAgents': len(agent_data),
                 'sicReceivedTotal': round2(total_received),
+                'totalPaid': round2(total_paid),
                 'subAgentPaidTotal': round2(total_paid),
+                'totalPending': round2(total_received - total_paid),
                 'totalMargin': round2(total_margin),
                 'overpayCount': overpay_count,
+                'byAgent': by_agent,
+                'byStatus': status_counts,
             })
         except Exception as e:
             return Response({'message': str(e)}, status=500)
