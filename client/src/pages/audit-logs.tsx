@@ -53,7 +53,7 @@ export default function AuditLogsPage() {
                       {log.action.replace(/_/g, " ")}
                     </span>
                     <span className="text-sm text-muted-foreground flex items-center gap-1">
-                      <User className="w-3 h-3" /> User #{log.userId || "System"}
+                      <User className="w-3 h-3" /> {log.userName || (log.userId ? `User #${log.userId}` : "System")}
                     </span>
                     <span className="text-sm text-muted-foreground">
                       {log.entityType} {log.entityId ? `#${log.entityId}` : ""}

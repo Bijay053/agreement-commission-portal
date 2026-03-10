@@ -45,7 +45,7 @@ export default function AuditTab({ agreementId }: { agreementId: number }) {
                       {log.action.replace(/_/g, " ")}
                     </span>
                     <span className="text-sm text-muted-foreground">
-                      User #{log.userId}
+                      {log.userName || `User #${log.userId}`}
                     </span>
                   </div>
                   <span className="text-xs text-muted-foreground flex items-center gap-1">
