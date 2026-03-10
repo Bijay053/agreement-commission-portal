@@ -114,26 +114,30 @@ function PdfCanvasViewer({ pdfData, watermarkInfo }: { pdfData: ArrayBuffer; wat
       const lineHeight = fontSize * 1.3;
       const blockHeight = lines.length * lineHeight;
       const blockWidth = Math.max(...lines.map(l => wCtx.measureText(l).width));
-      const spacingX = blockWidth + (25 * zoom);
-      const spacingY = blockHeight + (25 * zoom);
+      const gapX = 25 * zoom;
+      const gapY = 25 * zoom;
+      const stepX = blockWidth + gapX;
+      const stepY = blockHeight + gapY;
       const w = viewport.width;
       const h = viewport.height;
-      const extent = Math.max(w, h) * 2;
+      const angle = -0.35;
 
-      for (let y = -extent; y < extent; y += spacingY) {
-        for (let x = -extent; x < extent; x += spacingX) {
-          wCtx.save();
-          wCtx.translate(w / 2, h / 2);
-          wCtx.rotate(-0.35);
-          wCtx.translate(-w / 2, -h / 2);
-          wCtx.translate(x, y);
+      wCtx.translate(w / 2, h / 2);
+      wCtx.rotate(angle);
 
-          wCtx.fillStyle = "rgba(220, 38, 38, 0.14)";
+      const diag = Math.sqrt(w * w + h * h);
+      const half = diag / 2 + stepY;
+      const cols = Math.ceil((diag + stepX) / stepX);
+      const rows = Math.ceil((diag + stepY * 2) / stepY);
+
+      wCtx.fillStyle = "rgba(220, 38, 38, 0.14)";
+      for (let row = 0; row < rows; row++) {
+        for (let col = 0; col < cols; col++) {
+          const bx = -diag / 2 + col * stepX;
+          const by = -half + row * stepY;
           lines.forEach((line, i) => {
-            wCtx.fillText(line, 0, i * lineHeight);
+            wCtx.fillText(line, bx, by + i * lineHeight);
           });
-
-          wCtx.restore();
         }
       }
 
