@@ -34,12 +34,12 @@ doc_logger = logging.getLogger(__name__)
 MAX_SCAN_ON_SERVE_SIZE = 50 * 1024 * 1024
 
 
-def _scan_s3_document(doc, request):
+def _scan_and_fetch_s3_document(doc, request):
     if doc.status == 'quarantined':
-        return True, 'This file has been quarantined and cannot be accessed'
+        return True, 'This file has been quarantined and cannot be accessed', None
 
     if not s3_client:
-        return False, ''
+        return False, '', None
     try:
         head = s3_client.head_object(
             Bucket=settings.AWS_S3_BUCKET_NAME, Key=doc.storage_path
@@ -47,7 +47,7 @@ def _scan_s3_document(doc, request):
         size = head.get('ContentLength', 0)
         if size > MAX_SCAN_ON_SERVE_SIZE:
             doc_logger.info('Skipping scan-on-serve for large file %s (%d bytes)', doc.storage_path, size)
-            return False, ''
+            return False, '', None
 
         s3_obj = s3_client.get_object(
             Bucket=settings.AWS_S3_BUCKET_NAME, Key=doc.storage_path
@@ -67,11 +67,11 @@ def _scan_s3_document(doc, request):
         if not is_safe:
             doc.status = 'quarantined'
             doc.save(update_fields=['status'])
-            return True, f'File blocked: {msg}'
+            return True, f'File blocked: {msg}', None
     except Exception as e:
         doc_logger.error('Scan-on-serve failed for doc %s: %s', doc.id, e)
-        return True, 'File scan failed — access denied for safety'
-    return False, ''
+        return True, 'File scan failed — access denied for safety', None
+    return False, '', file_bytes
 
 
 class AgreementDocumentsView(APIView):
@@ -179,7 +179,6 @@ class AgreementDocumentsView(APIView):
 
 
 class DocumentViewView(APIView):
-    PRESIGNED_URL_EXPIRY = 900
 
     @require_permission("document.view_in_portal")
     def get(self, request, document_id):
@@ -192,7 +191,7 @@ class DocumentViewView(APIView):
             if not s3_client:
                 return Response({'message': 'S3 not configured'}, status=500)
 
-            blocked, block_msg = _scan_s3_document(doc, request)
+            blocked, block_msg, scanned_bytes = _scan_and_fetch_s3_document(doc, request)
             if blocked:
                 return Response({'message': block_msg}, status=403)
 
@@ -210,28 +209,25 @@ class DocumentViewView(APIView):
             except Exception:
                 pass
 
-            presigned_url = s3_client.generate_presigned_url(
-                'get_object',
-                Params={
-                    'Bucket': settings.AWS_S3_BUCKET_NAME,
-                    'Key': doc.storage_path,
-                    'ResponseContentDisposition': f'inline; filename="{doc.original_filename}"',
-                    'ResponseContentType': doc.mime_type,
-                },
-                ExpiresIn=self.PRESIGNED_URL_EXPIRY,
-            )
+            if scanned_bytes is not None:
+                file_bytes = scanned_bytes
+            else:
+                s3_obj = s3_client.get_object(
+                    Bucket=settings.AWS_S3_BUCKET_NAME,
+                    Key=doc.storage_path,
+                )
+                file_bytes = s3_obj['Body'].read()
 
-            return Response({
-                'url': presigned_url,
-                'filename': doc.original_filename,
-                'mimeType': doc.mime_type,
-            })
+            response = HttpResponse(file_bytes, content_type=doc.mime_type)
+            response['Content-Disposition'] = f'inline; filename="{doc.original_filename}"'
+            response['Content-Length'] = len(file_bytes)
+            response['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+            return response
         except Exception as e:
             return Response({'message': str(e)}, status=500)
 
 
 class DocumentDownloadView(APIView):
-    PRESIGNED_URL_EXPIRY = 900
 
     @require_permission("document.download")
     def get(self, request, document_id):
@@ -244,7 +240,7 @@ class DocumentDownloadView(APIView):
             if not s3_client:
                 return Response({'message': 'S3 not configured'}, status=500)
 
-            blocked, block_msg = _scan_s3_document(doc, request)
+            blocked, block_msg, scanned_bytes = _scan_and_fetch_s3_document(doc, request)
             if blocked:
                 return Response({'message': block_msg}, status=403)
 
@@ -262,12 +258,15 @@ class DocumentDownloadView(APIView):
             except Exception:
                 pass
 
-            is_pdf = doc.mime_type == 'application/pdf'
-
-            if is_pdf and HAS_PIKEPDF:
+            if scanned_bytes is not None:
+                file_data = scanned_bytes
+            else:
                 s3_obj = s3_client.get_object(Bucket=settings.AWS_S3_BUCKET_NAME, Key=doc.storage_path)
                 file_data = s3_obj['Body'].read()
 
+            is_pdf = doc.mime_type == 'application/pdf'
+
+            if is_pdf and HAS_PIKEPDF:
                 try:
                     input_pdf = pikepdf.open(io.BytesIO(file_data))
                     output_buf = io.BytesIO()
@@ -283,29 +282,13 @@ class DocumentDownloadView(APIView):
                 except Exception as e:
                     print(f'PDF encryption failed: {e}')
 
-                response = HttpResponse(file_data, content_type=doc.mime_type)
-                response['Content-Disposition'] = f'attachment; filename="{doc.original_filename}"'
-                response['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
-                response['Pragma'] = 'no-cache'
-                response['X-Content-Type-Options'] = 'nosniff'
-                return response
-
-            presigned_url = s3_client.generate_presigned_url(
-                'get_object',
-                Params={
-                    'Bucket': settings.AWS_S3_BUCKET_NAME,
-                    'Key': doc.storage_path,
-                    'ResponseContentDisposition': f'attachment; filename="{doc.original_filename}"',
-                    'ResponseContentType': doc.mime_type,
-                },
-                ExpiresIn=self.PRESIGNED_URL_EXPIRY,
-            )
-
-            return Response({
-                'url': presigned_url,
-                'filename': doc.original_filename,
-                'mimeType': doc.mime_type,
-            })
+            response = HttpResponse(file_data, content_type=doc.mime_type)
+            response['Content-Disposition'] = f'attachment; filename="{doc.original_filename}"'
+            response['Content-Length'] = len(file_data)
+            response['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+            response['Pragma'] = 'no-cache'
+            response['X-Content-Type-Options'] = 'nosniff'
+            return response
         except Exception as e:
             return Response({'message': str(e)}, status=500)
 

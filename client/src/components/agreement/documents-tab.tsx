@@ -223,6 +223,7 @@ function SecureViewer({ doc, userName, userEmail, onClose }: { doc: any; userNam
   }, []);
 
   const [signedViewUrl, setSignedViewUrl] = useState<string | null>(null);
+  const blobUrlRef = useRef<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -230,28 +231,25 @@ function SecureViewer({ doc, userName, userEmail, onClose }: { doc: any; userNam
       try {
         const res = await fetch(`/api/documents/${doc.id}/view`, { credentials: "include" });
         if (!res.ok) {
-          const err = await res.json().catch(() => ({ message: "Access denied" }));
-          setLoadError(err.message || "Failed to load document");
-          setLoading(false);
-          return;
-        }
-        const data = await res.json();
-        if (!data.url) {
-          setLoadError("Failed to get document URL");
-          setLoading(false);
-          return;
-        }
-        if (isPdf) {
-          const pdfRes = await fetch(data.url);
-          if (!pdfRes.ok) {
-            setLoadError("Failed to load PDF from storage");
-            setLoading(false);
-            return;
+          const contentType = res.headers.get("content-type") || "";
+          if (contentType.includes("application/json")) {
+            const err = await res.json().catch(() => ({ message: "Access denied" }));
+            setLoadError(err.message || "Failed to load document");
+          } else {
+            setLoadError("Failed to load document");
           }
-          const buffer = await pdfRes.arrayBuffer();
-          if (!cancelled) setPdfData(buffer);
+          setLoading(false);
+          return;
+        }
+        const buffer = await res.arrayBuffer();
+        if (cancelled) return;
+        if (isPdf) {
+          setPdfData(buffer);
         } else {
-          if (!cancelled) setSignedViewUrl(data.url);
+          const blob = new Blob([buffer], { type: doc.mimeType || "application/octet-stream" });
+          const url = URL.createObjectURL(blob);
+          blobUrlRef.current = url;
+          setSignedViewUrl(url);
         }
         setLoading(false);
       } catch {
@@ -260,7 +258,13 @@ function SecureViewer({ doc, userName, userEmail, onClose }: { doc: any; userNam
       }
     };
     loadDocument();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+      if (blobUrlRef.current) {
+        URL.revokeObjectURL(blobUrlRef.current);
+        blobUrlRef.current = null;
+      }
+    };
   }, [doc.id, isPdf]);
 
   const watermarkInfo: WatermarkInfo = {
@@ -469,34 +473,29 @@ export default function DocumentsTab({ agreementId }: { agreementId: number }) {
   };
 
   const handleDownload = async (doc: any) => {
-    const isPdf = doc.mimeType === "application/pdf";
-    if (isPdf) {
+    try {
+      const res = await fetch(`/api/documents/${doc.id}/download`, { credentials: "include" });
+      if (!res.ok) {
+        const contentType = res.headers.get("content-type") || "";
+        if (contentType.includes("application/json")) {
+          const err = await res.json().catch(() => ({ message: "Download failed" }));
+          toast({ title: "Download failed", description: err.message, variant: "destructive" });
+        } else {
+          toast({ title: "Download failed", description: "Unable to download file", variant: "destructive" });
+        }
+        return;
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
-      link.href = `/api/documents/${doc.id}/download`;
+      link.href = url;
       link.download = doc.originalFilename;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
-    } else {
-      try {
-        const res = await fetch(`/api/documents/${doc.id}/download`, { credentials: "include" });
-        if (!res.ok) {
-          const err = await res.json().catch(() => ({ message: "Download failed" }));
-          toast({ title: "Download failed", description: err.message, variant: "destructive" });
-          return;
-        }
-        const data = await res.json();
-        if (data.url) {
-          const link = document.createElement("a");
-          link.href = data.url;
-          link.download = data.filename || doc.originalFilename;
-          document.body.appendChild(link);
-          link.click();
-          document.body.removeChild(link);
-        }
-      } catch (err: any) {
-        toast({ title: "Download failed", description: err.message, variant: "destructive" });
-      }
+      URL.revokeObjectURL(url);
+    } catch (err: any) {
+      toast({ title: "Download failed", description: err.message, variant: "destructive" });
     }
   };
 

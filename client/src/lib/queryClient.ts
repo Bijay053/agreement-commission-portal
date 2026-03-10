@@ -1,6 +1,6 @@
 import { QueryClient, QueryFunction } from "@tanstack/react-query";
 
-function getCsrfToken(): string | null {
+export function getCsrfToken(): string | null {
   const match = document.cookie.match(/(?:^|;\s*)csrftoken=([^\s;]*)/);
   return match ? decodeURIComponent(match[1]) : null;
 }

@@ -646,6 +646,7 @@ class ChangePasswordView(APIView):
 
 
 class HeartbeatView(APIView):
+
     @require_auth
     def post(self, request):
         try:

@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useAuth } from "@/lib/auth";
+import { getCsrfToken } from "@/lib/queryClient";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Clock, LogOut } from "lucide-react";
@@ -33,7 +34,10 @@ export function InactivityMonitor() {
     }
     resetIdleTimer();
     try {
-      await fetch("/api/auth/heartbeat", { method: "POST", credentials: "include" });
+      const headers: Record<string, string> = {};
+      const token = getCsrfToken();
+      if (token) headers["X-CSRFToken"] = token;
+      await fetch("/api/auth/heartbeat", { method: "POST", credentials: "include", headers });
     } catch {}
   }, [resetIdleTimer]);
 
@@ -59,7 +63,10 @@ export function InactivityMonitor() {
     heartbeatRef.current = setInterval(async () => {
       if (!showWarning) {
         try {
-          await fetch("/api/auth/heartbeat", { method: "POST", credentials: "include" });
+          const headers: Record<string, string> = {};
+          const token = getCsrfToken();
+          if (token) headers["X-CSRFToken"] = token;
+          await fetch("/api/auth/heartbeat", { method: "POST", credentials: "include", headers });
         } catch {}
       }
     }, HEARTBEAT_INTERVAL);

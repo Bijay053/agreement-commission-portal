@@ -83,6 +83,7 @@ The portal adopts a client-server architecture:
 - **CSP**: Content-Security-Policy header in production (not DEBUG)
 - **Rate Limiting**: DRF throttling — 30/min anonymous, 120/min authenticated, 5/min login endpoints
 - **Malware Scanning**: Every upload (documents + bulk CSV) scanned before save: magic-byte validation, malicious signature detection (web shells, executables, suspicious PDF patterns), ClamAV antivirus when available. Scan-on-serve checks files from S3 before view/download — infected files quarantined and permanently blocked. Scan failures are fail-closed (access denied). All detections logged to `audit_logs` with action `MALWARE_BLOCKED` including filename, content type, user, IP, and check type
+- **Document Proxying**: Document view and download endpoints proxy file content through the backend (no S3 presigned URLs exposed to browser), avoiding CORS issues and preventing URL leakage. Scan-on-serve reuses fetched bytes to avoid duplicate S3 reads
 - **Soft Deletes**: Key tables use `is_deleted` flag instead of hard deletes
 - **Status History**: All status transitions tracked in `status_history` table
 - **Audit Logging**: All document operations (upload, view, download, delete) logged
@@ -117,7 +118,7 @@ All endpoints under `/api/`:
 - **Contacts**: list all, list by agreement, CRUD
 - **Targets**: CRUD + bonus rules
 - **Commissions**: commission rules CRUD, bonus rules CRUD, bonus calculate
-- **Documents**: list by agreement, upload (with security scan), view (signed URL), download (PDF protected), delete
+- **Documents**: list by agreement, upload (with security scan), view (proxied from S3), download (proxied, PDF password-protected), delete
 - **Commission Tracker**: students CRUD, entries CRUD, terms CRUD, dashboard, yearly dashboard, filters, years, all-entries, all-student-providers, bulk-upload preview/confirm, sample-sheet, recalculate, student-providers CRUD, export
 - **Sub-Agent**: dashboard, master list, update master, sync, term entries CRUD
 - **Dashboard**: stats, expiring, recent
