@@ -80,12 +80,17 @@ class AgreementContactsView(APIView):
     @require_permission("contacts.create")
     def post(self, request, agreement_id):
         try:
+            email = request.data.get('email', '').strip()
+            if email:
+                existing = AgreementContact.objects.filter(agreement_id=agreement_id, email__iexact=email).first()
+                if existing:
+                    return Response({'message': f'A contact with email "{email}" already exists for this agreement'}, status=409)
             c = AgreementContact.objects.create(
                 agreement_id=agreement_id,
                 full_name=request.data.get('fullName', ''),
                 position_title=request.data.get('positionTitle'),
                 phone=request.data.get('phone'),
-                email=request.data.get('email'),
+                email=email,
                 country_id=request.data.get('countryId'),
                 city=request.data.get('city'),
                 is_primary=request.data.get('isPrimary', False),
@@ -104,6 +109,11 @@ class ContactDetailView(APIView):
                 c = AgreementContact.objects.get(id=contact_id)
             except AgreementContact.DoesNotExist:
                 return Response({'message': 'Contact not found'}, status=404)
+            new_email = request.data.get('email', '').strip() if 'email' in request.data else None
+            if new_email and new_email.lower() != (c.email or '').lower():
+                existing = AgreementContact.objects.filter(agreement_id=c.agreement_id, email__iexact=new_email).exclude(id=contact_id).first()
+                if existing:
+                    return Response({'message': f'A contact with email "{new_email}" already exists for this agreement'}, status=409)
             field_map = {
                 'fullName': 'full_name', 'positionTitle': 'position_title',
                 'phone': 'phone', 'email': 'email', 'countryId': 'country_id',
