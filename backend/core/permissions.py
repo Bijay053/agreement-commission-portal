@@ -2,11 +2,79 @@ import functools
 from rest_framework.response import Response
 
 
+LEGACY_PERMISSION_MAP = {
+    "agreement.view": "agreements.agreement.read",
+    "agreement.create": "agreements.agreement.add",
+    "agreement.edit": "agreements.agreement.update",
+    "agreement.delete": "agreements.agreement.delete",
+    "agreement.notes.view_sensitive": "agreements.notes.read",
+    "agreement.notes.edit_sensitive": "agreements.notes.update",
+    "targets.view": "targets.target.read",
+    "targets.create": "targets.target.add",
+    "targets.edit": "targets.target.update",
+    "targets.delete": "targets.target.delete",
+    "targets.export": "targets.target.export",
+    "commission.view": "commission.commission_rule.read",
+    "commission.create": "commission.commission_rule.add",
+    "commission.edit": "commission.commission_rule.update",
+    "commission.delete": "commission.commission_rule.delete",
+    "commission.export": "commission.commission_rule.export",
+    "bonus.view": "bonus.bonus_rule.read",
+    "bonus.create": "bonus.bonus_rule.add",
+    "bonus.edit": "bonus.bonus_rule.update",
+    "bonus.delete": "bonus.bonus_rule.delete",
+    "bonus.export": "bonus.bonus_rule.export",
+    "commission_tracker.view": "commission_tracker.student.read",
+    "commission_tracker.create": "commission_tracker.student.add",
+    "commission_tracker.edit": "commission_tracker.student.update",
+    "commission_tracker.delete": "commission_tracker.student.delete",
+    "commission_tracker.export": "commission_tracker.student.export",
+    "commission_tracker.entry.view": "commission_tracker.entry.read",
+    "commission_tracker.entry.create": "commission_tracker.entry.add",
+    "commission_tracker.entry.edit": "commission_tracker.entry.update",
+    "commission_tracker.entry.delete": "commission_tracker.entry.delete",
+    "commission_tracker.student.delete_master": "commission_tracker.student.delete_master",
+    "commission_tracker.master.edit": "commission_tracker.master.edit",
+    "contacts.view": "contacts.contact.read",
+    "contacts.create": "contacts.contact.add",
+    "contacts.edit": "contacts.contact.update",
+    "contacts.delete": "contacts.contact.delete",
+    "contacts.export": "contacts.contact.export",
+    "sub_agent_commission.view": "sub_agent_commission.entry.read",
+    "sub_agent_commission.create": "sub_agent_commission.entry.add",
+    "sub_agent_commission.edit": "sub_agent_commission.entry.update",
+    "sub_agent_commission.delete": "sub_agent_commission.entry.delete",
+    "document.list": "documents.document.list",
+    "document.view_in_portal": "documents.document.view_in_portal",
+    "document.download": "documents.document.download",
+    "document.upload": "documents.document.upload",
+    "document.replace": "documents.document.replace",
+    "document.delete": "documents.document.delete",
+    "audit.view": "administration.audit.read",
+    "security.user.manage": "administration.user.update",
+    "security.role.manage": "administration.role.update",
+    "security.country_scope.manage": "administration.country_scope.update",
+    "reminders.view": "reminders.reminder.read",
+    "reminders.manage": "reminders.reminder.update",
+    "providers.provider.read": "providers.provider.read",
+    "providers.provider.add": "providers.provider.add",
+    "providers.provider.update": "providers.provider.update",
+    "providers.provider.delete": "providers.provider.delete",
+}
+
+
 def get_user_permissions(user_id):
     from accounts.models import UserRole, RolePermission, Permission
     role_ids = UserRole.objects.filter(user_id=user_id).values_list('role_id', flat=True)
     perm_ids = RolePermission.objects.filter(role_id__in=role_ids).values_list('permission_id', flat=True)
-    return list(Permission.objects.filter(id__in=perm_ids).values_list('code', flat=True))
+    raw_codes = list(Permission.objects.filter(id__in=perm_ids).values_list('code', flat=True))
+    all_codes = set(raw_codes)
+    for legacy_code, new_code in LEGACY_PERMISSION_MAP.items():
+        if legacy_code in all_codes:
+            all_codes.add(new_code)
+        if new_code in all_codes:
+            all_codes.add(legacy_code)
+    return list(all_codes)
 
 
 def require_auth(view_func):
