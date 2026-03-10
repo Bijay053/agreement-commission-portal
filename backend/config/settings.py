@@ -143,8 +143,8 @@ REST_FRAMEWORK = {
         'core.throttling.SessionUserRateThrottle',
     ],
     'DEFAULT_THROTTLE_RATES': {
-        'anon': '30/minute',
-        'user': '120/minute',
+        'anon': '60/minute',
+        'user': '600/minute',
         'login': '5/minute',
     },
 }
