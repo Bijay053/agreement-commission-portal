@@ -33,6 +33,7 @@ LEGACY_PERMISSION_MAP = {
     "commission_tracker.entry.create": "commission_tracker.entry.add",
     "commission_tracker.entry.edit": "commission_tracker.entry.update",
     "commission_tracker.entry.delete": "commission_tracker.entry.delete",
+    "commission_tracker.entry.export": "commission_tracker.entry.export",
     "commission_tracker.student.delete_master": "commission_tracker.student.delete_master",
     "commission_tracker.master.edit": "commission_tracker.master.edit",
     "contacts.view": "contacts.contact.read",
@@ -63,6 +64,42 @@ LEGACY_PERMISSION_MAP = {
 }
 
 
+IMPLIED_PERMISSIONS = {
+    "commission_tracker.view": [
+        "commission_tracker.entry.view", "commission_tracker.entry.read",
+    ],
+    "commission_tracker.create": [
+        "commission_tracker.entry.create", "commission_tracker.entry.add",
+    ],
+    "commission_tracker.edit": [
+        "commission_tracker.entry.edit", "commission_tracker.entry.update",
+        "commission_tracker.master.edit",
+    ],
+    "commission_tracker.delete": [
+        "commission_tracker.entry.delete",
+    ],
+    "commission_tracker.export": [
+        "commission_tracker.entry.export",
+    ],
+    "commission_tracker.student.read": [
+        "commission_tracker.entry.read", "commission_tracker.entry.view",
+    ],
+    "commission_tracker.student.add": [
+        "commission_tracker.entry.add", "commission_tracker.entry.create",
+    ],
+    "commission_tracker.student.update": [
+        "commission_tracker.entry.update", "commission_tracker.entry.edit",
+        "commission_tracker.master.edit",
+    ],
+    "commission_tracker.student.delete": [
+        "commission_tracker.entry.delete",
+    ],
+    "commission_tracker.student.export": [
+        "commission_tracker.entry.export",
+    ],
+}
+
+
 def get_user_permissions(user_id):
     from accounts.models import UserRole, RolePermission, Permission
     role_ids = UserRole.objects.filter(user_id=user_id).values_list('role_id', flat=True)
@@ -74,7 +111,11 @@ def get_user_permissions(user_id):
             all_codes.add(new_code)
         if new_code in all_codes:
             all_codes.add(legacy_code)
-    return list(all_codes)
+    expanded = set(all_codes)
+    for code in all_codes:
+        if code in IMPLIED_PERMISSIONS:
+            expanded.update(IMPLIED_PERMISSIONS[code])
+    return list(expanded)
 
 
 def require_auth(view_func):
