@@ -15,7 +15,7 @@ def make_aware_safe(dt):
     if dt is None:
         return None
     if timezone.is_naive(dt):
-        return timezone.make_aware(dt, timezone.utc)
+        return timezone.make_aware(dt)
     return dt
 from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import ensure_csrf_cookie
