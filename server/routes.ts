@@ -497,6 +497,11 @@ export async function registerRoutes(
     res.json({ user: safeUser, permissions: perms, roles: userRolesData, passwordExpired, passwordWarning, daysUntilExpiry });
   });
 
+  app.get("/api/auth/client-info", requireAuth, async (req, res) => {
+    const clientIp = req.headers["x-forwarded-for"]?.toString().split(",")[0].trim() || req.ip || "unknown";
+    res.json({ ip: clientIp });
+  });
+
   app.post("/api/auth/change-password", requireAuth, async (req, res) => {
     try {
       const { currentPassword, newPassword, confirmPassword } = req.body;
