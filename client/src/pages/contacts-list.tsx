@@ -526,7 +526,7 @@ export default function ContactsListPage() {
         </AlertDialogContent>
       </AlertDialog>
 
-      <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
+      <Dialog open={showAddDialog} onOpenChange={(open) => { if (open) setAddForm({ agreementId: "", fullName: "", positionTitle: "", phone: "", email: "", countryId: "", city: "", isPrimary: false, notes: "" }); setShowAddDialog(open); }}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Add Contact</DialogTitle>

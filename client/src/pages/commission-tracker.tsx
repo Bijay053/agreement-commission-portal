@@ -380,7 +380,7 @@ export default function CommissionTrackerPage() {
                     <DialogTitle>Add Student</DialogTitle>
                     <DialogDescription>Add a new student enrolment to the commission tracker</DialogDescription>
                   </DialogHeader>
-                  <AddStudentForm onSuccess={() => { setShowAddDialog(false); invalidateAll(); }} />
+                  {showAddDialog && <AddStudentForm onSuccess={() => { setShowAddDialog(false); invalidateAll(); }} />}
                 </DialogContent>
               </Dialog>
             )}

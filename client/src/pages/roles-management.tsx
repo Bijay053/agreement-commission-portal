@@ -359,7 +359,7 @@ export default function RolesManagementPage() {
         </CardContent>
       </Card>
 
-      <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
+      <Dialog open={showCreateDialog} onOpenChange={(open) => { if (open) setCreateForm({ name: "", description: "" }); setShowCreateDialog(open); }}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Create New Role</DialogTitle>

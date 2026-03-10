@@ -223,7 +223,7 @@ export default function ContactsTab({ agreementId }: { agreementId: number }) {
         </Card>
       )}
 
-      <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
+      <Dialog open={showAddDialog} onOpenChange={(open) => { if (open) setAddForm(emptyForm); setShowAddDialog(open); }}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Add Contact</DialogTitle>

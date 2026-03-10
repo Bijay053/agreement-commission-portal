@@ -478,7 +478,7 @@ export default function DocumentsTab({ agreementId }: { agreementId: number }) {
       <div className="flex items-center justify-between gap-2">
         <h3 className="font-medium">Agreement Documents</h3>
         {canUpload && (
-          <Dialog open={showDialog} onOpenChange={setShowDialog}>
+          <Dialog open={showDialog} onOpenChange={(open) => { if (open) { setNote(""); if (fileRef.current) fileRef.current.value = ""; } setShowDialog(open); }}>
             <DialogTrigger asChild>
               <Button size="sm" data-testid="button-upload-document">
                 <Upload className="w-4 h-4 mr-1" /> Upload
