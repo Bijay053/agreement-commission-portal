@@ -761,7 +761,7 @@ function DashboardView({ dashboard, year, intakeFilter, onIntakeChange, provider
             {dashboard.byAgent.map((a: any) => (
               <div key={a.agent} className="flex justify-between text-xs py-1 px-2 border rounded">
                 <span>{a.agent}</span>
-                <span className="font-mono">{a.count} students / ${Number(a.total).toFixed(2)}</span>
+                <span className="font-mono font-semibold">{a.count} students</span>
               </div>
             ))}
           </div>
