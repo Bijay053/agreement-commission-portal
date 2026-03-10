@@ -137,9 +137,11 @@ export default function CommissionTrackerPage() {
   const [showTermDialog, setShowTermDialog] = useState(false);
   const [showBulkUpload, setShowBulkUpload] = useState(false);
 
-  const canCreate = hasPermission("commission_tracker.create");
-  const canEdit = hasPermission("commission_tracker.edit");
-  const canDelete = hasPermission("commission_tracker.delete");
+  const canCreate = hasPermission("commission_tracker.student.add");
+  const canEdit = hasPermission("commission_tracker.entry.update");
+  const canEditStudent = hasPermission("commission_tracker.student.update");
+  const canAddEntry = hasPermission("commission_tracker.entry.add");
+  const canDelete = hasPermission("commission_tracker.entry.delete");
   const canDeleteMaster = hasPermission("commission_tracker.student.delete_master");
 
   const { data: years = [] } = useQuery<number[]>({
@@ -443,7 +445,7 @@ export default function CommissionTrackerPage() {
               allEntries={allEntries}
               year={selectedYear}
               isLoading={isLoading}
-              canEdit={canEdit}
+              canEdit={canEditStudent}
               canDeleteMaster={canDeleteMaster}
               isDeleting={deleteStudentMutation.isPending}
               providersByStudent={providersByStudent}
@@ -461,7 +463,8 @@ export default function CommissionTrackerPage() {
               terms={terms}
               isLoading={isLoading}
               canEdit={canEdit}
-              canDelete={false}
+              canAddEntry={canAddEntry}
+              canDelete={canDelete}
               providersByStudent={providersByStudent}
               onUpdateStudent={(id, data) => updateStudentMutation.mutate({ id, data })}
               onDeleteStudent={() => {}}
@@ -1097,7 +1100,7 @@ function MasterTable({ students, allEntries, year, isLoading, canEdit, canDelete
   );
 }
 
-function TermTable({ termName, students, allEntries, allEntriesGlobal, terms, isLoading, canEdit, canDelete, providersByStudent, onUpdateStudent, onDeleteStudent, onCreateEntry, onUpdateEntry, onDeleteEntry }: {
+function TermTable({ termName, students, allEntries, allEntriesGlobal, terms, isLoading, canEdit, canAddEntry, canDelete, providersByStudent, onUpdateStudent, onDeleteStudent, onCreateEntry, onUpdateEntry, onDeleteEntry }: {
   termName: string;
   students: CommissionStudent[];
   allEntries: Record<number, CommissionEntry[]>;
@@ -1105,6 +1108,7 @@ function TermTable({ termName, students, allEntries, allEntriesGlobal, terms, is
   terms: CommissionTerm[];
   isLoading: boolean;
   canEdit: boolean;
+  canAddEntry: boolean;
   canDelete: boolean;
   providersByStudent?: Record<number, any[]>;
   onUpdateStudent: (id: number, data: Record<string, any>) => void;
@@ -1182,7 +1186,7 @@ function TermTable({ termName, students, allEntries, allEntriesGlobal, terms, is
         <tr key={rowKey} className="bg-gray-50 dark:bg-gray-900" data-testid={`row-term-${rowKey}`}>
           {commonCells("text-gray-500")}
           <td colSpan={24} className="px-2 py-1 border border-gray-200 text-center">
-            {canEdit ? (
+            {canAddEntry ? (
               <button
                 className="text-blue-600 hover:text-blue-800 text-xs font-medium underline"
                 onClick={() => onCreateEntry(s.id, {
@@ -1570,7 +1574,7 @@ function BulkUploadDialog({ onSuccess }: { onSuccess: () => void }) {
 
 function ManageTermsDialog({ terms, onClose }: { terms: CommissionTerm[]; onClose: () => void }) {
   const { hasPermission } = useAuth();
-  const canDeleteTerms = hasPermission("commission_tracker.delete");
+  const canDeleteTerms = hasPermission("commission_tracker.entry.delete");
   const { toast } = useToast();
   const [year, setYear] = useState(new Date().getFullYear().toString());
   const [termNum, setTermNum] = useState("1");
