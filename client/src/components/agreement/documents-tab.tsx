@@ -196,11 +196,10 @@ function PdfCanvasViewer({ pdfData, watermarkInfo }: { pdfData: ArrayBuffer; wat
           </div>
         ) : (
           <div className="relative inline-block">
-            <canvas ref={canvasRef} className="block shadow-2xl" style={{ maxWidth: "100%" }} />
+            <canvas ref={canvasRef} className="block shadow-2xl" />
             <canvas
               ref={watermarkCanvasRef}
-              className="absolute inset-0 pointer-events-none"
-              style={{ width: "100%", height: "100%" }}
+              className="absolute top-0 left-0 pointer-events-none"
             />
           </div>
         )}
