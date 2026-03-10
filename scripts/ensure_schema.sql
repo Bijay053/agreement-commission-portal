@@ -49,6 +49,10 @@ ALTER TABLE sub_agent_term_entries ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMP
 -- agreements
 ALTER TABLE agreements ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN DEFAULT false;
 ALTER TABLE agreements ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMP;
+ALTER TABLE agreements ADD COLUMN IF NOT EXISTS internal_notes TEXT;
+ALTER TABLE agreements ADD COLUMN IF NOT EXISTS confidentiality_level VARCHAR(16) DEFAULT 'high';
+ALTER TABLE agreements ADD COLUMN IF NOT EXISTS created_by_user_id INTEGER;
+ALTER TABLE agreements ADD COLUMN IF NOT EXISTS updated_by_user_id INTEGER;
 
 -- agreement_documents
 ALTER TABLE agreement_documents ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN DEFAULT false;
