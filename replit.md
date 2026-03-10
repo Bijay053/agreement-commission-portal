@@ -78,7 +78,7 @@ The portal adopts a client-server architecture:
 - PDF download password: configured via `PDF_DOWNLOAD_PASSWORD` env var
 
 ### Security Features
-- **CSRF Protection**: Enabled via `CsrfViewMiddleware`; pre-auth endpoints exempted; frontend sends `X-CSRFToken` header
+- **CSRF Protection**: Enforced via `SessionCsrfAuthentication` DRF auth class (DRF's `APIView` exempts Django CSRF middleware, so enforcement moved to DRF layer); `@ensure_csrf_cookie` on `MeView`/`VerifyOtpView` sets cookie; pre-auth views have `authentication_classes = []`; frontend sends `X-CSRFToken` header
 - **Security Headers**: HSTS (1 year), X-Frame-Options DENY, Content-Type nosniff, Referrer-Policy
 - **CSP**: Content-Security-Policy header in production (not DEBUG)
 - **Rate Limiting**: DRF throttling — 30/min anonymous, 120/min authenticated, 5/min login endpoints

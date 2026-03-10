@@ -9,6 +9,8 @@ import bcrypt
 from django.conf import settings
 from django.core.mail import send_mail
 from django.utils import timezone
+from django.utils.decorators import method_decorator
+from django.views.decorators.csrf import ensure_csrf_cookie
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -193,6 +195,7 @@ def send_otp_email(email, code):
 
 
 class LoginView(APIView):
+    authentication_classes = []
     throttle_classes = [LoginRateThrottle]
 
     def post(self, request):
@@ -269,7 +272,9 @@ class LoginView(APIView):
             return Response({'message': str(e)}, status=500)
 
 
+@method_decorator(ensure_csrf_cookie, name='dispatch')
 class VerifyOtpView(APIView):
+    authentication_classes = []
     throttle_classes = [LoginRateThrottle]
 
     def post(self, request):
@@ -358,6 +363,7 @@ class VerifyOtpView(APIView):
 
 
 class ResendOtpView(APIView):
+    authentication_classes = []
     throttle_classes = [LoginRateThrottle]
 
     def post(self, request):
@@ -421,6 +427,7 @@ class LogoutView(APIView):
 
 
 class ForgotPasswordView(APIView):
+    authentication_classes = []
     throttle_classes = [LoginRateThrottle]
     forgot_rate_limit = {}
 
@@ -493,6 +500,7 @@ class ForgotPasswordView(APIView):
 
 
 class ResetPasswordView(APIView):
+    authentication_classes = []
     throttle_classes = [LoginRateThrottle]
 
     def post(self, request):
@@ -551,7 +559,10 @@ class ResetPasswordView(APIView):
             return Response({'message': str(e)}, status=500)
 
 
+@method_decorator(ensure_csrf_cookie, name='dispatch')
 class MeView(APIView):
+    authentication_classes = []
+
     def get(self, request):
         user_id = request.session.get('userId')
         if not user_id:
