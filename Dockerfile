@@ -12,6 +12,7 @@ RUN mkdir -p uploads && npm run build
 
 FROM base AS production
 ENV NODE_ENV=production
+RUN apk add --no-cache qpdf
 COPY package.json ./
 RUN npm install --production=false && npm cache clean --force
 COPY --from=build /app/dist ./dist
