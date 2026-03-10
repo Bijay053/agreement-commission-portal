@@ -84,12 +84,12 @@ function Router() {
         </AccessGuard>
       </Route>
       <Route path="/commission-tracker">
-        <AccessGuard permission="commission_tracker.view">
+        <AccessGuard permission="commission_tracker.student.read">
           <CommissionTrackerPage />
         </AccessGuard>
       </Route>
       <Route path="/commission-tracker/:id">
-        <AccessGuard permission="commission_tracker.view">
+        <AccessGuard permission="commission_tracker.student.read">
           <CommissionTrackerDetailPage />
         </AccessGuard>
       </Route>
