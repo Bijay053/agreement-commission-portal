@@ -1,0 +1,158 @@
+However, I want to clarify the long-term technical direction clearly: the backend needs to be in Python, not Node.js/Express.
+
+Because of that, I do not want us to treat the current Node.js backend as the final architecture. We can keep it running temporarily if needed, but the strategic direction should now shift toward a Python backend migration plan.
+
+Please prepare a Python backend architecture and migration plan based on the current system, with the goal of rebuilding the backend in a structured, production-ready way.
+
+My expected stack direction is:
+
+Python backend framework: Django + Django REST Framework
+
+Database: PostgreSQL
+
+Cache / queue: Redis
+
+Background jobs: Celery
+
+File storage: S3
+
+Reverse proxy / deployment: Nginx + Docker
+
+Monitoring: Sentry / CloudWatch
+
+Authentication / permissions: strong RBAC and backend-enforced validation on every endpoint
+
+I want the migration plan to cover these points clearly:
+
+1. Target Python architecture
+
+Define the recommended backend structure in Python, including:
+
+app/module structure
+
+API layer
+
+service layer
+
+models
+
+permissions
+
+audit logs
+
+background jobs
+
+file/document handling
+
+notifications
+
+health checks
+
+2. Migration scope
+
+Map the current Node.js features into Python modules, including:
+
+authentication
+
+users / roles / permissions
+
+agreements
+
+documents
+
+commission tracker
+
+sub-agent commission
+
+audit logs
+
+notifications
+
+scheduled reminders
+
+file access control
+
+3. Migration strategy
+
+I want a practical migration approach, not only theory. Please propose:
+
+whether migration should be big bang or phased
+
+how we keep the current system operational during migration
+
+how database compatibility will be handled
+
+whether the Python backend will reuse the current PostgreSQL schema or introduce a revised schema with migration scripts
+
+4. Security baseline
+
+The Python version must include from the beginning:
+
+strict backend validation
+
+CSRF protection where applicable
+
+rate limiting
+
+secure session/token handling
+
+strong file validation
+
+audit logging
+
+signed/private document access
+
+request size limits
+
+secure headers
+
+health and monitoring endpoints
+
+5. Infrastructure plan
+
+Please define the deployment architecture for the Python backend, including:
+
+Docker services
+
+Nginx
+
+app server choice
+
+Celery workers
+
+Redis
+
+PostgreSQL
+
+S3 integration
+
+environment management
+
+production vs staging setup
+
+6. Timeline and phases
+
+Provide a realistic phase-by-phase plan for:
+
+foundation setup
+
+core auth and RBAC
+
+feature migration
+
+testing
+
+cutover
+
+rollback strategy
+
+7. Recommendation on the current Node.js app
+
+Also clarify:
+
+what minimum hardening should still be done on the current Node.js app while migration is ongoing
+
+which improvements should not be invested in because they will be replaced by the Python backend
+
+At this point, I do not want further work to proceed under the assumption that Node.js is the final backend.
+The immediate next step should be a Python backend architecture + migration plan.
