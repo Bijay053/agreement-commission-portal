@@ -8,8 +8,21 @@ from .models import SubAgentEntry, SubAgentTermEntry
 from .services import calculate_sub_agent_term_entry, calculate_master_totals
 
 
+def student_to_dict(s):
+    if not s:
+        return None
+    return {
+        'id': s.id, 'agentName': s.agent_name, 'studentId': s.student_id,
+        'agentsicId': s.agentsic_id, 'studentName': s.student_name,
+        'provider': s.provider, 'country': s.country,
+        'courseLevel': s.course_level, 'courseName': s.course_name,
+        'startIntake': s.start_intake, 'status': s.status,
+        'totalReceived': str(s.total_received) if s.total_received is not None else '0',
+    }
+
+
 def master_to_dict(m, student=None):
-    d = {
+    return {
         'id': m.id, 'commissionStudentId': m.commission_student_id,
         'subAgentCommissionRatePct': str(m.sub_agent_commission_rate_pct) if m.sub_agent_commission_rate_pct is not None else '0',
         'gstApplicable': m.gst_applicable,
@@ -20,16 +33,8 @@ def master_to_dict(m, student=None):
         'status': m.status,
         'createdAt': m.created_at.isoformat() if m.created_at else None,
         'updatedAt': m.updated_at.isoformat() if m.updated_at else None,
+        'student': student_to_dict(student),
     }
-    if student:
-        d.update({
-            'agentName': student.agent_name, 'studentId': student.student_id,
-            'agentsicId': student.agentsic_id, 'studentName': student.student_name,
-            'provider': student.provider, 'country': student.country,
-            'courseLevel': student.course_level, 'courseName': student.course_name,
-            'startIntake': student.start_intake,
-        })
-    return d
 
 
 def term_entry_to_dict(e):
@@ -171,11 +176,7 @@ class SubAgentTermEntriesView(APIView):
             for e in entries:
                 d = term_entry_to_dict(e)
                 s = students.get(e.commission_student_id)
-                if s:
-                    d.update({
-                        'agentName': s.agent_name, 'studentName': s.student_name,
-                        'provider': s.provider, 'country': s.country,
-                    })
+                d['student'] = student_to_dict(s)
                 result.append(d)
             return Response(result)
         except Exception as e:
