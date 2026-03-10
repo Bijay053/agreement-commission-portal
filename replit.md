@@ -57,7 +57,7 @@ All endpoints under `/api/`:
 - **Sub-Agent**: dashboard, master list, update master, sync, term entries CRUD
 - **Dashboard**: stats, expiring, recent
 - **Audit Logs**: list with filters
-- **Notifications**: agreement notifications list
+- **Notifications**: agreement notifications list, expiry reminder emails (3 branded templates: reminder 30-60d, urgent 7-14d, expired follow-up)
 
 ## Permission System
 Fine-grained RBAC with permission codes like `agreement.view`, `commission_tracker.student.read`, `document.upload`, etc. Permissions are linked to roles via `role_permissions` table. Each API endpoint checks specific permission codes via `@require_permission` decorator.
