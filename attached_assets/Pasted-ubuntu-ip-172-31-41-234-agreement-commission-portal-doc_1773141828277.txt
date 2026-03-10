@@ -1,0 +1,78 @@
+ubuntu@ip-172-31-41-234:~/agreement-commission-portal$ docker exec agreement-commission-portal-db-1 psql -U portal_user -d agreement_portal -c "
+ALTER TABLE commission_students ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN DEFAULT false;
+ALTER TABLE commission_students ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMP;
+ALTER TABLE student_providers ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN DEFAULT false;
+ALTER TABLE student_providers ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMP;
+ALTER TABLE commission_entries ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN DEFAULT false;
+ALTER TABLE commission_entries ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMP;
+ALTER TABLE sub_agent_entries ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN DEFAULT false;
+ALTER TABLE sub_agent_entries ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMP;
+ALTER TABLE sub_agent_term_entries ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN DEFAULT false;
+ALTER TABLE sub_agent_term_entries ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMP;
+"
+ALTER TABLE
+ALTER TABLE
+ERROR:  relation "student_providers" does not exist
+ubuntu@ip-172-31-41-234:~/agreement-commission-portal$ docker exec agreement-commission-portal-db-1 psql -U portal_user -d agreement_portal -c "SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'student_providers');"
+docker exec agreement-commission-portal-db-1 psql -U portal_user -d agreement_portal -c "SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'status_history');"
+docker exec agreement-commission-portal-db-1 psql -U portal_user -d agreement_portal -c "SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'email_templates');"
+ exists 
+--------
+ f
+(1 row)
+
+ exists 
+--------
+ f
+(1 row)
+
+ exists 
+--------
+ f
+(1 row)
+
+ubuntu@ip-172-31-41-234:~/agreement-commission-portal$ docker exec agreement-commission-portal-db-1 psql -U portal_user -d agreement_portal -c "
+CREATE TABLE IF NOT EXISTS student_providers (
+    id SERIAL PRIMARY KEY,
+    commission_student_id INTEGER NOT NULL,
+    provider VARCHAR(255) NOT NULL,
+    student_id VARCHAR(64),
+    country VARCHAR(64) DEFAULT 'Australia',
+    course_level VARCHAR(64),
+    course_name VARCHAR(500),
+    course_duration_years DECIMAL(4,1),
+    start_intake VARCHAR(32),
+    commission_rate_pct DECIMAL(8,4),
+    gst_rate_pct DECIMAL(5,2) DEFAULT 10,
+    gst_applicable VARCHAR(3) DEFAULT 'Yes',
+    scholarship_type VARCHAR(16) DEFAULT 'None',
+    scholarship_value DECIMAL(12,2) DEFAULT 0,
+    status VARCHAR(32) DEFAULT 'Under Enquiry',
+    notes TEXT,
+    created_by_user_id INTEGER,
+    updated_by_user_id INTEGER,
+    created_at TIMESTAMP DEFAULT NOW(),
+    is_deleted BOOLEAN DEFAULT false,
+    deleted_at TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS status_history (
+    id SERIAL PRIMARY KEY,
+    entity_type VARCHAR(32) NOT NULL,
+    entity_id INTEGER NOT NULL,
+    old_status VARCHAR(32),
+    new_status VARCHAR(32) NOT NULL,
+    changed_by_user_id INTEGER,
+    changed_at TIMESTAMP DEFAULT NOW(),
+    notes TEXT
+"LTER TABLE sub_agent_term_entries ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMP;FAULT false;
+CREATE TABLE
+CREATE TABLE
+CREATE TABLE
+ALTER TABLE
+ALTER TABLE
+ALTER TABLE
+ALTER TABLE
+ALTER TABLE
+ALTER TABLE
+ubuntu@ip-172-31-41-234:~/agreement-commission-portal$ 
