@@ -36,4 +36,4 @@ ENV PYTHONUNBUFFERED=1
 EXPOSE 5000
 
 WORKDIR /app/backend
-CMD ["gunicorn", "config.wsgi:application", "--bind", "0.0.0.0:5000", "--workers", "3", "--timeout", "120", "--access-logfile", "-"]
+CMD bash -c "python -c \"import django; django.setup(); from django.db import connection; cursor = connection.cursor(); cursor.execute(open('/app/scripts/ensure_schema.sql').read()); print('Schema ensured.')\" 2>/dev/null || true; exec gunicorn config.wsgi:application --bind 0.0.0.0:5000 --workers 3 --timeout 120 --access-logfile -"

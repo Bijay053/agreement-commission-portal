@@ -1,0 +1,52 @@
+ubuntu@ip-172-31-41-234:~/agreement-commission-portal$ docker exec agreement-commission-portal-db-1 psql -U portal_user -d agreement_portal -c "
+ALTER TABLE commission_students ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN DEFAULT false;
+ALTER TABLE commission_students ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMP;
+ALTER TABLE commission_entries ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN DEFAULT false;
+ALTER TABLE commission_entries ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMP;
+ALTER TABLE student_providers ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN DEFAULT false;
+ALTER TABLE student_providers ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMP;
+ALTER TABLE sub_agent_entries ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN DEFAULT false;
+ALTER TABLE sub_agent_entries ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMP;
+ALTER TABLE sub_agent_term_entries ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN DEFAULT false;
+ALTER TABLE sub_agent_term_entries ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMP;
+ALTER TABLE agreements ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN DEFAULT false;
+ALTER TABLE agreements ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMP;
+ALTER TABLE agreement_documents ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN DEFAULT false;
+ALTER TABLE agreement_documents ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMP;
+ALTER TABLE agreement_contacts ADD COLUMN IF NOT EXISTS created_by_user_id INTEGER;
+ALTER TABLE agreement_contacts ADD COLUMN IF NOT EXISTS updated_by_user_id INTEGER;
+ALTER TABLE agreement_documents ADD COLUMN IF NOT EXISTS updated_by_user_id INTEGER;
+"
+ALTER TABLE
+ALTER TABLE
+NOTICE:  column "is_deleted" of relation "commission_entries" already exists, skipping
+NOTICE:  column "deleted_at" of relation "commission_entries" already exists, skipping
+ALTER TABLE
+ALTER TABLE
+NOTICE:  column "is_deleted" of relation "student_providers" already exists, skipping
+NOTICE:  column "deleted_at" of relation "student_providers" already exists, skipping
+NOTICE:  column "is_deleted" of relation "sub_agent_entries" already exists, skipping
+ALTER TABLE
+NOTICE:  column "deleted_at" of relation "sub_agent_entries" already exists, skipping
+ALTER TABLE
+NOTICE:  column "is_deleted" of relation "sub_agent_term_entries" already exists, skipping
+ALTER TABLE
+ALTER TABLE
+NOTICE:  column "deleted_at" of relation "sub_agent_term_entries" already exists, skipping
+ALTER TABLE
+ALTER TABLE
+NOTICE:  column "is_deleted" of relation "agreements" already exists, skipping
+NOTICE:  column "deleted_at" of relation "agreements" already exists, skipping
+NOTICE:  column "is_deleted" of relation "agreement_documents" already exists, skipping
+NOTICE:  column "deleted_at" of relation "agreement_documents" already exists, skipping
+ALTER TABLE
+ALTER TABLE
+ALTER TABLE
+ALTER TABLE
+NOTICE:  column "created_by_user_id" of relation "agreement_contacts" already exists, skipping
+NOTICE:  column "updated_by_user_id" of relation "agreement_contacts" already exists, skipping
+ALTER TABLE
+NOTICE:  column "updated_by_user_id" of relation "agreement_documents" already exists, skipping
+ALTER TABLE
+ALTER TABLE
+ubuntu@ip-172-31-41-234:~/agreement-commission-portal$ 
