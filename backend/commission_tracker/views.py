@@ -710,6 +710,26 @@ class DashboardYearView(APIView):
             terms = CommissionTerm.objects.filter(year=int(year)).order_by('sort_order')
             term_names = [t.term_name for t in terms]
 
+            intake_filter = request.query_params.get('intake', '')
+
+            students = CommissionStudent.objects.all()
+            if intake_filter and intake_filter.upper() != 'ALL':
+                students = students.filter(start_intake__icontains=intake_filter)
+
+            total_students = students.count()
+            providers_set = set()
+            agent_counts = {}
+            provider_counts = {}
+            status_counts = {}
+            for s in students:
+                providers_set.add(s.provider)
+                agent_counts[s.agent_name] = agent_counts.get(s.agent_name, 0) + 1
+                provider_counts[s.provider] = provider_counts.get(s.provider, 0) + 1
+                status_counts[s.status] = status_counts.get(s.status, 0) + 1
+
+            by_agent = sorted([{'agent': k, 'count': v} for k, v in agent_counts.items()], key=lambda x: -x['count'])
+            by_provider = [{'provider': k, 'count': v} for k, v in provider_counts.items()]
+
             entries = CommissionEntry.objects.filter(term_name__in=term_names)
             term_stats = []
             for t in terms:
@@ -717,6 +737,7 @@ class DashboardYearView(APIView):
                 total = sum(float(e.total_amount or 0) for e in term_entries)
                 comm = sum(float(e.commission_amount or 0) for e in term_entries)
                 gst = sum(float(e.gst_amount or 0) for e in term_entries)
+                bonus = sum(float(e.bonus or 0) for e in term_entries)
                 term_stat = {
                     'termName': t.term_name, 'termLabel': t.term_label,
                     'entryCount': len(term_entries),
@@ -725,17 +746,57 @@ class DashboardYearView(APIView):
                     term_stat['totalAmount'] = round2(total)
                     term_stat['commissionAmount'] = round2(comm)
                     term_stat['gstAmount'] = round2(gst)
+                    term_stat['bonusAmount'] = round2(bonus)
                 term_stats.append(term_stat)
+
+            if has_financials:
+                provider_financials = {}
+                for e in entries:
+                    try:
+                        student = CommissionStudent.objects.get(id=e.commission_student_id)
+                        prov = student.provider
+                    except CommissionStudent.DoesNotExist:
+                        prov = 'Unknown'
+                    if prov not in provider_financials:
+                        provider_financials[prov] = {'totalCommission': 0, 'totalBonus': 0, 'totalReceived': 0, 'pending': 0}
+                    provider_financials[prov]['totalCommission'] += float(e.commission_amount or 0)
+                    provider_financials[prov]['totalBonus'] += float(e.bonus or 0)
+
+                for p in by_provider:
+                    fin = provider_financials.get(p['provider'], {})
+                    p['totalCommission'] = round2(fin.get('totalCommission', 0))
+                    p['totalBonus'] = round2(fin.get('totalBonus', 0))
+                    try:
+                        prov_students = CommissionStudent.objects.filter(provider=p['provider'])
+                        p['totalReceived'] = round2(sum(float(s.total_received or 0) for s in prov_students))
+                        p['pending'] = round2(p['totalCommission'] - p['totalReceived'])
+                    except Exception:
+                        p['totalReceived'] = 0
+                        p['pending'] = 0
+
+                by_provider.sort(key=lambda x: -x.get('totalCommission', 0))
+
+            total_received = float(students.aggregate(total=Sum('total_received'))['total'] or 0)
 
             result = {
                 'year': int(year),
+                'totalStudents': total_students,
+                'totalProviders': len(providers_set),
                 'terms': term_stats,
                 'totalEntries': sum(ts['entryCount'] for ts in term_stats),
+                'byStatus': status_counts,
+                'byAgent': by_agent,
+                'byProvider': by_provider,
             }
             if has_financials:
+                total_comm = sum(ts.get('commissionAmount', 0) for ts in term_stats)
+                total_bonus = sum(ts.get('bonusAmount', 0) for ts in term_stats)
                 result['totalAmount'] = round2(sum(ts.get('totalAmount', 0) for ts in term_stats))
-                result['totalCommission'] = round2(sum(ts.get('commissionAmount', 0) for ts in term_stats))
+                result['totalCommission'] = round2(total_comm)
+                result['totalBonus'] = round2(total_bonus)
                 result['totalGst'] = round2(sum(ts.get('gstAmount', 0) for ts in term_stats))
+                result['totalReceived'] = round2(total_received)
+                result['totalPending'] = round2(total_comm - total_received)
             return Response(result)
         except Exception as e:
             return Response({'message': str(e)}, status=500)
