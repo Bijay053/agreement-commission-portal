@@ -43,14 +43,35 @@ function PdfCanvasViewer({ pdfData, watermarkInfo }: { pdfData: ArrayBuffer; wat
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const watermarkCanvasRef = useRef<HTMLCanvasElement>(null);
 
+  const [pdfError, setPdfError] = useState<string | null>(null);
+
   useEffect(() => {
     const loadPdf = async () => {
       try {
-        const doc = await pdfjsLib.getDocument({ data: pdfData }).promise;
+        const loadingTask = pdfjsLib.getDocument({ data: pdfData });
+        loadingTask.onPassword = (callback: (password: string) => void, reason: number) => {
+          const pwd = prompt(
+            reason === 1
+              ? "This PDF is password-protected. Enter the password:"
+              : "Incorrect password. Try again:"
+          );
+          if (pwd) {
+            callback(pwd);
+          } else {
+            setPdfError("Password required to view this document");
+          }
+        };
+        const doc = await loadingTask.promise;
         setPdfDoc(doc);
         setTotalPages(doc.numPages);
-      } catch {
-        console.error("Failed to load PDF");
+        setPdfError(null);
+      } catch (err: any) {
+        if (err?.name === "PasswordException") {
+          setPdfError("Password required to view this document");
+        } else {
+          console.error("Failed to load PDF", err);
+          setPdfError("Failed to load PDF");
+        }
       }
     };
     loadPdf();
@@ -149,14 +170,22 @@ function PdfCanvasViewer({ pdfData, watermarkInfo }: { pdfData: ArrayBuffer; wat
         </Button>
       </div>
       <div ref={containerRef} className="flex-1 overflow-auto flex justify-center bg-zinc-700 p-4" data-testid="secure-viewer-content">
-        <div className="relative inline-block">
-          <canvas ref={canvasRef} className="block shadow-2xl" style={{ maxWidth: "100%" }} />
-          <canvas
-            ref={watermarkCanvasRef}
-            className="absolute inset-0 pointer-events-none"
-            style={{ width: "100%", height: "100%" }}
-          />
-        </div>
+        {pdfError ? (
+          <div className="flex flex-col items-center justify-center h-full text-white">
+            <ShieldCheck className="w-16 h-16 text-amber-400 mb-4" />
+            <p className="text-lg font-medium">{pdfError}</p>
+            <p className="text-sm text-zinc-400 mt-2">The document cannot be displayed.</p>
+          </div>
+        ) : (
+          <div className="relative inline-block">
+            <canvas ref={canvasRef} className="block shadow-2xl" style={{ maxWidth: "100%" }} />
+            <canvas
+              ref={watermarkCanvasRef}
+              className="absolute inset-0 pointer-events-none"
+              style={{ width: "100%", height: "100%" }}
+            />
+          </div>
+        )}
       </div>
     </div>
   );
