@@ -40,13 +40,11 @@ MALICIOUS_SIGNATURES = [
 ]
 
 PDF_MALICIOUS_PATTERNS = [
-    b'/JavaScript',
-    b'/JS',
-    b'/Launch',
-    b'/SubmitForm',
-    b'/ImportData',
-    b'/OpenAction',
-    b'/AA',
+    (b'/JavaScript', 'File contains embedded JavaScript which is not allowed for security reasons'),
+    (b'/JS', 'File contains embedded JavaScript which is not allowed for security reasons'),
+    (b'/Launch', 'File contains a launch action that could execute programs on your computer'),
+    (b'/SubmitForm', 'File contains a form submission action that could send data externally'),
+    (b'/ImportData', 'File contains a data import action which is not allowed for security reasons'),
 ]
 
 
@@ -125,12 +123,9 @@ def check_malicious_signatures(file_obj, declared_content_type):
         file_obj.seek(0)
         content = file_obj.read(min(file_obj.size if hasattr(file_obj, 'size') else 1024 * 100, 100 * 1024))
         file_obj.seek(0)
-        found_patterns = []
-        for pattern in PDF_MALICIOUS_PATTERNS:
+        for pattern, reason in PDF_MALICIOUS_PATTERNS:
             if pattern in content:
-                found_patterns.append(pattern.decode())
-        if found_patterns:
-            return False, f'Suspicious PDF content detected: {", ".join(found_patterns)}'
+                return False, reason
 
     return True, 'No malicious signatures detected'
 
