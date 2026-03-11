@@ -12,7 +12,7 @@ from core.pagination import StandardPagination
 from core.field_permissions import filter_fields, filter_fields_list
 from core.object_permissions import filter_agreements_by_territory, can_access_agreement
 from .models import Agreement, AgreementTerritory
-from documents.models import Document
+from documents.models import AgreementDocument as Document
 from accounts.models import User
 
 
