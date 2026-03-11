@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
+import { useLocation, useSearch } from "wouter";
 import { useAuth } from "@/lib/auth";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -142,11 +143,16 @@ export default function SubAgentCommissionPage() {
   const { toast } = useToast();
   const canEdit = hasPermission("sub_agent_commission.edit");
 
-  const initialSubTab = window.location.hash ? window.location.hash.slice(1).toUpperCase() : "DASHBOARD";
-  const [activeTab, setActiveTabState] = useState(initialSubTab);
+  const [, navigate] = useLocation();
+  const searchString = useSearch();
+  const urlTab = new URLSearchParams(searchString).get("tab")?.toUpperCase() || "DASHBOARD";
+  const [activeTab, setActiveTabState] = useState(urlTab);
+  useEffect(() => { setActiveTabState(urlTab); }, [urlTab]);
   const setActiveTab = (tab: string) => {
     setActiveTabState(tab);
-    window.history.replaceState(null, "", `${window.location.pathname}${window.location.search}#${tab.toLowerCase()}`);
+    const params = new URLSearchParams(searchString);
+    params.set("tab", tab.toLowerCase());
+    navigate(`/sub-agent?${params.toString()}`, { replace: true });
   };
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const [selectedIntake, setSelectedIntake] = useState("All");

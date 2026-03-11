@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
+import { useLocation, useSearch } from "wouter";
 import { useAuth } from "@/lib/auth";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -132,12 +133,17 @@ function EditableCell({ value, onSave, type = "text", options, readOnly, width, 
 export default function CommissionTrackerPage() {
   const { hasPermission } = useAuth();
   const { toast } = useToast();
+  const [, navigate] = useLocation();
+  const searchString = useSearch();
   const [selectedYear, setSelectedYear] = useState<number | null>(null);
-  const initialTab = window.location.hash ? window.location.hash.slice(1).toUpperCase() : "DASHBOARD";
-  const [activeTab, setActiveTabState] = useState(initialTab);
+  const urlTab = new URLSearchParams(searchString).get("tab")?.toUpperCase() || "DASHBOARD";
+  const [activeTab, setActiveTabState] = useState(urlTab);
+  useEffect(() => { setActiveTabState(urlTab); }, [urlTab]);
   const setActiveTab = (tab: string) => {
     setActiveTabState(tab);
-    window.history.replaceState(null, "", `${window.location.pathname}${window.location.search}#${tab.toLowerCase()}`);
+    const params = new URLSearchParams(searchString);
+    params.set("tab", tab.toLowerCase());
+    navigate(`/commission-tracker?${params.toString()}`, { replace: true });
   };
   const [intakeFilter, setIntakeFilter] = useState("All");
   const [search, setSearch] = useState("");

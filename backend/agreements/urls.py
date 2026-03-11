@@ -7,4 +7,5 @@ urlpatterns = [
     path('agreements/status-counts', views.AgreementStatusCountsView.as_view()),
     path('agreements/alerts', views.AgreementAlertsView.as_view()),
     path('agreements/<int:agreement_id>', views.AgreementDetailView.as_view()),
+    path('agreements/<int:agreement_id>/audit', views.AgreementAuditView.as_view()),
 ]

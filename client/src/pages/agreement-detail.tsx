@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { useParams, useLocation } from "wouter";
+import { useParams, useLocation, useSearch } from "wouter";
 import { useAuth } from "@/lib/auth";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -33,8 +33,10 @@ function getStatusBadge(status: string) {
 export default function AgreementDetailPage() {
   const params = useParams<{ id: string }>();
   const [, navigate] = useLocation();
+  const searchString = useSearch();
   const { hasPermission } = useAuth();
   const agreementId = parseInt(params.id!);
+  const initialTab = new URLSearchParams(searchString).get("tab") || "overview";
 
   const { data: agreement, isLoading } = useQuery<any>({
     queryKey: ["/api/agreements", agreementId],
@@ -159,8 +161,8 @@ export default function AgreementDetailPage() {
       )}
 
       <Tabs
-        defaultValue={window.location.hash ? window.location.hash.slice(1) : "overview"}
-        onValueChange={(v) => window.history.replaceState(null, "", `${window.location.pathname}#${v}`)}
+        defaultValue={initialTab}
+        onValueChange={(v) => navigate(`/agreements/${agreementId}?tab=${v}`, { replace: true })}
         className="space-y-4"
       >
         <TabsList data-testid="tabs-agreement-detail">
