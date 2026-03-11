@@ -111,6 +111,7 @@ export default function ProvidersListPage() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!form.name.trim() || !form.providerType || !form.countryId || !form.website.trim() || !form.status) return;
     saveMutation.mutate({
       ...form,
       countryId: form.countryId ? parseInt(form.countryId) : null,
@@ -282,12 +283,12 @@ export default function ProvidersListPage() {
           </DialogHeader>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <Label>Provider Name</Label>
+              <Label>Provider Name <span className="text-red-500">*</span></Label>
               <Input value={form.name} onChange={e => setForm({...form, name: e.target.value})} placeholder="University of..." required data-testid="input-provider-name" />
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <Label>Provider Type</Label>
+                <Label>Provider Type <span className="text-red-500">*</span></Label>
                 <SearchableSelect
                   value={form.providerType}
                   onValueChange={v => setForm({...form, providerType: v})}
@@ -298,7 +299,7 @@ export default function ProvidersListPage() {
                 />
               </div>
               <div>
-                <Label>Country</Label>
+                <Label>Country <span className="text-red-500">*</span></Label>
                 <SearchableSelect
                   value={form.countryId}
                   onValueChange={v => setForm({...form, countryId: v})}
@@ -310,11 +311,11 @@ export default function ProvidersListPage() {
               </div>
             </div>
             <div>
-              <Label>Website</Label>
-              <Input value={form.website} onChange={e => setForm({...form, website: e.target.value})} placeholder="https://..." data-testid="input-provider-website" />
+              <Label>Website <span className="text-red-500">*</span></Label>
+              <Input value={form.website} onChange={e => setForm({...form, website: e.target.value})} placeholder="https://..." required data-testid="input-provider-website" />
             </div>
             <div>
-              <Label>Status</Label>
+              <Label>Status <span className="text-red-500">*</span></Label>
               <SearchableSelect
                 value={form.status}
                 onValueChange={v => setForm({...form, status: v})}
@@ -328,7 +329,7 @@ export default function ProvidersListPage() {
               <Label>Notes</Label>
               <Textarea value={form.notes} onChange={e => setForm({...form, notes: e.target.value})} placeholder="Additional notes..." />
             </div>
-            <Button type="submit" className="w-full" disabled={saveMutation.isPending} data-testid="button-submit-provider">
+            <Button type="submit" className="w-full" disabled={saveMutation.isPending || !form.name.trim() || !form.providerType || !form.countryId || !form.website.trim() || !form.status} data-testid="button-submit-provider">
               {saveMutation.isPending ? "Saving..." : editingId ? "Update Provider" : "Add Provider"}
             </Button>
           </form>
