@@ -1441,11 +1441,13 @@ function BulkUploadDialog({ onSuccess }: { onSuccess: () => void }) {
     try {
       const res = await apiRequest("POST", "/api/commission-tracker/bulk-upload/confirm", { rows: preview.rows });
       const result = await res.json();
+      const importedCount = result.imported ?? result.created ?? 0;
+      const failedCount = result.failed ?? (result.errors?.length || 0);
       toast({
         title: "Import Complete",
-        description: `${result.imported} imported, ${result.failed} failed`,
+        description: `${importedCount} imported, ${failedCount} failed`,
       });
-      if (result.imported > 0) onSuccess();
+      if (importedCount > 0) onSuccess();
     } catch (err: any) {
       toast({ title: "Error", description: err.message, variant: "destructive" });
     } finally {
