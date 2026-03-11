@@ -142,7 +142,12 @@ export default function SubAgentCommissionPage() {
   const { toast } = useToast();
   const canEdit = hasPermission("sub_agent_commission.edit");
 
-  const [activeTab, setActiveTab] = useState("DASHBOARD");
+  const initialSubTab = window.location.hash ? window.location.hash.slice(1).toUpperCase() : "DASHBOARD";
+  const [activeTab, setActiveTabState] = useState(initialSubTab);
+  const setActiveTab = (tab: string) => {
+    setActiveTabState(tab);
+    window.history.replaceState(null, "", `${window.location.pathname}${window.location.search}#${tab.toLowerCase()}`);
+  };
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const [selectedIntake, setSelectedIntake] = useState("All");
   const [search, setSearch] = useState("");

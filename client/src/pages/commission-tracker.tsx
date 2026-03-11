@@ -127,7 +127,12 @@ export default function CommissionTrackerPage() {
   const { hasPermission } = useAuth();
   const { toast } = useToast();
   const [selectedYear, setSelectedYear] = useState<number | null>(null);
-  const [activeTab, setActiveTab] = useState("DASHBOARD");
+  const initialTab = window.location.hash ? window.location.hash.slice(1).toUpperCase() : "DASHBOARD";
+  const [activeTab, setActiveTabState] = useState(initialTab);
+  const setActiveTab = (tab: string) => {
+    setActiveTabState(tab);
+    window.history.replaceState(null, "", `${window.location.pathname}${window.location.search}#${tab.toLowerCase()}`);
+  };
   const [intakeFilter, setIntakeFilter] = useState("All");
   const [search, setSearch] = useState("");
   const [agentFilters, setAgentFilters] = useState<string[]>([]);

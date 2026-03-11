@@ -305,7 +305,7 @@ export default function ContactsListPage() {
                   <TableRow
                     key={contact.id}
                     className="cursor-pointer"
-                    onClick={() => navigate(`/agreements/${contact.agreementId}?tab=contacts`)}
+                    onClick={() => navigate(`/agreements/${contact.agreementId}#contacts`)}
                     data-testid={`row-contact-${contact.id}`}
                   >
                     <TableCell>
@@ -373,7 +373,7 @@ export default function ContactsListPage() {
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
                             <DropdownMenuItem
-                              onClick={() => navigate(`/agreements/${contact.agreementId}?tab=contacts`)}
+                              onClick={() => navigate(`/agreements/${contact.agreementId}#contacts`)}
                               data-testid={`button-view-contact-${contact.id}`}
                             >
                               <Eye className="w-4 h-4 mr-2" />
