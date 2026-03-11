@@ -119,3 +119,18 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS force_password_change BOOLEAN DEFAULT
 ALTER TABLE users ADD COLUMN IF NOT EXISTS password_changed_at TIMESTAMP;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN DEFAULT false;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMP;
+
+-- user_devices
+CREATE TABLE IF NOT EXISTS user_devices (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER NOT NULL,
+    fingerprint VARCHAR(64) NOT NULL,
+    device_name VARCHAR(255),
+    browser VARCHAR(128),
+    os VARCHAR(64),
+    ip_address VARCHAR(45),
+    location VARCHAR(255),
+    first_login TIMESTAMP DEFAULT NOW(),
+    last_login TIMESTAMP DEFAULT NOW(),
+    is_trusted BOOLEAN DEFAULT true
+);
