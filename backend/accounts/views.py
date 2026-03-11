@@ -824,9 +824,41 @@ class UsersListView(APIView):
                 return Response({'message': 'Password must include uppercase, lowercase, and a number'}, status=400)
 
             hashed = hash_password(password)
-            user = User.objects.create(email=email, full_name=full_name, password_hash=hashed, is_active=True)
+            user = User.objects.create(
+                email=email,
+                full_name=full_name,
+                password_hash=hashed,
+                is_active=True,
+                force_password_change=True,
+            )
             if role_id:
                 UserRole.objects.create(user_id=user.id, role_id=role_id)
+
+            try:
+                from django.core.mail import send_mail
+                from django.conf import settings as django_settings
+                portal_url = getattr(django_settings, 'PORTAL_URL', 'https://portal.studyinfocentre.com')
+                subject = 'Your Agreement Portal Account Has Been Created'
+                message = (
+                    f"Hello {full_name},\n\n"
+                    f"An account has been created for you on the Agreement Portal.\n\n"
+                    f"Login URL: {portal_url}\n"
+                    f"Email: {email}\n"
+                    f"Temporary Password: {password}\n\n"
+                    f"You will be required to change your password upon first login.\n\n"
+                    f"Regards,\n"
+                    f"Agreement Portal - Study Info Centre"
+                )
+                send_mail(
+                    subject,
+                    message,
+                    django_settings.DEFAULT_FROM_EMAIL,
+                    [email],
+                    fail_silently=True,
+                )
+            except Exception:
+                pass
+
             return Response(user_to_dict(user))
         except Exception as e:
             return Response({'message': str(e)}, status=500)

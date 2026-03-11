@@ -276,8 +276,8 @@ export default function UsersManagementPage() {
                   <Label className="mb-1 block">Full Name</Label>
                   <Input
                     value={editFullName}
-                    onChange={e => setEditFullName(e.target.value)}
-                    placeholder="Enter full name"
+                    disabled
+                    className="bg-muted cursor-not-allowed"
                     data-testid="input-edit-user-name"
                   />
                 </div>
