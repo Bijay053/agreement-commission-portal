@@ -134,6 +134,24 @@ class PasswordHistory(models.Model):
         db_table = 'password_history'
 
 
+class UserDevice(models.Model):
+    id = models.AutoField(primary_key=True)
+    user_id = models.IntegerField()
+    fingerprint = models.CharField(max_length=64)
+    device_name = models.CharField(max_length=255, null=True, blank=True)
+    browser = models.CharField(max_length=128, null=True, blank=True)
+    os = models.CharField(max_length=64, null=True, blank=True)
+    ip_address = models.CharField(max_length=45, null=True, blank=True)
+    location = models.CharField(max_length=255, null=True, blank=True)
+    first_login = models.DateTimeField(auto_now_add=True)
+    last_login = models.DateTimeField(auto_now=True)
+    is_trusted = models.BooleanField(default=True)
+
+    class Meta:
+        managed = False
+        db_table = 'user_devices'
+
+
 class PasswordResetToken(models.Model):
     id = models.AutoField(primary_key=True)
     user_id = models.IntegerField()

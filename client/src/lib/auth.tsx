@@ -3,6 +3,24 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "./queryClient";
 import type { User, Role } from "@shared/schema";
 
+async function generateFingerprint(): Promise<string> {
+  const components = [
+    navigator.userAgent,
+    navigator.language,
+    screen.width + "x" + screen.height,
+    screen.colorDepth,
+    Intl.DateTimeFormat().resolvedOptions().timeZone,
+    navigator.hardwareConcurrency || "",
+    navigator.platform || "",
+  ];
+  const raw = components.join("|");
+  const encoder = new TextEncoder();
+  const data = encoder.encode(raw);
+  const hashBuffer = await crypto.subtle.digest("SHA-256", data);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.map(b => b.toString(16).padStart(2, "0")).join("").slice(0, 16);
+}
+
 interface AuthUser {
   user: Omit<User, "passwordHash">;
   permissions: string[];
@@ -75,7 +93,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [queryClient]);
 
   const verifyOtp = useCallback(async (code: string) => {
-    const res = await apiRequest("POST", "/api/auth/verify-otp", { code });
+    const fp = await generateFingerprint();
+    const res = await apiRequest("POST", "/api/auth/verify-otp", { code, fingerprint: fp });
     const data = await res.json();
     setOtpPending(null);
     if (data.passwordExpired) setPasswordExpired(true);

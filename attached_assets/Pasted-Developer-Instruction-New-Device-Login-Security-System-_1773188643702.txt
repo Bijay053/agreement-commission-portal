@@ -1,0 +1,162 @@
+Developer Instruction: New Device Login Security System
+Objective
+
+Implement a security feature that detects when a user logs in from a new device or browser and sends warning notifications to both the user and the admin.
+
+System Logic
+1. Generate Browser Fingerprint
+
+When a user logs in, the frontend should generate a browser fingerprint and send it to the backend.
+
+Fingerprint should include:
+
+Browser name
+
+Browser version
+
+Operating system
+
+Screen resolution
+
+Timezone
+
+Language
+
+Device type
+
+User agent
+
+Unique fingerprint ID
+
+Example:
+
+fingerprint: 7f2b8c5e1a3d9c4f
+2. Check Device in Database
+
+Create a table:
+
+user_devices
+
+id	user_id	fingerprint	device_name	ip_address	last_login
+
+System check:
+
+IF fingerprint exists for that user
+→ Allow login normally
+
+IF fingerprint does not exist
+→ Mark as new device
+
+3. Actions for New Device Login
+
+When a new device is detected:
+
+Save the device in user_devices
+
+Send security warning email to the user
+
+Send alert email to admin
+
+(Optional but recommended) Require OTP verification
+
+4. Data to Record
+
+For every login save:
+
+User ID
+
+Browser fingerprint
+
+Device name
+
+Browser
+
+Operating system
+
+IP address
+
+Location (country/city)
+
+Login time
+
+Table example:
+
+login_events
+
+| id | user_id | ip | fingerprint | location | login_time |
+
+5. Security Rules
+
+Trigger security alerts when:
+
+Login from new device
+
+Login from new country
+
+Login from suspicious IP
+
+Multiple failed login attempts
+
+Email Template 1
+
+(User Security Warning)
+
+Email
+Subject
+
+Hello ,
+
+A login to your account was detected from a new device.
+
+Login Details:
+Device: <Browser / Device Name>
+Location: <City, Country>
+IP Address:
+Date & Time:
+
+If this was you, no action is required.
+
+If you do not recognize this activity, please change your password immediately and contact support.
+
+For your security, the system administrator has also been notified.
+
+Security Team
+
+Email Template 2
+
+(Admin Alert)
+
+Email
+Subject
+
+Hello Admin,
+
+A user has logged into the system from a new device.
+
+User Details:
+Name:
+Email:
+
+Login Details:
+Device: <Browser / Device Name>
+IP Address:
+Location: <City, Country>
+Date & Time:
+
+Please review this activity if it appears unusual.
+
+System Security Notification
+
+💡 Important for your CRM (highly recommended)
+
+Also implement:
+
+OTP verification for new device login
+
+Login attempt rate limit
+
+Account lock after 5 failed logins
+
+Admin dashboard showing login activity
+
+Email alert for suspicious login

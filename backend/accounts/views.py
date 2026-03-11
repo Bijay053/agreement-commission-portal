@@ -25,7 +25,7 @@ from rest_framework.views import APIView
 from accounts.models import (
     LoginVerificationCode, PasswordHistory, PasswordResetToken,
     Permission, Role, RolePermission, SecurityAuditLog, User,
-    UserRole, UserSession,
+    UserDevice, UserRole, UserSession,
 )
 from audit.models import AuditLog
 from core.permissions import get_user_permissions, require_auth, require_permission
@@ -105,6 +105,112 @@ def parse_device_info(ua_string):
         os_name = 'iOS'
         device_type = 'mobile'
     return {'browser': browser, 'os': os_name, 'deviceType': device_type}
+
+
+def generate_fingerprint(request):
+    ua = get_user_agent(request)
+    device = parse_device_info(ua)
+    fp_from_client = request.data.get('fingerprint', '')
+    if fp_from_client:
+        return fp_from_client
+    raw = f"{device['browser']}|{device['os']}|{ua}"
+    return hashlib.sha256(raw.encode()).hexdigest()[:16]
+
+
+def check_new_device(user, request, device_info, client_ip):
+    fingerprint = generate_fingerprint(request)
+    existing = UserDevice.objects.filter(user_id=user.id, fingerprint=fingerprint).first()
+    now_str = timezone.now().strftime('%d %b %Y, %I:%M %p')
+    device_name = f"{device_info['browser']} on {device_info['os']}"
+
+    if existing:
+        existing.last_login = timezone.now()
+        existing.ip_address = client_ip
+        existing.save(update_fields=['last_login', 'ip_address'])
+        return False
+
+    UserDevice.objects.create(
+        user_id=user.id,
+        fingerprint=fingerprint,
+        device_name=device_name,
+        browser=device_info['browser'],
+        os=device_info['os'],
+        ip_address=client_ip,
+    )
+
+    create_security_log(
+        user_id=user.id,
+        event_type='NEW_DEVICE_LOGIN',
+        ip_address=client_ip,
+        device_info=get_user_agent(request),
+        metadata={'fingerprint': fingerprint, 'device': device_name},
+    )
+
+    try:
+        from django.conf import settings as django_settings
+        portal_url = getattr(django_settings, 'PORTAL_URL', 'https://portal.studyinfocentre.com')
+
+        user_subject = 'Security Alert – New Device Login Detected'
+        user_message = (
+            f"Hello {user.full_name},\n\n"
+            f"A login to your account was detected from a new device.\n\n"
+            f"Login Details:\n"
+            f"Device: {device_name}\n"
+            f"IP Address: {client_ip}\n"
+            f"Date & Time: {now_str}\n\n"
+            f"If this was you, no action is required.\n\n"
+            f"If you do not recognize this activity, please change your password "
+            f"immediately and contact support.\n\n"
+            f"For your security, the system administrator has also been notified.\n\n"
+            f"Security Team"
+        )
+        send_mail(
+            user_subject, user_message,
+            django_settings.DEFAULT_FROM_EMAIL,
+            [user.email],
+            fail_silently=True,
+        )
+
+        admin_emails = list(
+            User.objects.filter(is_active=True, email__icontains='admin')
+            .exclude(id=user.id)
+            .values_list('email', flat=True)[:5]
+        )
+        admin_role_user_ids = UserRole.objects.filter(
+            role_id__in=Role.objects.filter(name__icontains='admin').values_list('id', flat=True)
+        ).values_list('user_id', flat=True)
+        admin_emails_from_roles = list(
+            User.objects.filter(id__in=admin_role_user_ids, is_active=True)
+            .exclude(id=user.id)
+            .values_list('email', flat=True)
+        )
+        all_admin_emails = list(set(admin_emails + admin_emails_from_roles))
+
+        if all_admin_emails:
+            admin_subject = 'Security Alert – New Device Login for User'
+            admin_message = (
+                f"Hello Admin,\n\n"
+                f"A user has logged into the system from a new device.\n\n"
+                f"User Details:\n"
+                f"Name: {user.full_name}\n"
+                f"Email: {user.email}\n\n"
+                f"Login Details:\n"
+                f"Device: {device_name}\n"
+                f"IP Address: {client_ip}\n"
+                f"Date & Time: {now_str}\n\n"
+                f"Please review this activity if it appears unusual.\n\n"
+                f"System Security Notification"
+            )
+            send_mail(
+                admin_subject, admin_message,
+                django_settings.DEFAULT_FROM_EMAIL,
+                all_admin_emails,
+                fail_silently=True,
+            )
+    except Exception:
+        pass
+
+    return True
 
 
 def create_security_log(user_id=None, event_type='', ip_address=None, device_info=None, metadata=None):
@@ -348,6 +454,8 @@ class VerifyOtpView(APIView):
                 device_type=device_info['deviceType'],
                 otp_verified=True,
             )
+
+            is_new_device = check_new_device(user, request, device_info, client_ip)
 
             user.last_login_at = timezone.now()
             user.last_login_ip = client_ip
