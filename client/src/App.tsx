@@ -98,6 +98,12 @@ function Router() {
           <SubAgentCommissionPage />
         </AccessGuard>
       </Route>
+      <Route path="/sub-agent">
+        {() => {
+          window.location.replace("/sub-agent-commission" + window.location.search);
+          return null;
+        }}
+      </Route>
       <Route path="/audit-logs">
         <AccessGuard permission="audit.view">
           <AuditLogsPage />
