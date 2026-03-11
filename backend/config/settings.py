@@ -139,7 +139,7 @@ REST_FRAMEWORK = {
     'PAGE_SIZE': 50,
     'UNAUTHENTICATED_USER': None,
     'DEFAULT_THROTTLE_CLASSES': [
-        'rest_framework.throttling.AnonRateThrottle',
+        'core.authentication.SessionAwareAnonThrottle',
     ],
     'DEFAULT_THROTTLE_RATES': {
         'anon': '60/minute',
