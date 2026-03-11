@@ -84,6 +84,7 @@ export default function AgreementFormPage() {
     providerType: "university",
     countryId: "",
     website: "",
+    status: "active",
     notes: "",
   });
 
@@ -136,7 +137,7 @@ export default function AgreementFormPage() {
       queryClient.invalidateQueries({ queryKey: ["/api/providers"] });
       setForm({ ...form, universityId: String(result.id) });
       setShowProviderModal(false);
-      setProviderForm({ name: "", providerType: "university", countryId: "", website: "", notes: "" });
+      setProviderForm({ name: "", providerType: "university", countryId: "", website: "", status: "active", notes: "" });
       toast({ title: "Provider added" });
     },
     onError: (err: any) => {
@@ -155,6 +156,7 @@ export default function AgreementFormPage() {
 
   const handleProviderSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!providerForm.name.trim() || !providerForm.providerType || !providerForm.countryId || !providerForm.website.trim()) return;
     providerMutation.mutate({
       ...providerForm,
       countryId: providerForm.countryId ? parseInt(providerForm.countryId) : null,
@@ -356,7 +358,7 @@ export default function AgreementFormPage() {
         </Card>
       </form>
 
-      <Dialog open={showProviderModal} onOpenChange={(open) => { if (open) setProviderForm({ name: "", providerType: "university", countryId: "", website: "", notes: "" }); setShowProviderModal(open); }}>
+      <Dialog open={showProviderModal} onOpenChange={(open) => { if (open) setProviderForm({ name: "", providerType: "university", countryId: "", website: "", status: "active", notes: "" }); setShowProviderModal(open); }}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Add New Provider</DialogTitle>
@@ -368,7 +370,7 @@ export default function AgreementFormPage() {
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <Label>Provider Type</Label>
+                <Label>Provider Type <span className="text-red-500">*</span></Label>
                 <SearchableSelect
                   value={providerForm.providerType}
                   onValueChange={v => setProviderForm({...providerForm, providerType: v})}
@@ -379,7 +381,7 @@ export default function AgreementFormPage() {
                 />
               </div>
               <div>
-                <Label>Country</Label>
+                <Label>Country <span className="text-red-500">*</span></Label>
                 <SearchableSelect
                   value={providerForm.countryId}
                   onValueChange={v => setProviderForm({...providerForm, countryId: v})}
@@ -390,15 +392,28 @@ export default function AgreementFormPage() {
                 />
               </div>
             </div>
-            <div>
-              <Label>Website</Label>
-              <Input value={providerForm.website} onChange={e => setProviderForm({...providerForm, website: e.target.value})} placeholder="https://..." data-testid="input-provider-website" />
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label>Website <span className="text-red-500">*</span></Label>
+                <Input value={providerForm.website} onChange={e => setProviderForm({...providerForm, website: e.target.value})} placeholder="https://..." required data-testid="input-provider-website" />
+              </div>
+              <div>
+                <Label>Status <span className="text-red-500">*</span></Label>
+                <SearchableSelect
+                  value={providerForm.status}
+                  onValueChange={v => setProviderForm({...providerForm, status: v})}
+                  options={[{ value: "active", label: "Active" }, { value: "inactive", label: "Inactive" }]}
+                  placeholder="Select status"
+                  searchPlaceholder="Search..."
+                  data-testid="select-provider-status"
+                />
+              </div>
             </div>
             <div>
               <Label>Notes</Label>
               <Textarea value={providerForm.notes} onChange={e => setProviderForm({...providerForm, notes: e.target.value})} placeholder="Additional notes..." />
             </div>
-            <Button type="submit" className="w-full" disabled={providerMutation.isPending} data-testid="button-submit-provider">
+            <Button type="submit" className="w-full" disabled={providerMutation.isPending || !providerForm.countryId || !providerForm.providerType} data-testid="button-submit-provider">
               {providerMutation.isPending ? "Adding..." : "Add Provider"}
             </Button>
           </form>

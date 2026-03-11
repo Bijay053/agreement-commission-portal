@@ -1,3 +1,4 @@
+from django.db.models import Q
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from core.permissions import require_permission
@@ -34,6 +35,7 @@ class AuditLogListView(APIView):
             user_id = request.query_params.get('userId')
             action = request.query_params.get('action')
             entity_type = request.query_params.get('entityType')
+            entity_id = request.query_params.get('entityId')
             from_date = request.query_params.get('from')
             to_date = request.query_params.get('to')
 
@@ -43,6 +45,8 @@ class AuditLogListView(APIView):
                 qs = qs.filter(action=action)
             if entity_type:
                 qs = qs.filter(entity_type=entity_type)
+            if entity_id:
+                qs = qs.filter(entity_id=int(entity_id))
             if from_date:
                 qs = qs.filter(created_at__gte=from_date)
             if to_date:

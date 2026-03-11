@@ -12,6 +12,8 @@ from core.pagination import StandardPagination
 from core.field_permissions import filter_fields, filter_fields_list
 from core.object_permissions import filter_agreements_by_territory, can_access_agreement
 from .models import Agreement, AgreementTerritory
+from documents.models import Document
+from accounts.models import User
 
 
 def _build_provider_and_country_lookups(provider_ids):
@@ -377,5 +379,40 @@ class AgreementAlertsView(APIView):
             }
 
             return Response({'alerts': results, 'summary': summary})
+        except Exception as e:
+            return Response({'message': str(e)}, status=500)
+
+
+class AgreementAuditView(APIView):
+    @require_permission("audit.view")
+    def get(self, request, agreement_id):
+        try:
+            doc_ids = list(Document.objects.filter(agreement_id=agreement_id).values_list('id', flat=True))
+
+            qs = AuditLog.objects.filter(
+                Q(entity_type='agreement', entity_id=agreement_id) |
+                Q(entity_type='document', entity_id__in=doc_ids) |
+                Q(entity_type='commission', entity_id=agreement_id) |
+                Q(entity_type='target', entity_id=agreement_id) |
+                Q(entity_type='contact', entity_id=agreement_id)
+            ).order_by('-created_at')[:200]
+
+            user_cache = {}
+            results = []
+            for l in qs:
+                if l.user_id and l.user_id not in user_cache:
+                    try:
+                        u = User.objects.get(id=l.user_id)
+                        user_cache[l.user_id] = u.full_name
+                    except User.DoesNotExist:
+                        user_cache[l.user_id] = None
+                results.append({
+                    'id': l.id, 'userId': l.user_id, 'action': l.action,
+                    'entityType': l.entity_type, 'entityId': l.entity_id,
+                    'ipAddress': l.ip_address, 'metadata': l.metadata,
+                    'createdAt': l.created_at.isoformat() if l.created_at else None,
+                    'userName': user_cache.get(l.user_id),
+                })
+            return Response(results)
         except Exception as e:
             return Response({'message': str(e)}, status=500)

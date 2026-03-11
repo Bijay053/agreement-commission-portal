@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { useLocation } from "wouter";
+import { useLocation, useSearch } from "wouter";
 import { useAuth } from "@/lib/auth";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -55,15 +55,17 @@ const bonusTypeLabels: Record<string, string> = {
 export default function CommissionTablePage() {
   const [, navigate] = useLocation();
   const { hasPermission } = useAuth();
+  const searchString = useSearch();
   const canViewCommission = hasPermission("commission.view");
   const canViewBonus = hasPermission("bonus.view");
-  const hashTab = window.location.hash ? window.location.hash.slice(1) : "";
+  const urlTab = new URLSearchParams(searchString).get("tab") || "";
   const [activeTab, setActiveTabState] = useState(
-    hashTab === "commission" || hashTab === "bonus" ? hashTab : (canViewCommission ? "commission" : "bonus")
+    urlTab === "commission" || urlTab === "bonus" ? urlTab : (canViewCommission ? "commission" : "bonus")
   );
+  useEffect(() => { if (urlTab === "commission" || urlTab === "bonus") setActiveTabState(urlTab); }, [urlTab]);
   const setActiveTab = (tab: string) => {
     setActiveTabState(tab);
-    window.history.replaceState(null, "", `${window.location.pathname}#${tab}`);
+    navigate(`/commission?tab=${tab}`, { replace: true });
   };
 
   const [commSearch, setCommSearch] = useState("");
