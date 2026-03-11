@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useLocation } from "wouter";
+import { useLocation, useSearch } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/lib/auth";
 import {
@@ -59,9 +59,10 @@ export function AppSidebar() {
     return location.startsWith(url);
   };
 
+  const searchString = useSearch();
   const currentStatusFilter = (() => {
     if (!location.startsWith("/agreements")) return null;
-    const params = new URLSearchParams(window.location.search);
+    const params = new URLSearchParams(searchString);
     return params.get("status") || null;
   })();
 

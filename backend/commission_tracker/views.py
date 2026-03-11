@@ -237,9 +237,19 @@ class StudentDetailView(APIView):
                 'scholarshipType': 'scholarship_type', 'scholarshipValue': 'scholarship_value',
                 'status': 'status', 'notes': 'notes',
             }
+            decimal_fields = {'commission_rate_pct', 'gst_rate_pct', 'scholarship_value', 'course_duration_years'}
             for js_field, db_field in field_map.items():
                 if js_field in request.data:
-                    setattr(s, db_field, request.data[js_field])
+                    val = request.data[js_field]
+                    if db_field in decimal_fields:
+                        if val == '' or val is None:
+                            val = None
+                        else:
+                            try:
+                                val = Decimal(str(val))
+                            except Exception:
+                                val = None
+                    setattr(s, db_field, val)
             if 'status' in request.data:
                 record_status_change('commission_student', s.id, old_status, s.status, request.session.get('userId'), notes='Manual status update')
             s.updated_by_user_id = request.session.get('userId')
