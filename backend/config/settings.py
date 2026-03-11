@@ -140,11 +140,9 @@ REST_FRAMEWORK = {
     'UNAUTHENTICATED_USER': None,
     'DEFAULT_THROTTLE_CLASSES': [
         'rest_framework.throttling.AnonRateThrottle',
-        'core.throttling.SessionUserRateThrottle',
     ],
     'DEFAULT_THROTTLE_RATES': {
         'anon': '60/minute',
-        'user': '600/minute',
         'login': '5/minute',
     },
 }
