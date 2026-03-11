@@ -152,7 +152,7 @@ export default function SubAgentCommissionPage() {
     setActiveTabState(tab);
     const params = new URLSearchParams(searchString);
     params.set("tab", tab.toLowerCase());
-    navigate(`/sub-agent?${params.toString()}`, { replace: true });
+    navigate(`/sub-agent-commission?${params.toString()}`, { replace: true });
   };
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const [selectedIntake, setSelectedIntake] = useState("All");
