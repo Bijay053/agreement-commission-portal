@@ -94,7 +94,7 @@ export default function ContactsTab({ agreementId }: { agreementId: number }) {
 
   const handleAddSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!addForm.countryId) return;
+    if (!addForm.fullName.trim() || !addForm.positionTitle.trim() || !addForm.email.trim() || !addForm.phone.trim() || !addForm.countryId || !addForm.city.trim()) return;
     createMutation.mutate({
       ...addForm,
       countryId: parseInt(addForm.countryId),
@@ -238,18 +238,18 @@ export default function ContactsTab({ agreementId }: { agreementId: number }) {
                 <Input value={addForm.fullName} onChange={e => setAddForm({...addForm, fullName: e.target.value})} placeholder="Dr. John Smith" required data-testid="input-contact-name" />
               </div>
               <div>
-                <Label>Position</Label>
-                <Input value={addForm.positionTitle} onChange={e => setAddForm({...addForm, positionTitle: e.target.value})} placeholder="Partnerships Manager" data-testid="input-contact-position" />
+                <Label>Position <span className="text-red-500">*</span></Label>
+                <Input value={addForm.positionTitle} onChange={e => setAddForm({...addForm, positionTitle: e.target.value})} placeholder="Partnerships Manager" required data-testid="input-contact-position" />
               </div>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <Label>Email</Label>
-                <Input type="email" value={addForm.email} onChange={e => setAddForm({...addForm, email: e.target.value})} placeholder="john@university.edu" data-testid="input-contact-email" />
+                <Label>Email <span className="text-red-500">*</span></Label>
+                <Input type="email" value={addForm.email} onChange={e => setAddForm({...addForm, email: e.target.value})} placeholder="john@university.edu" required data-testid="input-contact-email" />
               </div>
               <div>
-                <Label>Phone</Label>
-                <Input type="tel" value={addForm.phone} onChange={e => { const v = e.target.value; if (v === '' || /^[\d\s\+\-\(\)\.]+$/.test(v)) setAddForm({...addForm, phone: v}); }} placeholder="+61 2 1234 5678" data-testid="input-contact-phone" />
+                <Label>Phone <span className="text-red-500">*</span></Label>
+                <Input type="tel" value={addForm.phone} onChange={e => { const v = e.target.value; if (v === '' || /^[\d\s\+\-\(\)\.]+$/.test(v)) setAddForm({...addForm, phone: v}); }} placeholder="+61 2 1234 5678" required data-testid="input-contact-phone" />
               </div>
             </div>
             <div className="grid grid-cols-2 gap-3">
@@ -265,8 +265,8 @@ export default function ContactsTab({ agreementId }: { agreementId: number }) {
                 />
               </div>
               <div>
-                <Label>City / State</Label>
-                <Input value={addForm.city} onChange={e => setAddForm({...addForm, city: e.target.value})} placeholder="e.g. Melbourne, VIC" data-testid="input-contact-city" />
+                <Label>City / State <span className="text-red-500">*</span></Label>
+                <Input value={addForm.city} onChange={e => setAddForm({...addForm, city: e.target.value})} placeholder="e.g. Melbourne, VIC" required data-testid="input-contact-city" />
               </div>
             </div>
             <div className="flex items-center gap-3">
@@ -279,7 +279,7 @@ export default function ContactsTab({ agreementId }: { agreementId: number }) {
             </div>
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setShowAddDialog(false)}>Cancel</Button>
-              <Button type="submit" className="w-full" disabled={createMutation.isPending || !addForm.countryId} data-testid="button-submit-contact">
+              <Button type="submit" className="w-full" disabled={createMutation.isPending || !addForm.fullName.trim() || !addForm.positionTitle.trim() || !addForm.email.trim() || !addForm.phone.trim() || !addForm.countryId || !addForm.city.trim()} data-testid="button-submit-contact">
                 {createMutation.isPending ? "Adding..." : "Add Contact"}
               </Button>
             </DialogFooter>
