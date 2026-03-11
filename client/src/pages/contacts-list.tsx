@@ -546,7 +546,7 @@ export default function ContactsListPage() {
           <form
             onSubmit={(e) => {
               e.preventDefault();
-              if (!addForm.agreementId || !addForm.countryId) return;
+              if (!addForm.agreementId || !addForm.fullName.trim() || !addForm.positionTitle.trim() || !addForm.email.trim() || !addForm.phone.trim() || !addForm.countryId || !addForm.city.trim()) return;
               createMutation.mutate({
                 ...addForm,
                 agreementId: parseInt(addForm.agreementId),
@@ -577,30 +577,33 @@ export default function ContactsListPage() {
                 />
               </div>
               <div>
-                <Label>Position</Label>
+                <Label>Position <span className="text-red-500">*</span></Label>
                 <Input
                   value={addForm.positionTitle}
                   onChange={e => setAddForm({ ...addForm, positionTitle: e.target.value })}
+                  required
                   data-testid="input-add-contact-position"
                 />
               </div>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <Label>Email</Label>
+                <Label>Email <span className="text-red-500">*</span></Label>
                 <Input
                   type="email"
                   value={addForm.email}
                   onChange={e => setAddForm({ ...addForm, email: e.target.value })}
+                  required
                   data-testid="input-add-contact-email"
                 />
               </div>
               <div>
-                <Label>Phone</Label>
+                <Label>Phone <span className="text-red-500">*</span></Label>
                 <Input
                   type="tel"
                   value={addForm.phone}
                   onChange={e => { const v = e.target.value; if (v === '' || /^[\d\s\+\-\(\)\.]+$/.test(v)) setAddForm({ ...addForm, phone: v }); }}
+                  required
                   data-testid="input-add-contact-phone"
                 />
               </div>
@@ -618,11 +621,12 @@ export default function ContactsListPage() {
                 />
               </div>
               <div>
-                <Label>City / State</Label>
+                <Label>City / State <span className="text-red-500">*</span></Label>
                 <Input
                   value={addForm.city}
                   onChange={e => setAddForm({ ...addForm, city: e.target.value })}
                   placeholder="e.g. Melbourne, VIC"
+                  required
                   data-testid="input-add-contact-city"
                 />
               </div>
@@ -645,7 +649,7 @@ export default function ContactsListPage() {
             </div>
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setShowAddDialog(false)}>Cancel</Button>
-              <Button type="submit" disabled={createMutation.isPending || !addForm.agreementId || !addForm.countryId} data-testid="button-submit-add-contact">
+              <Button type="submit" disabled={createMutation.isPending || !addForm.agreementId || !addForm.fullName.trim() || !addForm.positionTitle.trim() || !addForm.email.trim() || !addForm.phone.trim() || !addForm.countryId || !addForm.city.trim()} data-testid="button-submit-add-contact">
                 {createMutation.isPending ? "Adding..." : "Add Contact"}
               </Button>
             </DialogFooter>
