@@ -47,7 +47,7 @@ const PAYMENT_STATUSES = ["Pending", "Received", "Reversed", "Hold"];
 const ACADEMIC_YEARS = ["Year 1", "Year 2", "Year 3", "Year 4"];
 const COURSE_LEVELS = ["Diploma", "Diploma Leading Bachelor", "Bachelor", "Master", "Eap leading Master", "EAP leading Bachelor", "EAP + Bachelor of IT", "PhD", "Certificate", "MBA", "MPA", "BIT", "Other"];
 
-function EditableCell({ value, onSave, type = "text", options, readOnly, width, align, mono }: {
+function EditableCell({ value, onSave, type = "text", options, readOnly, width, align, mono, suffix, rowSpan }: {
   value: string;
   onSave: (v: string) => void;
   type?: "text" | "number" | "select" | "date";
@@ -56,6 +56,8 @@ function EditableCell({ value, onSave, type = "text", options, readOnly, width, 
   width?: string;
   align?: string;
   mono?: boolean;
+  suffix?: React.ReactNode;
+  rowSpan?: number;
 }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(value);
@@ -67,7 +69,7 @@ function EditableCell({ value, onSave, type = "text", options, readOnly, width, 
 
   if (readOnly) {
     return (
-      <td className={`px-2 py-1 border border-gray-200 dark:border-gray-700 text-xs whitespace-nowrap ${align === "right" ? "text-right" : "text-left"} ${mono ? "font-mono" : ""}`} style={{ minWidth: width || "auto" }}>
+      <td className={`px-2 py-1 border border-gray-200 dark:border-gray-700 text-xs whitespace-nowrap ${align === "right" ? "text-right" : "text-left"} ${mono ? "font-mono" : ""}`} style={{ minWidth: width || "auto" }} rowSpan={rowSpan}>
         {value || "-"}
       </td>
     );
@@ -76,7 +78,7 @@ function EditableCell({ value, onSave, type = "text", options, readOnly, width, 
   if (editing) {
     if (type === "select" && options) {
       return (
-        <td className="px-1 py-0 border border-blue-400 bg-blue-50 dark:bg-blue-900/20" style={{ minWidth: width || "auto" }}>
+        <td className="px-1 py-0 border border-blue-400 bg-blue-50 dark:bg-blue-900/20" style={{ minWidth: width || "auto" }} rowSpan={rowSpan}>
           <select
             className="w-full text-xs bg-transparent outline-none py-1"
             value={draft}
@@ -92,7 +94,7 @@ function EditableCell({ value, onSave, type = "text", options, readOnly, width, 
       );
     }
     return (
-      <td className="px-1 py-0 border border-blue-400 bg-blue-50 dark:bg-blue-900/20" style={{ minWidth: width || "auto" }}>
+      <td className="px-1 py-0 border border-blue-400 bg-blue-50 dark:bg-blue-900/20" style={{ minWidth: width || "auto" }} rowSpan={rowSpan}>
         <input
           ref={inputRef}
           className={`w-full text-xs bg-transparent outline-none py-1 ${align === "right" ? "text-right" : ""} ${mono ? "font-mono" : ""}`}
@@ -117,8 +119,12 @@ function EditableCell({ value, onSave, type = "text", options, readOnly, width, 
       style={{ minWidth: width || "auto" }}
       onClick={() => { setDraft(value); setEditing(true); }}
       data-testid="cell-editable"
+      rowSpan={rowSpan}
     >
-      {value || <span className="text-gray-400">-</span>}
+      <span className="flex items-center gap-1">
+        {value || <span className="text-gray-400">-</span>}
+        {suffix && <span onClick={(e) => e.stopPropagation()}>{suffix}</span>}
+      </span>
     </td>
   );
 }
@@ -952,23 +958,16 @@ function MasterTable({ students, allEntries, year, isLoading, canEdit, canDelete
                   rows.push(
                     <tr key={s.id} style={{ backgroundColor: statusBg }} data-testid={`row-master-${s.id}`}>
                       <td className="px-2 py-1 border border-gray-200 text-center" rowSpan={totalRows > 1 ? totalRows : undefined}>{sn}</td>
-                      <td className="px-2 py-1 border border-gray-200" rowSpan={totalRows > 1 ? totalRows : undefined}>{s.agentName}</td>
-                      <td className="px-2 py-1 border border-gray-200 font-mono" rowSpan={totalRows > 1 ? totalRows : undefined}>{s.agentsicId || "-"}</td>
-                      <td className="px-2 py-1 border border-gray-200 font-mono" rowSpan={totalRows > 1 ? totalRows : undefined}>{s.studentId || "-"}</td>
-                      <td className="px-2 py-1 border border-gray-200" rowSpan={totalRows > 1 ? totalRows : undefined}>{s.studentName}</td>
-                      <td className="px-2 py-1 border border-gray-200">
-                        <div className="flex items-center gap-1">
-                          <span>{s.provider}</span>
-                          {canEdit && <AddProviderButton studentId={s.id} studentName={s.studentName} />}
-                        </div>
-                      </td>
-                      <td className="px-2 py-1 border border-gray-200">{s.country}</td>
-                      <td className="px-2 py-1 border border-gray-200">{s.startIntake || "-"}</td>
+                      <EditableCell value={s.agentName || ""} readOnly={!canEdit} onSave={(v) => onUpdateStudent(s.id, { agentName: v })} width="100px" rowSpan={totalRows > 1 ? totalRows : undefined} />
+                      <EditableCell value={s.agentsicId || ""} readOnly={!canEdit} onSave={(v) => onUpdateStudent(s.id, { agentsicId: v })} mono width="80px" rowSpan={totalRows > 1 ? totalRows : undefined} />
+                      <EditableCell value={s.studentId || ""} readOnly={!canEdit} onSave={(v) => onUpdateStudent(s.id, { studentId: v })} mono width="80px" rowSpan={totalRows > 1 ? totalRows : undefined} />
+                      <EditableCell value={s.studentName || ""} readOnly={!canEdit} onSave={(v) => onUpdateStudent(s.id, { studentName: v })} width="120px" rowSpan={totalRows > 1 ? totalRows : undefined} />
+                      <EditableCell value={s.provider || ""} readOnly={!canEdit} onSave={(v) => onUpdateStudent(s.id, { provider: v })} width="120px" suffix={canEdit ? <AddProviderButton studentId={s.id} studentName={s.studentName} /> : undefined} />
+                      <EditableCell value={s.country || ""} readOnly={!canEdit} onSave={(v) => onUpdateStudent(s.id, { country: v })} width="60px" />
+                      <EditableCell value={s.startIntake || ""} readOnly={!canEdit} onSave={(v) => onUpdateStudent(s.id, { startIntake: v })} width="80px" />
                       <EditableCell value={s.courseLevel || ""} readOnly={!canEdit} onSave={(v) => onUpdateStudent(s.id, { courseLevel: v })} type="select" options={COURSE_LEVELS} width="80px" />
                       <EditableCell value={s.courseName || ""} readOnly={!canEdit} onSave={(v) => onUpdateStudent(s.id, { courseName: v })} width="120px" />
-                      <td className="px-2 py-1 border border-gray-200">
-                        <Badge className={`${STATUS_COLORS[s.status || ""] || "bg-gray-100 text-gray-800"} text-[10px] px-1.5 py-0`}>{s.status}</Badge>
-                      </td>
+                      <EditableCell value={s.status || "Under Enquiry"} readOnly={!canEdit} onSave={(v) => onUpdateStudent(s.id, { status: v })} type="select" options={STUDENT_STATUSES} width="80px" />
                       <EditableCell value={s.commissionRatePct?.toString() || ""} readOnly={!canEdit} onSave={(v) => onUpdateStudent(s.id, { commissionRatePct: v })} type="number" align="right" mono width="70px" />
                       <EditableCell value={s.gstApplicable || "Yes"} readOnly={!canEdit} onSave={(v) => onUpdateStudent(s.id, { gstApplicable: v })} type="select" options={["Yes", "No"]} width="50px" />
                       <EditableCell value={s.scholarshipType || "None"} readOnly={!canEdit} onSave={(v) => onUpdateStudent(s.id, { scholarshipType: v })} type="select" options={["None", "Percent", "Fixed"]} width="80px" />
