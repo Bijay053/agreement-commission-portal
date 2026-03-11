@@ -151,23 +151,26 @@ def check_new_device(user, request, device_info, client_ip):
         portal_url = getattr(django_settings, 'PORTAL_URL', 'https://portal.studyinfocentre.com')
 
         user_subject = 'Security Alert – New Device Login Detected'
-        user_message = (
-            f"Hello {user.full_name},\n\n"
-            f"A login to your account was detected from a new device.\n\n"
-            f"Login Details:\n"
-            f"Device: {device_name}\n"
-            f"IP Address: {client_ip}\n"
-            f"Date & Time: {now_str}\n\n"
-            f"If this was you, no action is required.\n\n"
-            f"If you do not recognize this activity, please change your password "
-            f"immediately and contact support.\n\n"
-            f"For your security, the system administrator has also been notified.\n\n"
-            f"Security Team"
-        )
+        user_body = f'''
+        <p style="color:#475569;font-size:15px;line-height:1.6;">Hello <strong>{user.full_name}</strong>,</p>
+        <p style="color:#475569;font-size:15px;line-height:1.6;">A login to your account was detected from a new device.</p>
+        {_info_table(
+            _info_row('Device', device_name) +
+            _info_row('IP Address', client_ip) +
+            _info_row('Date &amp; Time', now_str)
+        )}
+        <div style="background-color:#fef3c7;border-left:4px solid #f59e0b;padding:14px 18px;border-radius:6px;margin:20px 0;">
+          <p style="color:#92400e;font-size:13px;margin:0;"><strong>If this was you</strong>, no action is required.</p>
+          <p style="color:#92400e;font-size:13px;margin:6px 0 0;">If you do not recognize this activity, please <strong>change your password immediately</strong> and contact support.</p>
+        </div>
+        <p style="color:#94a3b8;font-size:13px;">For your security, the system administrator has also been notified.</p>
+        '''
+        user_html = _email_wrap('New Device Login Detected', user_body)
         send_mail(
-            user_subject, user_message,
+            user_subject, '',
             django_settings.DEFAULT_FROM_EMAIL,
             [user.email],
+            html_message=user_html,
             fail_silently=True,
         )
 
@@ -188,23 +191,24 @@ def check_new_device(user, request, device_info, client_ip):
 
         if all_admin_emails:
             admin_subject = 'Security Alert – New Device Login for User'
-            admin_message = (
-                f"Hello Admin,\n\n"
-                f"A user has logged into the system from a new device.\n\n"
-                f"User Details:\n"
-                f"Name: {user.full_name}\n"
-                f"Email: {user.email}\n\n"
-                f"Login Details:\n"
-                f"Device: {device_name}\n"
-                f"IP Address: {client_ip}\n"
-                f"Date & Time: {now_str}\n\n"
-                f"Please review this activity if it appears unusual.\n\n"
-                f"System Security Notification"
-            )
+            admin_body = f'''
+            <p style="color:#475569;font-size:15px;line-height:1.6;">Hello Admin,</p>
+            <p style="color:#475569;font-size:15px;line-height:1.6;">A user has logged into the system from a new device.</p>
+            {_info_table(
+                _info_row('User', user.full_name) +
+                _info_row('Email', user.email) +
+                _info_row('Device', device_name) +
+                _info_row('IP Address', client_ip) +
+                _info_row('Date &amp; Time', now_str)
+            )}
+            <p style="color:#64748b;font-size:14px;">Please review this activity if it appears unusual.</p>
+            '''
+            admin_html = _email_wrap('New Device Login for User', admin_body)
             send_mail(
-                admin_subject, admin_message,
+                admin_subject, '',
                 django_settings.DEFAULT_FROM_EMAIL,
                 all_admin_emails,
+                html_message=admin_html,
                 fail_silently=True,
             )
     except Exception:
@@ -278,26 +282,57 @@ def get_user_roles_list(user_id):
     return [role_to_dict(r) for r in roles]
 
 
+def _email_wrap(title, body_html, footer_note=''):
+    footer = f'<p style="color:#9ca3af;font-size:12px;margin-top:8px;">{footer_note}</p>' if footer_note else ''
+    return f'''<!DOCTYPE html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"></head>
+<body style="margin:0;padding:0;background-color:#f1f5f9;font-family:'Segoe UI',Arial,sans-serif;">
+<table width="100%" cellpadding="0" cellspacing="0" style="background-color:#f1f5f9;padding:40px 20px;">
+<tr><td align="center">
+<table width="600" cellpadding="0" cellspacing="0" style="background-color:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.08);">
+  <tr><td style="background:linear-gradient(135deg,#1e40af 0%,#3b82f6 100%);padding:32px 40px;text-align:center;">
+    <h1 style="color:#ffffff;margin:0;font-size:22px;font-weight:700;letter-spacing:0.5px;">Agreement Portal</h1>
+    <p style="color:#bfdbfe;margin:6px 0 0;font-size:13px;">Study Info Centre</p>
+  </td></tr>
+  <tr><td style="padding:36px 40px;">
+    <h2 style="color:#1e293b;margin:0 0 20px;font-size:20px;font-weight:600;">{title}</h2>
+    {body_html}
+  </td></tr>
+  <tr><td style="background-color:#f8fafc;padding:24px 40px;border-top:1px solid #e2e8f0;text-align:center;">
+    <p style="color:#94a3b8;font-size:12px;margin:0;">Agreement &amp; Commission Management Portal</p>
+    <p style="color:#94a3b8;font-size:11px;margin:4px 0 0;">&copy; {timezone.now().year} Study Info Centre. All rights reserved.</p>
+    {footer}
+  </td></tr>
+</table>
+</td></tr></table>
+</body></html>'''
+
+
+def _info_row(label, value, is_link=False):
+    val_html = f'<a href="{value}" style="color:#3b82f6;text-decoration:none;font-weight:500;">{value}</a>' if is_link else f'<span style="color:#1e293b;font-weight:500;">{value}</span>'
+    return f'<tr><td style="padding:10px 16px;color:#64748b;font-size:14px;border-bottom:1px solid #f1f5f9;width:140px;">{label}</td><td style="padding:10px 16px;font-size:14px;border-bottom:1px solid #f1f5f9;">{val_html}</td></tr>'
+
+
+def _info_table(rows_html):
+    return f'<table width="100%" cellpadding="0" cellspacing="0" style="background-color:#f8fafc;border-radius:8px;border:1px solid #e2e8f0;margin:16px 0;">{rows_html}</table>'
+
+
+def _button(text, url, color='#3b82f6'):
+    return f'<div style="text-align:center;padding:24px 0;"><a href="{url}" style="background-color:{color};color:#ffffff;padding:14px 36px;text-decoration:none;border-radius:8px;font-size:15px;font-weight:600;display:inline-block;letter-spacing:0.3px;">{text}</a></div>'
+
+
 def send_otp_email(email, code):
     subject = 'Login Verification Code - Agreement Portal'
-    html = f'''
-    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-        <div style="text-align: center; padding: 20px 0; border-bottom: 2px solid #3b82f6;">
-            <h1 style="color: #1e40af; margin: 0;">Agreement Portal</h1>
-            <p style="color: #6b7280; margin: 5px 0 0;">Study Info Centre</p>
-        </div>
-        <div style="padding: 30px 0;">
-            <h2 style="color: #111827;">Login Verification Code</h2>
-            <p style="color: #4b5563;">Your verification code:</p>
-            <div style="text-align: center; padding: 20px 0;">
-                <div style="display: inline-block; background-color: #f3f4f6; border: 2px solid #3b82f6; border-radius: 8px; padding: 16px 40px; letter-spacing: 8px; font-size: 32px; font-weight: bold; color: #1e40af; font-family: monospace;">
-                    {code}
-                </div>
-            </div>
-            <p style="color: #6b7280; font-size: 14px;">This code expires in {settings.OTP_EXPIRY_MINUTES} minutes.</p>
-        </div>
+    body = f'''
+    <p style="color:#475569;font-size:15px;line-height:1.6;">Your one-time verification code is:</p>
+    <div style="text-align:center;padding:24px 0;">
+      <div style="display:inline-block;background:linear-gradient(135deg,#eff6ff,#dbeafe);border:2px solid #3b82f6;border-radius:12px;padding:20px 48px;letter-spacing:10px;font-size:36px;font-weight:bold;color:#1e40af;font-family:'Courier New',monospace;">
+        {code}
+      </div>
     </div>
+    <p style="color:#94a3b8;font-size:13px;text-align:center;">This code expires in <strong>{settings.OTP_EXPIRY_MINUTES} minutes</strong>. Do not share it with anyone.</p>
     '''
+    html = _email_wrap('Login Verification Code', body)
     send_mail(
         subject,
         '',
@@ -596,15 +631,15 @@ class ForgotPasswordView(APIView):
 
             try:
                 subject = 'Password Reset Request - Agreement Portal'
-                html = f'''
-                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-                    <h1 style="color: #1e40af;">Agreement Portal</h1>
-                    <h2>Password Reset Request</h2>
-                    <p>Click below to reset your password:</p>
-                    <a href="{reset_url}" style="background-color: #3b82f6; color: white; padding: 12px 32px; text-decoration: none; border-radius: 6px; display: inline-block;">Reset Password</a>
-                    <p style="font-size: 14px; color: #6b7280;">This link expires in 30 minutes.</p>
+                reset_body = f'''
+                <p style="color:#475569;font-size:15px;line-height:1.6;">We received a request to reset your password. Click the button below to create a new password:</p>
+                {_button('Reset Password', reset_url)}
+                <p style="color:#94a3b8;font-size:13px;text-align:center;">This link expires in <strong>30 minutes</strong>.</p>
+                <div style="background-color:#fef2f2;border-left:4px solid #ef4444;padding:14px 18px;border-radius:6px;margin:20px 0;">
+                  <p style="color:#991b1b;font-size:13px;margin:0;">If you did not request a password reset, please ignore this email or contact support if you have concerns.</p>
                 </div>
                 '''
+                html = _email_wrap('Password Reset Request', reset_body)
                 send_mail(subject, '', f'"{settings.FROM_NAME}" <{settings.DEFAULT_FROM_EMAIL}>', [user.email], html_message=html, fail_silently=False)
             except Exception as e:
                 print(f'Failed to send password reset email: {e}')
@@ -947,22 +982,27 @@ class UsersListView(APIView):
                 from django.conf import settings as django_settings
                 portal_url = getattr(django_settings, 'PORTAL_URL', 'https://portal.studyinfocentre.com')
                 subject = 'Your Account Has Been Created \u2013 Temporary Password'
-                message = (
-                    f"Hello {full_name},\n\n"
-                    f"Your account has been successfully created.\n\n"
-                    f"You can log in using the details below:\n\n"
-                    f"Login Email: {email}\n"
-                    f"Temporary Password: {password}\n"
-                    f"Login Link: {portal_url}\n\n"
-                    f"For security reasons, please log in and change your password immediately after your first login.\n\n"
-                    f"If you did not request this account or need assistance, please contact the system administrator.\n\n"
-                    f"Thank you."
-                )
+                welcome_body = f'''
+                <p style="color:#475569;font-size:15px;line-height:1.6;">Hello <strong>{full_name}</strong>,</p>
+                <p style="color:#475569;font-size:15px;line-height:1.6;">Your account has been successfully created. You can log in using the details below:</p>
+                {_info_table(
+                    _info_row('Login Email', email) +
+                    _info_row('Temporary Password', password) +
+                    _info_row('Login Link', portal_url, is_link=True)
+                )}
+                {_button('Login to Portal', portal_url)}
+                <div style="background-color:#fef3c7;border-left:4px solid #f59e0b;padding:14px 18px;border-radius:6px;margin:20px 0;">
+                  <p style="color:#92400e;font-size:13px;margin:0;">For security reasons, please <strong>change your password immediately</strong> after your first login.</p>
+                </div>
+                <p style="color:#94a3b8;font-size:13px;">If you did not request this account or need assistance, please contact the system administrator.</p>
+                '''
+                welcome_html = _email_wrap('Welcome to Agreement Portal', welcome_body)
                 send_mail(
                     subject,
-                    message,
+                    '',
                     django_settings.DEFAULT_FROM_EMAIL,
                     [email],
+                    html_message=welcome_html,
                     fail_silently=True,
                 )
             except Exception:
