@@ -14,7 +14,7 @@ import { SearchableSelect } from "@/components/ui/searchable-select";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter,
 } from "@/components/ui/dialog";
-import { Plus, Users, Mail, User, Pencil, Shield, Monitor, Smartphone, Tablet, Clock, Globe, LogOut, UserCheck, UserX } from "lucide-react";
+import { Plus, Users, Mail, User, Pencil, Shield, Monitor, Smartphone, Tablet, Clock, Globe, LogOut, UserCheck, UserX, Eye, EyeOff } from "lucide-react";
 import { ConfirmModal } from "@/components/ui/confirm-modal";
 import type { Role } from "@shared/schema";
 
@@ -46,6 +46,7 @@ export default function UsersManagementPage() {
     password: "",
     roleId: "",
   });
+  const [showPassword, setShowPassword] = useState(false);
 
   const createMutation = useMutation({
     mutationFn: async (data: any) => {
@@ -137,7 +138,7 @@ export default function UsersManagementPage() {
           <h1 className="text-2xl font-semibold" data-testid="text-users-title">User Management</h1>
           <p className="text-sm text-muted-foreground mt-1">Manage system users and role assignments</p>
         </div>
-        <Dialog open={showCreateDialog} onOpenChange={(open) => { if (open) setCreateForm({ fullName: "", email: "", password: "", roleId: "" }); setShowCreateDialog(open); }}>
+        <Dialog open={showCreateDialog} onOpenChange={(open) => { if (open) { setCreateForm({ fullName: "", email: "", password: "", roleId: "" }); setShowPassword(false); } setShowCreateDialog(open); }}>
           <DialogTrigger asChild>
             <Button data-testid="button-add-user">
               <Plus className="w-4 h-4 mr-2" />
@@ -159,7 +160,12 @@ export default function UsersManagementPage() {
               </div>
               <div>
                 <Label>Password</Label>
-                <Input type="password" value={createForm.password} onChange={e => setCreateForm({...createForm, password: e.target.value})} placeholder="Minimum 12 characters" required minLength={12} data-testid="input-user-password" />
+                <div className="relative">
+                  <Input type={showPassword ? "text" : "password"} value={createForm.password} onChange={e => setCreateForm({...createForm, password: e.target.value})} placeholder="Minimum 12 characters" required minLength={12} data-testid="input-user-password" className="pr-10" />
+                  <button type="button" className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground" onClick={() => setShowPassword(!showPassword)} data-testid="button-toggle-password">
+                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
               </div>
               <div>
                 <Label>Initial Role</Label>
@@ -276,8 +282,7 @@ export default function UsersManagementPage() {
                   <Label className="mb-1 block">Full Name</Label>
                   <Input
                     value={editFullName}
-                    disabled
-                    className="bg-muted cursor-not-allowed"
+                    onChange={e => setEditFullName(e.target.value)}
                     data-testid="input-edit-user-name"
                   />
                 </div>
