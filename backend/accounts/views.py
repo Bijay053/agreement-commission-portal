@@ -1081,6 +1081,32 @@ class UserNameUpdateView(APIView):
             return Response({'message': str(e)}, status=500)
 
 
+class UserEmailUpdateView(APIView):
+    @require_permission("security.user.manage")
+    def patch(self, request, user_id):
+        try:
+            email = (request.data.get('email') or '').strip().lower()
+            if not email:
+                return Response({'message': 'Email is required'}, status=400)
+            try:
+                user = User.objects.get(id=user_id)
+            except User.DoesNotExist:
+                return Response({'message': 'User not found'}, status=404)
+            if User.objects.filter(email=email).exclude(id=user_id).exists():
+                return Response({'message': 'Email already in use by another user'}, status=400)
+            old_email = user.email
+            user.email = email
+            user.save(update_fields=['email'])
+            create_audit_log(
+                user_id=request.session.get('userId'), action='USER_EMAIL_UPDATE',
+                entity_type='user', entity_id=user_id, ip_address=get_client_ip(request),
+                metadata={'oldEmail': old_email, 'newEmail': email},
+            )
+            return Response({'message': 'User email updated'})
+        except Exception as e:
+            return Response({'message': str(e)}, status=500)
+
+
 class UserStatusUpdateView(APIView):
     @require_permission("security.user.manage")
     def patch(self, request, user_id):

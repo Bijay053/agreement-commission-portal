@@ -72,6 +72,7 @@ export default function UsersManagementPage() {
 
   const [editRoleIds, setEditRoleIds] = useState<number[]>([]);
   const [editFullName, setEditFullName] = useState("");
+  const [editEmail, setEditEmail] = useState("");
 
   const updateNameMutation = useMutation({
     mutationFn: async ({ userId, fullName }: { userId: number; fullName: string }) => {
@@ -82,6 +83,19 @@ export default function UsersManagementPage() {
       qc.invalidateQueries({ queryKey: ["/api/users"] });
       qc.invalidateQueries({ queryKey: ["/api/auth/me"] });
       toast({ title: "Name updated" });
+    },
+    onError: (err: any) => toast({ title: "Error", description: err.message, variant: "destructive" }),
+  });
+
+  const updateEmailMutation = useMutation({
+    mutationFn: async ({ userId, email }: { userId: number; email: string }) => {
+      const res = await apiRequest("PATCH", `/api/users/${userId}/email`, { email });
+      return res.json();
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["/api/users"] });
+      qc.invalidateQueries({ queryKey: ["/api/auth/me"] });
+      toast({ title: "Email updated" });
     },
     onError: (err: any) => toast({ title: "Error", description: err.message, variant: "destructive" }),
   });
@@ -115,6 +129,7 @@ export default function UsersManagementPage() {
     setEditingUser(user);
     setEditRoleIds(user.roles.map(r => r.id));
     setEditFullName(user.fullName);
+    setEditEmail(user.email);
   };
 
   const toggleRole = (roleId: number) => {
@@ -127,6 +142,9 @@ export default function UsersManagementPage() {
     if (!editingUser) return;
     if (editFullName.trim() !== editingUser.fullName) {
       updateNameMutation.mutate({ userId: editingUser.id, fullName: editFullName.trim() });
+    }
+    if (editEmail.trim().toLowerCase() !== editingUser.email.toLowerCase()) {
+      updateEmailMutation.mutate({ userId: editingUser.id, email: editEmail.trim() });
     }
     updateRolesMutation.mutate({ userId: editingUser.id, roleIds: editRoleIds });
   };
@@ -286,9 +304,15 @@ export default function UsersManagementPage() {
                     data-testid="input-edit-user-name"
                   />
                 </div>
-                <p className="text-xs text-muted-foreground flex items-center gap-1">
-                  <Mail className="w-3 h-3" /> {editingUser.email}
-                </p>
+                <div>
+                  <Label className="mb-1 block">Email</Label>
+                  <Input
+                    type="email"
+                    value={editEmail}
+                    onChange={e => setEditEmail(e.target.value)}
+                    data-testid="input-edit-user-email"
+                  />
+                </div>
               </div>
 
               <div className="flex-1 min-h-0 flex flex-col">

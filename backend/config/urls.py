@@ -31,6 +31,7 @@ urlpatterns = [
     path('api/users/<int:user_id>/roles', account_views.UserRolesView.as_view()),
     path('api/users/<int:user_id>/roles/<int:role_id>', account_views.UserRoleDeleteView.as_view()),
     path('api/users/<int:user_id>/name', account_views.UserNameUpdateView.as_view()),
+    path('api/users/<int:user_id>/email', account_views.UserEmailUpdateView.as_view()),
     path('api/users/<int:user_id>/status', account_views.UserStatusUpdateView.as_view()),
     path('api/admin/users/<int:user_id>/sessions', account_views.AdminUserSessionsView.as_view()),
     path('api/admin/users/<int:user_id>/security-logs', account_views.AdminUserSecurityLogsView.as_view()),
