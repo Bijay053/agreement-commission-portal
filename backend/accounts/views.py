@@ -838,16 +838,17 @@ class UsersListView(APIView):
                 from django.core.mail import send_mail
                 from django.conf import settings as django_settings
                 portal_url = getattr(django_settings, 'PORTAL_URL', 'https://portal.studyinfocentre.com')
-                subject = 'Your Agreement Portal Account Has Been Created'
+                subject = 'Your Account Has Been Created \u2013 Temporary Password'
                 message = (
                     f"Hello {full_name},\n\n"
-                    f"An account has been created for you on the Agreement Portal.\n\n"
-                    f"Login URL: {portal_url}\n"
-                    f"Email: {email}\n"
-                    f"Temporary Password: {password}\n\n"
-                    f"You will be required to change your password upon first login.\n\n"
-                    f"Regards,\n"
-                    f"Agreement Portal - Study Info Centre"
+                    f"Your account has been successfully created.\n\n"
+                    f"You can log in using the details below:\n\n"
+                    f"Login Email: {email}\n"
+                    f"Temporary Password: {password}\n"
+                    f"Login Link: {portal_url}\n\n"
+                    f"For security reasons, please log in and change your password immediately after your first login.\n\n"
+                    f"If you did not request this account or need assistance, please contact the system administrator.\n\n"
+                    f"Thank you."
                 )
                 send_mail(
                     subject,
