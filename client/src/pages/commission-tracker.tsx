@@ -1447,10 +1447,15 @@ function BulkUploadDialog({ onSuccess }: { onSuccess: () => void }) {
       const res = await apiRequest("POST", "/api/commission-tracker/bulk-upload/confirm", { rows: preview.rows });
       const result = await res.json();
       const importedCount = result.imported ?? result.created ?? 0;
+      const skippedCount = result.skipped ?? 0;
       const failedCount = result.failed ?? (result.errors?.length || 0);
+      const parts = [`${importedCount} imported`];
+      if (skippedCount > 0) parts.push(`${skippedCount} skipped (duplicates)`);
+      if (failedCount > skippedCount) parts.push(`${failedCount - skippedCount} failed`);
       toast({
         title: "Import Complete",
-        description: `${importedCount} imported, ${failedCount} failed`,
+        description: parts.join(", "),
+        variant: skippedCount > 0 || failedCount > 0 ? "destructive" : "default",
       });
       if (importedCount > 0) onSuccess();
     } catch (err: any) {

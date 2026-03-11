@@ -160,6 +160,27 @@ class StudentsListView(APIView):
         try:
             d = request.data
             user_id = request.session.get('userId')
+
+            student_id_val = d.get('studentId', '').strip()
+            provider_val = d.get('provider', '').strip()
+            agentsic_id_val = d.get('agentsicId', '').strip()
+
+            if student_id_val and provider_val:
+                existing = CommissionStudent.objects.filter(
+                    student_id=student_id_val, provider=provider_val
+                ).first()
+                if existing:
+                    return Response({
+                        'message': f'Student with ID "{student_id_val}" already exists for provider "{provider_val}"'
+                    }, status=400)
+
+            if agentsic_id_val:
+                existing = CommissionStudent.objects.filter(agentsic_id=agentsic_id_val).first()
+                if existing:
+                    return Response({
+                        'message': f'Student with Agentsic ID "{agentsic_id_val}" already exists'
+                    }, status=400)
+
             s = CommissionStudent.objects.create(
                 agent_name=d.get('agentName', ''),
                 student_id=d.get('studentId'),
@@ -884,15 +905,32 @@ class BulkUploadConfirmView(APIView):
             rows = request.data.get('rows', [])
             user_id = request.session.get('userId')
             created = 0
+            skipped = 0
             errors = []
             for i, row in enumerate(rows):
                 try:
+                    student_id_val = (row.get('studentId') or '').strip()
+                    provider_val = (row.get('provider') or '').strip()
+                    agentsic_id_val = (row.get('agentsicId') or '').strip()
+
+                    if student_id_val and provider_val:
+                        if CommissionStudent.objects.filter(student_id=student_id_val, provider=provider_val).exists():
+                            skipped += 1
+                            errors.append({'row': i + 1, 'message': f'Duplicate: Student ID "{student_id_val}" already exists for provider "{provider_val}"'})
+                            continue
+
+                    if agentsic_id_val:
+                        if CommissionStudent.objects.filter(agentsic_id=agentsic_id_val).exists():
+                            skipped += 1
+                            errors.append({'row': i + 1, 'message': f'Duplicate: Agentsic ID "{agentsic_id_val}" already exists'})
+                            continue
+
                     CommissionStudent.objects.create(
                         agent_name=row.get('agentName', ''),
-                        student_id=row.get('studentId'),
-                        agentsic_id=row.get('agentsicId'),
+                        student_id=student_id_val,
+                        agentsic_id=agentsic_id_val,
                         student_name=row.get('studentName', ''),
-                        provider=row.get('provider', ''),
+                        provider=provider_val,
                         country=row.get('country', 'AU'),
                         start_intake=row.get('startIntake'),
                         course_level=row.get('courseLevel'),
@@ -909,7 +947,7 @@ class BulkUploadConfirmView(APIView):
                     )
                     created += 1
                 except Exception as e:
-                    errors.append({'row': i, 'message': str(e)})
-            return Response({'created': created, 'errors': errors})
+                    errors.append({'row': i + 1, 'message': str(e)})
+            return Response({'created': created, 'skipped': skipped, 'errors': errors})
         except Exception as e:
             return Response({'message': str(e)}, status=500)
