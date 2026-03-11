@@ -158,7 +158,11 @@ export default function AgreementDetailPage() {
         </div>
       )}
 
-      <Tabs defaultValue="overview" className="space-y-4">
+      <Tabs
+        defaultValue={window.location.hash ? window.location.hash.slice(1) : "overview"}
+        onValueChange={(v) => window.history.replaceState(null, "", `${window.location.pathname}#${v}`)}
+        className="space-y-4"
+      >
         <TabsList data-testid="tabs-agreement-detail">
           <TabsTrigger value="overview" data-testid="tab-overview">
             <FileText className="w-3.5 h-3.5 mr-1.5" /> Overview

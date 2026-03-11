@@ -55,6 +55,7 @@ export function AppSidebar() {
 
   const isActive = (url: string) => {
     if (url === "/") return location === "/";
+    if (url === "/commission") return location === "/commission";
     return location.startsWith(url);
   };
 

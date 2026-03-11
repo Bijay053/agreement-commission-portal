@@ -57,7 +57,14 @@ export default function CommissionTablePage() {
   const { hasPermission } = useAuth();
   const canViewCommission = hasPermission("commission.view");
   const canViewBonus = hasPermission("bonus.view");
-  const [activeTab, setActiveTab] = useState(canViewCommission ? "commission" : "bonus");
+  const hashTab = window.location.hash ? window.location.hash.slice(1) : "";
+  const [activeTab, setActiveTabState] = useState(
+    hashTab === "commission" || hashTab === "bonus" ? hashTab : (canViewCommission ? "commission" : "bonus")
+  );
+  const setActiveTab = (tab: string) => {
+    setActiveTabState(tab);
+    window.history.replaceState(null, "", `${window.location.pathname}#${tab}`);
+  };
 
   const [commSearch, setCommSearch] = useState("");
   const [commProviders, setCommProviders] = useState<string[]>([]);
