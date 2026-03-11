@@ -1,5 +1,6 @@
 from rest_framework.authentication import BaseAuthentication
 from rest_framework.exceptions import PermissionDenied
+from rest_framework.throttling import AnonRateThrottle
 from django.middleware.csrf import CsrfViewMiddleware
 
 
@@ -22,3 +23,10 @@ class SessionCsrfAuthentication(BaseAuthentication):
         reason = check.process_view(request, None, (), {})
         if reason:
             raise PermissionDenied(f'CSRF Failed: {reason}')
+
+
+class SessionAwareAnonThrottle(AnonRateThrottle):
+    def allow_request(self, request, view):
+        if request.session and request.session.get('userId'):
+            return True
+        return super().allow_request(request, view)
