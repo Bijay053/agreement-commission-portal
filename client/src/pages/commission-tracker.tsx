@@ -18,7 +18,7 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   Plus, Search, Trash2, Users, DollarSign, TrendingUp, AlertCircle,
-  Settings, X, Upload, Download, Clock, CheckCircle2, FileSpreadsheet, AlertTriangle, RotateCcw, Check
+  Settings, X, Upload, Download, Clock, CheckCircle2, FileSpreadsheet, AlertTriangle, RotateCcw
 } from "lucide-react";
 import type { CommissionStudent, CommissionEntry } from "@shared/schema";
 import { parseIntake, intakeSortKeyFromParsed, intakeFromTermName, isFinalStatus } from "@shared/intake-utils";
@@ -77,32 +77,6 @@ function EditableCell({ value, onSave, type = "text", options, readOnly, width, 
     );
   }
 
-  if (pendingValue !== null) {
-    return (
-      <td className="px-1 py-0 border-2 border-amber-400 bg-amber-50 dark:bg-amber-900/20" style={{ minWidth: width || "auto" }} rowSpan={rowSpan}>
-        <div className="flex items-center gap-1">
-          <span className={`flex-1 text-xs truncate ${mono ? "font-mono" : ""}`}>{pendingValue || "-"}</span>
-          <button
-            className="text-green-600 hover:text-green-800 p-0.5"
-            onClick={() => { onSave(pendingValue); setPendingValue(null); setEditing(false); }}
-            title="Confirm"
-            data-testid="button-confirm-cell"
-          >
-            <Check className="h-3 w-3" />
-          </button>
-          <button
-            className="text-red-500 hover:text-red-700 p-0.5"
-            onClick={() => { setPendingValue(null); setDraft(value); setEditing(false); }}
-            title="Cancel"
-            data-testid="button-cancel-cell"
-          >
-            <X className="h-3 w-3" />
-          </button>
-        </div>
-      </td>
-    );
-  }
-
   if (editing) {
     if (type === "select" && options) {
       return (
@@ -156,9 +130,9 @@ function EditableCell({ value, onSave, type = "text", options, readOnly, width, 
 
   return (
     <td
-      className={`px-2 py-1 border border-gray-200 dark:border-gray-700 text-xs whitespace-nowrap cursor-pointer hover:bg-blue-50 dark:hover:bg-blue-900/20 ${align === "right" ? "text-right" : "text-left"} ${mono ? "font-mono" : ""}`}
+      className={`px-2 py-1 border border-gray-200 dark:border-gray-700 text-xs whitespace-nowrap cursor-pointer hover:bg-blue-50 dark:hover:bg-blue-900/20 ${align === "right" ? "text-right" : "text-left"} ${mono ? "font-mono" : ""} ${pendingValue !== null ? "ring-2 ring-amber-400 bg-amber-50 dark:bg-amber-900/20" : ""}`}
       style={{ minWidth: width || "auto" }}
-      onClick={() => { setDraft(value); setEditing(true); }}
+      onClick={() => { if (pendingValue === null) { setDraft(value); setEditing(true); } }}
       data-testid="cell-editable"
       rowSpan={rowSpan}
     >
@@ -166,6 +140,17 @@ function EditableCell({ value, onSave, type = "text", options, readOnly, width, 
         {value || <span className="text-gray-400">-</span>}
         {suffix && <span onClick={(e) => e.stopPropagation()}>{suffix}</span>}
       </span>
+      <ConfirmModal
+        open={pendingValue !== null}
+        onOpenChange={(open) => { if (!open) { setPendingValue(null); setDraft(value); } }}
+        variant="confirm"
+        title="Do you want to save this change?"
+        description={`Change value from "${value || "(empty)"}" to "${pendingValue || "(empty)"}".`}
+        confirmText="Save"
+        cancelText="Cancel"
+        onConfirm={() => { if (pendingValue !== null) { onSave(pendingValue); setPendingValue(null); } }}
+        data-testid="modal-confirm-edit"
+      />
     </td>
   );
 }
@@ -1243,38 +1228,7 @@ function TermTable({ termName, students, allEntries, allEntriesGlobal, terms, is
           {commonCells("text-gray-500")}
           <td colSpan={24} className="px-2 py-1 border border-gray-200 text-center">
             {canAddEntry ? (
-              addEntryConfirm === rowKey ? (
-                <span className="inline-flex items-center gap-2 text-xs">
-                  <span className="text-amber-700 dark:text-amber-300 font-medium">Add entry for {termName.replace("_", " ")}?</span>
-                  <button
-                    className="text-green-600 hover:text-green-800 p-0.5"
-                    onClick={() => {
-                      onCreateEntry(s.id, {
-                        termName,
-                        academicYear: "Year 1",
-                        feeGross: "0",
-                        bonus: "0",
-                        studentStatus: s.status || "Under Enquiry",
-                        paymentStatus: "Pending",
-                        studentProviderId,
-                      });
-                      setAddEntryConfirm(null);
-                    }}
-                    title="Confirm"
-                    data-testid={`button-confirm-add-entry-${rowKey}`}
-                  >
-                    <Check className="h-3.5 w-3.5" />
-                  </button>
-                  <button
-                    className="text-red-500 hover:text-red-700 p-0.5"
-                    onClick={() => setAddEntryConfirm(null)}
-                    title="Cancel"
-                    data-testid={`button-cancel-add-entry-${rowKey}`}
-                  >
-                    <X className="h-3.5 w-3.5" />
-                  </button>
-                </span>
-              ) : (
+              <>
                 <button
                   className="text-blue-600 hover:text-blue-800 text-xs font-medium underline"
                   onClick={() => setAddEntryConfirm(rowKey)}
@@ -1282,7 +1236,29 @@ function TermTable({ termName, students, allEntries, allEntriesGlobal, terms, is
                 >
                   + Add Entry for {termName.replace("_", " ")}
                 </button>
-              )
+                <ConfirmModal
+                  open={addEntryConfirm === rowKey}
+                  onOpenChange={(open) => { if (!open) setAddEntryConfirm(null); }}
+                  variant="confirm"
+                  title="Do you want to add this entry?"
+                  description={`Add a new commission entry for ${s.studentName} in ${termName.replace("_", " ")}.`}
+                  confirmText="Add Entry"
+                  cancelText="Cancel"
+                  onConfirm={() => {
+                    onCreateEntry(s.id, {
+                      termName,
+                      academicYear: "Year 1",
+                      feeGross: "0",
+                      bonus: "0",
+                      studentStatus: s.status || "Under Enquiry",
+                      paymentStatus: "Pending",
+                      studentProviderId,
+                    });
+                    setAddEntryConfirm(null);
+                  }}
+                  data-testid="modal-confirm-add-entry"
+                />
+              </>
             ) : (
               <span className="text-gray-400 text-xs">No entry</span>
             )}
