@@ -1452,9 +1452,11 @@ function BulkUploadDialog({ onSuccess }: { onSuccess: () => void }) {
       const res = await apiRequest("POST", "/api/commission-tracker/bulk-upload/confirm", { rows: preview.rows });
       const result = await res.json();
       const importedCount = result.imported ?? result.created ?? 0;
+      const providersAddedCount = result.providersAdded ?? 0;
       const skippedCount = result.skipped ?? 0;
       const failedCount = result.failed ?? (result.errors?.length || 0);
-      const parts = [`${importedCount} imported`];
+      const parts = [`${importedCount} students imported`];
+      if (providersAddedCount > 0) parts.push(`${providersAddedCount} providers added to existing students`);
       if (skippedCount > 0) parts.push(`${skippedCount} skipped (duplicates)`);
       if (failedCount > skippedCount) parts.push(`${failedCount - skippedCount} failed`);
       toast({
@@ -1496,11 +1498,11 @@ function BulkUploadDialog({ onSuccess }: { onSuccess: () => void }) {
         <div className="space-y-3">
           <div className="border-2 border-dashed rounded-lg p-6 text-center">
             <FileSpreadsheet className="w-8 h-8 mx-auto text-muted-foreground mb-2" />
-            <p className="text-sm text-muted-foreground mb-2">Upload a CSV file with student data</p>
+            <p className="text-sm text-muted-foreground mb-2">Upload an Excel (.xlsx) or CSV file with student data</p>
             <input
               ref={fileInputRef}
               type="file"
-              accept=".csv"
+              accept=".xlsx,.xls,.csv"
               className="hidden"
               onChange={(e) => setFile(e.target.files?.[0] || null)}
               data-testid="input-file"
