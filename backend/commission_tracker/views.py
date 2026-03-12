@@ -515,11 +515,25 @@ class EntryDetailView(APIView):
                 'scholarshipValueOverride': 'scholarship_value_override',
                 'studentProviderId': 'student_provider_id',
             }
+            decimal_fields = {
+                'fee_gross', 'commission_rate_override_pct', 'bonus',
+                'scholarship_value_override',
+            }
+            nullable_fields = {
+                'paid_date', 'invoice_no', 'payment_ref', 'notes',
+                'commission_rate_override_pct', 'scholarship_type_override',
+                'scholarship_value_override',
+            }
             for js_field, db_field in field_map.items():
                 if js_field in d:
                     val = d[js_field]
-                    if db_field == 'paid_date' and (val == '' or val is None):
+                    if db_field in nullable_fields and (val == '' or val is None):
                         val = None
+                    elif db_field in decimal_fields and val is not None:
+                        try:
+                            val = float(val) if val != '' else 0
+                        except (ValueError, TypeError):
+                            val = 0
                     setattr(entry, db_field, val)
 
             entry.updated_by_user_id = request.session.get('userId')
@@ -560,6 +574,8 @@ class EntryDetailView(APIView):
             user_perms = request.session.get('userPermissions', [])
             return Response(filter_fields(entry_to_dict(entry), 'commission_entry', user_perms))
         except Exception as e:
+            import traceback
+            traceback.print_exc()
             return Response({'message': str(e)}, status=500)
 
     @require_permission("commission_tracker.entry.delete")
