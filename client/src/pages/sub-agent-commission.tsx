@@ -256,7 +256,7 @@ export default function SubAgentCommissionPage() {
     },
   });
 
-  const allMasterRows = masterQuery.data || [];
+  const allMasterRows = (masterQuery.data || []).filter((r: any) => r && r.student);
   const allAgents = [...new Set(allMasterRows.map(r => r.student.agentName))].sort();
   const allProviders = [...new Set(allMasterRows.map(r => r.student.provider))].sort();
 
@@ -377,7 +377,7 @@ export default function SubAgentCommissionPage() {
             />
           ) : (
             <TermTable
-              rows={termEntryQuery.data || []}
+              rows={(termEntryQuery.data || []).filter((r: any) => r && r.student)}
               termName={activeTab}
               canEdit={canEdit}
               onUpdate={(id, data) => updateTermEntryMutation.mutate({ termName: activeTab, id, data })}
