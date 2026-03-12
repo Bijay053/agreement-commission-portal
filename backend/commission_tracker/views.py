@@ -148,6 +148,11 @@ class StudentsListView(APIView):
 
         qs = qs.order_by('-id')
         user_perms = request.session.get('userPermissions', [])
+
+        if request.query_params.get('pageSize') == 'all':
+            data = filter_fields_list([student_to_dict(s) for s in qs], 'commission_student', user_perms)
+            return Response({'count': len(data), 'next': None, 'previous': None, 'results': data})
+
         paginator = self.pagination_class()
         page = paginator.paginate_queryset(qs, request)
         if page is not None:

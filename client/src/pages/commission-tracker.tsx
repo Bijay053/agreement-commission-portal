@@ -185,6 +185,7 @@ export default function CommissionTrackerPage() {
       if (agentFilters.length) params.set("agent", agentFilters.join(","));
       if (providerFilters.length) params.set("provider", providerFilters.join(","));
       if (statusFilters.length) params.set("status", statusFilters.join(","));
+      params.set("pageSize", "all");
       const res = await fetch(`/api/commission-tracker/students?${params}`, { credentials: "include" });
       if (!res.ok) throw new Error("Failed to fetch");
       const json = await res.json();
