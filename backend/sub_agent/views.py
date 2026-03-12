@@ -64,7 +64,8 @@ class SubAgentDashboardView(APIView):
     @require_permission("sub_agent_commission.view")
     def get(self, request):
         try:
-            masters = SubAgentEntry.objects.all()
+            active_student_ids = set(CommissionStudent.objects.values_list('id', flat=True))
+            masters = SubAgentEntry.objects.filter(commission_student_id__in=active_student_ids)
             user_id = request.session.get('userId')
             masters = filter_sub_agent_by_user(masters, user_id)
             total = masters.count()
@@ -113,12 +114,13 @@ class SubAgentMasterListView(APIView):
     @require_permission("sub_agent_commission.view")
     def get(self, request):
         try:
-            masters = SubAgentEntry.objects.all().order_by('-id')
+            active_student_ids = set(CommissionStudent.objects.values_list('id', flat=True))
+            masters = SubAgentEntry.objects.filter(commission_student_id__in=active_student_ids).order_by('-id')
             user_id = request.session.get('userId')
             masters = filter_sub_agent_by_user(masters, user_id)
             student_ids = [m.commission_student_id for m in masters]
             students = {s.id: s for s in CommissionStudent.objects.filter(id__in=student_ids)}
-            result = [master_to_dict(m, students.get(m.commission_student_id)) for m in masters]
+            result = [master_to_dict(m, students.get(m.commission_student_id)) for m in masters if students.get(m.commission_student_id)]
             return Response(result)
         except Exception as e:
             return Response({'message': str(e)}, status=500)
@@ -171,9 +173,13 @@ class SubAgentSyncView(APIView):
     def post(self, request):
         try:
             students = CommissionStudent.objects.all()
-            synced = 0
+            active_student_ids = set(students.values_list('id', flat=True))
+            added = 0
+            updated = 0
+            removed = 0
+
             for student in students:
-                master, _ = SubAgentEntry.objects.get_or_create(
+                master, created = SubAgentEntry.objects.get_or_create(
                     commission_student_id=student.id,
                     defaults={'status': student.status}
                 )
@@ -188,9 +194,16 @@ class SubAgentSyncView(APIView):
                 master.margin = totals['margin']
                 master.overpay_warning = totals['overpayWarning']
                 master.save()
-                synced += 1
+                if created:
+                    added += 1
+                else:
+                    updated += 1
 
-            return Response({'message': f'Synced {synced} entries'})
+            orphaned = SubAgentEntry.objects.exclude(commission_student_id__in=active_student_ids)
+            removed = orphaned.count()
+            orphaned.delete()
+
+            return Response({'added': added, 'updated': updated, 'removed': removed})
         except Exception as e:
             return Response({'message': str(e)}, status=500)
 
