@@ -833,21 +833,93 @@ class DashboardYearView(APIView):
             return Response({'message': str(e)}, status=500)
 
 
+def _parse_bulk_row(row, i, col_map=None):
+    def g(key, default=''):
+        if col_map:
+            mapped_key = col_map.get(key, key)
+            val = row.get(mapped_key)
+        else:
+            val = row.get(key)
+        if val is None or (isinstance(val, str) and val.strip() == ''):
+            return str(default)
+        return str(val).strip()
+
+    rate_raw = g('Commission Rate (%)')
+    if rate_raw:
+        try:
+            rate_val = float(rate_raw)
+            if rate_val > 1:
+                rate_raw = str(rate_val)
+            else:
+                rate_raw = str(rate_val * 100)
+        except (ValueError, TypeError):
+            pass
+
+    gst_raw = g('GST Rate (%)', '10')
+    if gst_raw:
+        try:
+            gst_val = float(gst_raw)
+            if gst_val <= 1:
+                gst_raw = str(gst_val * 100)
+        except (ValueError, TypeError):
+            pass
+
+    return {
+        'agentName': g('Agent Name'),
+        'studentId': g('Student ID'),
+        'agentsicId': g('Agentsic ID') or g('AgentSIC ID'),
+        'studentName': g('Student Name'),
+        'provider': g('Provider'),
+        'country': g('Country', 'AU'),
+        'startIntake': g('Start Intake'),
+        'courseLevel': g('Course Level'),
+        'courseName': g('Course Name'),
+        'courseDurationYears': g('Course Duration (Years)'),
+        'commissionRatePct': rate_raw,
+        'gstRatePct': gst_raw,
+        'gstApplicable': g('GST Applicable', 'Yes'),
+        'scholarshipType': g('Scholarship Type', 'None'),
+        'scholarshipValue': g('Scholarship Value', '0'),
+        'status': g('Status', 'Under Enquiry'),
+        'notes': g('Notes'),
+        'rowIndex': i,
+    }
+
+
 class SampleSheetView(APIView):
     @require_auth
     def get(self, request):
+        import openpyxl
         from django.http import HttpResponse
-        response = HttpResponse(content_type='text/csv')
-        response['Content-Disposition'] = 'attachment; filename="commission_tracker_sample.csv"'
-        writer = csv.writer(response)
-        writer.writerow([
-            'Agent Name', 'Student ID', 'AgentSIC ID', 'Student Name', 'Provider',
-            'Country', 'Start Intake', 'Course Level', 'Course Name', 'Course Duration (Years)',
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = 'MASTER'
+        headers = [
+            'S.No', 'Agent Name', 'Student ID', 'Agentsic ID', 'Student Name',
+            'Provider', 'Country', 'Start Intake',
+            'Course Level (Diploma/Bachelor/Master)', 'Course Name',
+            'Course Duration (Years)', 'Commission Rate (%)',
+            'GST Rate (%)', 'GST Applicable', 'Scholarship Type',
+            'Scholarship Value', 'Status', 'Notes',
+        ]
+        ws.append(headers)
+        from openpyxl.styles import Font
+        for cell in ws[1]:
+            cell.font = Font(bold=True)
+        ws.append([
+            1, 'Sample Agent', 'STU001', 'ASIC100001', 'John Doe',
+            'University of Melbourne', 'AU', 'T1 2025',
+            'Bachelor', 'Bachelor of Engineering', 4, 20,
+            10, 'Yes', 'None', 0, 'Under Enquiry', '',
         ])
-        writer.writerow([
-            'Sample Agent', 'STU001', 'SIC001', 'John Doe', 'University of Melbourne',
-            'AU', 'T1 2025', 'Bachelor', 'Bachelor of Engineering', '4',
-        ])
+        buf = io.BytesIO()
+        wb.save(buf)
+        buf.seek(0)
+        response = HttpResponse(
+            buf.getvalue(),
+            content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        )
+        response['Content-Disposition'] = 'attachment; filename="commission_tracker_sample.xlsx"'
         return response
 
 
@@ -861,10 +933,15 @@ class BulkUploadPreviewView(APIView):
             if not file:
                 return Response({'message': 'No file provided'}, status=400)
 
+            filename = getattr(file, 'name', '')
+            ext = filename.lower().rsplit('.', 1)[-1] if '.' in filename else ''
+            if ext not in ('xlsx', 'xls', 'csv'):
+                return Response({'message': 'Only .xlsx, .xls, or .csv files are accepted'}, status=400)
+
             from core.file_security import validate_uploaded_file
             is_safe, security_msg = validate_uploaded_file(
-                file, file.content_type or 'text/csv',
-                filename=getattr(file, 'name', ''),
+                file, file.content_type or 'application/octet-stream',
+                filename=filename,
                 user_id=request.session.get('userId'),
                 ip_address=request.META.get('REMOTE_ADDR', ''),
                 user_agent=request.META.get('HTTP_USER_AGENT', ''),
@@ -872,36 +949,87 @@ class BulkUploadPreviewView(APIView):
             if not is_safe:
                 return Response({'message': f'File rejected: {security_msg}'}, status=400)
 
-            content = file.read().decode('utf-8-sig')
-            reader = csv.DictReader(io.StringIO(content))
+            file.seek(0)
+
             rows = []
             errors = []
 
-            for i, row in enumerate(reader):
-                r = {
-                    'agentName': row.get('Agent Name', '').strip(),
-                    'studentId': row.get('Student ID', '').strip(),
-                    'agentsicId': row.get('AgentSIC ID', '').strip(),
-                    'studentName': row.get('Student Name', '').strip(),
-                    'provider': row.get('Provider', '').strip(),
-                    'country': row.get('Country', 'AU').strip(),
-                    'startIntake': row.get('Start Intake', '').strip(),
-                    'courseLevel': row.get('Course Level', '').strip(),
-                    'courseName': row.get('Course Name', '').strip(),
-                    'courseDurationYears': row.get('Course Duration (Years)', '').strip(),
-                    'commissionRatePct': row.get('Commission Rate %', '').strip(),
-                    'gstRatePct': row.get('GST Rate %', '10').strip(),
-                    'gstApplicable': row.get('GST Applicable', 'Yes').strip(),
-                    'scholarshipType': row.get('Scholarship Type', 'None').strip(),
-                    'scholarshipValue': row.get('Scholarship Value', '0').strip(),
-                    'status': row.get('Status', 'Under Enquiry').strip(),
-                    'rowIndex': i,
-                }
-                if not r['studentName']:
-                    errors.append({'row': i + 2, 'message': 'Student Name is required'})
-                if not r['provider']:
-                    errors.append({'row': i + 2, 'message': 'Provider is required'})
-                rows.append(r)
+            if filename.lower().endswith(('.xlsx', '.xls')):
+                import openpyxl
+                wb = openpyxl.load_workbook(file, data_only=True, read_only=True)
+                sheet_name = 'MASTER' if 'MASTER' in wb.sheetnames else wb.sheetnames[0]
+                ws = wb[sheet_name]
+
+                header_row = None
+                for row in ws.iter_rows(min_row=1, max_row=1, values_only=True):
+                    header_row = [str(c or '').strip() for c in row]
+                if not header_row:
+                    return Response({'message': 'Empty spreadsheet'}, status=400)
+
+                col_map = {}
+                for h in header_row:
+                    hl = h.lower()
+                    if 'agent name' in hl:
+                        col_map['Agent Name'] = h
+                    elif hl == 'student id':
+                        col_map['Student ID'] = h
+                    elif 'agentsic' in hl:
+                        col_map['Agentsic ID'] = h
+                    elif 'student name' in hl:
+                        col_map['Student Name'] = h
+                    elif hl == 'provider' or 'provider' in hl and 'auto' not in hl:
+                        col_map['Provider'] = h
+                    elif hl == 'country' or 'country' in hl and 'auto' not in hl:
+                        col_map['Country'] = h
+                    elif 'start intake' in hl:
+                        col_map['Start Intake'] = h
+                    elif 'course level' in hl:
+                        col_map['Course Level'] = h
+                    elif 'course name' in hl:
+                        col_map['Course Name'] = h
+                    elif 'course duration' in hl:
+                        col_map['Course Duration (Years)'] = h
+                    elif 'commission rate' in hl and 'override' not in hl and 'used' not in hl and 'auto' not in hl:
+                        col_map['Commission Rate (%)'] = h
+                    elif 'gst rate' in hl:
+                        col_map['GST Rate (%)'] = h
+                    elif 'gst applicable' in hl:
+                        col_map['GST Applicable'] = h
+                    elif hl == 'scholarship type' or ('scholarship type' in hl and 'override' not in hl and 'used' not in hl and 'auto' not in hl):
+                        col_map['Scholarship Type'] = h
+                    elif hl == 'scholarship value' or ('scholarship value' in hl and 'override' not in hl and 'used' not in hl and 'auto' not in hl):
+                        col_map['Scholarship Value'] = h
+                    elif hl == 'status':
+                        col_map['Status'] = h
+                    elif hl == 'notes':
+                        col_map['Notes'] = h
+
+                for i, data_row in enumerate(ws.iter_rows(min_row=2, values_only=True)):
+                    row_dict = {}
+                    for idx, val in enumerate(data_row):
+                        if idx < len(header_row):
+                            row_dict[header_row[idx]] = val
+                    r = _parse_bulk_row(row_dict, i, col_map)
+                    if not r['studentName'] and not r['studentId']:
+                        continue
+                    if not r['studentName']:
+                        errors.append({'row': i + 2, 'message': 'Student Name is required'})
+                    if not r['provider']:
+                        errors.append({'row': i + 2, 'message': 'Provider is required'})
+                    rows.append(r)
+                wb.close()
+            else:
+                content = file.read().decode('utf-8-sig')
+                reader = csv.DictReader(io.StringIO(content))
+                for i, row in enumerate(reader):
+                    r = _parse_bulk_row(row, i)
+                    if not r['studentName'] and not r['studentId']:
+                        continue
+                    if not r['studentName']:
+                        errors.append({'row': i + 2, 'message': 'Student Name is required'})
+                    if not r['provider']:
+                        errors.append({'row': i + 2, 'message': 'Provider is required'})
+                    rows.append(r)
 
             return Response({'rows': rows, 'errors': errors, 'totalRows': len(rows)})
         except Exception as e:
@@ -916,12 +1044,63 @@ class BulkUploadConfirmView(APIView):
             user_id = request.session.get('userId')
             created = 0
             skipped = 0
+            providers_added = 0
             errors = []
             for i, row in enumerate(rows):
                 try:
                     student_id_val = (row.get('studentId') or '').strip()
                     provider_val = (row.get('provider') or '').strip()
                     agentsic_id_val = (row.get('agentsicId') or '').strip()
+                    student_name_val = (row.get('studentName') or '').strip()
+
+                    existing_student = None
+                    if student_name_val and agentsic_id_val:
+                        existing_student = CommissionStudent.objects.filter(
+                            student_name__iexact=student_name_val,
+                            agentsic_id__iexact=agentsic_id_val,
+                        ).first()
+
+                    if not existing_student and student_id_val:
+                        existing_student = CommissionStudent.objects.filter(
+                            student_id=student_id_val,
+                            student_name__iexact=student_name_val,
+                        ).first()
+
+                    if existing_student:
+                        already_has_primary = existing_student.provider and existing_student.provider.lower() == provider_val.lower()
+                        already_has_secondary = StudentProvider.objects.filter(
+                            commission_student_id=existing_student.id,
+                            provider__iexact=provider_val,
+                        ).exists()
+                        if already_has_primary or already_has_secondary:
+                            skipped += 1
+                            errors.append({'row': i + 1, 'message': f'Duplicate: "{student_name_val}" already has provider "{provider_val}"'})
+                            continue
+
+                        dur = row.get('courseDurationYears') or None
+                        rate = row.get('commissionRatePct') or None
+                        gst = row.get('gstRatePct', 10)
+                        schol_val = row.get('scholarshipValue', 0)
+
+                        StudentProvider.objects.create(
+                            commission_student_id=existing_student.id,
+                            provider=provider_val,
+                            student_id=student_id_val or existing_student.student_id,
+                            country=row.get('country', 'AU'),
+                            course_level=row.get('courseLevel'),
+                            course_name=row.get('courseName'),
+                            course_duration_years=dur if dur != '' else None,
+                            start_intake=row.get('startIntake'),
+                            commission_rate_pct=rate if rate != '' else None,
+                            gst_rate_pct=gst if gst != '' else 10,
+                            gst_applicable=row.get('gstApplicable', 'Yes'),
+                            scholarship_type=row.get('scholarshipType', 'None'),
+                            scholarship_value=schol_val if schol_val != '' else 0,
+                            status=row.get('status', 'Under Enquiry'),
+                            created_by_user_id=user_id,
+                        )
+                        providers_added += 1
+                        continue
 
                     if student_id_val and provider_val:
                         if CommissionStudent.objects.filter(student_id=student_id_val, provider=provider_val).exists():
@@ -929,35 +1108,40 @@ class BulkUploadConfirmView(APIView):
                             errors.append({'row': i + 1, 'message': f'Duplicate: Student ID "{student_id_val}" already exists for provider "{provider_val}"'})
                             continue
 
-                    if agentsic_id_val:
-                        if CommissionStudent.objects.filter(agentsic_id=agentsic_id_val).exists():
-                            skipped += 1
-                            errors.append({'row': i + 1, 'message': f'Duplicate: Agentsic ID "{agentsic_id_val}" already exists'})
-                            continue
+                    dur = row.get('courseDurationYears') or None
+                    rate = row.get('commissionRatePct') or None
+                    gst = row.get('gstRatePct', 10)
+                    schol_val = row.get('scholarshipValue', 0)
 
                     CommissionStudent.objects.create(
                         agent_name=row.get('agentName', ''),
                         student_id=student_id_val,
                         agentsic_id=agentsic_id_val,
-                        student_name=row.get('studentName', ''),
+                        student_name=student_name_val,
                         provider=provider_val,
                         country=row.get('country', 'AU'),
                         start_intake=row.get('startIntake'),
                         course_level=row.get('courseLevel'),
                         course_name=row.get('courseName'),
-                        course_duration_years=row.get('courseDurationYears') or None,
-                        commission_rate_pct=row.get('commissionRatePct') or None,
-                        gst_rate_pct=row.get('gstRatePct', 10),
+                        course_duration_years=dur if dur != '' else None,
+                        commission_rate_pct=rate if rate != '' else None,
+                        gst_rate_pct=gst if gst != '' else 10,
                         gst_applicable=row.get('gstApplicable', 'Yes'),
                         scholarship_type=row.get('scholarshipType', 'None'),
-                        scholarship_value=row.get('scholarshipValue', 0),
+                        scholarship_value=schol_val if schol_val != '' else 0,
                         status=row.get('status', 'Under Enquiry'),
+                        notes=row.get('notes') or None,
                         created_by_user_id=user_id,
                         updated_by_user_id=user_id,
                     )
                     created += 1
                 except Exception as e:
                     errors.append({'row': i + 1, 'message': str(e)})
-            return Response({'created': created, 'skipped': skipped, 'errors': errors})
+            return Response({
+                'created': created,
+                'skipped': skipped,
+                'providersAdded': providers_added,
+                'errors': errors,
+            })
         except Exception as e:
             return Response({'message': str(e)}, status=500)
