@@ -13,6 +13,20 @@ from core.field_permissions import filter_fields, filter_fields_list
 from .services import calculate_entry, compute_master_from_entries, num, round2
 
 
+def _intake_sort_key(intake_str):
+    if not intake_str:
+        return (0, 0)
+    parts = intake_str.strip().upper().split()
+    year = 0
+    term = 0
+    for p in parts:
+        if p.isdigit() and len(p) == 4:
+            year = int(p)
+        elif p.startswith('T') and len(p) == 2 and p[1:].isdigit():
+            term = int(p[1:])
+    return (year, term)
+
+
 def student_to_dict(s):
     return {
         'id': s.id, 'agentName': s.agent_name, 'studentId': s.student_id,
@@ -146,19 +160,20 @@ class StudentsListView(APIView):
         if year:
             qs = qs.filter(start_intake__icontains=year)
 
-        qs = qs.order_by('-id')
+        students_list = sorted(qs, key=lambda s: _intake_sort_key(s.start_intake), reverse=True)
         user_perms = request.session.get('userPermissions', [])
 
         if request.query_params.get('pageSize') == 'all':
-            data = filter_fields_list([student_to_dict(s) for s in qs], 'commission_student', user_perms)
+            data = filter_fields_list([student_to_dict(s) for s in students_list], 'commission_student', user_perms)
             return Response({'count': len(data), 'next': None, 'previous': None, 'results': data})
 
-        paginator = self.pagination_class()
-        page = paginator.paginate_queryset(qs, request)
-        if page is not None:
-            data = filter_fields_list([student_to_dict(s) for s in page], 'commission_student', user_perms)
-            return paginator.get_paginated_response(data)
-        return Response(filter_fields_list([student_to_dict(s) for s in qs], 'commission_student', user_perms))
+        from django.core.paginator import Paginator as DjPaginator
+        page_num = int(request.query_params.get('page', 1))
+        page_sz = int(request.query_params.get('pageSize', 50))
+        djp = DjPaginator(students_list, page_sz)
+        page_obj = djp.get_page(page_num)
+        data = filter_fields_list([student_to_dict(s) for s in page_obj], 'commission_student', user_perms)
+        return Response({'count': djp.count, 'next': None, 'previous': None, 'results': data})
 
     @require_permission("commission_tracker.student.add")
     def post(self, request):
