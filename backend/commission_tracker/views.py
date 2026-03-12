@@ -27,10 +27,18 @@ def _intake_sort_key(intake_str):
     return (year, term)
 
 
+def _clean_id(val):
+    if val and isinstance(val, str) and val.endswith('.0'):
+        stripped = val[:-2]
+        if stripped.isdigit():
+            return stripped
+    return val
+
+
 def student_to_dict(s):
     return {
-        'id': s.id, 'agentName': s.agent_name, 'studentId': s.student_id,
-        'agentsicId': s.agentsic_id, 'studentName': s.student_name,
+        'id': s.id, 'agentName': s.agent_name, 'studentId': _clean_id(s.student_id),
+        'agentsicId': _clean_id(s.agentsic_id), 'studentName': s.student_name,
         'provider': s.provider, 'country': s.country, 'startIntake': s.start_intake,
         'courseLevel': s.course_level, 'courseName': s.course_name,
         'courseDurationYears': str(s.course_duration_years) if s.course_duration_years is not None else None,
@@ -79,7 +87,7 @@ def entry_to_dict(e):
 def provider_to_dict(sp):
     return {
         'id': sp.id, 'commissionStudentId': sp.commission_student_id,
-        'provider': sp.provider, 'studentId': sp.student_id, 'country': sp.country,
+        'provider': sp.provider, 'studentId': _clean_id(sp.student_id), 'country': sp.country,
         'courseLevel': sp.course_level, 'courseName': sp.course_name,
         'courseDurationYears': str(sp.course_duration_years) if sp.course_duration_years is not None else None,
         'startIntake': sp.start_intake,
@@ -181,9 +189,9 @@ class StudentsListView(APIView):
             d = request.data
             user_id = request.session.get('userId')
 
-            student_id_val = d.get('studentId', '').strip()
+            student_id_val = _clean_id(d.get('studentId', '').strip())
             provider_val = d.get('provider', '').strip()
-            agentsic_id_val = d.get('agentsicId', '').strip()
+            agentsic_id_val = _clean_id(d.get('agentsicId', '').strip())
 
             if student_id_val and provider_val:
                 existing = CommissionStudent.objects.filter(
@@ -203,8 +211,8 @@ class StudentsListView(APIView):
 
             s = CommissionStudent.objects.create(
                 agent_name=d.get('agentName', ''),
-                student_id=d.get('studentId'),
-                agentsic_id=d.get('agentsicId'),
+                student_id=_clean_id(d.get('studentId')),
+                agentsic_id=_clean_id(d.get('agentsicId')),
                 student_name=d.get('studentName', ''),
                 provider=d.get('provider', ''),
                 country=d.get('country', 'AU'),
@@ -258,6 +266,7 @@ class StudentDetailView(APIView):
                 'status': 'status', 'notes': 'notes',
             }
             decimal_fields = {'commission_rate_pct', 'gst_rate_pct', 'scholarship_value', 'course_duration_years'}
+            id_fields = {'student_id', 'agentsic_id'}
             for js_field, db_field in field_map.items():
                 if js_field in request.data:
                     val = request.data[js_field]
@@ -269,6 +278,8 @@ class StudentDetailView(APIView):
                                 val = Decimal(str(val))
                             except Exception:
                                 val = None
+                    if db_field in id_fields:
+                        val = _clean_id(val)
                     setattr(s, db_field, val)
             if 'status' in request.data:
                 record_status_change('commission_student', s.id, old_status, s.status, request.session.get('userId'), notes='Manual status update')
@@ -329,7 +340,7 @@ class StudentProvidersView(APIView):
             sp = StudentProvider.objects.create(
                 commission_student_id=student_id,
                 provider=d.get('provider', ''),
-                student_id=d.get('studentId'),
+                student_id=_clean_id(d.get('studentId')),
                 country=d.get('country', 'Australia'),
                 course_level=d.get('courseLevel'),
                 course_name=d.get('courseName'),
@@ -389,7 +400,10 @@ class StudentProviderUpdateView(APIView):
             }
             for js_field, db_field in field_map.items():
                 if js_field in request.data:
-                    setattr(sp, db_field, request.data[js_field])
+                    val = request.data[js_field]
+                    if db_field == 'student_id':
+                        val = _clean_id(val)
+                    setattr(sp, db_field, val)
             sp.updated_by_user_id = request.session.get('userId')
             sp.save()
 
@@ -720,7 +734,7 @@ class CommissionTrackerExportView(APIView):
             rows = []
             for s in qs:
                 rows.append([
-                    s.id, s.agent_name, s.student_id, s.agentsic_id, s.student_name,
+                    s.id, s.agent_name, _clean_id(s.student_id), _clean_id(s.agentsic_id), s.student_name,
                     s.provider, s.country, s.start_intake, s.course_level, s.course_name,
                     str(s.course_duration_years) if s.course_duration_years is not None else '',
                     str(s.commission_rate_pct) if s.commission_rate_pct is not None else '',
@@ -1084,9 +1098,9 @@ class BulkUploadConfirmView(APIView):
             errors = []
             for i, row in enumerate(rows):
                 try:
-                    student_id_val = (row.get('studentId') or '').strip()
+                    student_id_val = _clean_id((row.get('studentId') or '').strip())
                     provider_val = (row.get('provider') or '').strip()
-                    agentsic_id_val = (row.get('agentsicId') or '').strip()
+                    agentsic_id_val = _clean_id((row.get('agentsicId') or '').strip())
                     student_name_val = (row.get('studentName') or '').strip()
 
                     existing_student = None

@@ -134,3 +134,9 @@ CREATE TABLE IF NOT EXISTS user_devices (
     last_login TIMESTAMP DEFAULT NOW(),
     is_trusted BOOLEAN DEFAULT true
 );
+
+-- Clean .0 suffix from numeric ID fields (from Excel float imports)
+UPDATE commission_students SET student_id = REGEXP_REPLACE(student_id, '\.0$', '') WHERE student_id ~ '^\d+\.0$';
+UPDATE commission_students SET agentsic_id = REGEXP_REPLACE(agentsic_id, '\.0$', '') WHERE agentsic_id ~ '^\d+\.0$';
+UPDATE student_providers SET student_id = REGEXP_REPLACE(student_id, '\.0$', '') WHERE student_id ~ '^\d+\.0$';
+UPDATE commission_entries SET student_id = REGEXP_REPLACE(student_id, '\.0$', '') WHERE student_id IS NOT NULL AND student_id ~ '^\d+\.0$';
