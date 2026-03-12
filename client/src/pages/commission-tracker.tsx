@@ -18,7 +18,7 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   Plus, Search, Trash2, Users, DollarSign, TrendingUp, AlertCircle,
-  Settings, X, Upload, Download, Clock, CheckCircle2, FileSpreadsheet, AlertTriangle, RotateCcw
+  Settings, X, Upload, Download, Clock, CheckCircle2, FileSpreadsheet, AlertTriangle, RotateCcw, ExternalLink
 } from "lucide-react";
 import { ScrollableTableWrapper } from "@/components/ui/scrollable-table-wrapper";
 import type { CommissionStudent, CommissionEntry } from "@shared/schema";
@@ -289,6 +289,10 @@ export default function CommissionTrackerPage() {
       if (!res.ok) throw new Error("Failed to fetch");
       return res.json();
     },
+  });
+
+  const { data: providerAgreementsMap = {} } = useQuery<Record<string, number>>({
+    queryKey: ["/api/commission-tracker/provider-agreements-map"],
   });
 
   const { data: filters } = useQuery<{
@@ -572,6 +576,7 @@ export default function CommissionTrackerPage() {
             canDeleteMaster={canDeleteMaster}
             isDeleting={deleteStudentMutation.isPending}
             providersByStudent={providersByStudent}
+            providerAgreementsMap={providerAgreementsMap}
             onRemoveProvider={(studentId, providerId) => removeProviderMutation.mutate({ studentId, providerId })}
             onUpdateStudent={(id, data) => updateStudentMutation.mutate({ id, data })}
             onUpdateProvider={(id, data) => updateProviderMutation.mutate({ id, data })}
@@ -589,6 +594,7 @@ export default function CommissionTrackerPage() {
             canAddEntry={canAddEntry}
             canDelete={canDelete}
             providersByStudent={providersByStudent}
+            providerAgreementsMap={providerAgreementsMap}
             onUpdateStudent={(id, data) => updateStudentMutation.mutate({ id, data })}
             onDeleteStudent={() => {}}
             onCreateEntry={(studentId, data) => createEntryMutation.mutate({ studentId, data })}
@@ -992,7 +998,35 @@ function DashboardView({ dashboard, year, intakeFilter, onIntakeChange, provider
   );
 }
 
-function MasterTable({ students, allEntries, year, isLoading, canEdit, canDeleteMaster, isDeleting, providersByStudent, onRemoveProvider, onUpdateStudent, onUpdateProvider, onDeleteStudent }: {
+function ProviderLink({ name, agreementId }: { name: string; agreementId?: number }) {
+  const [, navigate] = useLocation();
+  if (agreementId) {
+    if (!name) {
+      return (
+        <button
+          className="text-blue-600 hover:text-blue-800 cursor-pointer p-0"
+          onClick={(e) => { e.stopPropagation(); navigate(`/agreements/${agreementId}`); }}
+          title="View Agreement"
+          data-testid={`link-provider-agreement-${agreementId}`}
+        >
+          <ExternalLink className="w-3 h-3" />
+        </button>
+      );
+    }
+    return (
+      <button
+        className="text-blue-600 hover:text-blue-800 hover:underline cursor-pointer text-left"
+        onClick={(e) => { e.stopPropagation(); navigate(`/agreements/${agreementId}`); }}
+        data-testid={`link-provider-agreement-${agreementId}`}
+      >
+        {name}
+      </button>
+    );
+  }
+  return <span>{name}</span>;
+}
+
+function MasterTable({ students, allEntries, year, isLoading, canEdit, canDeleteMaster, isDeleting, providersByStudent, providerAgreementsMap, onRemoveProvider, onUpdateStudent, onUpdateProvider, onDeleteStudent }: {
   students: CommissionStudent[];
   allEntries: Record<number, CommissionEntry[]>;
   year: number | null;
@@ -1001,6 +1035,7 @@ function MasterTable({ students, allEntries, year, isLoading, canEdit, canDelete
   canDeleteMaster: boolean;
   isDeleting: boolean;
   providersByStudent: Record<number, any[]>;
+  providerAgreementsMap: Record<string, number>;
   onRemoveProvider: (studentId: number, providerId: number) => void;
   onUpdateStudent: (id: number, data: Record<string, any>) => void;
   onUpdateProvider: (id: number, data: Record<string, any>) => void;
@@ -1070,7 +1105,14 @@ function MasterTable({ students, allEntries, year, isLoading, canEdit, canDelete
                       <EditableCell value={s.agentsicId || ""} readOnly={!canEdit} onSave={(v) => onUpdateStudent(s.id, { agentsicId: v })} mono width="80px" rowSpan={totalRows > 1 ? totalRows : undefined} />
                       <EditableCell value={s.studentId || ""} readOnly={!canEdit} onSave={(v) => onUpdateStudent(s.id, { studentId: v })} mono width="80px" rowSpan={totalRows > 1 ? totalRows : undefined} />
                       <EditableCell value={s.studentName || ""} readOnly={!canEdit} onSave={(v) => onUpdateStudent(s.id, { studentName: v })} width="120px" rowSpan={totalRows > 1 ? totalRows : undefined} />
-                      <EditableCell value={s.provider || ""} readOnly={!canEdit} onSave={(v) => onUpdateStudent(s.id, { provider: v })} width="120px" suffix={canEdit ? <AddProviderButton studentId={s.id} studentName={s.studentName} /> : undefined} />
+                      <EditableCell value={s.provider || ""} readOnly={!canEdit} onSave={(v) => onUpdateStudent(s.id, { provider: v })} width="120px" suffix={
+                        <span className="flex items-center gap-0.5 shrink-0">
+                          {s.provider && providerAgreementsMap[s.provider] && (
+                            <ProviderLink name="" agreementId={providerAgreementsMap[s.provider]} />
+                          )}
+                          {canEdit && <AddProviderButton studentId={s.id} studentName={s.studentName} />}
+                        </span>
+                      } />
                       <EditableCell value={s.country || ""} readOnly={!canEdit} onSave={(v) => onUpdateStudent(s.id, { country: v })} width="60px" />
                       <EditableCell value={s.startIntake || ""} readOnly={!canEdit} onSave={(v) => onUpdateStudent(s.id, { startIntake: v })} width="80px" />
                       <EditableCell value={s.courseLevel || ""} readOnly={!canEdit} onSave={(v) => onUpdateStudent(s.id, { courseLevel: v })} type="select" options={COURSE_LEVELS} width="80px" />
@@ -1096,7 +1138,7 @@ function MasterTable({ students, allEntries, year, isLoading, canEdit, canDelete
                       <tr key={`${s.id}-ap-${ap.id}`} style={{ backgroundColor: STATUS_ROW_BG[ap.status || ""] || statusBg }}>
                         <td className="px-2 py-1 border border-gray-200">
                           <div className="flex items-center gap-1 text-blue-600">
-                            <span>{ap.provider}{ap.studentId ? ` (${ap.studentId})` : ""}</span>
+                            <ProviderLink name={`${ap.provider}${ap.studentId ? ` (${ap.studentId})` : ""}`} agreementId={providerAgreementsMap[ap.provider]} />
                             {canEdit && (
                               <button
                                 onClick={() => setDeleteProviderTarget({ studentId: s.id, provider: ap, isLast: additionalProviders.length === 1 && !s.provider })}
@@ -1215,7 +1257,7 @@ function MasterTable({ students, allEntries, year, isLoading, canEdit, canDelete
   );
 }
 
-function TermTable({ termName, students, allEntries, allEntriesGlobal, terms, isLoading, canEdit, canAddEntry, canDelete, providersByStudent, onUpdateStudent, onDeleteStudent, onCreateEntry, onUpdateEntry, onDeleteEntry }: {
+function TermTable({ termName, students, allEntries, allEntriesGlobal, terms, isLoading, canEdit, canAddEntry, canDelete, providersByStudent, providerAgreementsMap, onUpdateStudent, onDeleteStudent, onCreateEntry, onUpdateEntry, onDeleteEntry }: {
   termName: string;
   students: CommissionStudent[];
   allEntries: Record<number, CommissionEntry[]>;
@@ -1226,6 +1268,7 @@ function TermTable({ termName, students, allEntries, allEntriesGlobal, terms, is
   canAddEntry: boolean;
   canDelete: boolean;
   providersByStudent?: Record<number, any[]>;
+  providerAgreementsMap: Record<string, number>;
   onUpdateStudent: (id: number, data: Record<string, any>) => void;
   onDeleteStudent: (id: number) => void;
   onCreateEntry: (studentId: number, data: Record<string, any>) => void;
@@ -1291,7 +1334,7 @@ function TermTable({ termName, students, allEntries, allEntriesGlobal, terms, is
             <td className={`px-2 py-1 border border-gray-200 ${textClass}`} rowSpan={totalProviderRows > 1 ? totalProviderRows : undefined}>{s.studentName}</td>
           </>
         )}
-        <td className={`px-2 py-1 border border-gray-200 ${isAdditional ? "text-blue-600" : textClass}`}>{providerLabel}</td>
+        <td className={`px-2 py-1 border border-gray-200 ${isAdditional ? "text-blue-600" : textClass}`}><ProviderLink name={providerLabel} agreementId={providerAgreementsMap[providerLabel.replace(/\s*\(.*\)$/, '')]} /></td>
         <td className={`px-2 py-1 border border-gray-200 ${isAdditional ? "text-blue-600" : textClass}`}>{providerCountry}</td>
         <td className={`px-2 py-1 border border-gray-200 ${isAdditional ? "text-blue-600" : textClass}`}>{providerCourseLevel || "-"}</td>
         <td className={`px-2 py-1 border border-gray-200 ${isAdditional ? "text-blue-600" : textClass}`}>{providerCourseName || "-"}</td>
