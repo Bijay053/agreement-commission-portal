@@ -63,11 +63,15 @@ function EditableCell({ value, onSave, type = "text", options, readOnly, width, 
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(value);
   const [pendingValue, setPendingValue] = useState<string | null>(null);
+  const [displayValue, setDisplayValue] = useState(value);
   const inputRef = useRef<HTMLInputElement>(null);
+  const draftRef = useRef(draft);
+  draftRef.current = draft;
   const onSaveRef = useRef(onSave);
   onSaveRef.current = onSave;
 
   useEffect(() => {
+    setDisplayValue(value);
     if (!editing && pendingValue === null) {
       setDraft(value);
     }
@@ -80,14 +84,27 @@ function EditableCell({ value, onSave, type = "text", options, readOnly, width, 
   const handleConfirmSave = useCallback(() => {
     if (pendingValue !== null) {
       onSaveRef.current(pendingValue);
+      setDisplayValue(pendingValue);
       setDraft(pendingValue);
     }
     setPendingValue(null);
+    setEditing(false);
+    setTimeout(() => { if (document.activeElement instanceof HTMLElement) document.activeElement.blur(); }, 0);
   }, [pendingValue]);
 
   const handleCancelEdit = useCallback(() => {
     setPendingValue(null);
     setDraft(value);
+    setEditing(false);
+  }, [value]);
+
+  const commitEdit = useCallback(() => {
+    const currentDraft = draftRef.current;
+    setEditing(false);
+    if (currentDraft !== value) {
+      setPendingValue(currentDraft);
+    }
+    setTimeout(() => { if (document.activeElement instanceof HTMLElement) document.activeElement.blur(); }, 0);
   }, [value]);
 
   if (readOnly) {
@@ -132,15 +149,9 @@ function EditableCell({ value, onSave, type = "text", options, readOnly, width, 
           inputMode={type === "number" ? "decimal" : undefined}
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
-          onBlur={() => {
-            if (draft !== value) { setPendingValue(draft); }
-            setEditing(false);
-          }}
+          onBlur={() => commitEdit()}
           onKeyDown={(e) => {
-            if (e.key === "Enter") {
-              if (draft !== value) { setPendingValue(draft); }
-              setEditing(false);
-            }
+            if (e.key === "Enter") { e.preventDefault(); commitEdit(); }
             if (e.key === "Escape") { setDraft(value); setEditing(false); }
           }}
           data-testid="cell-input"
@@ -153,16 +164,16 @@ function EditableCell({ value, onSave, type = "text", options, readOnly, width, 
     <td
       className={`px-2 py-1 border border-gray-200 dark:border-gray-700 text-xs whitespace-nowrap cursor-pointer hover:bg-blue-50 dark:hover:bg-blue-900/20 ${align === "right" ? "text-right" : "text-left"} ${mono ? "font-mono" : ""}`}
       style={{ minWidth: width || "auto" }}
-      onClick={() => { setDraft(value); setEditing(true); }}
+      onClick={() => { if (pendingValue === null) { setDraft(value); setEditing(true); } }}
       data-testid="cell-editable"
       rowSpan={rowSpan}
     >
       <span className="flex items-center gap-1">
-        {value || <span className="text-gray-400">-</span>}
+        {displayValue || <span className="text-gray-400">-</span>}
         {suffix && <span onClick={(e) => e.stopPropagation()}>{suffix}</span>}
       </span>
       <Dialog open={pendingValue !== null} onOpenChange={(open) => { if (!open) handleCancelEdit(); }}>
-        <DialogContent className="sm:max-w-[420px]" data-testid="dialog-confirm-edit">
+        <DialogContent className="sm:max-w-[420px]" onClick={(e) => e.stopPropagation()} data-testid="dialog-confirm-edit">
           <DialogHeader>
             <div className="flex items-center gap-2">
               <div className="flex items-center justify-center w-10 h-10 rounded-full bg-blue-100 dark:bg-blue-900/30">
