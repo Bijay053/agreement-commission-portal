@@ -18,7 +18,8 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   Plus, Search, Trash2, Users, DollarSign, TrendingUp, AlertCircle,
-  Settings, X, Upload, Download, Clock, CheckCircle2, FileSpreadsheet, AlertTriangle, RotateCcw
+  Settings, X, Upload, Download, Clock, CheckCircle2, FileSpreadsheet, AlertTriangle, RotateCcw,
+  ChevronLeft, ChevronRight
 } from "lucide-react";
 import type { CommissionStudent, CommissionEntry } from "@shared/schema";
 import { parseIntake, intakeSortKeyFromParsed, intakeFromTermName, isFinalStatus } from "@shared/intake-utils";
@@ -192,6 +193,59 @@ function EditableCell({ value, onSave, type = "text", options, readOnly, width, 
         </DialogContent>
       </Dialog>
     </td>
+  );
+}
+
+function ScrollableTableWrapper({ children, className }: { children: React.ReactNode; className?: string }) {
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const [canScrollLeft, setCanScrollLeft] = useState(false);
+  const [canScrollRight, setCanScrollRight] = useState(false);
+
+  const checkScroll = useCallback(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    setCanScrollLeft(el.scrollLeft > 0);
+    setCanScrollRight(el.scrollLeft + el.clientWidth < el.scrollWidth - 1);
+  }, []);
+
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    checkScroll();
+    el.addEventListener("scroll", checkScroll, { passive: true });
+    const ro = new ResizeObserver(checkScroll);
+    ro.observe(el);
+    return () => { el.removeEventListener("scroll", checkScroll); ro.disconnect(); };
+  }, [checkScroll]);
+
+  const scroll = (dir: number) => {
+    scrollRef.current?.scrollBy({ left: dir * 300, behavior: "smooth" });
+  };
+
+  return (
+    <div className={`relative ${className || ""}`}>
+      {canScrollLeft && (
+        <button
+          onClick={() => scroll(-1)}
+          className="absolute left-0 top-1/2 -translate-y-1/2 z-20 bg-white/90 dark:bg-gray-800/90 shadow-lg border border-gray-300 dark:border-gray-600 rounded-r-lg p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+          data-testid="button-scroll-left"
+        >
+          <ChevronLeft className="w-5 h-5 text-gray-600 dark:text-gray-300" />
+        </button>
+      )}
+      {canScrollRight && (
+        <button
+          onClick={() => scroll(1)}
+          className="absolute right-0 top-1/2 -translate-y-1/2 z-20 bg-white/90 dark:bg-gray-800/90 shadow-lg border border-gray-300 dark:border-gray-600 rounded-l-lg p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+          data-testid="button-scroll-right"
+        >
+          <ChevronRight className="w-5 h-5 text-gray-600 dark:text-gray-300" />
+        </button>
+      )}
+      <div ref={scrollRef} className="overflow-auto border rounded-lg">
+        {children}
+      </div>
+    </div>
   );
 }
 
@@ -985,7 +1039,7 @@ function MasterTable({ students, allEntries, year, isLoading, canEdit, canDelete
   return (
     <div className="p-4 space-y-4" data-testid="master-table-view">
       <h2 className="text-lg font-semibold">Master - All Students {year ? `(${year})` : ""}</h2>
-      <div className="overflow-auto border rounded-lg">
+      <ScrollableTableWrapper>
         <table className="w-full text-xs border-collapse" data-testid="table-master-students">
           <thead className="sticky top-0 z-10">
             <tr className="bg-[#2E75B6] text-white">
@@ -1097,7 +1151,7 @@ function MasterTable({ students, allEntries, year, isLoading, canEdit, canDelete
             )}
           </tbody>
         </table>
-      </div>
+      </ScrollableTableWrapper>
 
       <Dialog open={!!deleteTarget} onOpenChange={(open) => { if (!open && !isDeleting) setDeleteTarget(null); }}>
         <DialogContent className="sm:max-w-[440px]" data-testid="dialog-delete-student">
@@ -1343,7 +1397,7 @@ function TermTable({ termName, students, allEntries, allEntriesGlobal, terms, is
   const allTermEntries: CommissionEntry[] = [];
 
   return (
-    <div className="overflow-auto h-full">
+    <ScrollableTableWrapper className="h-full">
       <table className="w-full text-xs border-collapse" data-testid={`table-term-${termName}`}>
         <thead className="sticky top-0 z-10">
           <tr className="bg-[#2E75B6] text-white">
@@ -1489,7 +1543,7 @@ function TermTable({ termName, students, allEntries, allEntriesGlobal, terms, is
           );
         })()}
       </table>
-    </div>
+    </ScrollableTableWrapper>
   );
 }
 
