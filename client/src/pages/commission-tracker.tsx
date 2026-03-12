@@ -18,7 +18,7 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   Plus, Search, Trash2, Users, DollarSign, TrendingUp, AlertCircle,
-  Settings, X, Upload, Download, Clock, CheckCircle2, FileSpreadsheet, AlertTriangle, RotateCcw
+  Settings, X, Upload, Download, Clock, CheckCircle2, FileSpreadsheet, AlertTriangle, RotateCcw, Check
 } from "lucide-react";
 import type { CommissionStudent, CommissionEntry } from "@shared/schema";
 import { parseIntake, intakeSortKeyFromParsed, intakeFromTermName, isFinalStatus } from "@shared/intake-utils";
@@ -62,6 +62,7 @@ function EditableCell({ value, onSave, type = "text", options, readOnly, width, 
 }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(value);
+  const [pendingValue, setPendingValue] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -76,6 +77,32 @@ function EditableCell({ value, onSave, type = "text", options, readOnly, width, 
     );
   }
 
+  if (pendingValue !== null) {
+    return (
+      <td className="px-1 py-0 border-2 border-amber-400 bg-amber-50 dark:bg-amber-900/20" style={{ minWidth: width || "auto" }} rowSpan={rowSpan}>
+        <div className="flex items-center gap-1">
+          <span className={`flex-1 text-xs truncate ${mono ? "font-mono" : ""}`}>{pendingValue || "-"}</span>
+          <button
+            className="text-green-600 hover:text-green-800 p-0.5"
+            onClick={() => { onSave(pendingValue); setPendingValue(null); setEditing(false); }}
+            title="Confirm"
+            data-testid="button-confirm-cell"
+          >
+            <Check className="h-3 w-3" />
+          </button>
+          <button
+            className="text-red-500 hover:text-red-700 p-0.5"
+            onClick={() => { setPendingValue(null); setDraft(value); setEditing(false); }}
+            title="Cancel"
+            data-testid="button-cancel-cell"
+          >
+            <X className="h-3 w-3" />
+          </button>
+        </div>
+      </td>
+    );
+  }
+
   if (editing) {
     if (type === "select" && options) {
       return (
@@ -83,7 +110,14 @@ function EditableCell({ value, onSave, type = "text", options, readOnly, width, 
           <select
             className="w-full text-xs bg-transparent outline-none py-1"
             value={draft}
-            onChange={(e) => { setDraft(e.target.value); onSave(e.target.value); setEditing(false); }}
+            onChange={(e) => {
+              const newVal = e.target.value;
+              setDraft(newVal);
+              if (newVal !== value) {
+                setPendingValue(newVal);
+              }
+              setEditing(false);
+            }}
             onBlur={() => setEditing(false)}
             autoFocus
             data-testid="cell-select"
@@ -103,9 +137,15 @@ function EditableCell({ value, onSave, type = "text", options, readOnly, width, 
           step={type === "number" ? "0.01" : undefined}
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
-          onBlur={() => { onSave(draft); setEditing(false); }}
+          onBlur={() => {
+            if (draft !== value) { setPendingValue(draft); }
+            setEditing(false);
+          }}
           onKeyDown={(e) => {
-            if (e.key === "Enter") { onSave(draft); setEditing(false); }
+            if (e.key === "Enter") {
+              if (draft !== value) { setPendingValue(draft); }
+              setEditing(false);
+            }
             if (e.key === "Escape") { setDraft(value); setEditing(false); }
           }}
           data-testid="cell-input"
@@ -1131,6 +1171,8 @@ function TermTable({ termName, students, allEntries, allEntriesGlobal, terms, is
   onUpdateEntry: (id: number, data: Record<string, any>) => void;
   onDeleteEntry: (id: number) => void;
 }) {
+  const [addEntryConfirm, setAddEntryConfirm] = useState<string | null>(null);
+
   const getEntry = (studentId: number, studentProviderId: number | null): CommissionEntry | undefined => {
     return (allEntries[studentId] || []).find(e => e.termName === termName && (e.studentProviderId || null) === studentProviderId);
   };
@@ -1201,21 +1243,46 @@ function TermTable({ termName, students, allEntries, allEntriesGlobal, terms, is
           {commonCells("text-gray-500")}
           <td colSpan={24} className="px-2 py-1 border border-gray-200 text-center">
             {canAddEntry ? (
-              <button
-                className="text-blue-600 hover:text-blue-800 text-xs font-medium underline"
-                onClick={() => onCreateEntry(s.id, {
-                  termName,
-                  academicYear: "Year 1",
-                  feeGross: "0",
-                  bonus: "0",
-                  studentStatus: s.status || "Under Enquiry",
-                  paymentStatus: "Pending",
-                  studentProviderId,
-                })}
-                data-testid={`button-add-entry-${rowKey}`}
-              >
-                + Add Entry for {termName.replace("_", " ")}
-              </button>
+              addEntryConfirm === rowKey ? (
+                <span className="inline-flex items-center gap-2 text-xs">
+                  <span className="text-amber-700 dark:text-amber-300 font-medium">Add entry for {termName.replace("_", " ")}?</span>
+                  <button
+                    className="text-green-600 hover:text-green-800 p-0.5"
+                    onClick={() => {
+                      onCreateEntry(s.id, {
+                        termName,
+                        academicYear: "Year 1",
+                        feeGross: "0",
+                        bonus: "0",
+                        studentStatus: s.status || "Under Enquiry",
+                        paymentStatus: "Pending",
+                        studentProviderId,
+                      });
+                      setAddEntryConfirm(null);
+                    }}
+                    title="Confirm"
+                    data-testid={`button-confirm-add-entry-${rowKey}`}
+                  >
+                    <Check className="h-3.5 w-3.5" />
+                  </button>
+                  <button
+                    className="text-red-500 hover:text-red-700 p-0.5"
+                    onClick={() => setAddEntryConfirm(null)}
+                    title="Cancel"
+                    data-testid={`button-cancel-add-entry-${rowKey}`}
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </span>
+              ) : (
+                <button
+                  className="text-blue-600 hover:text-blue-800 text-xs font-medium underline"
+                  onClick={() => setAddEntryConfirm(rowKey)}
+                  data-testid={`button-add-entry-${rowKey}`}
+                >
+                  + Add Entry for {termName.replace("_", " ")}
+                </button>
+              )
             ) : (
               <span className="text-gray-400 text-xs">No entry</span>
             )}
