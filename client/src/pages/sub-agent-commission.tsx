@@ -15,7 +15,7 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   Search, Users, DollarSign, TrendingUp, AlertCircle,
-  RefreshCw, ArrowDownUp, AlertTriangle, CalendarDays
+  RefreshCw, ArrowDownUp, AlertTriangle, CalendarDays, Check, X
 } from "lucide-react";
 import type { CommissionStudent, SubAgentEntry, SubAgentTermEntry } from "@shared/schema";
 
@@ -66,6 +66,7 @@ function EditableCell({ value, onSave, type = "text", options, readOnly, width, 
 }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(value);
+  const [pendingValue, setPendingValue] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -86,6 +87,32 @@ function EditableCell({ value, onSave, type = "text", options, readOnly, width, 
     );
   }
 
+  if (pendingValue !== null) {
+    return (
+      <td className="px-1 py-0 border-2 border-amber-400 bg-amber-50 dark:bg-amber-900/20" style={{ minWidth: width || "auto" }}>
+        <div className="flex items-center gap-1">
+          <span className={`flex-1 text-xs truncate ${mono ? "font-mono" : ""}`}>{pendingValue || "-"}</span>
+          <button
+            className="text-green-600 hover:text-green-800 p-0.5"
+            onClick={() => { onSave(pendingValue); setPendingValue(null); setEditing(false); }}
+            title="Confirm"
+            data-testid="button-confirm-cell"
+          >
+            <Check className="h-3 w-3" />
+          </button>
+          <button
+            className="text-red-500 hover:text-red-700 p-0.5"
+            onClick={() => { setPendingValue(null); setDraft(value); setEditing(false); }}
+            title="Cancel"
+            data-testid="button-cancel-cell"
+          >
+            <X className="h-3 w-3" />
+          </button>
+        </div>
+      </td>
+    );
+  }
+
   if (editing) {
     if (type === "select" && options) {
       return (
@@ -93,7 +120,12 @@ function EditableCell({ value, onSave, type = "text", options, readOnly, width, 
           <select
             className="w-full text-xs bg-transparent outline-none py-1"
             value={draft}
-            onChange={(e) => { setDraft(e.target.value); onSave(e.target.value); setEditing(false); }}
+            onChange={(e) => {
+              const newVal = e.target.value;
+              setDraft(newVal);
+              if (newVal !== value) { setPendingValue(newVal); }
+              setEditing(false);
+            }}
             onBlur={() => setEditing(false)}
             autoFocus
             data-testid="cell-select"
@@ -112,8 +144,17 @@ function EditableCell({ value, onSave, type = "text", options, readOnly, width, 
           step={type === "number" ? "0.01" : undefined}
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
-          onBlur={() => { onSave(draft); setEditing(false); }}
-          onKeyDown={(e) => { if (e.key === "Enter") { onSave(draft); setEditing(false); } if (e.key === "Escape") setEditing(false); }}
+          onBlur={() => {
+            if (draft !== value) { setPendingValue(draft); }
+            setEditing(false);
+          }}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              if (draft !== value) { setPendingValue(draft); }
+              setEditing(false);
+            }
+            if (e.key === "Escape") { setDraft(value); setEditing(false); }
+          }}
           data-testid="cell-input"
         />
       </td>
