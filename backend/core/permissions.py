@@ -67,35 +67,49 @@ LEGACY_PERMISSION_MAP = {
 IMPLIED_PERMISSIONS = {
     "commission_tracker.view": [
         "commission_tracker.entry.view", "commission_tracker.entry.read",
+        "commission_tracker.field.financials",
     ],
     "commission_tracker.create": [
         "commission_tracker.entry.create", "commission_tracker.entry.add",
+        "commission_tracker.field.financials",
     ],
     "commission_tracker.edit": [
         "commission_tracker.entry.edit", "commission_tracker.entry.update",
         "commission_tracker.master.edit",
+        "commission_tracker.field.financials",
     ],
     "commission_tracker.delete": [
         "commission_tracker.entry.delete",
     ],
     "commission_tracker.export": [
         "commission_tracker.entry.export",
+        "commission_tracker.field.financials",
     ],
     "commission_tracker.student.read": [
         "commission_tracker.entry.read", "commission_tracker.entry.view",
+        "commission_tracker.field.financials",
     ],
     "commission_tracker.student.add": [
         "commission_tracker.entry.add", "commission_tracker.entry.create",
+        "commission_tracker.field.financials",
     ],
     "commission_tracker.student.update": [
         "commission_tracker.entry.update", "commission_tracker.entry.edit",
         "commission_tracker.master.edit",
+        "commission_tracker.field.financials",
     ],
     "commission_tracker.student.delete": [
         "commission_tracker.entry.delete",
     ],
     "commission_tracker.student.export": [
         "commission_tracker.entry.export",
+        "commission_tracker.field.financials",
+    ],
+    "commission_tracker.entry.read": [
+        "commission_tracker.field.financials",
+    ],
+    "commission_tracker.entry.update": [
+        "commission_tracker.field.financials",
     ],
 }
 
