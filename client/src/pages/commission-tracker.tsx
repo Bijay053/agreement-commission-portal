@@ -63,11 +63,14 @@ function EditableCell({ value, onSave, type = "text", options, readOnly, width, 
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(value);
   const [pendingValue, setPendingValue] = useState<string | null>(null);
+  const pendingRef = useRef<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (editing && inputRef.current) inputRef.current.focus();
   }, [editing]);
+
+  useEffect(() => { pendingRef.current = pendingValue; }, [pendingValue]);
 
   if (readOnly) {
     return (
@@ -107,8 +110,8 @@ function EditableCell({ value, onSave, type = "text", options, readOnly, width, 
         <input
           ref={inputRef}
           className={`w-full text-xs bg-transparent outline-none py-1 ${align === "right" ? "text-right" : ""} ${mono ? "font-mono" : ""}`}
-          type={type === "number" ? "number" : type === "date" ? "date" : "text"}
-          step={type === "number" ? "0.01" : undefined}
+          type={type === "number" ? "text" : type === "date" ? "date" : "text"}
+          inputMode={type === "number" ? "decimal" : undefined}
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
           onBlur={() => {
@@ -148,7 +151,10 @@ function EditableCell({ value, onSave, type = "text", options, readOnly, width, 
         description={`Change value from "${value || "(empty)"}" to "${pendingValue || "(empty)"}".`}
         confirmText="Save"
         cancelText="Cancel"
-        onConfirm={() => { if (pendingValue !== null) { onSave(pendingValue); setPendingValue(null); } }}
+        onConfirm={() => {
+          const val = pendingRef.current;
+          if (val !== null) { onSave(val); }
+        }}
         data-testid="modal-confirm-edit"
       />
     </td>
