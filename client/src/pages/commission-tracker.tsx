@@ -146,13 +146,19 @@ export default function CommissionTrackerPage() {
     navigate(`/commission-tracker?${params.toString()}`, { replace: true });
   };
   const [intakeFilter, setIntakeFilter] = useState("All");
-  const [search, setSearch] = useState("");
-  const [agentFilters, setAgentFilters] = useState<string[]>([]);
-  const [providerFilters, setProviderFilters] = useState<string[]>([]);
-  const [statusFilters, setStatusFilters] = useState<string[]>([]);
+  const [search, setSearchRaw] = useState("");
+  const setSearch = (v: string) => { setSearchRaw(v); setCurrentPage(1); };
+  const [agentFilters, setAgentFiltersRaw] = useState<string[]>([]);
+  const setAgentFilters = (v: string[]) => { setAgentFiltersRaw(v); setCurrentPage(1); };
+  const [providerFilters, setProviderFiltersRaw] = useState<string[]>([]);
+  const setProviderFilters = (v: string[]) => { setProviderFiltersRaw(v); setCurrentPage(1); };
+  const [statusFilters, setStatusFiltersRaw] = useState<string[]>([]);
+  const setStatusFilters = (v: string[]) => { setStatusFiltersRaw(v); setCurrentPage(1); };
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [showTermDialog, setShowTermDialog] = useState(false);
   const [showBulkUpload, setShowBulkUpload] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const pageSize = 100;
 
   const canCreate = hasPermission("commission_tracker.student.add");
   const canEdit = hasPermission("commission_tracker.entry.update");
@@ -178,13 +184,15 @@ export default function CommissionTrackerPage() {
   const yearTerms = terms.filter(t => t.year === selectedYear);
 
   const { data: studentsData, isLoading } = useQuery<{ count: number; next: string | null; previous: string | null; results: CommissionStudent[] }>({
-    queryKey: ["/api/commission-tracker/students", { search, agents: agentFilters, providers: providerFilters, statuses: statusFilters }],
+    queryKey: ["/api/commission-tracker/students", { search, agents: agentFilters, providers: providerFilters, statuses: statusFilters, page: currentPage, pageSize }],
     queryFn: async () => {
       const params = new URLSearchParams();
       if (search) params.set("search", search);
       if (agentFilters.length) params.set("agent", agentFilters.join(","));
       if (providerFilters.length) params.set("provider", providerFilters.join(","));
       if (statusFilters.length) params.set("status", statusFilters.join(","));
+      params.set("page", String(currentPage));
+      params.set("pageSize", String(pageSize));
       const res = await fetch(`/api/commission-tracker/students?${params}`, { credentials: "include" });
       if (!res.ok) throw new Error("Failed to fetch");
       const json = await res.json();
@@ -193,6 +201,8 @@ export default function CommissionTrackerPage() {
     },
   });
   const students = (studentsData?.results || []).filter((s: any) => s != null);
+  const totalCount = studentsData?.count || 0;
+  const totalPages = Math.ceil(totalCount / pageSize);
 
   const { data: allStudentProviders = [] } = useQuery<any[]>({
     queryKey: ["/api/commission-tracker/all-student-providers"],
