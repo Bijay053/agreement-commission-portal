@@ -73,18 +73,22 @@ function EditableCell({ value, onSave, type = "text", options, readOnly, width, 
   onSaveRef.current = onSave;
 
   useEffect(() => {
+    if (!editing && pendingValue === null) {
+      setDraft(value);
+    }
+  }, [value, editing, pendingValue]);
+
+  useEffect(() => {
     if (editing && inputRef.current) inputRef.current.focus();
   }, [editing]);
 
   const handleConfirmSave = useCallback(() => {
-    setPendingValue((prev) => {
-      if (prev !== null) {
-        onSaveRef.current(prev);
-      }
-      return null;
-    });
-    setDraft(value);
-  }, [value]);
+    if (pendingValue !== null) {
+      onSaveRef.current(pendingValue);
+      setDraft(pendingValue);
+    }
+    setPendingValue(null);
+  }, [pendingValue]);
 
   const handleCancelEdit = useCallback(() => {
     setPendingValue(null);
