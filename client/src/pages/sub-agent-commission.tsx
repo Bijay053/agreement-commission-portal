@@ -9,13 +9,14 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { MultiSearchableSelect } from "@/components/ui/multi-searchable-select";
+import { ConfirmModal } from "@/components/ui/confirm-modal";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   Search, Users, DollarSign, TrendingUp, AlertCircle,
-  RefreshCw, ArrowDownUp, AlertTriangle, CalendarDays, Check, X
+  RefreshCw, ArrowDownUp, AlertTriangle, CalendarDays
 } from "lucide-react";
 import type { CommissionStudent, SubAgentEntry, SubAgentTermEntry } from "@shared/schema";
 
@@ -87,32 +88,6 @@ function EditableCell({ value, onSave, type = "text", options, readOnly, width, 
     );
   }
 
-  if (pendingValue !== null) {
-    return (
-      <td className="px-1 py-0 border-2 border-amber-400 bg-amber-50 dark:bg-amber-900/20" style={{ minWidth: width || "auto" }}>
-        <div className="flex items-center gap-1">
-          <span className={`flex-1 text-xs truncate ${mono ? "font-mono" : ""}`}>{pendingValue || "-"}</span>
-          <button
-            className="text-green-600 hover:text-green-800 p-0.5"
-            onClick={() => { onSave(pendingValue); setPendingValue(null); setEditing(false); }}
-            title="Confirm"
-            data-testid="button-confirm-cell"
-          >
-            <Check className="h-3 w-3" />
-          </button>
-          <button
-            className="text-red-500 hover:text-red-700 p-0.5"
-            onClick={() => { setPendingValue(null); setDraft(value); setEditing(false); }}
-            title="Cancel"
-            data-testid="button-cancel-cell"
-          >
-            <X className="h-3 w-3" />
-          </button>
-        </div>
-      </td>
-    );
-  }
-
   if (editing) {
     if (type === "select" && options) {
       return (
@@ -163,12 +138,23 @@ function EditableCell({ value, onSave, type = "text", options, readOnly, width, 
 
   return (
     <td
-      className={`px-2 py-1 border border-gray-200 dark:border-gray-700 text-xs whitespace-nowrap cursor-pointer hover:bg-blue-50 dark:hover:bg-blue-900/20 ${align === "right" ? "text-right" : "text-left"} ${mono ? "font-mono" : ""}`}
+      className={`px-2 py-1 border border-gray-200 dark:border-gray-700 text-xs whitespace-nowrap cursor-pointer hover:bg-blue-50 dark:hover:bg-blue-900/20 ${align === "right" ? "text-right" : "text-left"} ${mono ? "font-mono" : ""} ${pendingValue !== null ? "ring-2 ring-amber-400 bg-amber-50 dark:bg-amber-900/20" : ""}`}
       style={style}
-      onClick={() => { setDraft(value); setEditing(true); }}
+      onClick={() => { if (pendingValue === null) { setDraft(value); setEditing(true); } }}
       data-testid="cell-editable"
     >
       {value || "-"}
+      <ConfirmModal
+        open={pendingValue !== null}
+        onOpenChange={(open) => { if (!open) { setPendingValue(null); setDraft(value); } }}
+        variant="confirm"
+        title="Do you want to save this change?"
+        description={`Change value from "${value || "(empty)"}" to "${pendingValue || "(empty)"}".`}
+        confirmText="Save"
+        cancelText="Cancel"
+        onConfirm={() => { if (pendingValue !== null) { onSave(pendingValue); setPendingValue(null); } }}
+        data-testid="modal-confirm-edit"
+      />
     </td>
   );
 }
