@@ -16,7 +16,7 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   Search, Users, DollarSign, TrendingUp, AlertCircle,
-  RefreshCw, ArrowDownUp, AlertTriangle, CalendarDays
+  RefreshCw, ArrowDownUp, AlertTriangle, CalendarDays, ExternalLink
 } from "lucide-react";
 import { ScrollableTableWrapper } from "@/components/ui/scrollable-table-wrapper";
 import type { CommissionStudent, SubAgentEntry, SubAgentTermEntry } from "@shared/schema";
@@ -206,6 +206,22 @@ function fmt(v: string | number | null | undefined): string {
   return n.toLocaleString("en-AU", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
+function SubAgentProviderLink({ name, agreementId }: { name: string; agreementId?: number }) {
+  const [, navigate] = useLocation();
+  if (agreementId) {
+    return (
+      <button
+        className="text-blue-600 hover:text-blue-800 hover:underline cursor-pointer text-left"
+        onClick={(e) => { e.stopPropagation(); navigate(`/agreements/${agreementId}`); }}
+        data-testid={`link-provider-agreement-${agreementId}`}
+      >
+        {name}
+      </button>
+    );
+  }
+  return <span>{name}</span>;
+}
+
 export default function SubAgentCommissionPage() {
   const { user, hasPermission } = useAuth();
   const { toast } = useToast();
@@ -228,6 +244,10 @@ export default function SubAgentCommissionPage() {
   const [selectedAgents, setSelectedAgents] = useState<string[]>([]);
   const [selectedProviders, setSelectedProviders] = useState<string[]>([]);
   const [selectedStatuses, setSelectedStatuses] = useState<string[]>([]);
+
+  const { data: providerAgreementsMap = {} } = useQuery<Record<string, number>>({
+    queryKey: ["/api/commission-tracker/provider-agreements-map"],
+  });
 
   const termsQuery = useQuery<CommissionTerm[]>({ queryKey: ["/api/commission-tracker/terms"] });
   const terms = (termsQuery.data || []).filter(t => t.year === selectedYear).sort((a, b) => a.sortOrder - b.sortOrder);
@@ -622,7 +642,7 @@ function MasterTable({ rows, canEdit, onUpdateRate, onUpdateGst }: {
                 <td className="px-2 py-1 border border-gray-200 text-xs">{row.student.agentsicId || "-"}</td>
                 <td className="px-2 py-1 border border-gray-200 text-xs">{row.student.agentName}</td>
                 <td className="px-2 py-1 border border-gray-200 text-xs font-medium">{row.student.studentName}</td>
-                <td className="px-2 py-1 border border-gray-200 text-xs">{row.student.provider}</td>
+                <td className="px-2 py-1 border border-gray-200 text-xs"><SubAgentProviderLink name={row.student.provider} agreementId={providerAgreementsMap[row.student.provider]} /></td>
                 <td className="px-2 py-1 border border-gray-200 text-xs">{row.student.country}</td>
                 <td className="px-2 py-1 border border-gray-200 text-xs">{row.student.startIntake || "-"}</td>
                 <td className="px-2 py-1 border border-gray-200 text-xs">{row.student.courseName || "-"}</td>
@@ -740,7 +760,7 @@ function TermTable({ rows, termName, canEdit, onUpdate }: {
                 <td className="px-2 py-1 border border-gray-200 text-xs">{row.student.agentsicId || "-"}</td>
                 <td className="px-2 py-1 border border-gray-200 text-xs">{row.student.agentName}</td>
                 <td className="px-2 py-1 border border-gray-200 text-xs font-medium">{row.student.studentName}</td>
-                <td className="px-2 py-1 border border-gray-200 text-xs">{row.student.provider}</td>
+                <td className="px-2 py-1 border border-gray-200 text-xs"><SubAgentProviderLink name={row.student.provider} agreementId={providerAgreementsMap[row.student.provider]} /></td>
                 <td className="px-2 py-1 border border-gray-200 text-xs">{row.student.country}</td>
                 <td className="px-2 py-1 border border-gray-200 text-xs">{row.student.startIntake || "-"}</td>
                 <td className="px-2 py-1 border border-gray-200 text-xs">{row.student.courseName || "-"}</td>

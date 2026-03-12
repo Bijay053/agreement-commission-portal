@@ -22,4 +22,5 @@ urlpatterns = [
     path('commission-tracker/sample-sheet', views.SampleSheetView.as_view()),
     path('commission-tracker/bulk-upload/preview', views.BulkUploadPreviewView.as_view()),
     path('commission-tracker/bulk-upload/confirm', views.BulkUploadConfirmView.as_view()),
+    path('commission-tracker/provider-agreements-map', views.ProviderAgreementsMapView.as_view()),
 ]

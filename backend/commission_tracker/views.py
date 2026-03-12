@@ -1195,3 +1195,20 @@ class BulkUploadConfirmView(APIView):
             })
         except Exception as e:
             return Response({'message': str(e)}, status=500)
+
+
+class ProviderAgreementsMapView(APIView):
+    @require_auth
+    def get(self, request):
+        from agreements.models import Agreement
+        from providers.models import Provider
+        agreements = Agreement.objects.exclude(status='terminated').values_list('university_id', 'id')
+        provider_ids = set(a[0] for a in agreements if a[0])
+        providers = {p.id: p.name for p in Provider.objects.filter(id__in=provider_ids)}
+        result = {}
+        for uid, aid in agreements:
+            if uid and uid in providers:
+                name = providers[uid]
+                if name not in result:
+                    result[name] = aid
+        return Response(result)
