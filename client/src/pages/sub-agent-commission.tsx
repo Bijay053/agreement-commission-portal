@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { MultiSearchableSelect } from "@/components/ui/multi-searchable-select";
-import { ConfirmModal } from "@/components/ui/confirm-modal";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -68,14 +68,28 @@ function EditableCell({ value, onSave, type = "text", options, readOnly, width, 
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(value);
   const [pendingValue, setPendingValue] = useState<string | null>(null);
-  const pendingRef = useRef<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const onSaveRef = useRef(onSave);
+  onSaveRef.current = onSave;
 
   useEffect(() => {
     if (editing && inputRef.current) inputRef.current.focus();
   }, [editing]);
 
-  useEffect(() => { pendingRef.current = pendingValue; }, [pendingValue]);
+  const handleConfirmSave = useCallback(() => {
+    setPendingValue((prev) => {
+      if (prev !== null) {
+        onSaveRef.current(prev);
+      }
+      return null;
+    });
+    setDraft(value);
+  }, [value]);
+
+  const handleCancelEdit = useCallback(() => {
+    setPendingValue(null);
+    setDraft(value);
+  }, [value]);
 
   const style: any = { minWidth: width || "auto" };
   if (highlightStyle) {
@@ -141,26 +155,31 @@ function EditableCell({ value, onSave, type = "text", options, readOnly, width, 
 
   return (
     <td
-      className={`px-2 py-1 border border-gray-200 dark:border-gray-700 text-xs whitespace-nowrap cursor-pointer hover:bg-blue-50 dark:hover:bg-blue-900/20 ${align === "right" ? "text-right" : "text-left"} ${mono ? "font-mono" : ""} ${pendingValue !== null ? "ring-2 ring-amber-400 bg-amber-50 dark:bg-amber-900/20" : ""}`}
+      className={`px-2 py-1 border border-gray-200 dark:border-gray-700 text-xs whitespace-nowrap cursor-pointer hover:bg-blue-50 dark:hover:bg-blue-900/20 ${align === "right" ? "text-right" : "text-left"} ${mono ? "font-mono" : ""}`}
       style={style}
-      onClick={() => { if (pendingValue === null) { setDraft(value); setEditing(true); } }}
+      onClick={() => { setDraft(value); setEditing(true); }}
       data-testid="cell-editable"
     >
       {value || "-"}
-      <ConfirmModal
-        open={pendingValue !== null}
-        onOpenChange={(open) => { if (!open) { setPendingValue(null); setDraft(value); } }}
-        variant="confirm"
-        title="Do you want to save this change?"
-        description={`Change value from "${value || "(empty)"}" to "${pendingValue || "(empty)"}".`}
-        confirmText="Save"
-        cancelText="Cancel"
-        onConfirm={() => {
-          const val = pendingRef.current;
-          if (val !== null) { onSave(val); }
-        }}
-        data-testid="modal-confirm-edit"
-      />
+      <Dialog open={pendingValue !== null} onOpenChange={(open) => { if (!open) handleCancelEdit(); }}>
+        <DialogContent className="sm:max-w-[420px]" data-testid="dialog-confirm-edit">
+          <DialogHeader>
+            <div className="flex items-center gap-2">
+              <div className="flex items-center justify-center w-10 h-10 rounded-full bg-blue-100 dark:bg-blue-900/30">
+                <AlertCircle className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+              </div>
+              <DialogTitle className="text-lg">Do you want to save this change?</DialogTitle>
+            </div>
+            <DialogDescription>
+              Change value from "{value || "(empty)"}" to "{pendingValue || "(empty)"}".
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="outline" onClick={handleCancelEdit} data-testid="button-cancel-edit">Cancel</Button>
+            <Button onClick={handleConfirmSave} data-testid="button-confirm-save">Save</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </td>
   );
 }
