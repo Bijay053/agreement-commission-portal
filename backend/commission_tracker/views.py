@@ -836,8 +836,13 @@ class DashboardYearView(APIView):
 def _parse_bulk_row(row, i, col_map=None):
     def g(key, default=''):
         if col_map:
-            return str(row.get(col_map.get(key, key), default) or default).strip()
-        return str(row.get(key, default) or default).strip()
+            mapped_key = col_map.get(key, key)
+            val = row.get(mapped_key)
+        else:
+            val = row.get(key)
+        if val is None or (isinstance(val, str) and val.strip() == ''):
+            return str(default)
+        return str(val).strip()
 
     rate_raw = g('Commission Rate (%)')
     if rate_raw:
@@ -929,6 +934,9 @@ class BulkUploadPreviewView(APIView):
                 return Response({'message': 'No file provided'}, status=400)
 
             filename = getattr(file, 'name', '')
+            ext = filename.lower().rsplit('.', 1)[-1] if '.' in filename else ''
+            if ext not in ('xlsx', 'xls', 'csv'):
+                return Response({'message': 'Only .xlsx, .xls, or .csv files are accepted'}, status=400)
 
             from core.file_security import validate_uploaded_file
             is_safe, security_msg = validate_uploaded_file(
@@ -1015,6 +1023,8 @@ class BulkUploadPreviewView(APIView):
                 reader = csv.DictReader(io.StringIO(content))
                 for i, row in enumerate(reader):
                     r = _parse_bulk_row(row, i)
+                    if not r['studentName'] and not r['studentId']:
+                        continue
                     if not r['studentName']:
                         errors.append({'row': i + 2, 'message': 'Student Name is required'})
                     if not r['provider']:
@@ -1057,11 +1067,12 @@ class BulkUploadConfirmView(APIView):
                         ).first()
 
                     if existing_student:
-                        already_has = StudentProvider.objects.filter(
+                        already_has_primary = existing_student.provider and existing_student.provider.lower() == provider_val.lower()
+                        already_has_secondary = StudentProvider.objects.filter(
                             commission_student_id=existing_student.id,
                             provider__iexact=provider_val,
                         ).exists()
-                        if already_has:
+                        if already_has_primary or already_has_secondary:
                             skipped += 1
                             errors.append({'row': i + 1, 'message': f'Duplicate: "{student_name_val}" already has provider "{provider_val}"'})
                             continue
