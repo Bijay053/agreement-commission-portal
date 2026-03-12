@@ -322,12 +322,43 @@ export default function CommissionTrackerPage() {
     queryClient.invalidateQueries({ queryKey: ["/api/commission-tracker/terms"] });
   }, []);
 
+  const scrollPositionRef = useRef<{ top: number; left: number } | null>(null);
+
+  const saveScrollPosition = useCallback(() => {
+    const scrollEl = document.querySelector('[data-testid="button-scroll-left"], [data-testid="button-scroll-right"]')
+      ?.closest('div')?.querySelector('.overflow-auto')
+      || document.querySelector('.overflow-auto.border.rounded-lg');
+    if (scrollEl) {
+      scrollPositionRef.current = { top: scrollEl.scrollTop, left: scrollEl.scrollLeft };
+    }
+  }, []);
+
+  const restoreScrollPosition = useCallback(() => {
+    if (!scrollPositionRef.current) return;
+    const pos = scrollPositionRef.current;
+    requestAnimationFrame(() => {
+      const scrollEl = document.querySelector('.overflow-auto.border.rounded-lg.flex-1');
+      if (scrollEl) {
+        scrollEl.scrollTop = pos.top;
+        scrollEl.scrollLeft = pos.left;
+      }
+      scrollPositionRef.current = null;
+    });
+  }, []);
+
+  const invalidateAndRestore = useCallback(() => {
+    saveScrollPosition();
+    invalidateAll();
+    setTimeout(restoreScrollPosition, 150);
+  }, [invalidateAll, saveScrollPosition, restoreScrollPosition]);
+
   const updateStudentMutation = useMutation({
     mutationFn: async ({ id, data }: { id: number; data: Record<string, any> }) => {
+      saveScrollPosition();
       const res = await apiRequest("PATCH", `/api/commission-tracker/students/${id}`, data);
       return res.json();
     },
-    onSuccess: invalidateAll,
+    onSuccess: () => { invalidateAll(); setTimeout(restoreScrollPosition, 200); },
     onError: (err: Error) => toast({ title: "Error", description: err.message, variant: "destructive" }),
   });
 
@@ -351,31 +382,35 @@ export default function CommissionTrackerPage() {
 
   const updateProviderMutation = useMutation({
     mutationFn: async ({ id, data }: { id: number; data: Record<string, any> }) => {
+      saveScrollPosition();
       const res = await apiRequest("PATCH", `/api/commission-tracker/student-providers/${id}`, data);
       return res.json();
     },
     onSuccess: () => {
       invalidateAll();
       queryClient.invalidateQueries({ queryKey: ["/api/commission-tracker/all-student-providers"] });
+      setTimeout(restoreScrollPosition, 200);
     },
     onError: (err: Error) => toast({ title: "Error", description: err.message, variant: "destructive" }),
   });
 
   const createEntryMutation = useMutation({
     mutationFn: async ({ studentId, data }: { studentId: number; data: Record<string, any> }) => {
+      saveScrollPosition();
       const res = await apiRequest("POST", `/api/commission-tracker/students/${studentId}/entries`, data);
       return res.json();
     },
-    onSuccess: invalidateAll,
+    onSuccess: () => { invalidateAll(); setTimeout(restoreScrollPosition, 200); },
     onError: (err: Error) => toast({ title: "Error", description: err.message, variant: "destructive" }),
   });
 
   const updateEntryMutation = useMutation({
     mutationFn: async ({ id, data }: { id: number; data: Record<string, any> }) => {
+      saveScrollPosition();
       const res = await apiRequest("PATCH", `/api/commission-tracker/entries/${id}`, data);
       return res.json();
     },
-    onSuccess: invalidateAll,
+    onSuccess: () => { invalidateAll(); setTimeout(restoreScrollPosition, 200); },
     onError: (err: Error) => toast({ title: "Error", description: err.message, variant: "destructive" }),
   });
 
@@ -515,9 +550,9 @@ export default function CommissionTrackerPage() {
         </Tabs>
       </div>
 
-      <div className="flex-1 overflow-hidden flex flex-col">
-        <div className="flex-1 overflow-auto border-t">
-          {activeTab === "DASHBOARD" ? (
+      <div className="flex-1 overflow-hidden flex flex-col border-t">
+        {activeTab === "DASHBOARD" ? (
+          <div className="flex-1 overflow-auto">
             <DashboardView
               dashboard={yearDashboard}
               year={selectedYear}
@@ -526,41 +561,41 @@ export default function CommissionTrackerPage() {
               providersByStudent={providersByStudent}
               yearTerms={yearTerms}
             />
-          ) : activeTab === "MASTER" ? (
-            <MasterTable
-              students={students || []}
-              allEntries={allEntries}
-              year={selectedYear}
-              isLoading={isLoading}
-              canEdit={canEditStudent}
-              canDeleteMaster={canDeleteMaster}
-              isDeleting={deleteStudentMutation.isPending}
-              providersByStudent={providersByStudent}
-              onRemoveProvider={(studentId, providerId) => removeProviderMutation.mutate({ studentId, providerId })}
-              onUpdateStudent={(id, data) => updateStudentMutation.mutate({ id, data })}
-              onUpdateProvider={(id, data) => updateProviderMutation.mutate({ id, data })}
-              onDeleteStudent={(id) => deleteStudentMutation.mutate(id)}
-            />
-          ) : (
-            <TermTable
-              termName={activeTab}
-              students={students || []}
-              allEntries={allEntries}
-              allEntriesGlobal={allEntriesGlobal}
-              terms={terms}
-              isLoading={isLoading}
-              canEdit={canEdit}
-              canAddEntry={canAddEntry}
-              canDelete={canDelete}
-              providersByStudent={providersByStudent}
-              onUpdateStudent={(id, data) => updateStudentMutation.mutate({ id, data })}
-              onDeleteStudent={() => {}}
-              onCreateEntry={(studentId, data) => createEntryMutation.mutate({ studentId, data })}
-              onUpdateEntry={(id, data) => updateEntryMutation.mutate({ id, data })}
-              onDeleteEntry={(id) => deleteEntryMutation.mutate(id)}
-            />
-          )}
-        </div>
+          </div>
+        ) : activeTab === "MASTER" ? (
+          <MasterTable
+            students={students || []}
+            allEntries={allEntries}
+            year={selectedYear}
+            isLoading={isLoading}
+            canEdit={canEditStudent}
+            canDeleteMaster={canDeleteMaster}
+            isDeleting={deleteStudentMutation.isPending}
+            providersByStudent={providersByStudent}
+            onRemoveProvider={(studentId, providerId) => removeProviderMutation.mutate({ studentId, providerId })}
+            onUpdateStudent={(id, data) => updateStudentMutation.mutate({ id, data })}
+            onUpdateProvider={(id, data) => updateProviderMutation.mutate({ id, data })}
+            onDeleteStudent={(id) => deleteStudentMutation.mutate(id)}
+          />
+        ) : (
+          <TermTable
+            termName={activeTab}
+            students={students || []}
+            allEntries={allEntries}
+            allEntriesGlobal={allEntriesGlobal}
+            terms={terms}
+            isLoading={isLoading}
+            canEdit={canEdit}
+            canAddEntry={canAddEntry}
+            canDelete={canDelete}
+            providersByStudent={providersByStudent}
+            onUpdateStudent={(id, data) => updateStudentMutation.mutate({ id, data })}
+            onDeleteStudent={() => {}}
+            onCreateEntry={(studentId, data) => createEntryMutation.mutate({ studentId, data })}
+            onUpdateEntry={(id, data) => updateEntryMutation.mutate({ id, data })}
+            onDeleteEntry={(id) => deleteEntryMutation.mutate(id)}
+          />
+        )}
 
         {students && (
           <div className="px-3 py-1 border-t bg-muted/20">
@@ -984,9 +1019,9 @@ function MasterTable({ students, allEntries, year, isLoading, canEdit, canDelete
   const colCount = canDeleteMaster ? 18 : 17;
 
   return (
-    <div className="p-4 space-y-4" data-testid="master-table-view">
-      <h2 className="text-lg font-semibold">Master - All Students {year ? `(${year})` : ""}</h2>
-      <ScrollableTableWrapper>
+    <div className="flex-1 flex flex-col min-h-0 p-4 gap-2" data-testid="master-table-view">
+      <h2 className="text-lg font-semibold shrink-0">Master - All Students {year ? `(${year})` : ""}</h2>
+      <ScrollableTableWrapper className="flex-1 min-h-0">
         <table className="w-full text-xs border-collapse" data-testid="table-master-students">
           <thead className="sticky top-0 z-10">
             <tr className="bg-[#2E75B6] text-white">
@@ -1344,7 +1379,7 @@ function TermTable({ termName, students, allEntries, allEntriesGlobal, terms, is
   const allTermEntries: CommissionEntry[] = [];
 
   return (
-    <ScrollableTableWrapper className="h-full">
+    <ScrollableTableWrapper className="flex-1 min-h-0">
       <table className="w-full text-xs border-collapse" data-testid={`table-term-${termName}`}>
         <thead className="sticky top-0 z-10">
           <tr className="bg-[#2E75B6] text-white">

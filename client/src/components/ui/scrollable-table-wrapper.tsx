@@ -56,7 +56,7 @@ export function ScrollableTableWrapper({ children, className, ...rest }: React.H
   };
 
   return (
-    <div className={className || ""} {...rest}>
+    <div className={`flex flex-col min-h-0 ${className || ""}`} {...rest}>
       {btnStyle.visible && canScrollLeft && (
         <button
           onClick={() => scroll(-1)}
@@ -77,7 +77,7 @@ export function ScrollableTableWrapper({ children, className, ...rest }: React.H
           <ChevronRight className="w-5 h-5 text-blue-600 dark:text-blue-400" />
         </button>
       )}
-      <div ref={scrollRef} className="overflow-auto border rounded-lg">
+      <div ref={scrollRef} className="overflow-auto border rounded-lg flex-1 min-h-0">
         {children}
       </div>
     </div>
