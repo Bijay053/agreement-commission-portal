@@ -9,6 +9,20 @@ from .models import SubAgentEntry, SubAgentTermEntry
 from .services import calculate_sub_agent_term_entry, calculate_master_totals
 
 
+def _intake_sort_key(intake_str):
+    if not intake_str:
+        return (0, 0)
+    parts = intake_str.strip().upper().split()
+    year = 0
+    term = 0
+    for p in parts:
+        if p.isdigit() and len(p) == 4:
+            year = int(p)
+        elif p.startswith('T') and len(p) == 2 and p[1:].isdigit():
+            term = int(p[1:])
+    return (year, term)
+
+
 def student_to_dict(s):
     if not s:
         return None
@@ -115,12 +129,13 @@ class SubAgentMasterListView(APIView):
     def get(self, request):
         try:
             active_student_ids = set(CommissionStudent.objects.values_list('id', flat=True))
-            masters = SubAgentEntry.objects.filter(commission_student_id__in=active_student_ids).order_by('-id')
+            masters = SubAgentEntry.objects.filter(commission_student_id__in=active_student_ids)
             user_id = request.session.get('userId')
             masters = filter_sub_agent_by_user(masters, user_id)
             student_ids = [m.commission_student_id for m in masters]
             students = {s.id: s for s in CommissionStudent.objects.filter(id__in=student_ids)}
             result = [master_to_dict(m, students.get(m.commission_student_id)) for m in masters if students.get(m.commission_student_id)]
+            result.sort(key=lambda r: _intake_sort_key(r['student']['startIntake'] if r.get('student') else ''), reverse=True)
             return Response(result)
         except Exception as e:
             return Response({'message': str(e)}, status=500)
@@ -212,7 +227,7 @@ class SubAgentTermEntriesView(APIView):
     @require_permission("sub_agent_commission.view")
     def get(self, request, term_name):
         try:
-            entries = SubAgentTermEntry.objects.filter(term_name=term_name).order_by('-id')
+            entries = SubAgentTermEntry.objects.filter(term_name=term_name)
             student_ids = [e.commission_student_id for e in entries]
             students = {s.id: s for s in CommissionStudent.objects.filter(id__in=student_ids)}
             result = []
@@ -221,6 +236,7 @@ class SubAgentTermEntriesView(APIView):
                 s = students.get(e.commission_student_id)
                 d['student'] = student_to_dict(s)
                 result.append(d)
+            result.sort(key=lambda r: _intake_sort_key(r['student']['startIntake'] if r.get('student') and r['student'] else ''), reverse=True)
             return Response(result)
         except Exception as e:
             return Response({'message': str(e)}, status=500)
