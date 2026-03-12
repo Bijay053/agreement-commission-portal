@@ -1,0 +1,170 @@
+$session = New-Object Microsoft.PowerShell.Commands.WebRequestSession
+$session.UserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36"
+$session.Cookies.Add((New-Object System.Net.Cookie("csrftoken", "KbWKrqo0QAxLVBvHKhtc1mDex9zHP7kK", "/", "portal.studyinfocentre.com")))
+$session.Cookies.Add((New-Object System.Net.Cookie("connect.sid", "0ksz30bl0ho4ga1kq7wz13nsaakvj0g0", "/", "portal.studyinfocentre.com")))
+Invoke-WebRequest -UseBasicParsing -Uri "https://portal.studyinfocentre.com/api/commission-tracker/entries/50" `
+-Method "PATCH" `
+-WebSession $session `
+-Headers @{
+"Accept"="*/*"
+  "Accept-Encoding"="gzip, deflate, br, zstd"
+  "Accept-Language"="en-US,en;q=0.9"
+  "Origin"="https://portal.studyinfocentre.com"
+  "Referer"="https://portal.studyinfocentre.com/commission-tracker?tab=t1_2025"
+  "Sec-Fetch-Dest"="empty"
+  "Sec-Fetch-Mode"="cors"
+  "Sec-Fetch-Site"="same-origin"
+  "X-CSRFToken"="KbWKrqo0QAxLVBvHKhtc1mDex9zHP7kK"
+  "sec-ch-ua"="`"Not:A-Brand`";v=`"99`", `"Google Chrome`";v=`"145`", `"Chromium`";v=`"145`""
+  "sec-ch-ua-mobile"="?0"
+  "sec-ch-ua-platform"="`"Windows`""
+} `
+-ContentType "application/json" `
+-Body "{`"feeGross`":`"2`"}";
+$session = New-Object Microsoft.PowerShell.Commands.WebRequestSession
+$session.UserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36"
+$session.Cookies.Add((New-Object System.Net.Cookie("csrftoken", "KbWKrqo0QAxLVBvHKhtc1mDex9zHP7kK", "/", "portal.studyinfocentre.com")))
+$session.Cookies.Add((New-Object System.Net.Cookie("connect.sid", "0ksz30bl0ho4ga1kq7wz13nsaakvj0g0", "/", "portal.studyinfocentre.com")))
+Invoke-WebRequest -UseBasicParsing -Uri "https://portal.studyinfocentre.com/api/commission-tracker/students?pageSize=all" `
+-WebSession $session `
+-Headers @{
+"Accept"="*/*"
+  "Accept-Encoding"="gzip, deflate, br, zstd"
+  "Accept-Language"="en-US,en;q=0.9"
+  "Referer"="https://portal.studyinfocentre.com/commission-tracker?tab=t1_2025"
+  "Sec-Fetch-Dest"="empty"
+  "Sec-Fetch-Mode"="cors"
+  "Sec-Fetch-Site"="same-origin"
+  "sec-ch-ua"="`"Not:A-Brand`";v=`"99`", `"Google Chrome`";v=`"145`", `"Chromium`";v=`"145`""
+  "sec-ch-ua-mobile"="?0"
+  "sec-ch-ua-platform"="`"Windows`""
+};
+$session = New-Object Microsoft.PowerShell.Commands.WebRequestSession
+$session.UserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36"
+$session.Cookies.Add((New-Object System.Net.Cookie("csrftoken", "KbWKrqo0QAxLVBvHKhtc1mDex9zHP7kK", "/", "portal.studyinfocentre.com")))
+$session.Cookies.Add((New-Object System.Net.Cookie("connect.sid", "0ksz30bl0ho4ga1kq7wz13nsaakvj0g0", "/", "portal.studyinfocentre.com")))
+Invoke-WebRequest -UseBasicParsing -Uri "https://portal.studyinfocentre.com/api/commission-tracker/all-entries?year=2025" `
+-WebSession $session `
+-Headers @{
+"Accept"="*/*"
+  "Accept-Encoding"="gzip, deflate, br, zstd"
+  "Accept-Language"="en-US,en;q=0.9"
+  "Referer"="https://portal.studyinfocentre.com/commission-tracker?tab=t1_2025"
+  "Sec-Fetch-Dest"="empty"
+  "Sec-Fetch-Mode"="cors"
+  "Sec-Fetch-Site"="same-origin"
+  "sec-ch-ua"="`"Not:A-Brand`";v=`"99`", `"Google Chrome`";v=`"145`", `"Chromium`";v=`"145`""
+  "sec-ch-ua-mobile"="?0"
+  "sec-ch-ua-platform"="`"Windows`""
+};
+$session = New-Object Microsoft.PowerShell.Commands.WebRequestSession
+$session.UserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36"
+$session.Cookies.Add((New-Object System.Net.Cookie("csrftoken", "KbWKrqo0QAxLVBvHKhtc1mDex9zHP7kK", "/", "portal.studyinfocentre.com")))
+$session.Cookies.Add((New-Object System.Net.Cookie("connect.sid", "0ksz30bl0ho4ga1kq7wz13nsaakvj0g0", "/", "portal.studyinfocentre.com")))
+Invoke-WebRequest -UseBasicParsing -Uri "https://portal.studyinfocentre.com/api/commission-tracker/all-entries" `
+-WebSession $session `
+-Headers @{
+"Accept"="*/*"
+  "Accept-Encoding"="gzip, deflate, br, zstd"
+  "Accept-Language"="en-US,en;q=0.9"
+  "Referer"="https://portal.studyinfocentre.com/commission-tracker?tab=t1_2025"
+  "Sec-Fetch-Dest"="empty"
+  "Sec-Fetch-Mode"="cors"
+  "Sec-Fetch-Site"="same-origin"
+  "sec-ch-ua"="`"Not:A-Brand`";v=`"99`", `"Google Chrome`";v=`"145`", `"Chromium`";v=`"145`""
+  "sec-ch-ua-mobile"="?0"
+  "sec-ch-ua-platform"="`"Windows`""
+};
+$session = New-Object Microsoft.PowerShell.Commands.WebRequestSession
+$session.UserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36"
+$session.Cookies.Add((New-Object System.Net.Cookie("csrftoken", "KbWKrqo0QAxLVBvHKhtc1mDex9zHP7kK", "/", "portal.studyinfocentre.com")))
+$session.Cookies.Add((New-Object System.Net.Cookie("connect.sid", "0ksz30bl0ho4ga1kq7wz13nsaakvj0g0", "/", "portal.studyinfocentre.com")))
+Invoke-WebRequest -UseBasicParsing -Uri "https://portal.studyinfocentre.com/api/commission-tracker/dashboard/2025?" `
+-WebSession $session `
+-Headers @{
+"Accept"="*/*"
+  "Accept-Encoding"="gzip, deflate, br, zstd"
+  "Accept-Language"="en-US,en;q=0.9"
+  "Referer"="https://portal.studyinfocentre.com/commission-tracker?tab=t1_2025"
+  "Sec-Fetch-Dest"="empty"
+  "Sec-Fetch-Mode"="cors"
+  "Sec-Fetch-Site"="same-origin"
+  "sec-ch-ua"="`"Not:A-Brand`";v=`"99`", `"Google Chrome`";v=`"145`", `"Chromium`";v=`"145`""
+  "sec-ch-ua-mobile"="?0"
+  "sec-ch-ua-platform"="`"Windows`""
+};
+$session = New-Object Microsoft.PowerShell.Commands.WebRequestSession
+$session.UserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36"
+$session.Cookies.Add((New-Object System.Net.Cookie("csrftoken", "KbWKrqo0QAxLVBvHKhtc1mDex9zHP7kK", "/", "portal.studyinfocentre.com")))
+$session.Cookies.Add((New-Object System.Net.Cookie("connect.sid", "0ksz30bl0ho4ga1kq7wz13nsaakvj0g0", "/", "portal.studyinfocentre.com")))
+Invoke-WebRequest -UseBasicParsing -Uri "https://portal.studyinfocentre.com/api/commission-tracker/filters" `
+-WebSession $session `
+-Headers @{
+"Accept"="*/*"
+  "Accept-Encoding"="gzip, deflate, br, zstd"
+  "Accept-Language"="en-US,en;q=0.9"
+  "Referer"="https://portal.studyinfocentre.com/commission-tracker?tab=t1_2025"
+  "Sec-Fetch-Dest"="empty"
+  "Sec-Fetch-Mode"="cors"
+  "Sec-Fetch-Site"="same-origin"
+  "sec-ch-ua"="`"Not:A-Brand`";v=`"99`", `"Google Chrome`";v=`"145`", `"Chromium`";v=`"145`""
+  "sec-ch-ua-mobile"="?0"
+  "sec-ch-ua-platform"="`"Windows`""
+};
+$session = New-Object Microsoft.PowerShell.Commands.WebRequestSession
+$session.UserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36"
+$session.Cookies.Add((New-Object System.Net.Cookie("csrftoken", "KbWKrqo0QAxLVBvHKhtc1mDex9zHP7kK", "/", "portal.studyinfocentre.com")))
+$session.Cookies.Add((New-Object System.Net.Cookie("connect.sid", "0ksz30bl0ho4ga1kq7wz13nsaakvj0g0", "/", "portal.studyinfocentre.com")))
+Invoke-WebRequest -UseBasicParsing -Uri "https://portal.studyinfocentre.com/api/commission-tracker/years" `
+-WebSession $session `
+-Headers @{
+"Accept"="*/*"
+  "Accept-Encoding"="gzip, deflate, br, zstd"
+  "Accept-Language"="en-US,en;q=0.9"
+  "Referer"="https://portal.studyinfocentre.com/commission-tracker?tab=t1_2025"
+  "Sec-Fetch-Dest"="empty"
+  "Sec-Fetch-Mode"="cors"
+  "Sec-Fetch-Site"="same-origin"
+  "sec-ch-ua"="`"Not:A-Brand`";v=`"99`", `"Google Chrome`";v=`"145`", `"Chromium`";v=`"145`""
+  "sec-ch-ua-mobile"="?0"
+  "sec-ch-ua-platform"="`"Windows`""
+};
+$session = New-Object Microsoft.PowerShell.Commands.WebRequestSession
+$session.UserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36"
+$session.Cookies.Add((New-Object System.Net.Cookie("csrftoken", "KbWKrqo0QAxLVBvHKhtc1mDex9zHP7kK", "/", "portal.studyinfocentre.com")))
+$session.Cookies.Add((New-Object System.Net.Cookie("connect.sid", "0ksz30bl0ho4ga1kq7wz13nsaakvj0g0", "/", "portal.studyinfocentre.com")))
+Invoke-WebRequest -UseBasicParsing -Uri "https://portal.studyinfocentre.com/api/commission-tracker/terms" `
+-WebSession $session `
+-Headers @{
+"Accept"="*/*"
+  "Accept-Encoding"="gzip, deflate, br, zstd"
+  "Accept-Language"="en-US,en;q=0.9"
+  "Referer"="https://portal.studyinfocentre.com/commission-tracker?tab=t1_2025"
+  "Sec-Fetch-Dest"="empty"
+  "Sec-Fetch-Mode"="cors"
+  "Sec-Fetch-Site"="same-origin"
+  "sec-ch-ua"="`"Not:A-Brand`";v=`"99`", `"Google Chrome`";v=`"145`", `"Chromium`";v=`"145`""
+  "sec-ch-ua-mobile"="?0"
+  "sec-ch-ua-platform"="`"Windows`""
+};
+$session = New-Object Microsoft.PowerShell.Commands.WebRequestSession
+$session.UserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36"
+$session.Cookies.Add((New-Object System.Net.Cookie("csrftoken", "KbWKrqo0QAxLVBvHKhtc1mDex9zHP7kK", "/", "portal.studyinfocentre.com")))
+$session.Cookies.Add((New-Object System.Net.Cookie("connect.sid", "0ksz30bl0ho4ga1kq7wz13nsaakvj0g0", "/", "portal.studyinfocentre.com")))
+Invoke-WebRequest -UseBasicParsing -Uri "https://portal.studyinfocentre.com/api/auth/heartbeat" `
+-Method "POST" `
+-WebSession $session `
+-Headers @{
+"Accept"="*/*"
+  "Accept-Encoding"="gzip, deflate, br, zstd"
+  "Accept-Language"="en-US,en;q=0.9"
+  "Origin"="https://portal.studyinfocentre.com"
+  "Referer"="https://portal.studyinfocentre.com/commission-tracker?tab=t1_2025"
+  "Sec-Fetch-Dest"="empty"
+  "Sec-Fetch-Mode"="cors"
+  "Sec-Fetch-Site"="same-origin"
+  "X-CSRFToken"="KbWKrqo0QAxLVBvHKhtc1mDex9zHP7kK"
+  "sec-ch-ua"="`"Not:A-Brand`";v=`"99`", `"Google Chrome`";v=`"145`", `"Chromium`";v=`"145`""
+  "sec-ch-ua-mobile"="?0"
+  "sec-ch-ua-platform"="`"Windows`""
+}
