@@ -73,6 +73,8 @@ export default function UsersManagementPage() {
   const [editRoleIds, setEditRoleIds] = useState<number[]>([]);
   const [editFullName, setEditFullName] = useState("");
   const [editEmail, setEditEmail] = useState("");
+  const [nameEditing, setNameEditing] = useState(false);
+  const [emailEditing, setEmailEditing] = useState(false);
 
   const updateNameMutation = useMutation({
     mutationFn: async ({ userId, fullName }: { userId: number; fullName: string }) => {
@@ -130,6 +132,8 @@ export default function UsersManagementPage() {
     setEditRoleIds(user.roles.map(r => r.id));
     setEditFullName(user.fullName);
     setEditEmail(user.email);
+    setNameEditing(false);
+    setEmailEditing(false);
   };
 
   const toggleRole = (roleId: number) => {
@@ -298,20 +302,50 @@ export default function UsersManagementPage() {
               <div className="shrink-0 space-y-3">
                 <div>
                   <Label className="mb-1 block">Full Name</Label>
-                  <Input
-                    value={editFullName}
-                    onChange={e => setEditFullName(e.target.value)}
-                    data-testid="input-edit-user-name"
-                  />
+                  <div className="flex items-center gap-2">
+                    <Input
+                      value={editFullName}
+                      onChange={e => setEditFullName(e.target.value)}
+                      readOnly={!nameEditing}
+                      className={!nameEditing ? "bg-muted cursor-default" : ""}
+                      data-testid="input-edit-user-name"
+                    />
+                    <Button
+                      type="button"
+                      variant={nameEditing ? "default" : "outline"}
+                      size="icon"
+                      className="shrink-0 h-9 w-9"
+                      onClick={() => setNameEditing(!nameEditing)}
+                      data-testid="button-toggle-edit-name"
+                      title={nameEditing ? "Lock name" : "Edit name"}
+                    >
+                      <Pencil className="h-4 w-4" />
+                    </Button>
+                  </div>
                 </div>
                 <div>
                   <Label className="mb-1 block">Email</Label>
-                  <Input
-                    type="email"
-                    value={editEmail}
-                    onChange={e => setEditEmail(e.target.value)}
-                    data-testid="input-edit-user-email"
-                  />
+                  <div className="flex items-center gap-2">
+                    <Input
+                      type="email"
+                      value={editEmail}
+                      onChange={e => setEditEmail(e.target.value)}
+                      readOnly={!emailEditing}
+                      className={!emailEditing ? "bg-muted cursor-default" : ""}
+                      data-testid="input-edit-user-email"
+                    />
+                    <Button
+                      type="button"
+                      variant={emailEditing ? "default" : "outline"}
+                      size="icon"
+                      className="shrink-0 h-9 w-9"
+                      onClick={() => setEmailEditing(!emailEditing)}
+                      data-testid="button-toggle-edit-email"
+                      title={emailEditing ? "Lock email" : "Edit email"}
+                    >
+                      <Pencil className="h-4 w-4" />
+                    </Button>
+                  </div>
                 </div>
               </div>
 
