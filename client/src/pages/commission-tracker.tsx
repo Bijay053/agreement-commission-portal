@@ -192,7 +192,7 @@ export default function CommissionTrackerPage() {
       return json;
     },
   });
-  const students = studentsData?.results;
+  const students = (studentsData?.results || []).filter((s: any) => s != null);
 
   const { data: allStudentProviders = [] } = useQuery<any[]>({
     queryKey: ["/api/commission-tracker/all-student-providers"],
