@@ -18,6 +18,7 @@ import {
   Search, Users, DollarSign, TrendingUp, AlertCircle,
   RefreshCw, ArrowDownUp, AlertTriangle, CalendarDays
 } from "lucide-react";
+import { ScrollableTableWrapper } from "@/components/ui/scrollable-table-wrapper";
 import type { CommissionStudent, SubAgentEntry, SubAgentTermEntry } from "@shared/schema";
 
 type CommissionTerm = { id: number; termName: string; termLabel: string; year: number; termNumber: number; sortOrder: number; isActive: boolean };
@@ -590,7 +591,7 @@ function MasterTable({ rows, canEdit, onUpdateRate, onUpdateGst }: {
   }
 
   return (
-    <div className="overflow-auto border rounded-lg" data-testid="master-table">
+    <ScrollableTableWrapper data-testid="master-table">
       <table className="w-full text-xs border-collapse">
         <thead>
           <tr className="bg-[#1F4E79] text-white">
@@ -668,7 +669,7 @@ function MasterTable({ rows, canEdit, onUpdateRate, onUpdateGst }: {
           })}
         </tbody>
       </table>
-    </div>
+    </ScrollableTableWrapper>
   );
 }
 
@@ -698,7 +699,7 @@ function TermTable({ rows, termName, canEdit, onUpdate }: {
   }), { feeNet: 0, mainComm: 0, subComm: 0, bonus: 0, gst: 0, totalPaid: 0 });
 
   return (
-    <div className="overflow-auto border rounded-lg" data-testid="term-table">
+    <ScrollableTableWrapper data-testid="term-table">
       <table className="w-full text-xs border-collapse">
         <thead>
           <tr className="bg-[#1F4E79] text-white sticky top-0 z-10">
@@ -846,6 +847,6 @@ function TermTable({ rows, termName, canEdit, onUpdate }: {
           </tr>
         </tfoot>
       </table>
-    </div>
+    </ScrollableTableWrapper>
   );
 }
