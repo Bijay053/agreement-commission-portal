@@ -82,8 +82,11 @@ const ACTION_LABELS: Record<string, string> = {
   portal_opened: "Portal Opened",
   open_and_fill: "Open & Fill",
   extension_matched: "Extension Match",
+  extension_reveal: "Extension Reveal",
   autofill_success: "Autofill OK",
   autofill_failed: "Autofill Failed",
+  autofill_dismissed: "Autofill Dismissed",
+  suspicious_domain_blocked: "Domain Blocked",
 };
 
 const ACTION_COLORS: Record<string, string> = {
@@ -97,8 +100,11 @@ const ACTION_COLORS: Record<string, string> = {
   portal_opened: "bg-cyan-100 text-cyan-800 dark:bg-cyan-900/30 dark:text-cyan-300",
   open_and_fill: "bg-indigo-100 text-indigo-800 dark:bg-indigo-900/30 dark:text-indigo-300",
   extension_matched: "bg-violet-100 text-violet-800 dark:bg-violet-900/30 dark:text-violet-300",
+  extension_reveal: "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300",
   autofill_success: "bg-teal-100 text-teal-800 dark:bg-teal-900/30 dark:text-teal-300",
   autofill_failed: "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300",
+  autofill_dismissed: "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400",
+  suspicious_domain_blocked: "bg-red-200 text-red-900 dark:bg-red-900/40 dark:text-red-300",
 };
 
 function formatDateTime(d: string | null) {

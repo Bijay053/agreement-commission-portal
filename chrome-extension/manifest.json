@@ -1,27 +1,24 @@
 {
   "manifest_version": 3,
   "name": "Study Info Centre - Portal Autofill",
-  "version": "1.0.0",
-  "description": "Auto-fill portal login credentials from Study Info Centre CRM",
+  "version": "2.0.0",
+  "description": "Secure auto-fill for portal login credentials from Study Info Centre CRM",
   "permissions": [
     "storage",
     "activeTab",
     "scripting",
-    "tabs"
+    "tabs",
+    "alarms"
   ],
   "host_permissions": [
-    "<all_urls>"
+    "https://portal.studyinfocentre.com/*"
+  ],
+  "optional_host_permissions": [
+    "https://*/*"
   ],
   "background": {
     "service_worker": "background.js"
   },
-  "content_scripts": [
-    {
-      "matches": ["<all_urls>"],
-      "js": ["content.js"],
-      "run_at": "document_idle"
-    }
-  ],
   "action": {
     "default_popup": "popup.html",
     "default_icon": {

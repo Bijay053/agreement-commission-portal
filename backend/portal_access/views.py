@@ -58,6 +58,27 @@ def _extract_domain(url):
         return ''
 
 
+SUSPICIOUS_TLDS = {'.tk', '.ml', '.ga', '.cf', '.gq', '.xyz', '.top', '.buzz', '.club'}
+SUSPICIOUS_KEYWORDS = ['phish', 'secure-login', 'auth-verify', 'account-update',
+                       'signin-', 'login-verify', 'password-reset-confirm']
+
+
+def _is_suspicious_domain(hostname):
+    if not hostname:
+        return False
+    h = hostname.lower()
+    for tld in SUSPICIOUS_TLDS:
+        if h.endswith(tld):
+            return True
+    for kw in SUSPICIOUS_KEYWORDS:
+        if kw in h:
+            return True
+    parts = h.split('.')
+    if len(parts) > 4:
+        return True
+    return False
+
+
 def portal_to_dict(p, include_password=False):
     d = {
         'id': p.id,
@@ -341,8 +362,13 @@ class PortalAccessLogListView(APIView):
         } for log in logs])
 
 
+class PortalMatchThrottle(UserRateThrottle):
+    rate = '60/hour'
+    scope = 'portal_match'
+
+
 class PortalMatchView(APIView):
-    throttle_classes = [PortalRevealThrottle]
+    throttle_classes = [PortalMatchThrottle]
 
     @require_permission("portal_access.reveal")
     def post(self, request):
@@ -356,18 +382,25 @@ class PortalMatchView(APIView):
         if not hostname:
             return Response({'matched': False})
 
+        if _is_suspicious_domain(hostname):
+            user = _user_info(request)
+            _log_action(None, user, 'suspicious_domain_blocked', request,
+                         result='blocked', note=f"Blocked suspicious domain: {hostname}")
+            return Response({'matched': False})
+
         candidates = PortalCredential.objects.filter(status='active')
         matched = None
 
         for item in candidates:
-            if (item.domain or '').lower() == hostname:
+            d = (item.domain or '').lower()
+            if d and d == hostname:
                 matched = item
                 break
 
         if not matched:
             for item in candidates:
                 d = (item.domain or '').lower()
-                if d and hostname.endswith(d):
+                if d and hostname.endswith('.' + d):
                     matched = item
                     break
 
@@ -381,11 +414,6 @@ class PortalMatchView(APIView):
         _log_action(matched, user, 'extension_matched', request,
                      note=f"Matched for {hostname}")
 
-        try:
-            password = decrypt_value(matched.encrypted_password) if matched.encrypted_password else ''
-        except Exception:
-            password = ''
-
         return Response({
             'matched': True,
             'portal': {
@@ -394,7 +422,6 @@ class PortalMatchView(APIView):
                 'portal_url': matched.portal_url,
                 'domain': matched.domain,
                 'username': matched.username,
-                'password': password,
                 'username_selector': matched.username_selector or '',
                 'password_selector': matched.password_selector or '',
                 'submit_selector': matched.submit_selector or '',

@@ -1,22 +1,25 @@
+let pendingPortalInfo = null;
+let bannerElement = null;
+
 function isVisible(el) {
   return !!(el && el.offsetWidth > 0 && el.offsetHeight > 0);
 }
 
 function triggerEvents(el) {
   el.focus();
-  el.dispatchEvent(new Event("focus", { bubbles: true }));
-  el.dispatchEvent(new Event("input", { bubbles: true }));
-  el.dispatchEvent(new Event("change", { bubbles: true }));
-  el.dispatchEvent(new Event("blur", { bubbles: true }));
-
+  ["focus", "input", "change"].forEach((name) => {
+    el.dispatchEvent(new Event(name, { bubbles: true }));
+  });
   el.dispatchEvent(new KeyboardEvent("keydown", { bubbles: true }));
   el.dispatchEvent(new KeyboardEvent("keyup", { bubbles: true }));
 }
 
 function setNativeValue(element, value) {
-  const valueSetter = Object.getOwnPropertyDescriptor(element.__proto__, "value")?.set;
+  const valueSetter =
+    Object.getOwnPropertyDescriptor(element.__proto__, "value")?.set;
   const prototype = Object.getPrototypeOf(element);
-  const prototypeValueSetter = Object.getOwnPropertyDescriptor(prototype, "value")?.set;
+  const prototypeValueSetter =
+    Object.getOwnPropertyDescriptor(prototype, "value")?.set;
 
   if (prototypeValueSetter && valueSetter !== prototypeValueSetter) {
     prototypeValueSetter.call(element, value);
@@ -55,7 +58,6 @@ function findUsernameField(customSelector) {
       if (isVisible(field)) return field;
     }
   }
-
   return null;
 }
 
@@ -64,12 +66,10 @@ function findPasswordField(customSelector) {
     const el = document.querySelector(customSelector);
     if (el && isVisible(el)) return el;
   }
-
   const fields = document.querySelectorAll('input[type="password"]');
   for (const field of fields) {
     if (isVisible(field)) return field;
   }
-
   return null;
 }
 
@@ -82,7 +82,7 @@ function findSubmitButton(customSelector) {
   const candidates = [
     'button[type="submit"]',
     'input[type="submit"]',
-    'button'
+    "button"
   ];
 
   for (const selector of candidates) {
@@ -94,103 +94,198 @@ function findSubmitButton(customSelector) {
         text.includes("login") ||
         text.includes("log in") ||
         text.includes("sign in") ||
-        text.includes("submit") ||
-        text.includes("enter")
+        text.includes("submit")
       ) {
         return field;
       }
     }
   }
 
-  const submitBtn = document.querySelector('button[type="submit"]');
-  if (submitBtn && isVisible(submitBtn)) return submitBtn;
-
-  const inputSubmit = document.querySelector('input[type="submit"]');
-  if (inputSubmit && isVisible(inputSubmit)) return inputSubmit;
-
-  return null;
+  return (
+    document.querySelector('button[type="submit"]') ||
+    document.querySelector('input[type="submit"]') ||
+    null
+  );
 }
 
-function logToServer(payload, config) {
-  if (!config.crmBaseUrl || !config.sessionCookie) return;
-  try {
-    fetch(`${config.crmBaseUrl}/api/portal-access/autofill-log`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Cookie": `sessionid=${config.sessionCookie}`
-      },
-      credentials: "include",
-      body: JSON.stringify(payload)
-    });
-  } catch (e) {
-    console.error("Autofill log error:", e);
+function sendLog(portalId, action, message) {
+  chrome.runtime.sendMessage({
+    type: "LOG_EVENT",
+    portalId,
+    action,
+    url: window.location.href,
+    message
+  });
+}
+
+function clearPending() {
+  pendingPortalInfo = null;
+}
+
+function removeBanner() {
+  if (bannerElement) {
+    bannerElement.remove();
+    bannerElement = null;
   }
 }
 
-function autofill(payload) {
-  const { portal, autoSubmit, crmBaseUrl, sessionCookie } = payload;
-  const config = { crmBaseUrl, sessionCookie };
+function escapeHtml(str) {
+  const div = document.createElement("div");
+  div.appendChild(document.createTextNode(str || ""));
+  return div.innerHTML;
+}
 
-  const usernameField = findUsernameField(portal.username_selector);
-  const passwordField = findPasswordField(portal.password_selector);
+function showAutofillBanner(info) {
+  removeBanner();
+
+  const shadow = document.createElement("div");
+  shadow.id = "sic-autofill-root";
+  const shadowRoot = shadow.attachShadow({ mode: "closed" });
+
+  shadowRoot.innerHTML = `
+    <style>
+      @keyframes sic-slide-in {
+        from { transform: translateY(-100%); }
+        to { transform: translateY(0); }
+      }
+      .sic-banner {
+        position: fixed; top: 0; left: 0; right: 0; z-index: 2147483647;
+        background: linear-gradient(135deg, #4f46e5 0%, #6366f1 100%);
+        color: white; padding: 10px 16px;
+        display: flex; align-items: center; justify-content: space-between;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        font-size: 13px; box-shadow: 0 2px 12px rgba(0,0,0,0.2);
+        animation: sic-slide-in 0.3s ease-out;
+      }
+      .sic-left { display: flex; align-items: center; gap: 10px; }
+      .sic-btns { display: flex; gap: 8px; align-items: center; }
+      .sic-fill {
+        background: white; color: #4f46e5; border: none; border-radius: 4px;
+        padding: 6px 14px; font-size: 12px; font-weight: 600; cursor: pointer;
+      }
+      .sic-dismiss {
+        background: transparent; color: rgba(255,255,255,0.8);
+        border: 1px solid rgba(255,255,255,0.3);
+        border-radius: 4px; padding: 6px 10px; font-size: 12px; cursor: pointer;
+      }
+    </style>
+    <div class="sic-banner">
+      <div class="sic-left">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+          <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+        </svg>
+        <span>
+          <strong>${escapeHtml(info.portalName)}</strong> &mdash;
+          credentials ready for <strong>${escapeHtml(info.username)}</strong>
+        </span>
+      </div>
+      <div class="sic-btns">
+        <button class="sic-fill">Fill Credentials</button>
+        <button class="sic-dismiss">Dismiss</button>
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(shadow);
+  bannerElement = shadow;
+
+  shadowRoot.querySelector(".sic-fill").addEventListener("click", (e) => {
+    if (!e.isTrusted) return;
+    performAutofill(info);
+    removeBanner();
+    clearPending();
+  });
+
+  shadowRoot.querySelector(".sic-dismiss").addEventListener("click", (e) => {
+    if (!e.isTrusted) return;
+    removeBanner();
+    sendLog(info.portalId, "autofill_dismissed", "User dismissed autofill banner");
+    clearPending();
+  });
+
+  setTimeout(() => {
+    removeBanner();
+    clearPending();
+  }, 30000);
+}
+
+function performAutofill(info) {
+  const usernameField = findUsernameField(info.usernameSelector);
+  const passwordField = findPasswordField(info.passwordSelector);
 
   if (!usernameField && !passwordField) {
-    console.warn("[SIC Autofill] No login fields found on page");
-    logToServer({
-      portal_id: portal.id,
-      action: "autofill_failed",
-      url: window.location.href,
-      message: "No login fields found"
-    }, config);
-    return false;
+    sendLog(info.portalId, "autofill_failed", "No login fields found on page");
+    return;
   }
 
   if (usernameField) {
-    setNativeValue(usernameField, portal.username);
+    setNativeValue(usernameField, info.username);
     triggerEvents(usernameField);
   }
 
-  if (passwordField) {
-    setNativeValue(passwordField, portal.password);
-    triggerEvents(passwordField);
-  }
+  chrome.runtime.sendMessage(
+    { type: "FETCH_PASSWORD", portalId: info.portalId },
+    (response) => {
+      if (chrome.runtime.lastError || !response || !response.ok) {
+        sendLog(
+          info.portalId,
+          "autofill_failed",
+          "Failed to fetch password: " + (response?.error || chrome.runtime.lastError?.message || "unknown")
+        );
+        return;
+      }
 
-  logToServer({
-    portal_id: portal.id,
-    action: "autofill_success",
-    url: window.location.href,
-    message: `Filled: username=${!!usernameField}, password=${!!passwordField}`
-  }, config);
+      let password = response.password;
 
-  if (autoSubmit) {
-    const submitButton = findSubmitButton(portal.submit_selector);
-    if (submitButton) {
-      setTimeout(() => submitButton.click(), 600);
+      if (passwordField) {
+        setNativeValue(passwordField, password);
+        triggerEvents(passwordField);
+      }
+
+      password = null;
+      if (response) response.password = null;
+
+      sendLog(
+        info.portalId,
+        "autofill_success",
+        `Filled: username=${!!usernameField}, password=${!!passwordField}`
+      );
+
+      if (info.autoSubmit) {
+        const submitButton = findSubmitButton(info.submitSelector);
+        if (submitButton) {
+          setTimeout(() => submitButton.click(), 600);
+        }
+      }
     }
-  }
-
-  return true;
-}
-
-function retryAutofill(payload, maxAttempts = 6) {
-  let count = 0;
-
-  const run = () => {
-    const ok = autofill(payload);
-    count += 1;
-
-    if (!ok && count < maxAttempts) {
-      setTimeout(run, 1000);
-    }
-  };
-
-  run();
+  );
 }
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  if (message.type === "AUTOFILL_CREDENTIALS") {
-    retryAutofill(message.payload, 6);
+  if (message.type === "CREDENTIALS_AVAILABLE") {
+    pendingPortalInfo = {
+      portalName: message.payload.portalName,
+      portalId: message.payload.portalId,
+      username: message.payload.username,
+      usernameSelector: message.payload.usernameSelector,
+      passwordSelector: message.payload.passwordSelector,
+      submitSelector: message.payload.submitSelector,
+      autoSubmit: message.payload.autoSubmit
+    };
+    showAutofillBanner(pendingPortalInfo);
     sendResponse({ ok: true });
   }
+
+  if (message.type === "TRIGGER_FILL" && pendingPortalInfo) {
+    performAutofill(pendingPortalInfo);
+    removeBanner();
+    clearPending();
+    sendResponse({ ok: true });
+  }
+});
+
+window.addEventListener("beforeunload", () => {
+  removeBanner();
+  clearPending();
 });
