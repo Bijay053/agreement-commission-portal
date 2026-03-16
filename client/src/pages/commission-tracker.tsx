@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useLocation, useSearch } from "wouter";
 import { useAuth } from "@/lib/auth";
@@ -22,7 +22,7 @@ import {
 } from "lucide-react";
 import { ScrollableTableWrapper } from "@/components/ui/scrollable-table-wrapper";
 import type { CommissionStudent, CommissionEntry } from "@shared/schema";
-import { parseIntake, intakeSortKeyFromParsed, intakeFromTermName, isFinalStatus } from "@shared/intake-utils";
+import { parseIntake, intakeSortKey, intakeSortKeyFromParsed, intakeFromTermName, isFinalStatus } from "@shared/intake-utils";
 
 type CommissionTerm = { id: number; termName: string; termLabel: string; year: number; termNumber: number; sortOrder: number; isActive: boolean };
 
@@ -1044,6 +1044,15 @@ function MasterTable({ students, allEntries, year, isLoading, canEdit, canDelete
   const [deleteTarget, setDeleteTarget] = useState<CommissionStudent | null>(null);
   const [deleteProviderTarget, setDeleteProviderTarget] = useState<{ studentId: number; provider: any; isLast: boolean } | null>(null);
 
+  const sortedStudents = useMemo(() => {
+    return [...students].sort((a, b) => {
+      const keyA = intakeSortKey(a.startIntake);
+      const keyB = intakeSortKey(b.startIntake);
+      if (keyB !== keyA) return keyB - keyA;
+      return a.id - b.id;
+    });
+  }, [students]);
+
   const getTotalForProvider = (studentId: number, providerId: number | null) => {
     const entries = allEntries[studentId] || [];
     return entries
@@ -1088,11 +1097,11 @@ function MasterTable({ students, allEntries, year, isLoading, canEdit, canDelete
                   ))}
                 </tr>
               ))
-            ) : students.length > 0 ? (
+            ) : sortedStudents.length > 0 ? (
               (() => {
                 const rows: any[] = [];
                 let sn = 0;
-                for (const s of students) {
+                for (const s of sortedStudents) {
                   const statusBg = STATUS_ROW_BG[s.status || ""] || "transparent";
                   const additionalProviders = providersByStudent[s.id] || [];
                   const totalRows = 1 + additionalProviders.length;
@@ -1276,6 +1285,15 @@ function TermTable({ termName, students, allEntries, allEntriesGlobal, terms, is
   onDeleteEntry: (id: number) => void;
 }) {
   const [addEntryConfirm, setAddEntryConfirm] = useState<string | null>(null);
+
+  const sortedStudents = useMemo(() => {
+    return [...students].sort((a, b) => {
+      const keyA = intakeSortKey(a.startIntake);
+      const keyB = intakeSortKey(b.startIntake);
+      if (keyB !== keyA) return keyB - keyA;
+      return a.id - b.id;
+    });
+  }, [students]);
 
   const getEntry = (studentId: number, studentProviderId: number | null): CommissionEntry | undefined => {
     return (allEntries[studentId] || []).find(e => e.termName === termName && (e.studentProviderId || null) === studentProviderId);
@@ -1470,11 +1488,11 @@ function TermTable({ termName, students, allEntries, allEntriesGlobal, terms, is
                 ))}
               </tr>
             ))
-          ) : students.length > 0 ? (
+          ) : sortedStudents.length > 0 ? (
             (() => {
               const rows: any[] = [];
               let sn = 0;
-              for (const s of students) {
+              for (const s of sortedStudents) {
                 const additionalProviders = providersByStudent?.[s.id] || [];
 
                 const primaryHidden = isHidden(s.id, null, s.startIntake);

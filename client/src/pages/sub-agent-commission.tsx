@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useLocation, useSearch } from "wouter";
 import { useAuth } from "@/lib/auth";
@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import { ScrollableTableWrapper } from "@/components/ui/scrollable-table-wrapper";
 import type { CommissionStudent, SubAgentEntry, SubAgentTermEntry } from "@shared/schema";
+import { intakeSortKey } from "@shared/intake-utils";
 
 type CommissionTerm = { id: number; termName: string; termLabel: string; year: number; termNumber: number; sortOrder: number; isActive: boolean };
 
@@ -344,7 +345,15 @@ export default function SubAgentCommissionPage() {
     },
   });
 
-  const allMasterRows = (masterQuery.data || []).filter((r: any) => r && r.student);
+  const allMasterRows = useMemo(() => {
+    const rows = (masterQuery.data || []).filter((r: any) => r && r.student);
+    return rows.sort((a: MasterRow, b: MasterRow) => {
+      const keyA = intakeSortKey(a.student.startIntake);
+      const keyB = intakeSortKey(b.student.startIntake);
+      if (keyB !== keyA) return keyB - keyA;
+      return a.id - b.id;
+    });
+  }, [masterQuery.data]);
   const allAgents = [...new Set(allMasterRows.map(r => r.student.agentName))].sort();
   const allProviders = [...new Set(allMasterRows.map(r => r.student.provider))].sort();
 

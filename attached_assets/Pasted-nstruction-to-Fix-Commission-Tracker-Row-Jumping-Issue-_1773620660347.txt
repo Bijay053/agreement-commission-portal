@@ -1,0 +1,106 @@
+nstruction to Fix Commission Tracker Row Jumping Issue
+Problem
+
+When editing any column in the Commission Tracker table, the row order becomes unstable. Sometimes rows jump to different positions (e.g., row 1 → row 10 → row 1 again). This happens because the table is re-rendering without applying a consistent sorting rule.
+
+Required Fix
+
+The Commission Tracker must always sort rows by Start Intake date (descending) before rendering the table.
+
+Newest intake should appear first.
+
+Correct Order Example
+T3 2026
+T2 2026
+T1 2026
+T3 2025
+T2 2025
+T1 2025
+T3 2024
+T2 2024
+T1 2024
+Implementation Rules
+1. Add Start Intake Field
+
+Each record must contain a Start Intake value.
+
+Example:
+
+start_intake: "T1 2025"
+2. Convert Intake to Sortable Value
+
+Convert intake to numeric order before sorting.
+
+Mapping rule:
+
+T1 = 1
+T2 = 2
+T3 = 3
+
+Then generate a sort key:
+
+sort_key = year * 10 + intake_number
+
+Example:
+
+Intake	Year	Intake Number	Sort Key
+T1 2026	2026	1	20261
+T2 2026	2026	2	20262
+T3 2026	2026	3	20263
+3. Sort Before Rendering
+
+Rows must be sorted every time data loads or updates.
+
+Pseudo code:
+
+function intakeSortKey(intake) {
+  const [term, year] = intake.split(" ")
+  const intakeNumber = { T1:1, T2:2, T3:3 }[term]
+  return parseInt(year) * 10 + intakeNumber
+}
+
+data.sort((a,b) => {
+  return intakeSortKey(b.start_intake) - intakeSortKey(a.start_intake)
+})
+4. Prevent Table Reorder After Edit
+
+When a cell is edited:
+
+Update the row data
+
+Recalculate sorting
+
+Re-render table using the sorted data
+
+Example:
+
+onCellEdit(rowId, field, value){
+   updateRow(rowId, field, value)
+
+   data.sort((a,b)=> intakeSortKey(b.start_intake)-intakeSortKey(a.start_intake))
+
+   renderTable(data)
+}
+5. Add Stable Row ID
+
+Each row must have a permanent ID.
+
+Example:
+
+row_id
+student_id
+agentsic_id
+
+Do NOT rely on table index.
+
+Example:
+
+rowKey = student_id + "-" + provider
+Final Expected Behaviour
+
+After the fix:
+
+✔ Editing any column will NOT move rows randomly
+✔ Table will always remain sorted by Start Intake
+✔ Latest intake always stays at top
+✔ Row position will remain stable after edits
