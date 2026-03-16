@@ -35,28 +35,19 @@ async function getStoredConfig() {
   });
 }
 
-function validateHttpsUrl(url) {
-  try {
-    const parsed = new URL(url);
-    return parsed.protocol === "https:";
-  } catch {
-    return false;
-  }
-}
-
 chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
   if (changeInfo.status !== "complete" || !tab.url) return;
   if (
     tab.url.startsWith("chrome://") ||
     tab.url.startsWith("chrome-extension://") ||
     tab.url.startsWith("about:") ||
-    tab.url.startsWith("edge://")
+    tab.url.startsWith("edge://") ||
+    tab.url.startsWith("file://")
   )
     return;
 
   const config = await getStoredConfig();
   if (!config.crmBaseUrl || !config.sessionCookie) return;
-  if (!validateHttpsUrl(config.crmBaseUrl)) return;
 
   let hostname;
   try {
@@ -65,7 +56,12 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
     return;
   }
 
-  if (hostname === new URL(config.crmBaseUrl).hostname.toLowerCase()) return;
+  try {
+    const crmHost = new URL(config.crmBaseUrl).hostname.toLowerCase();
+    if (hostname === crmHost) return;
+  } catch {
+    return;
+  }
 
   try {
     const response = await fetch(`${config.crmBaseUrl}/api/portal-access/match`, {
@@ -95,23 +91,19 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
       return;
     }
 
-    const origin = `https://${hostname}/*`;
-    const hasPermission = await chrome.permissions.contains({ origins: [origin] });
-    if (!hasPermission) {
-      chrome.action.setBadgeText({ text: "?", tabId });
-      chrome.action.setBadgeBackgroundColor({ color: "#f59e0b", tabId });
-      chrome.storage.session.set({
-        pendingPermission: { origin, tabId, portalName: data.portal.portal_name }
+    try {
+      await chrome.scripting.executeScript({
+        target: { tabId },
+        files: ["content.js"]
       });
+    } catch (injErr) {
+      console.error("Content script injection failed:", injErr.message);
       return;
     }
 
-    await chrome.scripting.executeScript({
-      target: { tabId },
-      files: ["content.js"]
-    });
+    await new Promise((r) => setTimeout(r, 200));
 
-    await chrome.tabs.sendMessage(tabId, {
+    chrome.tabs.sendMessage(tabId, {
       type: "CREDENTIALS_AVAILABLE",
       payload: {
         portalName: data.portal.portal_name,
@@ -121,6 +113,10 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
         passwordSelector: data.portal.password_selector,
         submitSelector: data.portal.submit_selector,
         autoSubmit: config.autoSubmit
+      }
+    }, (resp) => {
+      if (chrome.runtime.lastError) {
+        console.error("Message to content script failed:", chrome.runtime.lastError.message);
       }
     });
 
@@ -148,7 +144,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           }
         );
         if (!response.ok) {
-          sendResponse({ ok: false, error: "Permission denied" });
+          sendResponse({ ok: false, error: "Permission denied or server error" });
           return;
         }
         const data = await response.json();

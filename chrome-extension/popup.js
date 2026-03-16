@@ -25,32 +25,6 @@ document.addEventListener("DOMContentLoaded", () => {
     }, duration || 3000);
   }
 
-  const permissionBar = document.getElementById("permissionBar");
-  const permPortalName = document.getElementById("permPortalName");
-  const grantPermBtn = document.getElementById("grantPermBtn");
-
-  chrome.storage.session.get(["pendingPermission"], (result) => {
-    if (result.pendingPermission) {
-      const pp = result.pendingPermission;
-      permPortalName.textContent = pp.portalName || pp.origin;
-      permissionBar.style.display = "block";
-
-      grantPermBtn.addEventListener("click", async () => {
-        const granted = await chrome.permissions.request({
-          origins: [pp.origin]
-        });
-        if (granted) {
-          chrome.storage.session.remove("pendingPermission");
-          permissionBar.style.display = "none";
-          showStatus(statusOk, "Permission granted! Reload the portal page.");
-          chrome.action.setBadgeText({ text: "" });
-        } else {
-          showStatus(statusErr, "Permission was denied");
-        }
-      });
-    }
-  });
-
   saveBtn.addEventListener("click", () => {
     const url = crmBaseUrl.value.trim().replace(/\/+$/, "");
     const cookie = sessionCookie.value.trim();
