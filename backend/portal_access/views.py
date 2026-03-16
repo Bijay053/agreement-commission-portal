@@ -220,6 +220,26 @@ class PortalCopyUsernameView(APIView):
         return Response({'username': portal.username})
 
 
+class PortalCopyPasswordView(APIView):
+    throttle_classes = [PortalRevealThrottle]
+
+    @require_permission("portal_access.reveal")
+    def post(self, request, portal_id):
+        try:
+            portal = PortalCredential.objects.get(id=portal_id)
+        except PortalCredential.DoesNotExist:
+            return Response({'message': 'Portal not found'}, status=404)
+
+        user = _user_info(request)
+        try:
+            password = decrypt_value(portal.encrypted_password) if portal.encrypted_password else ''
+        except Exception:
+            return Response({'message': 'Decryption error'}, status=500)
+
+        _log_action(portal, user, 'password_copied', request)
+        return Response({'password': password})
+
+
 class PortalOpenView(APIView):
     @require_permission("portal_access.view")
     def post(self, request, portal_id):
@@ -231,6 +251,30 @@ class PortalOpenView(APIView):
         user = _user_info(request)
         _log_action(portal, user, 'portal_opened', request)
         return Response({'url': portal.portal_url})
+
+
+class PortalOpenAndFillView(APIView):
+    throttle_classes = [PortalRevealThrottle]
+
+    @require_permission("portal_access.reveal")
+    def post(self, request, portal_id):
+        try:
+            portal = PortalCredential.objects.get(id=portal_id)
+        except PortalCredential.DoesNotExist:
+            return Response({'message': 'Portal not found'}, status=404)
+
+        user = _user_info(request)
+        try:
+            password = decrypt_value(portal.encrypted_password) if portal.encrypted_password else ''
+        except Exception:
+            password = ''
+
+        _log_action(portal, user, 'open_and_fill', request)
+        return Response({
+            'username': portal.username,
+            'password': password,
+            'url': portal.portal_url,
+        })
 
 
 class PortalAccessLogListView(APIView):

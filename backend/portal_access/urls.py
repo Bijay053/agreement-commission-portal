@@ -8,6 +8,8 @@ urlpatterns = [
     path('portal-access/<int:portal_id>/reveal', views.PortalRevealPasswordView.as_view()),
     path('portal-access/<int:portal_id>/rotate', views.PortalRotatePasswordView.as_view()),
     path('portal-access/<int:portal_id>/copy-username', views.PortalCopyUsernameView.as_view()),
+    path('portal-access/<int:portal_id>/copy-password', views.PortalCopyPasswordView.as_view()),
     path('portal-access/<int:portal_id>/open', views.PortalOpenView.as_view()),
+    path('portal-access/<int:portal_id>/open-and-fill', views.PortalOpenAndFillView.as_view()),
     path('portal-access/logs', views.PortalAccessLogListView.as_view()),
 ]

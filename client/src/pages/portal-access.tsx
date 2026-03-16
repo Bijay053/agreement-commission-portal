@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/lib/auth";
 import { apiRequest } from "@/lib/queryClient";
@@ -22,13 +22,17 @@ import {
   Tabs, TabsContent, TabsList, TabsTrigger,
 } from "@/components/ui/tabs";
 import {
-  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem,
+  DropdownMenuSeparator, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  Tooltip, TooltipContent, TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { Label } from "@/components/ui/label";
 import {
   Plus, Search, Eye, EyeOff, Copy, ExternalLink, RotateCcw,
-  MoreVertical, Edit, Trash2, Shield, Clock, Globe, User, Key,
-  AlertTriangle, Check,
+  MoreVertical, Edit, Trash2, Shield, Globe, User, Key,
+  AlertTriangle, Check, LogIn, Clipboard, Lock,
 } from "lucide-react";
 
 interface Portal {
@@ -69,7 +73,9 @@ const ACTION_LABELS: Record<string, string> = {
   password_revealed: "Password Revealed",
   password_rotated: "Password Rotated",
   username_copied: "Username Copied",
+  password_copied: "Password Copied",
   portal_opened: "Portal Opened",
+  open_and_fill: "Open & Fill",
 };
 
 const ACTION_COLORS: Record<string, string> = {
@@ -79,15 +85,10 @@ const ACTION_COLORS: Record<string, string> = {
   password_revealed: "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300",
   password_rotated: "bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300",
   username_copied: "bg-slate-100 text-slate-800 dark:bg-slate-800 dark:text-slate-300",
+  password_copied: "bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300",
   portal_opened: "bg-cyan-100 text-cyan-800 dark:bg-cyan-900/30 dark:text-cyan-300",
+  open_and_fill: "bg-indigo-100 text-indigo-800 dark:bg-indigo-900/30 dark:text-indigo-300",
 };
-
-function formatDate(d: string | null) {
-  if (!d) return "—";
-  return new Date(d).toLocaleDateString("en-AU", {
-    day: "2-digit", month: "short", year: "numeric",
-  });
-}
 
 function formatDateTime(d: string | null) {
   if (!d) return "—";
@@ -122,7 +123,8 @@ export default function PortalAccessPage() {
   const [editingPortal, setEditingPortal] = useState<Portal | null>(null);
   const [revealedPasswords, setRevealedPasswords] = useState<Record<number, string>>({});
   const [deactivateConfirm, setDeactivateConfirm] = useState<Portal | null>(null);
-  const [copiedId, setCopiedId] = useState<number | null>(null);
+  const [copiedField, setCopiedField] = useState<{ id: number; field: string } | null>(null);
+  const [launchPortal, setLaunchPortal] = useState<Portal | null>(null);
 
   const canEdit = hasPermission("portal_access.edit");
   const canReveal = hasPermission("portal_access.reveal");
@@ -195,6 +197,11 @@ export default function PortalAccessPage() {
     },
   });
 
+  const showCopied = useCallback((id: number, field: string) => {
+    setCopiedField({ id, field });
+    setTimeout(() => setCopiedField(null), 2000);
+  }, []);
+
   const revealPassword = async (portalId: number) => {
     if (revealedPasswords[portalId] !== undefined) {
       setRevealedPasswords((prev) => {
@@ -220,23 +227,62 @@ export default function PortalAccessPage() {
     }
   };
 
-  const copyToClipboard = async (text: string, portalId: number, type: "username" | "password") => {
+  const copyUsername = async (portal: Portal) => {
     try {
-      await navigator.clipboard.writeText(text);
-      setCopiedId(portalId);
-      setTimeout(() => setCopiedId(null), 2000);
-      if (type === "username") {
-        apiRequest("POST", `/api/portal-access/${portalId}/copy-username`);
-      }
-      toast({ title: `${type === "username" ? "Username" : "Password"} copied` });
+      await navigator.clipboard.writeText(portal.username);
+      showCopied(portal.id, "username");
+      toast({ title: "Username copied to clipboard" });
+      await apiRequest("POST", `/api/portal-access/${portal.id}/copy-username`);
     } catch {
-      toast({ title: "Failed to copy", variant: "destructive" });
+      toast({ title: "Failed to copy username", variant: "destructive" });
     }
   };
 
-  const openPortal = async (portal: Portal) => {
+  const copyPassword = async (portal: Portal) => {
+    try {
+      const res = await apiRequest("POST", `/api/portal-access/${portal.id}/copy-password`);
+      const { password } = await res.json();
+      await navigator.clipboard.writeText(password);
+      showCopied(portal.id, "password");
+      toast({ title: "Password copied to clipboard", description: "Clipboard will be cleared in 30 seconds" });
+      setTimeout(async () => {
+        try {
+          const current = await navigator.clipboard.readText();
+          if (current === password) {
+            await navigator.clipboard.writeText("");
+          }
+        } catch {}
+      }, 30000);
+    } catch {
+      toast({ title: "Failed to copy password", variant: "destructive" });
+    }
+  };
+
+  const openAndFill = async (portal: Portal) => {
     if (!portal.portalUrl) return;
-    apiRequest("POST", `/api/portal-access/${portal.id}/open`);
+    let password = "";
+    try {
+      const res = await apiRequest("POST", `/api/portal-access/${portal.id}/open-and-fill`);
+      const data = await res.json();
+      password = data.password || "";
+    } catch {
+      toast({ title: "Could not retrieve credentials", description: "Opening portal without credentials.", variant: "destructive" });
+      window.open(portal.portalUrl, "_blank", "noopener,noreferrer");
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(password);
+      toast({
+        title: "Credentials ready — opening portal",
+        description: `Username: ${portal.username} • Password copied to clipboard.`,
+      });
+    } catch {
+      toast({
+        title: "Clipboard access denied",
+        description: "Could not copy password. Opening portal anyway.",
+        variant: "destructive",
+      });
+    }
     window.open(portal.portalUrl, "_blank", "noopener,noreferrer");
   };
 
@@ -261,13 +307,18 @@ export default function PortalAccessPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold" data-testid="text-page-title">Portal Access Manager</h1>
-          <p className="text-sm text-muted-foreground">Manage login credentials for university and agent portals</p>
+          <p className="text-sm text-muted-foreground">Secure credential vault for university and agent portals</p>
         </div>
-        {canEdit && (
-          <Button onClick={handleAdd} data-testid="button-add-portal">
-            <Plus className="w-4 h-4 mr-2" /> Add Portal
-          </Button>
-        )}
+        <div className="flex items-center gap-2">
+          <Badge variant="outline" className="text-xs gap-1 py-1">
+            <Lock className="w-3 h-3" /> Fernet Encrypted
+          </Badge>
+          {canEdit && (
+            <Button onClick={handleAdd} data-testid="button-add-portal">
+              <Plus className="w-4 h-4 mr-2" /> Add Portal
+            </Button>
+          )}
+        </div>
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
@@ -333,17 +384,16 @@ export default function PortalAccessPage() {
                 <TableHeader>
                   <TableRow>
                     <TableHead className="w-[250px]">Portal</TableHead>
-                    <TableHead>Username</TableHead>
-                    <TableHead>Password</TableHead>
+                    <TableHead>Credentials</TableHead>
                     <TableHead>Category</TableHead>
                     <TableHead>Team</TableHead>
                     <TableHead>Password Updated</TableHead>
-                    <TableHead className="w-[60px]">Actions</TableHead>
+                    <TableHead className="w-[140px] text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {filteredPortals.map((portal) => (
-                    <TableRow key={portal.id} data-testid={`row-portal-${portal.id}`}>
+                    <TableRow key={portal.id} data-testid={`row-portal-${portal.id}`} className="group">
                       <TableCell>
                         <div className="space-y-0.5">
                           <div className="flex items-center gap-2">
@@ -355,69 +405,109 @@ export default function PortalAccessPage() {
                             )}
                           </div>
                           {portal.portalUrl && (
-                            <button
-                              onClick={() => openPortal(portal)}
-                              className="text-xs text-blue-600 hover:underline flex items-center gap-1 dark:text-blue-400"
-                              data-testid={`link-portal-url-${portal.id}`}
-                            >
-                              <ExternalLink className="w-3 h-3" />
+                            <span className="text-xs text-muted-foreground flex items-center gap-1">
+                              <Globe className="w-3 h-3" />
                               {(() => { try { return new URL(portal.portalUrl).hostname; } catch { return portal.portalUrl; } })()}
-                            </button>
+                            </span>
                           )}
                         </div>
                       </TableCell>
                       <TableCell>
-                        {portal.username ? (
-                          <div className="flex items-center gap-1">
-                            <code className="text-xs bg-muted px-1.5 py-0.5 rounded" data-testid={`text-username-${portal.id}`}>
-                              {portal.username}
-                            </code>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-6 w-6"
-                              onClick={() => copyToClipboard(portal.username, portal.id, "username")}
-                              data-testid={`button-copy-username-${portal.id}`}
-                            >
-                              {copiedId === portal.id ? <Check className="w-3 h-3 text-emerald-600" /> : <Copy className="w-3 h-3" />}
-                            </Button>
-                          </div>
-                        ) : (
-                          <span className="text-xs text-muted-foreground">—</span>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-1">
-                          {revealedPasswords[portal.id] !== undefined ? (
-                            <>
-                              <code className="text-xs bg-amber-50 dark:bg-amber-900/20 px-1.5 py-0.5 rounded border border-amber-200 dark:border-amber-800" data-testid={`text-password-${portal.id}`}>
-                                {revealedPasswords[portal.id]}
+                        <div className="space-y-1">
+                          {portal.username && (
+                            <div className="flex items-center gap-1.5">
+                              <User className="w-3 h-3 text-muted-foreground" />
+                              <code className="text-xs bg-muted px-1.5 py-0.5 rounded" data-testid={`text-username-${portal.id}`}>
+                                {portal.username}
                               </code>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-6 w-6"
-                                onClick={() => copyToClipboard(revealedPasswords[portal.id], portal.id, "password")}
-                                data-testid={`button-copy-password-${portal.id}`}
-                              >
-                                <Copy className="w-3 h-3" />
-                              </Button>
-                            </>
-                          ) : (
-                            <span className="text-xs text-muted-foreground font-mono">••••••••</span>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-5 w-5"
+                                    onClick={() => copyUsername(portal)}
+                                    data-testid={`button-copy-username-${portal.id}`}
+                                  >
+                                    {copiedField?.id === portal.id && copiedField?.field === "username"
+                                      ? <Check className="w-3 h-3 text-emerald-600" />
+                                      : <Copy className="w-3 h-3" />}
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>Copy username</TooltipContent>
+                              </Tooltip>
+                            </div>
                           )}
-                          {canReveal && (
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-6 w-6"
-                              onClick={() => revealPassword(portal.id)}
-                              data-testid={`button-reveal-password-${portal.id}`}
-                            >
-                              {revealedPasswords[portal.id] !== undefined ?
-                                <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
-                            </Button>
-                          )}
+                          <div className="flex items-center gap-1.5">
+                            <Key className="w-3 h-3 text-muted-foreground" />
+                            {revealedPasswords[portal.id] !== undefined ? (
+                              <>
+                                <code className="text-xs bg-amber-50 dark:bg-amber-900/20 px-1.5 py-0.5 rounded border border-amber-200 dark:border-amber-800" data-testid={`text-password-${portal.id}`}>
+                                  {revealedPasswords[portal.id]}
+                                </code>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      className="h-5 w-5"
+                                      onClick={async () => {
+                                        try {
+                                          await navigator.clipboard.writeText(revealedPasswords[portal.id]);
+                                          showCopied(portal.id, "password");
+                                          toast({ title: "Password copied" });
+                                        } catch {
+                                          toast({ title: "Failed to copy", variant: "destructive" });
+                                        }
+                                      }}
+                                      data-testid={`button-copy-password-${portal.id}`}
+                                    >
+                                      {copiedField?.id === portal.id && copiedField?.field === "password"
+                                        ? <Check className="w-3 h-3 text-emerald-600" />
+                                        : <Copy className="w-3 h-3" />}
+                                    </Button>
+                                  </TooltipTrigger>
+                                  <TooltipContent>Copy password</TooltipContent>
+                                </Tooltip>
+                              </>
+                            ) : (
+                              <span className="text-xs text-muted-foreground font-mono">••••••••</span>
+                            )}
+                            {canReveal && (
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-5 w-5"
+                                    onClick={() => revealPassword(portal.id)}
+                                    data-testid={`button-reveal-password-${portal.id}`}
+                                  >
+                                    {revealedPasswords[portal.id] !== undefined
+                                      ? <EyeOff className="w-3 h-3" />
+                                      : <Eye className="w-3 h-3" />}
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>{revealedPasswords[portal.id] !== undefined ? "Hide password" : "Reveal password"}</TooltipContent>
+                              </Tooltip>
+                            )}
+                            {canReveal && (
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-5 w-5"
+                                    onClick={() => copyPassword(portal)}
+                                    data-testid={`button-copy-pw-${portal.id}`}
+                                  >
+                                    <Clipboard className="w-3 h-3" />
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>Copy password to clipboard</TooltipContent>
+                              </Tooltip>
+                            )}
+                          </div>
                         </div>
                       </TableCell>
                       <TableCell>
@@ -434,42 +524,107 @@ export default function PortalAccessPage() {
                         </span>
                       </TableCell>
                       <TableCell>
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="icon" className="h-7 w-7" data-testid={`button-actions-${portal.id}`}>
-                              <MoreVertical className="w-4 h-4" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            {portal.portalUrl && (
-                              <DropdownMenuItem onClick={() => openPortal(portal)} data-testid={`menu-open-${portal.id}`}>
-                                <ExternalLink className="w-4 h-4 mr-2" /> Open Portal
-                              </DropdownMenuItem>
-                            )}
-                            {canEdit && (
-                              <DropdownMenuItem onClick={() => handleEdit(portal)} data-testid={`menu-edit-${portal.id}`}>
-                                <Edit className="w-4 h-4 mr-2" /> Edit
-                              </DropdownMenuItem>
-                            )}
-                            {canEdit && (
-                              <DropdownMenuItem onClick={() => {
-                                setEditingPortal(portal);
-                                setFormOpen(true);
-                              }} data-testid={`menu-rotate-${portal.id}`}>
-                                <RotateCcw className="w-4 h-4 mr-2" /> Update Password
-                              </DropdownMenuItem>
-                            )}
-                            {canDelete && portal.status === "active" && (
-                              <DropdownMenuItem
-                                onClick={() => setDeactivateConfirm(portal)}
-                                className="text-red-600"
-                                data-testid={`menu-deactivate-${portal.id}`}
-                              >
-                                <Trash2 className="w-4 h-4 mr-2" /> Deactivate
-                              </DropdownMenuItem>
-                            )}
-                          </DropdownMenuContent>
-                        </DropdownMenu>
+                        <div className="flex items-center justify-end gap-1">
+                          {portal.portalUrl && canReveal && (
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button
+                                  size="sm"
+                                  className="h-7 px-2.5 gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white"
+                                  onClick={() => openAndFill(portal)}
+                                  data-testid={`button-launch-${portal.id}`}
+                                >
+                                  <LogIn className="w-3.5 h-3.5" />
+                                  <span className="text-xs">Launch</span>
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent>Copy password & open portal login page</TooltipContent>
+                            </Tooltip>
+                          )}
+                          {portal.portalUrl && !canReveal && (
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="h-7 px-2.5 gap-1.5"
+                                  onClick={() => {
+                                    apiRequest("POST", `/api/portal-access/${portal.id}/open`);
+                                    window.open(portal.portalUrl, "_blank", "noopener,noreferrer");
+                                  }}
+                                  data-testid={`button-open-${portal.id}`}
+                                >
+                                  <ExternalLink className="w-3.5 h-3.5" />
+                                  <span className="text-xs">Open</span>
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent>Open portal in new tab</TooltipContent>
+                            </Tooltip>
+                          )}
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" size="icon" className="h-7 w-7" data-testid={`button-actions-${portal.id}`}>
+                                <MoreVertical className="w-4 h-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              {portal.username && (
+                                <DropdownMenuItem onClick={() => copyUsername(portal)} data-testid={`menu-copy-user-${portal.id}`}>
+                                  <User className="w-4 h-4 mr-2" /> Copy Username
+                                </DropdownMenuItem>
+                              )}
+                              {canReveal && (
+                                <DropdownMenuItem onClick={() => copyPassword(portal)} data-testid={`menu-copy-pw-${portal.id}`}>
+                                  <Clipboard className="w-4 h-4 mr-2" /> Copy Password
+                                </DropdownMenuItem>
+                              )}
+                              {canReveal && (
+                                <DropdownMenuItem onClick={() => revealPassword(portal.id)} data-testid={`menu-reveal-${portal.id}`}>
+                                  <Eye className="w-4 h-4 mr-2" /> {revealedPasswords[portal.id] !== undefined ? "Hide Password" : "Reveal Password"}
+                                </DropdownMenuItem>
+                              )}
+                              {portal.portalUrl && (
+                                <>
+                                  <DropdownMenuSeparator />
+                                  {canReveal && (
+                                    <DropdownMenuItem onClick={() => openAndFill(portal)} data-testid={`menu-launch-${portal.id}`}>
+                                      <LogIn className="w-4 h-4 mr-2" /> Launch (Copy & Open)
+                                    </DropdownMenuItem>
+                                  )}
+                                  <DropdownMenuItem onClick={() => {
+                                    apiRequest("POST", `/api/portal-access/${portal.id}/open`);
+                                    window.open(portal.portalUrl, "_blank", "noopener,noreferrer");
+                                  }} data-testid={`menu-open-${portal.id}`}>
+                                    <ExternalLink className="w-4 h-4 mr-2" /> Open Portal
+                                  </DropdownMenuItem>
+                                </>
+                              )}
+                              {(canEdit || canDelete) && <DropdownMenuSeparator />}
+                              {canEdit && (
+                                <DropdownMenuItem onClick={() => handleEdit(portal)} data-testid={`menu-edit-${portal.id}`}>
+                                  <Edit className="w-4 h-4 mr-2" /> Edit Details
+                                </DropdownMenuItem>
+                              )}
+                              {canEdit && (
+                                <DropdownMenuItem onClick={() => {
+                                  setEditingPortal(portal);
+                                  setFormOpen(true);
+                                }} data-testid={`menu-rotate-${portal.id}`}>
+                                  <RotateCcw className="w-4 h-4 mr-2" /> Rotate Password
+                                </DropdownMenuItem>
+                              )}
+                              {canDelete && portal.status === "active" && (
+                                <DropdownMenuItem
+                                  onClick={() => setDeactivateConfirm(portal)}
+                                  className="text-red-600"
+                                  data-testid={`menu-deactivate-${portal.id}`}
+                                >
+                                  <Trash2 className="w-4 h-4 mr-2" /> Deactivate
+                                </DropdownMenuItem>
+                              )}
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -477,8 +632,15 @@ export default function PortalAccessPage() {
               </Table>
             </div>
           )}
-          <div className="text-xs text-muted-foreground">
-            Showing {filteredPortals.length} of {portals.length} portal{portals.length !== 1 ? "s" : ""}
+          <div className="flex items-center justify-between">
+            <div className="text-xs text-muted-foreground">
+              Showing {filteredPortals.length} of {portals.length} portal{portals.length !== 1 ? "s" : ""}
+            </div>
+            <div className="flex items-center gap-4 text-[10px] text-muted-foreground">
+              <span className="flex items-center gap-1"><Lock className="w-3 h-3" /> Passwords encrypted at rest (Fernet)</span>
+              <span className="flex items-center gap-1"><Shield className="w-3 h-3" /> All access logged</span>
+              <span className="flex items-center gap-1"><Eye className="w-3 h-3" /> Auto-hide after 30s</span>
+            </div>
           </div>
         </TabsContent>
 
@@ -652,7 +814,7 @@ function PortalFormDialog({
         <DialogHeader>
           <DialogTitle>{portal ? "Edit Portal" : "Add Portal"}</DialogTitle>
           <DialogDescription>
-            {portal ? "Update portal credentials and details." : "Add a new portal credential entry."}
+            {portal ? "Update portal credentials and details." : "Add a new portal credential entry. Passwords are encrypted before storage."}
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -759,6 +921,10 @@ function PortalFormDialog({
                 data-testid="input-notes"
               />
             </div>
+          </div>
+          <div className="flex items-center gap-2 text-[11px] text-muted-foreground bg-muted/50 rounded px-3 py-2">
+            <Lock className="w-3.5 h-3.5 shrink-0" />
+            <span>Password will be encrypted using Fernet (AES-128-CBC + HMAC) before storage. The original password is never stored in plain text.</span>
           </div>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)} data-testid="button-cancel-form">
