@@ -220,7 +220,7 @@ export default function RolesManagementPage() {
       permissionSchema.modules.forEach(mod =>
         mod.resources.forEach(res =>
           res.actions.forEach(act => {
-            if (act.permissionId && (act.action === "read" || act.action === "list" || act.action === "view_in_portal")) {
+            if (act.permissionId && (act.action === "read" || act.action === "view" || act.action === "list" || act.action === "view_in_portal")) {
               readIds.add(act.permissionId);
             }
           })

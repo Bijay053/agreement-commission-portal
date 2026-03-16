@@ -61,6 +61,11 @@ LEGACY_PERMISSION_MAP = {
     "providers.provider.add": "providers.provider.add",
     "providers.provider.update": "providers.provider.update",
     "providers.provider.delete": "providers.provider.delete",
+    "portal_access.view": "portal_access.portal.view",
+    "portal_access.edit": "portal_access.portal.edit",
+    "portal_access.reveal": "portal_access.portal.reveal",
+    "portal_access.delete": "portal_access.portal.delete",
+    "portal_access.logs": "portal_access.portal.logs",
 }
 
 
@@ -119,6 +124,18 @@ IMPLIED_PERMISSIONS = {
     ],
     "portal_access.reveal": [
         "portal_access.view",
+    ],
+    "portal_access.portal.edit": [
+        "portal_access.view", "portal_access.portal.view",
+    ],
+    "portal_access.portal.delete": [
+        "portal_access.view", "portal_access.portal.view",
+    ],
+    "portal_access.portal.reveal": [
+        "portal_access.view", "portal_access.portal.view",
+    ],
+    "portal_access.portal.logs": [
+        "portal_access.view", "portal_access.portal.view",
     ],
 }
 
