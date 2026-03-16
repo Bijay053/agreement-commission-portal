@@ -46,6 +46,7 @@ The portal adopts a client-server architecture:
 │   ├── documents/       # S3 document upload/view/download with PDF password protection
 │   ├── commission_tracker/ # Student commission tracking, entries, terms, bulk upload
 │   ├── sub_agent/       # Sub-agent commission tracking, sync, margin calculation
+│   ├── portal_access/   # Portal credential vault with Fernet encryption, access audit logs
 │   ├── audit/           # Audit logs
 │   ├── notifications/   # Agreement expiry notifications, email template management
 │   ├── dashboard/       # Dashboard stats, expiring agreements, recent activity
@@ -121,6 +122,7 @@ All endpoints under `/api/`:
 - **Documents**: list by agreement, upload (with security scan), view (proxied from S3), download (proxied, PDF password-protected), delete
 - **Commission Tracker**: students CRUD, entries CRUD, terms CRUD, dashboard, yearly dashboard, filters, years, all-entries, all-student-providers, bulk-upload preview/confirm, sample-sheet, recalculate, student-providers CRUD, export
 - **Sub-Agent**: dashboard, master list, update master, sync, term entries CRUD
+- **Portal Access Manager**: portal credentials CRUD, password reveal (throttled, audited), password rotate, access audit logs, categories
 - **Dashboard**: stats, expiring, recent
 - **Audit Logs**: list with filters, export
 - **Notifications**: agreement notifications list, expiry reminder emails, email template CRUD
@@ -146,6 +148,7 @@ Fine-grained RBAC with permission codes like `agreement.view`, `commission_track
 - **python-magic**: File type detection
 - **pyclamd**: ClamAV antivirus integration (optional)
 - **openpyxl**: Excel export support
+- **cryptography**: Fernet encryption for portal credential vault
 
 ### JavaScript (frontend only)
 - **React + Vite**: Frontend build

@@ -31,6 +31,7 @@ import ResetPasswordPage from "@/pages/reset-password";
 import VerifyOtpPage from "@/pages/verify-otp";
 import ChangePasswordPage from "@/pages/change-password";
 import AccountSecurityPage from "@/pages/account-security";
+import PortalAccessPage from "@/pages/portal-access";
 import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 
@@ -96,6 +97,11 @@ function Router() {
       <Route path="/sub-agent-commission">
         <AccessGuard permission="sub_agent_commission.view">
           <SubAgentCommissionPage />
+        </AccessGuard>
+      </Route>
+      <Route path="/portal-access">
+        <AccessGuard permission="portal_access.view">
+          <PortalAccessPage />
         </AccessGuard>
       </Route>
       <Route path="/sub-agent">

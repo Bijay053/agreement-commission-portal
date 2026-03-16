@@ -135,6 +135,64 @@ CREATE TABLE IF NOT EXISTS user_devices (
     is_trusted BOOLEAN DEFAULT true
 );
 
+-- Portal Access Manager tables
+CREATE TABLE IF NOT EXISTS portal_credentials (
+    id SERIAL PRIMARY KEY,
+    portal_name VARCHAR(255) NOT NULL,
+    portal_url TEXT DEFAULT '',
+    username VARCHAR(255) DEFAULT '',
+    encrypted_password TEXT DEFAULT '',
+    category VARCHAR(64) DEFAULT '',
+    country VARCHAR(64) DEFAULT '',
+    team VARCHAR(128) DEFAULT '',
+    notes TEXT DEFAULT '',
+    status VARCHAR(16) DEFAULT 'active',
+    created_by INTEGER,
+    updated_by INTEGER,
+    password_updated_at TIMESTAMP,
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS portal_access_logs (
+    id SERIAL PRIMARY KEY,
+    portal_id INTEGER NOT NULL,
+    user_id INTEGER NOT NULL,
+    user_name VARCHAR(255) DEFAULT '',
+    user_email VARCHAR(255) DEFAULT '',
+    action VARCHAR(64) NOT NULL,
+    portal_name VARCHAR(255) DEFAULT '',
+    ip_address VARCHAR(64) DEFAULT '',
+    result VARCHAR(16) DEFAULT 'success',
+    note TEXT DEFAULT '',
+    created_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_portal_access_logs_portal ON portal_access_logs(portal_id);
+CREATE INDEX IF NOT EXISTS idx_portal_access_logs_user ON portal_access_logs(user_id);
+CREATE INDEX IF NOT EXISTS idx_portal_access_logs_created ON portal_access_logs(created_at DESC);
+
+-- Portal Access permissions
+INSERT INTO permissions (code, module, resource, action, description)
+SELECT 'portal_access.view', 'portal_access', 'portal', 'view', 'View portal credentials list'
+WHERE NOT EXISTS (SELECT 1 FROM permissions WHERE code = 'portal_access.view');
+
+INSERT INTO permissions (code, module, resource, action, description)
+SELECT 'portal_access.edit', 'portal_access', 'portal', 'edit', 'Add/edit portal credentials'
+WHERE NOT EXISTS (SELECT 1 FROM permissions WHERE code = 'portal_access.edit');
+
+INSERT INTO permissions (code, module, resource, action, description)
+SELECT 'portal_access.reveal', 'portal_access', 'portal', 'reveal', 'Reveal portal passwords'
+WHERE NOT EXISTS (SELECT 1 FROM permissions WHERE code = 'portal_access.reveal');
+
+INSERT INTO permissions (code, module, resource, action, description)
+SELECT 'portal_access.delete', 'portal_access', 'portal', 'delete', 'Deactivate portal credentials'
+WHERE NOT EXISTS (SELECT 1 FROM permissions WHERE code = 'portal_access.delete');
+
+INSERT INTO permissions (code, module, resource, action, description)
+SELECT 'portal_access.logs', 'portal_access', 'portal', 'logs', 'View portal access audit logs'
+WHERE NOT EXISTS (SELECT 1 FROM permissions WHERE code = 'portal_access.logs');
+
 -- Clean .0 suffix from numeric ID fields (from Excel float imports)
 UPDATE commission_students SET student_id = REGEXP_REPLACE(student_id, '\.0$', '') WHERE student_id ~ '^\d+\.0$';
 UPDATE commission_students SET agentsic_id = REGEXP_REPLACE(agentsic_id, '\.0$', '') WHERE agentsic_id ~ '^\d+\.0$';

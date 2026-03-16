@@ -111,6 +111,15 @@ IMPLIED_PERMISSIONS = {
     "commission_tracker.entry.update": [
         "commission_tracker.field.financials",
     ],
+    "portal_access.edit": [
+        "portal_access.view",
+    ],
+    "portal_access.delete": [
+        "portal_access.view",
+    ],
+    "portal_access.reveal": [
+        "portal_access.view",
+    ],
 }
 
 
