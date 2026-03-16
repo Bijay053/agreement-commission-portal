@@ -469,6 +469,7 @@ export default function SubAgentCommissionPage() {
             <MasterTable
               rows={allMasterRows}
               canEdit={canEdit}
+              providerAgreementsMap={providerAgreementsMap}
               onUpdateRate={(studentId, rate) => updateMasterMutation.mutate({ studentId, data: { subAgentCommissionRatePct: rate } })}
               onUpdateGst={(studentId, gst) => updateMasterMutation.mutate({ studentId, data: { gstApplicable: gst } })}
             />
@@ -477,6 +478,7 @@ export default function SubAgentCommissionPage() {
               rows={(termEntryQuery.data || []).filter((r: any) => r && r.student)}
               termName={activeTab}
               canEdit={canEdit}
+              providerAgreementsMap={providerAgreementsMap}
               onUpdate={(id, data) => updateTermEntryMutation.mutate({ termName: activeTab, id, data })}
             />
           )}
@@ -603,11 +605,12 @@ function DashboardView({ data }: { data: any }) {
   );
 }
 
-function MasterTable({ rows, canEdit, onUpdateRate, onUpdateGst }: {
+function MasterTable({ rows, canEdit, onUpdateRate, onUpdateGst, providerAgreementsMap }: {
   rows: MasterRow[];
   canEdit: boolean;
   onUpdateRate: (studentId: number, rate: string) => void;
   onUpdateGst: (studentId: number, gst: string) => void;
+  providerAgreementsMap: Record<string, number>;
 }) {
   if (rows.length === 0) {
     return (
@@ -702,11 +705,12 @@ function MasterTable({ rows, canEdit, onUpdateRate, onUpdateGst }: {
   );
 }
 
-function TermTable({ rows, termName, canEdit, onUpdate }: {
+function TermTable({ rows, termName, canEdit, onUpdate, providerAgreementsMap }: {
   rows: TermRow[];
   termName: string;
   canEdit: boolean;
   onUpdate: (id: number, data: any) => void;
+  providerAgreementsMap: Record<string, number>;
 }) {
   if (rows.length === 0) {
     return (
