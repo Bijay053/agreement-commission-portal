@@ -42,8 +42,8 @@ interface ContactRow {
   isPrimary: boolean | null;
   notes: string | null;
   city: string | null;
-  contactCountryId: number | null;
-  contactCountryName: string | null;
+  countryId: number | null;
+  countryName: string | null;
   agreementId: number;
   agreementCode: string;
   agreementTitle: string;
@@ -180,7 +180,7 @@ export default function ContactsListPage() {
       positionTitle: contact.positionTitle || "",
       phone: contact.phone || "",
       email: contact.email || "",
-      countryId: contact.contactCountryId ? String(contact.contactCountryId) : "",
+      countryId: contact.countryId ? String(contact.countryId) : "",
       city: contact.city || "",
       isPrimary: contact.isPrimary || false,
       notes: contact.notes || "",
@@ -329,8 +329,8 @@ export default function ContactsListPage() {
                     </TableCell>
                     <TableCell>
                       <span className="text-sm text-muted-foreground truncate block">
-                        {contact.contactCountryName
-                          ? `${contact.contactCountryName}${contact.city ? `, ${contact.city}` : ""}`
+                        {contact.countryName
+                          ? `${contact.countryName}${contact.city ? `, ${contact.city}` : ""}`
                           : "-"}
                       </span>
                     </TableCell>

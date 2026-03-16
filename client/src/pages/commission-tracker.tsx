@@ -42,9 +42,10 @@ const STATUS_ROW_BG: Record<string, string> = {
   "Claim Next Semester": "#FFF2CC",
   "Under Enquiry": "#D9E1F2",
   "Active": "#C6EFCE",
+  "Other": "#E2E8F0",
 };
 
-const STUDENT_STATUSES = ["Under Enquiry", "Claim Next Semester", "On Break", "Withdrawn", "Complete", "Active"];
+const STUDENT_STATUSES = ["Under Enquiry", "Claim Next Semester", "On Break", "Withdrawn", "Complete", "Active", "Other"];
 const PAYMENT_STATUSES = ["Pending", "Received", "Reversed", "Hold"];
 const ACADEMIC_YEARS = ["Year 1", "Year 2", "Year 3", "Year 4"];
 const COURSE_LEVELS = ["Diploma", "Diploma Leading Bachelor", "Bachelor", "Master", "Eap leading Master", "EAP leading Bachelor", "EAP + Bachelor of IT", "PhD", "Certificate", "MBA", "MPA", "BIT", "Other"];
