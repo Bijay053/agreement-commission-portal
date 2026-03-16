@@ -168,6 +168,14 @@ CREATE TABLE IF NOT EXISTS portal_access_logs (
     created_at TIMESTAMP DEFAULT NOW()
 );
 
+ALTER TABLE portal_credentials ADD COLUMN IF NOT EXISTS domain VARCHAR(255) DEFAULT '';
+ALTER TABLE portal_credentials ADD COLUMN IF NOT EXISTS username_selector VARCHAR(255) DEFAULT '';
+ALTER TABLE portal_credentials ADD COLUMN IF NOT EXISTS password_selector VARCHAR(255) DEFAULT '';
+ALTER TABLE portal_credentials ADD COLUMN IF NOT EXISTS submit_selector VARCHAR(255) DEFAULT '';
+ALTER TABLE portal_credentials ADD COLUMN IF NOT EXISTS last_used_at TIMESTAMP;
+
+CREATE INDEX IF NOT EXISTS idx_portal_credentials_domain ON portal_credentials(domain);
+
 CREATE INDEX IF NOT EXISTS idx_portal_access_logs_portal ON portal_access_logs(portal_id);
 CREATE INDEX IF NOT EXISTS idx_portal_access_logs_user ON portal_access_logs(user_id);
 CREATE INDEX IF NOT EXISTS idx_portal_access_logs_created ON portal_access_logs(created_at DESC);

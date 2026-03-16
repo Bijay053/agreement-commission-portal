@@ -39,7 +39,11 @@ interface Portal {
   id: number;
   portalName: string;
   portalUrl: string;
+  domain: string;
   username: string;
+  usernameSelector: string;
+  passwordSelector: string;
+  submitSelector: string;
   category: string;
   country: string;
   team: string;
@@ -48,6 +52,7 @@ interface Portal {
   createdBy: number | null;
   updatedBy: number | null;
   passwordUpdatedAt: string | null;
+  lastUsedAt: string | null;
   createdAt: string | null;
   updatedAt: string | null;
 }
@@ -76,6 +81,9 @@ const ACTION_LABELS: Record<string, string> = {
   password_copied: "Password Copied",
   portal_opened: "Portal Opened",
   open_and_fill: "Open & Fill",
+  extension_matched: "Extension Match",
+  autofill_success: "Autofill OK",
+  autofill_failed: "Autofill Failed",
 };
 
 const ACTION_COLORS: Record<string, string> = {
@@ -88,6 +96,9 @@ const ACTION_COLORS: Record<string, string> = {
   password_copied: "bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300",
   portal_opened: "bg-cyan-100 text-cyan-800 dark:bg-cyan-900/30 dark:text-cyan-300",
   open_and_fill: "bg-indigo-100 text-indigo-800 dark:bg-indigo-900/30 dark:text-indigo-300",
+  extension_matched: "bg-violet-100 text-violet-800 dark:bg-violet-900/30 dark:text-violet-300",
+  autofill_success: "bg-teal-100 text-teal-800 dark:bg-teal-900/30 dark:text-teal-300",
+  autofill_failed: "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300",
 };
 
 function formatDateTime(d: string | null) {
@@ -769,7 +780,11 @@ function PortalFormDialog({
   const [country, setCountry] = useState("");
   const [team, setTeam] = useState("");
   const [notes, setNotes] = useState("");
+  const [usernameSelector, setUsernameSelector] = useState("");
+  const [passwordSelector, setPasswordSelector] = useState("");
+  const [submitSelector, setSubmitSelector] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [showSelectors, setShowSelectors] = useState(false);
 
   const resetForm = () => {
     if (portal) {
@@ -781,6 +796,10 @@ function PortalFormDialog({
       setCountry(portal.country);
       setTeam(portal.team);
       setNotes(portal.notes);
+      setUsernameSelector(portal.usernameSelector || "");
+      setPasswordSelector(portal.passwordSelector || "");
+      setSubmitSelector(portal.submitSelector || "");
+      setShowSelectors(!!(portal.usernameSelector || portal.passwordSelector || portal.submitSelector));
     } else {
       setPortalName("");
       setPortalUrl("");
@@ -790,6 +809,10 @@ function PortalFormDialog({
       setCountry("");
       setTeam("");
       setNotes("");
+      setUsernameSelector("");
+      setPasswordSelector("");
+      setSubmitSelector("");
+      setShowSelectors(false);
     }
     setShowPassword(false);
   };
@@ -803,6 +826,7 @@ function PortalFormDialog({
     e.preventDefault();
     const data: Record<string, string> = {
       portalName, portalUrl, username, category, country, team, notes,
+      usernameSelector, passwordSelector, submitSelector,
     };
     if (password) data.password = password;
     onSave(data);
@@ -922,6 +946,62 @@ function PortalFormDialog({
               />
             </div>
           </div>
+
+          <div className="border rounded-lg">
+            <button
+              type="button"
+              onClick={() => setShowSelectors(!showSelectors)}
+              className="w-full flex items-center justify-between px-3 py-2 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors"
+              data-testid="button-toggle-selectors"
+            >
+              <span>Autofill Selectors (for Chrome Extension)</span>
+              <span className="text-[10px]">{showSelectors ? "Hide" : "Show"}</span>
+            </button>
+            {showSelectors && (
+              <div className="px-3 pb-3 space-y-3 border-t">
+                <p className="text-[11px] text-muted-foreground pt-2">
+                  CSS selectors help the Chrome extension find the login form fields on this portal.
+                  Leave blank to use automatic detection.
+                </p>
+                <div className="grid grid-cols-1 gap-3">
+                  <div>
+                    <Label htmlFor="usernameSelector" className="text-xs">Username Field Selector</Label>
+                    <Input
+                      id="usernameSelector"
+                      value={usernameSelector}
+                      onChange={(e) => setUsernameSelector(e.target.value)}
+                      placeholder='e.g. input[type="email"] or #txtUsername'
+                      className="font-mono text-xs"
+                      data-testid="input-username-selector"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="passwordSelector" className="text-xs">Password Field Selector</Label>
+                    <Input
+                      id="passwordSelector"
+                      value={passwordSelector}
+                      onChange={(e) => setPasswordSelector(e.target.value)}
+                      placeholder='e.g. input[type="password"] or #txtPassword'
+                      className="font-mono text-xs"
+                      data-testid="input-password-selector"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="submitSelector" className="text-xs">Submit Button Selector</Label>
+                    <Input
+                      id="submitSelector"
+                      value={submitSelector}
+                      onChange={(e) => setSubmitSelector(e.target.value)}
+                      placeholder='e.g. button[type="submit"] or #btnLogin'
+                      className="font-mono text-xs"
+                      data-testid="input-submit-selector"
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
           <div className="flex items-center gap-2 text-[11px] text-muted-foreground bg-muted/50 rounded px-3 py-2">
             <Lock className="w-3.5 h-3.5 shrink-0" />
             <span>Password will be encrypted using Fernet (AES-128-CBC + HMAC) before storage. The original password is never stored in plain text.</span>

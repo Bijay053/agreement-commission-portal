@@ -47,12 +47,27 @@ def _user_info(request):
     }
 
 
+def _extract_domain(url):
+    if not url:
+        return ''
+    try:
+        from urllib.parse import urlparse
+        parsed = urlparse(url)
+        return parsed.hostname or ''
+    except Exception:
+        return ''
+
+
 def portal_to_dict(p, include_password=False):
     d = {
         'id': p.id,
         'portalName': p.portal_name,
         'portalUrl': p.portal_url or '',
+        'domain': p.domain or '',
         'username': p.username or '',
+        'usernameSelector': p.username_selector or '',
+        'passwordSelector': p.password_selector or '',
+        'submitSelector': p.submit_selector or '',
         'category': p.category or '',
         'country': p.country or '',
         'team': p.team or '',
@@ -61,6 +76,7 @@ def portal_to_dict(p, include_password=False):
         'createdBy': p.created_by,
         'updatedBy': p.updated_by,
         'passwordUpdatedAt': p.password_updated_at.isoformat() if p.password_updated_at else None,
+        'lastUsedAt': p.last_used_at.isoformat() if p.last_used_at else None,
         'createdAt': p.created_at.isoformat() if p.created_at else None,
         'updatedAt': p.updated_at.isoformat() if p.updated_at else None,
     }
@@ -86,11 +102,17 @@ class PortalListView(APIView):
     def post(self, request):
         d = request.data
         user = _user_info(request)
+        portal_url = d.get('portalUrl', '')
+        domain = d.get('domain', '') or _extract_domain(portal_url)
         portal = PortalCredential(
             portal_name=d.get('portalName', ''),
-            portal_url=d.get('portalUrl', ''),
+            portal_url=portal_url,
+            domain=domain,
             username=d.get('username', ''),
             encrypted_password=encrypt_value(d.get('password', '')),
+            username_selector=d.get('usernameSelector', ''),
+            password_selector=d.get('passwordSelector', ''),
+            submit_selector=d.get('submitSelector', ''),
             category=d.get('category', ''),
             country=d.get('country', ''),
             team=d.get('team', ''),
@@ -127,7 +149,11 @@ class PortalDetailView(APIView):
 
         for field, db_field in {
             'portalName': 'portal_name', 'portalUrl': 'portal_url',
-            'username': 'username', 'category': 'category',
+            'domain': 'domain', 'username': 'username',
+            'usernameSelector': 'username_selector',
+            'passwordSelector': 'password_selector',
+            'submitSelector': 'submit_selector',
+            'category': 'category',
             'country': 'country', 'team': 'team',
             'notes': 'notes', 'status': 'status',
         }.items():
@@ -137,6 +163,9 @@ class PortalDetailView(APIView):
                 if old != new:
                     changes.append(f"{field}: {old} → {new}")
                 setattr(portal, db_field, d[field])
+
+        if 'portalUrl' in d and d['portalUrl'] and not portal.domain:
+            portal.domain = _extract_domain(d['portalUrl'])
 
         if 'password' in d and d['password']:
             portal.encrypted_password = encrypt_value(d['password'])
@@ -310,6 +339,85 @@ class PortalAccessLogListView(APIView):
             'note': log.note,
             'createdAt': log.created_at.isoformat() if log.created_at else None,
         } for log in logs])
+
+
+class PortalMatchView(APIView):
+    throttle_classes = [PortalRevealThrottle]
+
+    @require_permission("portal_access.reveal")
+    def post(self, request):
+        url = (request.data.get('url') or '').strip()
+        if not url:
+            return Response({'detail': 'URL is required'}, status=400)
+
+        from urllib.parse import urlparse
+        parsed = urlparse(url)
+        hostname = (parsed.hostname or '').lower()
+        if not hostname:
+            return Response({'matched': False})
+
+        candidates = PortalCredential.objects.filter(status='active')
+        matched = None
+
+        for item in candidates:
+            if (item.domain or '').lower() == hostname:
+                matched = item
+                break
+
+        if not matched:
+            for item in candidates:
+                d = (item.domain or '').lower()
+                if d and hostname.endswith(d):
+                    matched = item
+                    break
+
+        if not matched:
+            return Response({'matched': False})
+
+        matched.last_used_at = timezone.now()
+        matched.save(update_fields=['last_used_at'])
+
+        user = _user_info(request)
+        _log_action(matched, user, 'extension_matched', request,
+                     note=f"Matched for {hostname}")
+
+        try:
+            password = decrypt_value(matched.encrypted_password) if matched.encrypted_password else ''
+        except Exception:
+            password = ''
+
+        return Response({
+            'matched': True,
+            'portal': {
+                'id': matched.id,
+                'portal_name': matched.portal_name,
+                'portal_url': matched.portal_url,
+                'domain': matched.domain,
+                'username': matched.username,
+                'password': password,
+                'username_selector': matched.username_selector or '',
+                'password_selector': matched.password_selector or '',
+                'submit_selector': matched.submit_selector or '',
+            }
+        })
+
+
+class PortalAutofillLogView(APIView):
+    @require_permission("portal_access.view")
+    def post(self, request):
+        portal_id = request.data.get('portal_id')
+        action = request.data.get('action', 'autofill_unknown')
+        url = request.data.get('url', '')
+        message = request.data.get('message', '')
+
+        try:
+            portal = PortalCredential.objects.get(id=portal_id)
+        except PortalCredential.DoesNotExist:
+            return Response({'detail': 'Portal not found'}, status=404)
+
+        user = _user_info(request)
+        _log_action(portal, user, action, request, note=message or f"Extension: {url}")
+        return Response({'ok': True})
 
 
 class PortalCategoriesView(APIView):

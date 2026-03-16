@@ -1,0 +1,52 @@
+from django.conf import settings
+from django.db import models
+from cryptography.fernet import Fernet
+import os
+
+FERNET_KEY = os.environ.get("PORTAL_FERNET_KEY")
+if not FERNET_KEY:
+    raise ValueError("PORTAL_FERNET_KEY is not set in environment")
+
+fernet = Fernet(FERNET_KEY.encode())
+
+
+class PortalCredential(models.Model):
+    portal_name = models.CharField(max_length=255)
+    portal_url = models.URLField()
+    domain = models.CharField(max_length=255, db_index=True)
+    username = models.CharField(max_length=255)
+    encrypted_password = models.TextField()
+
+    username_selector = models.CharField(max_length=255, blank=True, null=True)
+    password_selector = models.CharField(max_length=255, blank=True, null=True)
+    submit_selector = models.CharField(max_length=255, blank=True, null=True)
+
+    is_active = models.BooleanField(default=True)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    last_used_at = models.DateTimeField(blank=True, null=True)
+
+    def set_password(self, raw_password: str):
+        self.encrypted_password = fernet.encrypt(raw_password.encode()).decode()
+
+    def get_password(self) -> str:
+        return fernet.decrypt(self.encrypted_password.encode()).decode()
+
+    def __str__(self):
+        return f"{self.portal_name} ({self.domain})"
+
+
+class PortalAccessLog(models.Model):
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    portal = models.ForeignKey(PortalCredential, on_delete=models.CASCADE)
+    action = models.CharField(max_length=100)  # matched, filled, autofill_failed
+    domain = models.CharField(max_length=255)
+    url = models.TextField(blank=True, null=True)
+    message = models.TextField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)

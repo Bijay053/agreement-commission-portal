@@ -1,0 +1,108 @@
+from urllib.parse import urlparse
+from django.utils import timezone
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework.permissions import IsAuthenticated
+from rest_framework import generics, status
+
+from .models import PortalCredential, PortalAccessLog
+from .serializers import PortalCredentialSerializer
+
+
+class PortalCredentialListCreateView(generics.ListCreateAPIView):
+    queryset = PortalCredential.objects.all().order_by("-id")
+    serializer_class = PortalCredentialSerializer
+    permission_classes = [IsAuthenticated]
+
+
+class PortalCredentialRetrieveUpdateView(generics.RetrieveUpdateAPIView):
+    queryset = PortalCredential.objects.all()
+    serializer_class = PortalCredentialSerializer
+    permission_classes = [IsAuthenticated]
+
+
+class MatchPortalCredentialView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        url = request.data.get("url", "").strip()
+        if not url:
+            return Response({"detail": "URL is required"}, status=status.HTTP_400_BAD_REQUEST)
+
+        parsed = urlparse(url)
+        hostname = parsed.hostname or ""
+        path = parsed.path or "/"
+
+        # exact domain or subdomain match logic
+        candidates = PortalCredential.objects.filter(is_active=True)
+
+        matched = None
+
+        # 1. exact domain match
+        for item in candidates:
+            if item.domain.lower() == hostname.lower():
+                matched = item
+                break
+
+        # 2. fallback: stored domain is parent of hostname
+        if not matched:
+            for item in candidates:
+                if hostname.lower().endswith(item.domain.lower()):
+                    matched = item
+                    break
+
+        if not matched:
+            return Response({"matched": False})
+
+        matched.last_used_at = timezone.now()
+        matched.save(update_fields=["last_used_at"])
+
+        PortalAccessLog.objects.create(
+            user=request.user,
+            portal=matched,
+            action="matched",
+            domain=hostname,
+            url=url,
+            message=f"Portal matched for {hostname}{path}"
+        )
+
+        return Response({
+            "matched": True,
+            "portal": {
+                "id": matched.id,
+                "portal_name": matched.portal_name,
+                "portal_url": matched.portal_url,
+                "domain": matched.domain,
+                "username": matched.username,
+                "password": matched.get_password(),
+                "username_selector": matched.username_selector,
+                "password_selector": matched.password_selector,
+                "submit_selector": matched.submit_selector,
+            }
+        })
+
+
+class PortalAutofillLogView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        portal_id = request.data.get("portal_id")
+        action = request.data.get("action", "unknown")
+        url = request.data.get("url", "")
+        message = request.data.get("message", "")
+
+        try:
+            portal = PortalCredential.objects.get(id=portal_id)
+        except PortalCredential.DoesNotExist:
+            return Response({"detail": "Portal not found"}, status=404)
+
+        parsed = urlparse(url)
+        PortalAccessLog.objects.create(
+            user=request.user,
+            portal=portal,
+            action=action,
+            domain=parsed.hostname or "",
+            url=url,
+            message=message
+        )
+        return Response({"ok": True})

@@ -1,0 +1,141 @@
+function isVisible(el) {
+  return !!(el && el.offsetWidth > 0 && el.offsetHeight > 0);
+}
+
+function triggerEvents(el) {
+  ["focus", "input", "change", "blur"].forEach((eventName) => {
+    el.dispatchEvent(new Event(eventName, { bubbles: true }));
+  });
+}
+
+function setNativeValue(element, value) {
+  const valueSetter = Object.getOwnPropertyDescriptor(element.__proto__, "value")?.set;
+  const prototype = Object.getPrototypeOf(element);
+  const prototypeValueSetter = Object.getOwnPropertyDescriptor(prototype, "value")?.set;
+
+  if (prototypeValueSetter && valueSetter !== prototypeValueSetter) {
+    prototypeValueSetter.call(element, value);
+  } else if (valueSetter) {
+    valueSetter.call(element, value);
+  } else {
+    element.value = value;
+  }
+}
+
+function findUsernameField(customSelector = "") {
+  if (customSelector) {
+    const el = document.querySelector(customSelector);
+    if (el && isVisible(el)) return el;
+  }
+
+  const candidates = [
+    'input[type="email"]',
+    'input[name*="email" i]',
+    'input[id*="email" i]',
+    'input[name*="user" i]',
+    'input[id*="user" i]',
+    'input[type="text"]'
+  ];
+
+  for (const selector of candidates) {
+    const fields = document.querySelectorAll(selector);
+    for (const field of fields) {
+      if (isVisible(field)) return field;
+    }
+  }
+
+  return null;
+}
+
+function findPasswordField(customSelector = "") {
+  if (customSelector) {
+    const el = document.querySelector(customSelector);
+    if (el && isVisible(el)) return el;
+  }
+
+  const fields = document.querySelectorAll('input[type="password"]');
+  for (const field of fields) {
+    if (isVisible(field)) return field;
+  }
+
+  return null;
+}
+
+function findSubmitButton(customSelector = "") {
+  if (customSelector) {
+    const el = document.querySelector(customSelector);
+    if (el && isVisible(el)) return el;
+  }
+
+  const candidates = [
+    'button[type="submit"]',
+    'input[type="submit"]',
+    'button'
+  ];
+
+  for (const selector of candidates) {
+    const fields = document.querySelectorAll(selector);
+    for (const field of fields) {
+      if (!isVisible(field)) continue;
+      const text = (field.innerText || field.value || "").toLowerCase();
+      if (
+        text.includes("login") ||
+        text.includes("sign in") ||
+        text.includes("submit")
+      ) {
+        return field;
+      }
+    }
+  }
+
+  return null;
+}
+
+function autofill(payload) {
+  const { portal, autoSubmit } = payload;
+
+  const usernameField = findUsernameField(portal.username_selector);
+  const passwordField = findPasswordField(portal.password_selector);
+
+  if (!usernameField || !passwordField) {
+    console.warn("Autofill failed: username or password field not found");
+    return false;
+  }
+
+  setNativeValue(usernameField, portal.username);
+  triggerEvents(usernameField);
+
+  setNativeValue(passwordField, portal.password);
+  triggerEvents(passwordField);
+
+  if (autoSubmit) {
+    const submitButton = findSubmitButton(portal.submit_selector);
+    if (submitButton) {
+      setTimeout(() => submitButton.click(), 500);
+    }
+  }
+
+  return true;
+}
+
+function retryAutofill(payload, attempts = 5) {
+  let count = 0;
+
+  const run = () => {
+    const ok = autofill(payload);
+    count += 1;
+
+    if (!ok && count < attempts) {
+      setTimeout(run, 1000);
+    }
+  };
+
+  run();
+}
+
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message.type === "AUTOFILL_CREDENTIALS") {
+    retryAutofill(message.payload, 6);
+    sendResponse({ ok: true });
+  }
+});
