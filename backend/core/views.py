@@ -65,13 +65,6 @@ PERMISSION_REGISTRY = [
         ],
     },
     {
-        "module": "portal_access",
-        "label": "Portal Access",
-        "resources": [
-            {"resource": "portal", "label": "Portal Credentials", "actions": ["view", "edit", "reveal", "delete", "logs"]},
-        ],
-    },
-    {
         "module": "documents",
         "label": "Documents",
         "resources": [

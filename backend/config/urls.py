@@ -25,7 +25,6 @@ urlpatterns = [
     path('api/', include('audit.urls')),
     path('api/', include('notifications.urls')),
     path('api/', include('dashboard.urls')),
-    path('api/', include('portal_access.urls')),
     path('api/', include('core.urls')),
 
     path('api/users', account_views.UsersListView.as_view()),
