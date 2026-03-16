@@ -1,0 +1,688 @@
+Build a secure Portal Access Manager inside our CRM so the admission team can access multiple university/admission portals safely without sharing passwords in WhatsApp, email, or sheets.
+
+System must be developed in Replit for testing and deployed in AWS for production.
+
+1. Main Goal
+
+We have many admission portals for different universities and partners. We need one central place inside CRM where authorized team members can:
+
+view portal list
+
+open portal URL
+
+copy username
+
+reveal password only if permission is granted
+
+update credentials
+
+track who viewed or changed access
+
+manage access by role/team/country
+
+This module must be secure and production-ready.
+
+2. Tech Stack
+
+Use our existing stack:
+
+Frontend: Next.js
+
+Backend: Django
+
+Database: PostgreSQL
+
+Development: Replit
+
+Production Hosting: AWS
+
+Secrets Storage: AWS Secrets Manager
+
+Logs: CloudWatch or DB audit logs
+
+3. Important Security Rules
+Must follow
+
+Do not store passwords in plain text in database
+
+Do not return password in list API
+
+Do not expose secrets in frontend code
+
+Do not store portal passwords in browser local storage
+
+Do not use Replit for permanent production secrets
+
+All sensitive actions must create audit logs
+
+Access must be controlled by role and permission
+
+4. Module Name in CRM
+
+Add a new menu/module:
+
+Settings → Portal Access Manager
+
+Inside this module create these sections:
+
+Portal List
+
+Add Portal
+
+Access Groups / Permissions
+
+Audit Logs
+
+Password Rotation / Last Updated
+
+5. Features Required
+A. Portal List
+
+Show all portal records with:
+
+Portal Name
+
+Portal URL
+
+Username
+
+Category
+
+Country
+
+Assigned Team
+
+Status
+
+Last Updated
+
+Actions
+
+Actions
+
+Open Portal
+
+Copy Username
+
+Reveal Password
+
+Edit
+
+Deactivate
+
+Rotate Password
+
+B. Add Portal Form
+
+Admin should be able to add new portal with:
+
+Portal Name
+
+Portal URL
+
+Username
+
+Password
+
+Category
+
+Country
+
+Assigned Team
+
+Notes
+
+Status (Active / Inactive)
+
+Category examples
+
+Australia
+
+UK
+
+USA
+
+Canada
+
+Europe
+
+Agent Portals
+
+Finance
+
+Internal Systems
+
+C. Permissions
+
+Need role-based access control.
+
+Suggested roles
+Super Admin
+
+full access
+
+add/edit/delete portals
+
+reveal password
+
+rotate password
+
+assign access
+
+view all logs
+
+Admission Manager
+
+view assigned portals
+
+reveal password if permission allowed
+
+edit notes
+
+update credentials if allowed
+
+Admission Staff
+
+view assigned portals
+
+open portal URL
+
+copy username
+
+password reveal only if specifically allowed
+
+Compliance / Auditor
+
+view logs only
+
+no password reveal
+
+6. Password Storage Logic
+Very important
+
+Do not save actual password directly in PostgreSQL.
+
+Required approach
+
+Store actual credentials in AWS Secrets Manager.
+
+In PostgreSQL save only portal metadata such as:
+
+id
+
+portal_name
+
+portal_url
+
+username
+
+aws_secret_name or aws_secret_arn
+
+category
+
+country
+
+team
+
+notes
+
+status
+
+created_by
+
+updated_by
+
+created_at
+
+updated_at
+
+Example
+
+Database stores:
+
+portal_name = Northumbria University London
+
+aws_secret_name = crm/portal/northumbria_london
+
+AWS secret stores:
+
+username
+
+password
+
+7. API Requirements
+Backend API endpoints
+
+Create secure backend APIs for:
+
+Portal Management
+
+create portal
+
+update portal
+
+list portals
+
+get portal details
+
+deactivate portal
+
+Password Actions
+
+reveal password
+
+rotate password
+
+update stored secret
+
+Logs
+
+get audit log list
+
+get portal access history
+
+Permissions
+
+check access based on logged-in user role/team
+
+8. API Security Rules
+
+List API must never return decrypted password
+
+Reveal password API must check permission first
+
+Reveal action must log:
+
+user
+
+portal
+
+time
+
+IP
+
+action type
+
+Rotate action must log old update and new update time
+
+Sensitive APIs should be backend-only protected
+
+Only authenticated CRM users can access module
+
+9. Frontend UI Requirements
+
+Create a clean page in Next.js.
+
+Portal List UI
+
+Show cards or table with:
+
+Portal Name
+
+URL
+
+Username
+
+Team
+
+Category
+
+Status
+
+Last Updated
+
+Buttons
+
+Open Portal
+
+Copy Username
+
+Reveal Password
+
+Edit
+
+Rotate Password
+
+Password Display
+
+Default masked
+
+Show only after clicking Reveal
+
+Show only for authorized users
+
+Optional second confirmation before reveal
+
+10. Search and Filter
+
+Need filters for:
+
+Portal Name
+
+Country
+
+Category
+
+Assigned Team
+
+Status
+
+User Access Group
+
+Search should be fast and easy because we have many portals.
+
+11. Audit Log Requirements
+
+Every important action must be recorded.
+
+Actions to log
+
+portal created
+
+portal edited
+
+portal deactivated
+
+password revealed
+
+password rotated
+
+failed access attempt
+
+username copied
+
+portal opened
+
+Log fields
+
+User Name
+
+User Email
+
+Action
+
+Portal Name
+
+Date/Time
+
+IP Address
+
+Result (Success / Failed)
+
+Note if needed
+
+12. Replit Development Rules
+
+Use Replit only for:
+
+UI development
+
+backend development
+
+testing
+
+staging/demo
+
+Do not use Replit for:
+
+storing real production credentials
+
+final production database
+
+permanent secret storage
+
+Use dummy or test credentials only during development.
+
+13. AWS Production Setup
+
+Deploy live version in AWS.
+
+Production recommended setup
+
+Django backend in EC2 / ECS / Elastic Beanstalk
+
+PostgreSQL in AWS RDS
+
+Secrets in AWS Secrets Manager
+
+Logs in CloudWatch
+
+Optional static/media in S3
+
+IAM Requirement
+
+Application must have permission to:
+
+read specific secrets from Secrets Manager
+
+update specific secrets when rotating password
+
+Do not allow unrestricted secret access.
+
+14. Database Tables Required
+
+Create at least these tables:
+
+portal_credentials
+
+Stores metadata only
+
+portal_access_logs
+
+Stores all sensitive activity logs
+
+portal_access_permissions
+
+Stores role/team/user-level permissions if needed
+
+15. Suggested Database Fields
+portal_credentials
+
+id
+
+portal_name
+
+portal_url
+
+username
+
+aws_secret_name
+
+category
+
+country
+
+team_id or access_group
+
+notes
+
+status
+
+created_by
+
+updated_by
+
+created_at
+
+updated_at
+
+last_rotated_at
+
+portal_access_logs
+
+id
+
+portal_id
+
+user_id
+
+action_type
+
+ip_address
+
+status
+
+message
+
+created_at
+
+16. Business Rules
+
+One portal can be assigned to one or multiple teams
+
+Only admin can create and delete portal records
+
+Staff should not automatically see password unless allowed
+
+Opening portal should not expose password on list page
+
+Password reveal should expire after short time in UI if possible
+
+Inactive portal should remain in record but hidden from normal users
+
+Keep history of updates
+
+17. Optional Advanced Features
+
+Add if possible after main version:
+
+2-step confirmation before revealing password
+
+password expiry reminder
+
+last used date
+
+manager approval flow for reveal
+
+browser helper for secure login launch
+
+country-based permission rules
+
+session timeout on portal access page
+
+18. Implementation Stages
+Stage 1
+
+Portal list
+
+Add portal
+
+Store credentials in AWS Secrets Manager
+
+Role-based permission
+
+Basic audit logs
+
+Stage 2
+
+Reveal password control
+
+Rotation flow
+
+Search/filter
+
+Status active/inactive
+
+Stage 3
+
+Detailed audit screen
+
+advanced permission mapping
+
+password expiry reminder
+
+better reporting
+
+19. Testing Requirements
+
+Developer must test:
+
+admin can add portal
+
+manager can view assigned portal
+
+unauthorized user cannot reveal password
+
+reveal action creates log
+
+rotate action updates AWS secret correctly
+
+password is never returned in list API
+
+inactive portals are hidden for normal users
+
+access rules work properly
+
+20. Final Deliverables
+
+Developer must provide:
+
+working frontend UI
+
+working backend APIs
+
+database migration
+
+AWS Secrets Manager integration
+
+access control system
+
+audit log system
+
+deployment guide for AWS
+
+testing notes
+
+admin usage instructions
+
+21. Priority Note
+
+This module is security-sensitive.
+Developer must focus on:
+
+safe secret storage
+
+proper role permission
+
+strong audit log
+
+no plain text password storage
+
+production-ready AWS deployment
+
+22. Simple Internal Example
+
+Example record:
+
+Portal Name: Northumbria University London
+
+URL: portal.example.com
+
+Username: admission@company.com
+
+Password: stored in AWS secret
+
+Team: UK Admission Team
+
+Status: Active
+
+Admission staff can:
+
+open link
+
+copy username
+
+Manager/Admin can:
+
+reveal password
+
+rotate password
+
+edit details
+
+All actions must be logged.
+
+23. Developer Note
+
+Please build this as a separate secure module inside CRM and ensure existing CRM data is not affected.
+Do not remove old data from any other module.
