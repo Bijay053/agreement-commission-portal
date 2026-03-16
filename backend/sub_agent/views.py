@@ -1,3 +1,4 @@
+import re
 from django.db.models import Sum
 from rest_framework.views import APIView
 from rest_framework.response import Response
@@ -206,17 +207,20 @@ class SubAgentSyncView(APIView):
                 master.sic_received_total = student.total_received or 0
                 master.status = student.status
 
+                sa_rate = float(master.sub_agent_commission_rate_pct or 0)
+                gst_applicable = master.gst_applicable or 'No'
+
                 main_entries = main_entries_by_student.get(student.id, [])
+                synced_terms = set()
                 for ce in main_entries:
                     if not ce.term_name:
                         continue
+                    synced_terms.add(ce.term_name)
                     existing = SubAgentTermEntry.objects.filter(
                         commission_student_id=student.id,
                         term_name=ce.term_name
                     ).first()
                     if not existing:
-                        sa_rate = float(master.sub_agent_commission_rate_pct or 0)
-                        gst_applicable = master.gst_applicable or 'No'
                         fee_net = float(ce.fee_gross or 0) - float(ce.scholarship_amount or 0)
                         main_comm = float(ce.total_amount or 0)
 
@@ -245,6 +249,39 @@ class SubAgentSyncView(APIView):
                             exceeds_main_warning=calc.get('exceedsMainWarning'),
                         )
                         term_entries_added += 1
+
+                intake_str = (student.start_intake or '').strip()
+                if intake_str:
+                    m = re.match(r'[Tt](\d)\s*(\d{4})', intake_str)
+                    if m:
+                        intake_term_name = f"T{m.group(1)}_{m.group(2)}"
+                        if intake_term_name not in synced_terms:
+                            existing = SubAgentTermEntry.objects.filter(
+                                commission_student_id=student.id,
+                                term_name=intake_term_name
+                            ).first()
+                            if not existing:
+                                calc = calculate_sub_agent_term_entry(
+                                    fee_net=0, main_commission=0,
+                                    commission_rate_auto=sa_rate,
+                                    commission_rate_override_pct=None,
+                                    bonus_paid=0, gst_pct=0,
+                                    gst_applicable=gst_applicable,
+                                )
+                                SubAgentTermEntry.objects.create(
+                                    commission_student_id=student.id,
+                                    term_name=intake_term_name,
+                                    academic_year='Year 1',
+                                    fee_net=0,
+                                    main_commission=0,
+                                    commission_rate_auto=sa_rate,
+                                    commission_rate_used_pct=calc['commissionRateUsedPct'],
+                                    sub_agent_commission=calc['subAgentCommission'],
+                                    gst_amount=calc['gstAmount'],
+                                    total_paid=calc['totalPaid'],
+                                    student_status=student.status or 'Under Enquiry',
+                                )
+                                term_entries_added += 1
 
                 all_term_entries = SubAgentTermEntry.objects.filter(commission_student_id=student.id)
                 total_paid = sum(float(te.total_paid or 0) for te in all_term_entries)
