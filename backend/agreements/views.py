@@ -24,9 +24,16 @@ def _build_provider_and_country_lookups(provider_ids):
 
 
 def _build_territory_lookup(agreement_ids):
-    territories = defaultdict(list)
+    raw = defaultdict(list)
     for t in AgreementTerritory.objects.filter(agreement_id__in=agreement_ids):
-        territories[t.agreement_id].append(t.country_id)
+        raw[t.agreement_id].append(t.country_id)
+    all_country_ids = set()
+    for cids in raw.values():
+        all_country_ids.update(cids)
+    country_names = {c.id: c.name for c in Country.objects.filter(id__in=all_country_ids)} if all_country_ids else {}
+    territories = {}
+    for aid, cids in raw.items():
+        territories[aid] = [{'id': cid, 'name': country_names.get(cid, '')} for cid in cids]
     return territories
 
 
@@ -54,7 +61,12 @@ def agreement_to_dict(a, providers_lookup=None, countries_lookup=None, territori
     if territories_lookup is not None:
         territories = territories_lookup.get(a.id, [])
     else:
-        territories = list(AgreementTerritory.objects.filter(agreement_id=a.id).values_list('country_id', flat=True))
+        terr_ids = list(AgreementTerritory.objects.filter(agreement_id=a.id).values_list('country_id', flat=True))
+        if terr_ids:
+            cnames = {c.id: c.name for c in Country.objects.filter(id__in=terr_ids)}
+            territories = [{'id': cid, 'name': cnames.get(cid, '')} for cid in terr_ids]
+        else:
+            territories = []
 
     return {
         'id': a.id,
@@ -67,7 +79,8 @@ def agreement_to_dict(a, providers_lookup=None, countries_lookup=None, territori
         'status': a.status,
         'territoryType': a.territory_type,
         'territoryCountryId': a.territory_country_id,
-        'territoryCountryIds': territories,
+        'territoryCountryIds': [t['id'] for t in territories],
+        'territories': territories,
         'startDate': str(a.start_date) if a.start_date else None,
         'expiryDate': str(a.expiry_date) if a.expiry_date else None,
         'autoRenew': a.auto_renew,
