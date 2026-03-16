@@ -687,10 +687,12 @@ class FiltersView(APIView):
         agents = list(CommissionStudent.objects.values_list('agent_name', flat=True).distinct())
         providers = list(CommissionStudent.objects.values_list('provider', flat=True).distinct())
         countries = list(CommissionStudent.objects.values_list('country', flat=True).distinct())
+        statuses = ["Under Enquiry", "Claim Next Semester", "On Break", "Withdrawn", "Complete", "Active", "Other"]
         return Response({
             'agents': sorted(set(a for a in agents if a)),
             'providers': sorted(set(p for p in providers if p)),
             'countries': sorted(set(c for c in countries if c)),
+            'statuses': statuses,
         })
 
 
