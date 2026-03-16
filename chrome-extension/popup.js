@@ -71,9 +71,8 @@ document.addEventListener("DOMContentLoaded", () => {
     try {
       const res = await fetch(`${url}/api/auth/me`, {
         headers: {
-          Cookie: `sessionid=${cookie}`
-        },
-        credentials: "include"
+          "X-Session-Token": cookie
+        }
       });
 
       if (res.ok) {

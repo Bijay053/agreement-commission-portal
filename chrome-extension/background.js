@@ -8,8 +8,9 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
     if (!config.crmBaseUrl || !config.sessionCookie) return;
     try {
       const res = await fetch(`${config.crmBaseUrl}/api/auth/me`, {
-        headers: { "Cookie": `sessionid=${config.sessionCookie}` },
-        credentials: "include"
+        headers: {
+          "X-Session-Token": config.sessionCookie
+        }
       });
       if (!res.ok) {
         chrome.storage.sync.set({ sessionCookie: "" });
@@ -33,6 +34,13 @@ async function getStoredConfig() {
       }
     );
   });
+}
+
+function makeHeaders(sessionCookie) {
+  return {
+    "Content-Type": "application/json",
+    "X-Session-Token": sessionCookie
+  };
 }
 
 chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
@@ -66,11 +74,7 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
   try {
     const response = await fetch(`${config.crmBaseUrl}/api/portal-access/match`, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Cookie": `sessionid=${config.sessionCookie}`
-      },
-      credentials: "include",
+      headers: makeHeaders(config.sessionCookie),
       body: JSON.stringify({ url: tab.url })
     });
 
@@ -101,7 +105,7 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
       return;
     }
 
-    await new Promise((r) => setTimeout(r, 200));
+    await new Promise((r) => setTimeout(r, 300));
 
     chrome.tabs.sendMessage(tabId, {
       type: "CREDENTIALS_AVAILABLE",
@@ -136,11 +140,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           `${config.crmBaseUrl}/api/portal-access/${message.portalId}/copy-password`,
           {
             method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              "Cookie": `sessionid=${config.sessionCookie}`
-            },
-            credentials: "include"
+            headers: makeHeaders(config.sessionCookie)
           }
         );
         if (!response.ok) {
@@ -163,11 +163,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         if (!config.crmBaseUrl || !config.sessionCookie) return;
         await fetch(`${config.crmBaseUrl}/api/portal-access/autofill-log`, {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "Cookie": `sessionid=${config.sessionCookie}`
-          },
-          credentials: "include",
+          headers: makeHeaders(config.sessionCookie),
           body: JSON.stringify({
             portal_id: message.portalId,
             action: message.action,
