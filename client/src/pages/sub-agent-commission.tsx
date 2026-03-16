@@ -642,7 +642,7 @@ function MasterTable({ rows, canEdit, onUpdateRate, onUpdateGst }: {
                 <td className="px-2 py-1 border border-gray-200 text-xs">{row.student.agentsicId || "-"}</td>
                 <td className="px-2 py-1 border border-gray-200 text-xs">{row.student.agentName}</td>
                 <td className="px-2 py-1 border border-gray-200 text-xs font-medium">{row.student.studentName}</td>
-                <td className="px-2 py-1 border border-gray-200 text-xs"><SubAgentProviderLink name={row.student.provider} agreementId={providerAgreementsMap[row.student.provider]} /></td>
+                <td className="px-2 py-1 border border-gray-200 text-xs">{row.student.provider ? <SubAgentProviderLink name={row.student.provider} agreementId={providerAgreementsMap[row.student.provider]} /> : "-"}</td>
                 <td className="px-2 py-1 border border-gray-200 text-xs">{row.student.country}</td>
                 <td className="px-2 py-1 border border-gray-200 text-xs">{row.student.startIntake || "-"}</td>
                 <td className="px-2 py-1 border border-gray-200 text-xs">{row.student.courseName || "-"}</td>
@@ -760,7 +760,7 @@ function TermTable({ rows, termName, canEdit, onUpdate }: {
                 <td className="px-2 py-1 border border-gray-200 text-xs">{row.student.agentsicId || "-"}</td>
                 <td className="px-2 py-1 border border-gray-200 text-xs">{row.student.agentName}</td>
                 <td className="px-2 py-1 border border-gray-200 text-xs font-medium">{row.student.studentName}</td>
-                <td className="px-2 py-1 border border-gray-200 text-xs"><SubAgentProviderLink name={row.student.provider} agreementId={providerAgreementsMap[row.student.provider]} /></td>
+                <td className="px-2 py-1 border border-gray-200 text-xs">{row.student.provider ? <SubAgentProviderLink name={row.student.provider} agreementId={providerAgreementsMap[row.student.provider]} /> : "-"}</td>
                 <td className="px-2 py-1 border border-gray-200 text-xs">{row.student.country}</td>
                 <td className="px-2 py-1 border border-gray-200 text-xs">{row.student.startIntake || "-"}</td>
                 <td className="px-2 py-1 border border-gray-200 text-xs">{row.student.courseName || "-"}</td>
