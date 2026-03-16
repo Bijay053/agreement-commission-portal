@@ -183,7 +183,7 @@ class AgreementListView(APIView):
                 updated_by_user_id=request.session.get('userId'),
             )
 
-            if territory_type == 'country_specific' and territory_country_ids:
+            if territory_type not in ('global', 'south_asia') and territory_country_ids:
                 for cid in territory_country_ids:
                     AgreementTerritory.objects.create(agreement_id=agreement.id, country_id=cid)
 
@@ -241,7 +241,7 @@ class AgreementDetailView(APIView):
 
             if data.get('territoryType') == 'country_specific' and territory_country_ids:
                 a.territory_country_id = territory_country_ids[0] if territory_country_ids else None
-            elif data.get('territoryType') == 'global':
+            elif data.get('territoryType') in ('global', 'south_asia'):
                 a.territory_country_id = None
 
             a.confidentiality_level = 'high'
@@ -250,7 +250,7 @@ class AgreementDetailView(APIView):
 
             if territory_country_ids is not None:
                 AgreementTerritory.objects.filter(agreement_id=agreement_id).delete()
-                if data.get('territoryType') != 'global':
+                if data.get('territoryType') not in ('global', 'south_asia'):
                     for cid in territory_country_ids:
                         AgreementTerritory.objects.create(agreement_id=agreement_id, country_id=cid)
 

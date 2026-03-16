@@ -221,6 +221,11 @@ export default function AgreementsListPage() {
                             <Globe className="w-3 h-3" /> Global
                           </Badge>
                         )}
+                        {agr.territoryType === "south_asia" && (
+                          <Badge variant="outline" className="gap-1">
+                            <MapPin className="w-3 h-3" /> South Asia
+                          </Badge>
+                        )}
                       </div>
                       <h3 className="text-base font-medium mt-1.5 truncate">{agr.title}</h3>
                       <div className="flex items-center gap-4 mt-2 text-sm text-muted-foreground flex-wrap">

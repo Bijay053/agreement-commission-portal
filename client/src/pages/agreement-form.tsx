@@ -150,7 +150,7 @@ export default function AgreementFormPage() {
     mutation.mutate({
       ...form,
       universityId: parseInt(form.universityId),
-      territoryCountryIds: form.territoryType === "global" ? [] : form.territoryCountryIds,
+      territoryCountryIds: form.territoryType === "global" || form.territoryType === "south_asia" ? [] : form.territoryCountryIds,
     });
   };
 
@@ -195,6 +195,7 @@ export default function AgreementFormPage() {
 
   const territoryTypeOptions = [
     { value: "global", label: "Global (All Countries)" },
+    { value: "south_asia", label: "South Asia" },
     { value: "country_specific", label: "Country-Specific" },
   ];
 
@@ -291,7 +292,7 @@ export default function AgreementFormPage() {
                   searchPlaceholder="Search..."
                   data-testid="select-territory-type"
                 />
-                {form.territoryType === "country_specific" && (
+                {form.territoryType !== "global" && form.territoryType !== "south_asia" && (
                   <div>
                     <div className="flex flex-wrap gap-1.5 mb-2">
                       {form.territoryCountryIds.map(id => {

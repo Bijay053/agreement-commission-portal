@@ -72,6 +72,8 @@ export default function AgreementDetailPage() {
   const daysLeft = differenceInDays(parseISO(agreement.expiryDate), new Date());
   const territoryDisplay = agreement.territoryType === "global"
     ? "Global"
+    : agreement.territoryType === "south_asia"
+    ? "South Asia"
     : agreement.territories?.map((t: any) => t.name).join(", ") || "—";
 
   return (
