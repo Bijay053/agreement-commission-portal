@@ -192,6 +192,11 @@ class SubAgentSyncView(APIView):
             added = 0
             updated = 0
             removed = 0
+            term_entries_added = 0
+
+            main_entries_by_student = {}
+            for ce in CommissionEntry.objects.all():
+                main_entries_by_student.setdefault(ce.commission_student_id, []).append(ce)
 
             for student in students:
                 master, created = SubAgentEntry.objects.get_or_create(
@@ -201,8 +206,48 @@ class SubAgentSyncView(APIView):
                 master.sic_received_total = student.total_received or 0
                 master.status = student.status
 
-                term_entries = SubAgentTermEntry.objects.filter(commission_student_id=student.id)
-                total_paid = sum(float(te.total_paid or 0) for te in term_entries)
+                main_entries = main_entries_by_student.get(student.id, [])
+                for ce in main_entries:
+                    if not ce.term_name:
+                        continue
+                    existing = SubAgentTermEntry.objects.filter(
+                        commission_student_id=student.id,
+                        term_name=ce.term_name
+                    ).first()
+                    if not existing:
+                        sa_rate = float(master.sub_agent_commission_rate_pct or 0)
+                        gst_applicable = master.gst_applicable or 'No'
+                        fee_net = float(ce.fee_gross or 0) - float(ce.scholarship_amount or 0)
+                        main_comm = float(ce.total_amount or 0)
+
+                        calc = calculate_sub_agent_term_entry(
+                            fee_net=fee_net,
+                            main_commission=main_comm,
+                            commission_rate_auto=sa_rate,
+                            commission_rate_override_pct=None,
+                            bonus_paid=0,
+                            gst_pct=0,
+                            gst_applicable=gst_applicable,
+                        )
+                        SubAgentTermEntry.objects.create(
+                            commission_student_id=student.id,
+                            term_name=ce.term_name,
+                            academic_year=ce.academic_year or 'Year 1',
+                            fee_net=round2(fee_net),
+                            main_commission=round2(main_comm),
+                            commission_rate_auto=sa_rate,
+                            commission_rate_used_pct=calc['commissionRateUsedPct'],
+                            sub_agent_commission=calc['subAgentCommission'],
+                            gst_amount=calc['gstAmount'],
+                            total_paid=calc['totalPaid'],
+                            student_status=student.status or 'Under Enquiry',
+                            rate_override_warning=calc.get('rateOverrideWarning'),
+                            exceeds_main_warning=calc.get('exceedsMainWarning'),
+                        )
+                        term_entries_added += 1
+
+                all_term_entries = SubAgentTermEntry.objects.filter(commission_student_id=student.id)
+                total_paid = sum(float(te.total_paid or 0) for te in all_term_entries)
                 master.sub_agent_paid_total = round2(total_paid)
 
                 totals = calculate_master_totals(float(master.sic_received_total), total_paid)
@@ -218,7 +263,7 @@ class SubAgentSyncView(APIView):
             removed = orphaned.count()
             orphaned.delete()
 
-            return Response({'added': added, 'updated': updated, 'removed': removed})
+            return Response({'added': added, 'updated': updated, 'removed': removed, 'termEntriesAdded': term_entries_added})
         except Exception as e:
             return Response({'message': str(e)}, status=500)
 
