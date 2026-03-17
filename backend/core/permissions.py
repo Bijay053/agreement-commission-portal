@@ -65,6 +65,24 @@ LEGACY_PERMISSION_MAP = {
 
 
 IMPLIED_PERMISSIONS = {
+    "agreement.view": [
+        "agreement.field.confidential",
+    ],
+    "agreement.edit": [
+        "agreement.field.confidential",
+    ],
+    "agreement.create": [
+        "agreement.field.confidential",
+    ],
+    "agreements.agreement.read": [
+        "agreement.field.confidential",
+    ],
+    "agreements.agreement.update": [
+        "agreement.field.confidential",
+    ],
+    "agreements.agreement.add": [
+        "agreement.field.confidential",
+    ],
     "commission_tracker.view": [
         "commission_tracker.entry.view", "commission_tracker.entry.read",
         "commission_tracker.field.financials",
