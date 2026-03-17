@@ -326,6 +326,57 @@ class StudentRecalculateView(APIView):
             return Response({'message': str(e)}, status=500)
 
 
+class RecalculateAllView(APIView):
+    @require_permission("commission_tracker.student.update")
+    def post(self, request):
+        try:
+            term_name = request.data.get('termName')
+            students = CommissionStudent.objects.all()
+            recalculated = 0
+            for student in students:
+                entries = list(CommissionEntry.objects.filter(commission_student_id=student.id))
+                if term_name:
+                    entries = [e for e in entries if e.term_name == term_name]
+                if not entries:
+                    continue
+
+                provider_ids = set(e.student_provider_id for e in entries if e.student_provider_id)
+                providers_lookup = {sp.id: sp for sp in StudentProvider.objects.filter(id__in=provider_ids)} if provider_ids else {}
+
+                for entry in entries:
+                    prov_config = providers_lookup.get(entry.student_provider_id) if entry.student_provider_id else None
+                    calc = calculate_entry(student, entry, prov_config)
+                    entry.commission_rate_auto = calc['commissionRateAuto']
+                    entry.commission_rate_used_pct = calc['commissionRateUsedPct']
+                    entry.commission_amount = calc['commissionAmount']
+                    entry.gst_amount = calc['gstAmount']
+                    entry.total_amount = calc['totalAmount']
+                    entry.rate_change_warning = calc['rateChangeWarning']
+                    entry.scholarship_type_auto = calc['scholarshipTypeAuto']
+                    entry.scholarship_value_auto = calc['scholarshipValueAuto']
+                    entry.scholarship_type_used = calc['scholarshipTypeUsed']
+                    entry.scholarship_value_used = calc['scholarshipValueUsed']
+                    entry.scholarship_change_warning = calc['scholarshipChangeWarning']
+                    entry.scholarship_amount = calc['scholarshipAmount']
+                    entry.fee_after_scholarship = calc['feeAfterScholarship']
+                    entry.save()
+                    recalculated += 1
+
+                all_entries = list(CommissionEntry.objects.filter(commission_student_id=student.id))
+                term_order = get_term_order()
+                master = compute_master_from_entries(all_entries, term_order)
+                student.status = master['status']
+                student.notes = master['notes']
+                student.total_received = master['totalReceived']
+                student.save(update_fields=['status', 'notes', 'total_received'])
+
+            return Response({'message': f'Recalculated {recalculated} entries', 'recalculated': recalculated})
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            return Response({'message': str(e)}, status=500)
+
+
 class StudentProvidersView(APIView):
     @require_permission("commission_tracker.student.read")
     def get(self, request, student_id):

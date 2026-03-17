@@ -426,6 +426,18 @@ export default function CommissionTrackerPage() {
     onSuccess: invalidateAll,
   });
 
+  const recalculateAllMutation = useMutation({
+    mutationFn: async (termName?: string) => {
+      const res = await apiRequest("POST", `/api/commission-tracker/recalculate-all`, termName ? { termName } : {});
+      return res.json();
+    },
+    onSuccess: (data) => {
+      toast({ title: "Recalculated", description: `${data.recalculated} entries recalculated successfully` });
+      invalidateAll();
+    },
+    onError: (err: Error) => toast({ title: "Error", description: err.message, variant: "destructive" }),
+  });
+
   const tabs = ["DASHBOARD", "MASTER", ...yearTerms.map(t => t.termName)];
 
   useEffect(() => {
@@ -478,6 +490,18 @@ export default function CommissionTrackerPage() {
                   <BulkUploadDialog onSuccess={() => { setShowBulkUpload(false); invalidateAll(); }} />
                 </DialogContent>
               </Dialog>
+            )}
+            {canEditStudent && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => recalculateAllMutation.mutate(activeTab !== "DASHBOARD" && activeTab !== "MASTER" ? activeTab : undefined)}
+                disabled={recalculateAllMutation.isPending}
+                data-testid="button-recalculate-all"
+              >
+                <RotateCcw className={`w-3.5 h-3.5 mr-1 ${recalculateAllMutation.isPending ? "animate-spin" : ""}`} />
+                {recalculateAllMutation.isPending ? "Recalculating..." : "Recalculate"}
+              </Button>
             )}
             {canCreate && (
               <Dialog open={showTermDialog} onOpenChange={setShowTermDialog}>
@@ -1417,7 +1441,7 @@ function TermTable({ termName, students, allEntries, allEntriesGlobal, terms, is
         <td className="px-2 py-1 border border-gray-200 text-right font-mono text-xs bg-gray-50">{`${Number(entry.commissionRateAuto || 0)}%`}</td>
         <EditableCell value={entry.commissionRateOverridePct || ""} readOnly={!canEdit} onSave={(v) => onUpdateEntry(entry.id, { commissionRateOverridePct: v || "" })} type="number" width="70px" align="right" mono />
         <td className="px-2 py-1 border border-gray-200 text-right font-mono text-xs bg-gray-50">{`${Number(entry.commissionRateUsedPct || 0)}%`}</td>
-        <td className="px-2 py-1 border border-gray-200 text-right font-mono text-xs bg-gray-50">${Number(entry.commissionAmount || 0).toFixed(2)}</td>
+        <td className={`px-2 py-1 border border-gray-200 text-right font-mono text-xs bg-gray-50 ${Number(entry.commissionAmount || 0) < 0 ? "text-red-600" : ""}`}>{((v) => v < 0 ? `-$${Math.abs(v).toFixed(2)}` : `$${v.toFixed(2)}`)(Number(entry.commissionAmount || 0))}</td>
         <td className="px-2 py-1 border border-gray-200 text-center text-xs">{entry.rateChangeWarning ? <span className="text-amber-600 whitespace-nowrap" title={entry.rateChangeWarning}>⚠ Changed</span> : ""}</td>
         <EditableCell value={entry.bonus || "0"} readOnly={!canEdit} onSave={(v) => onUpdateEntry(entry.id, { bonus: v || "0" })} type="number" width="60px" align="right" mono />
         <td className="px-2 py-1 border border-gray-200 text-left text-xs bg-gray-50">{entry.scholarshipTypeAuto || "None"}</td>
@@ -1428,8 +1452,8 @@ function TermTable({ termName, students, allEntries, allEntriesGlobal, terms, is
         <td className="px-2 py-1 border border-gray-200 text-right font-mono text-xs bg-gray-50">${Number(entry.scholarshipAmount || 0).toFixed(2)}</td>
         <td className="px-2 py-1 border border-gray-200 text-right font-mono text-xs bg-gray-50">${Number(entry.feeAfterScholarship || 0).toFixed(2)}</td>
         <td className="px-2 py-1 border border-gray-200 text-center text-xs">{entry.scholarshipChangeWarning ? <span className="text-amber-600 whitespace-nowrap" title={entry.scholarshipChangeWarning}>⚠ Changed</span> : ""}</td>
-        <td className="px-2 py-1 border border-gray-200 text-right font-mono text-xs">${Number(entry.gstAmount || 0).toFixed(2)}</td>
-        <td className="px-2 py-1 border border-gray-200 text-right font-mono text-xs font-semibold">${Number(entry.totalAmount || 0).toFixed(2)}</td>
+        <td className={`px-2 py-1 border border-gray-200 text-right font-mono text-xs ${Number(entry.gstAmount || 0) < 0 ? "text-red-600" : ""}`}>{((v) => v < 0 ? `-$${Math.abs(v).toFixed(2)}` : `$${v.toFixed(2)}`)(Number(entry.gstAmount || 0))}</td>
+        <td className={`px-2 py-1 border border-gray-200 text-right font-mono text-xs font-semibold ${Number(entry.totalAmount || 0) < 0 ? "text-red-600" : ""}`}>{((v) => v < 0 ? `-$${Math.abs(v).toFixed(2)}` : `$${v.toFixed(2)}`)(Number(entry.totalAmount || 0))}</td>
         <EditableCell value={entry.paymentStatus || "Pending"} readOnly={!canEdit} onSave={(v) => onUpdateEntry(entry.id, { paymentStatus: v })} type="select" options={PAYMENT_STATUSES} width="80px" />
         <EditableCell value={entry.paidDate || ""} readOnly={!canEdit} onSave={(v) => onUpdateEntry(entry.id, { paidDate: v || null })} type="date" width="80px" />
         <EditableCell value={entry.invoiceNo || ""} readOnly={!canEdit} onSave={(v) => onUpdateEntry(entry.id, { invoiceNo: v || null })} width="80px" />
@@ -1550,34 +1574,39 @@ function TermTable({ termName, students, allEntries, allEntriesGlobal, terms, is
         </tbody>
         {(() => {
           const entries = allTermEntries;
-          const totalCommission = entries.reduce((sum, e) => sum + Number(e.commissionAmount || 0), 0);
-          const totalBonus = entries.reduce((sum, e) => sum + Number(e.bonus || 0), 0);
-          const totalGst = entries.reduce((sum, e) => sum + Number(e.gstAmount || 0), 0);
-          const totalAmount = entries.reduce((sum, e) => sum + Number(e.totalAmount || 0), 0);
+          const totalFee = entries.reduce((sum, e) => sum + (parseFloat(String(e.feeGross)) || 0), 0);
+          const totalCommission = entries.reduce((sum, e) => sum + (parseFloat(String(e.commissionAmount)) || 0), 0);
+          const totalBonus = entries.reduce((sum, e) => sum + (parseFloat(String(e.bonus)) || 0), 0);
+          const totalScholarship = entries.reduce((sum, e) => sum + (parseFloat(String(e.scholarshipAmount)) || 0), 0);
+          const totalFeeAfterScholarship = entries.reduce((sum, e) => sum + (parseFloat(String(e.feeAfterScholarship)) || 0), 0);
+          const totalGst = entries.reduce((sum, e) => sum + (parseFloat(String(e.gstAmount)) || 0), 0);
+          const totalAmount = entries.reduce((sum, e) => sum + (parseFloat(String(e.totalAmount)) || 0), 0);
           if (entries.length === 0) return null;
+          const fmtTotal = (val: number) => `${val < 0 ? "-" : ""}$${Math.abs(val).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+          const negClass = (val: number) => val < 0 ? "text-red-300" : "";
           return (
             <tfoot className="sticky bottom-0 z-10">
               <tr className="bg-[#1a4971] text-white font-semibold text-xs" data-testid={`row-totals-${termName}`}>
                 <td className="px-2 py-2 border border-[#2060a0]" colSpan={10}>
                   <span className="text-white/80">Entries: {entries.length}</span>
                 </td>
+                <td className={`px-2 py-2 border border-[#2060a0] text-right font-mono ${negClass(totalFee)}`} data-testid={`total-fee-${termName}`}>{fmtTotal(totalFee)}</td>
                 <td className="px-2 py-2 border border-[#2060a0]"></td>
                 <td className="px-2 py-2 border border-[#2060a0]"></td>
                 <td className="px-2 py-2 border border-[#2060a0]"></td>
+                <td className={`px-2 py-2 border border-[#2060a0] text-right font-mono ${negClass(totalCommission)}`} data-testid={`total-commission-${termName}`}>{fmtTotal(totalCommission)}</td>
                 <td className="px-2 py-2 border border-[#2060a0]"></td>
-                <td className="px-2 py-2 border border-[#2060a0] text-right font-mono" data-testid={`total-commission-${termName}`}>${totalCommission.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                <td className="px-2 py-2 border border-[#2060a0]"></td>
-                <td className="px-2 py-2 border border-[#2060a0] text-right font-mono" data-testid={`total-bonus-${termName}`}>${totalBonus.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                <td className="px-2 py-2 border border-[#2060a0]"></td>
-                <td className="px-2 py-2 border border-[#2060a0]"></td>
+                <td className={`px-2 py-2 border border-[#2060a0] text-right font-mono ${negClass(totalBonus)}`} data-testid={`total-bonus-${termName}`}>{fmtTotal(totalBonus)}</td>
                 <td className="px-2 py-2 border border-[#2060a0]"></td>
                 <td className="px-2 py-2 border border-[#2060a0]"></td>
                 <td className="px-2 py-2 border border-[#2060a0]"></td>
                 <td className="px-2 py-2 border border-[#2060a0]"></td>
                 <td className="px-2 py-2 border border-[#2060a0]"></td>
+                <td className={`px-2 py-2 border border-[#2060a0] text-right font-mono ${negClass(totalScholarship)}`}>{fmtTotal(totalScholarship)}</td>
+                <td className={`px-2 py-2 border border-[#2060a0] text-right font-mono ${negClass(totalFeeAfterScholarship)}`}>{fmtTotal(totalFeeAfterScholarship)}</td>
                 <td className="px-2 py-2 border border-[#2060a0]"></td>
-                <td className="px-2 py-2 border border-[#2060a0] text-right font-mono" data-testid={`total-gst-${termName}`}>${totalGst.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                <td className="px-2 py-2 border border-[#2060a0] text-right font-mono" data-testid={`total-amount-${termName}`}>${totalAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                <td className={`px-2 py-2 border border-[#2060a0] text-right font-mono ${negClass(totalGst)}`} data-testid={`total-gst-${termName}`}>{fmtTotal(totalGst)}</td>
+                <td className={`px-2 py-2 border border-[#2060a0] text-right font-mono ${negClass(totalAmount)}`} data-testid={`total-amount-${termName}`}>{fmtTotal(totalAmount)}</td>
                 <td className="px-2 py-2 border border-[#2060a0]"></td>
                 <td className="px-2 py-2 border border-[#2060a0]"></td>
                 <td className="px-2 py-2 border border-[#2060a0]"></td>
