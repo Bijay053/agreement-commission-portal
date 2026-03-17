@@ -1160,8 +1160,8 @@ function MasterTable({ students, allEntries, year, isLoading, canEdit, canDelete
                             )}
                           </div>
                         </td>
-                        <td className="px-2 py-1 border border-gray-200 text-blue-600">{ap.country || s.country}</td>
-                        <td className="px-2 py-1 border border-gray-200 text-blue-600">{ap.startIntake || "-"}</td>
+                        <EditableCell value={ap.country || s.country || ""} readOnly={!canEdit} onSave={(v) => onUpdateProvider(ap.id, { country: v })} width="60px" />
+                        <EditableCell value={ap.startIntake || ""} readOnly={!canEdit} onSave={(v) => onUpdateProvider(ap.id, { startIntake: v })} width="80px" />
                         <EditableCell value={ap.courseLevel || ""} readOnly={!canEdit} onSave={(v) => onUpdateProvider(ap.id, { courseLevel: v })} type="select" options={COURSE_LEVELS} width="80px" />
                         <EditableCell value={ap.courseName || ""} readOnly={!canEdit} onSave={(v) => onUpdateProvider(ap.id, { courseName: v })} width="120px" />
                         <EditableCell value={ap.status || "Under Enquiry"} readOnly={!canEdit} onSave={(v) => onUpdateProvider(ap.id, { status: v })} type="select" options={STUDENT_STATUSES} width="80px" />
