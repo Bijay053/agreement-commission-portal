@@ -72,6 +72,7 @@ function EditableCell({ value, onSave, type = "text", options, readOnly, width, 
   const [pendingValue, setPendingValue] = useState<string | null>(null);
   const [displayValue, setDisplayValue] = useState(value);
   const inputRef = useRef<HTMLInputElement>(null);
+  const cellRef = useRef<HTMLTableCellElement>(null);
   const draftRef = useRef(draft);
   draftRef.current = draft;
   const onSaveRef = useRef(onSave);
@@ -88,7 +89,34 @@ function EditableCell({ value, onSave, type = "text", options, readOnly, width, 
     if (editing && inputRef.current) inputRef.current.focus();
   }, [editing]);
 
+  const saveScrollPosition = useCallback(() => {
+    const el = cellRef.current;
+    if (!el) return null;
+    let scrollParent: HTMLElement | null = el.parentElement;
+    while (scrollParent) {
+      const ov = getComputedStyle(scrollParent).overflowY;
+      if (ov === "auto" || ov === "scroll") break;
+      scrollParent = scrollParent.parentElement;
+    }
+    if (scrollParent) {
+      const top = scrollParent.scrollTop;
+      const left = scrollParent.scrollLeft;
+      return { el: scrollParent, top, left };
+    }
+    return null;
+  }, []);
+
+  const restoreScrollPosition = useCallback((saved: { el: HTMLElement; top: number; left: number } | null) => {
+    if (!saved) return;
+    const restore = () => { saved.el.scrollTop = saved.top; saved.el.scrollLeft = saved.left; };
+    restore();
+    requestAnimationFrame(restore);
+    setTimeout(restore, 50);
+    setTimeout(restore, 150);
+  }, []);
+
   const handleConfirmSave = useCallback(() => {
+    const scrollState = saveScrollPosition();
     if (pendingValue !== null) {
       onSaveRef.current(pendingValue);
       setDisplayValue(pendingValue);
@@ -96,8 +124,9 @@ function EditableCell({ value, onSave, type = "text", options, readOnly, width, 
     }
     setPendingValue(null);
     setEditing(false);
+    restoreScrollPosition(scrollState);
     setTimeout(() => { if (document.activeElement instanceof HTMLElement) document.activeElement.blur(); }, 0);
-  }, [pendingValue]);
+  }, [pendingValue, saveScrollPosition, restoreScrollPosition]);
 
   const handleCancelEdit = useCallback(() => {
     setPendingValue(null);
@@ -172,6 +201,7 @@ function EditableCell({ value, onSave, type = "text", options, readOnly, width, 
 
   return (
     <td
+      ref={cellRef}
       className={`px-2 py-1 border border-gray-200 dark:border-gray-700 text-xs whitespace-nowrap cursor-pointer hover:bg-blue-50 dark:hover:bg-blue-900/20 ${align === "right" ? "text-right" : "text-left"} ${mono ? "font-mono" : ""}`}
       style={style}
       onClick={() => { if (pendingValue === null) { setDraft(value); setEditing(true); } }}
@@ -246,6 +276,26 @@ export default function SubAgentCommissionPage() {
   const [selectedProviders, setSelectedProviders] = useState<string[]>([]);
   const [selectedStatuses, setSelectedStatuses] = useState<string[]>([]);
 
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const savedScrollRef = useRef<{ top: number; left: number } | null>(null);
+
+  const saveScrollPos = useCallback(() => {
+    const el = scrollContainerRef.current?.querySelector('[class*="overflow-auto"]') as HTMLElement | null;
+    if (el) savedScrollRef.current = { top: el.scrollTop, left: el.scrollLeft };
+  }, []);
+
+  const restoreScrollPos = useCallback(() => {
+    const el = scrollContainerRef.current?.querySelector('[class*="overflow-auto"]') as HTMLElement | null;
+    const saved = savedScrollRef.current;
+    if (el && saved) {
+      const restore = () => { el.scrollTop = saved.top; el.scrollLeft = saved.left; };
+      restore();
+      requestAnimationFrame(restore);
+      setTimeout(restore, 50);
+      setTimeout(restore, 200);
+    }
+  }, []);
+
   const { data: providerAgreementsMap = {} } = useQuery<Record<string, number>>({
     queryKey: ["/api/commission-tracker/provider-agreements-map"],
   });
@@ -317,6 +367,7 @@ export default function SubAgentCommissionPage() {
 
   const updateMasterMutation = useMutation({
     mutationFn: async ({ studentId, data }: { studentId: number; data: any }) => {
+      saveScrollPos();
       const res = await apiRequest("PUT", `/api/sub-agent-commission/master/${studentId}`, data);
       return res.json();
     },
@@ -324,6 +375,7 @@ export default function SubAgentCommissionPage() {
       queryClient.invalidateQueries({ queryKey: ["/api/sub-agent-commission/master"] });
       queryClient.invalidateQueries({ queryKey: ["/api/sub-agent-commission/terms"] });
       queryClient.invalidateQueries({ queryKey: ["/api/sub-agent-commission/dashboard"] });
+      restoreScrollPos();
     },
     onError: (err: any) => {
       toast({ title: "Update Failed", description: err.message, variant: "destructive" });
@@ -332,6 +384,7 @@ export default function SubAgentCommissionPage() {
 
   const updateTermEntryMutation = useMutation({
     mutationFn: async ({ termName, id, data }: { termName: string; id: number; data: any }) => {
+      saveScrollPos();
       const res = await apiRequest("PUT", `/api/sub-agent-commission/terms/${termName}/entries/${id}`, data);
       return res.json();
     },
@@ -339,6 +392,7 @@ export default function SubAgentCommissionPage() {
       queryClient.invalidateQueries({ queryKey: ["/api/sub-agent-commission/master"] });
       queryClient.invalidateQueries({ queryKey: ["/api/sub-agent-commission/terms"] });
       queryClient.invalidateQueries({ queryKey: ["/api/sub-agent-commission/dashboard"] });
+      restoreScrollPos();
     },
     onError: (err: any) => {
       toast({ title: "Update Failed", description: err.message, variant: "destructive" });
@@ -458,9 +512,9 @@ export default function SubAgentCommissionPage() {
           </TabsList>
         </div>
 
-        <div className="flex-1 overflow-auto p-4">
+        <div ref={scrollContainerRef} className={`flex-1 min-h-0 p-4 ${activeTab === "DASHBOARD" ? "overflow-auto" : "flex flex-col"}`}>
           {isLoading ? (
-            <div className="space-y-2">
+            <div className="space-y-2 overflow-auto">
               {[...Array(6)].map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}
             </div>
           ) : activeTab === "DASHBOARD" ? (
@@ -626,7 +680,7 @@ function MasterTable({ rows, canEdit, onUpdateRate, onUpdateGst, providerAgreeme
     <ScrollableTableWrapper data-testid="master-table">
       <table className="w-full text-xs border-collapse">
         <thead>
-          <tr className="bg-[#1F4E79] text-white">
+          <tr className="bg-[#1F4E79] text-white sticky top-0 z-10">
             <th className="px-2 py-1.5 text-left font-medium border border-[#2060a0] min-w-[40px]">S.No</th>
             <th className="px-2 py-1.5 text-left font-medium border border-[#2060a0] min-w-[80px]">Agentsic ID</th>
             <th className="px-2 py-1.5 text-left font-medium border border-[#2060a0] min-w-[120px]">Agent Name</th>
@@ -866,7 +920,7 @@ function TermTable({ rows, termName, canEdit, onUpdate, providerAgreementsMap }:
           })}
         </tbody>
         <tfoot>
-          <tr className="bg-gray-100 dark:bg-gray-800 font-semibold sticky bottom-0">
+          <tr className="bg-gray-100 dark:bg-gray-800 font-semibold sticky bottom-0 z-10">
             <td colSpan={9} className="px-2 py-1.5 border border-gray-300 text-xs text-right">TOTALS</td>
             <td className="px-2 py-1.5 border border-gray-300 text-xs text-right font-mono">{fmt(totals.feeNet)}</td>
             <td className="px-2 py-1.5 border border-gray-300 text-xs text-right font-mono">{fmt(totals.mainComm)}</td>

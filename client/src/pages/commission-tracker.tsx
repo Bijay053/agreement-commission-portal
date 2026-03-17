@@ -1363,6 +1363,7 @@ function TermTable({ termName, students, allEntries, allEntriesGlobal, terms, is
     sn: number | null,
     totalProviderRows: number,
     isAdditional: boolean,
+    providerStatus?: string | null,
   ) => {
     const entry = getEntry(s.id, studentProviderId);
 
@@ -1414,7 +1415,7 @@ function TermTable({ termName, students, allEntries, allEntriesGlobal, terms, is
                       academicYear: "Year 1",
                       feeGross: "0",
                       bonus: "0",
-                      studentStatus: s.status || "Under Enquiry",
+                      studentStatus: providerStatus || s.status || "Under Enquiry",
                       paymentStatus: "Pending",
                       studentProviderId,
                     });
@@ -1539,6 +1540,7 @@ function TermTable({ termName, students, allEntries, allEntriesGlobal, terms, is
                   rows.push(renderEntryRow(
                     s, s.provider, s.country, s.courseLevel || "", s.courseName || "",
                     null, `${s.id}`, sn, visibleProviderRows, false,
+                    s.status,
                   ));
                 }
 
@@ -1559,6 +1561,7 @@ function TermTable({ termName, students, allEntries, allEntriesGlobal, terms, is
                     isFirstRow ? sn : null,
                     isFirstRow ? visibleProviderRows : 0,
                     !isFirstRow,
+                    ap.status,
                   ));
                 }
               }
