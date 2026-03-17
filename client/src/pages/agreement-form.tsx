@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useParams, useLocation } from "wouter";
 import { apiRequest } from "@/lib/queryClient";
@@ -78,6 +78,22 @@ export default function AgreementFormPage() {
     internalNotes: "",
   });
 
+  const codeManuallyEdited = useRef(false);
+
+  const generateAgreementCode = (providerName: string): string => {
+    if (!providerName) return "";
+    const cleaned = providerName
+      .replace(/\s*—\s*/g, "-")
+      .replace(/[^a-zA-Z0-9\s-]/g, "")
+      .trim();
+    const words = cleaned.split(/[\s-]+/).filter(Boolean);
+    if (words.length === 0) return "";
+    if (words.length === 1) return words[0];
+    const significant = words.filter(w => !["of", "the", "and", "for", "in", "at", "a", "an"].includes(w.toLowerCase()));
+    if (significant.length <= 3) return significant.join("-");
+    return significant.slice(0, 3).join("-");
+  };
+
   const [showProviderModal, setShowProviderModal] = useState(false);
   const [providerForm, setProviderForm] = useState({
     name: "",
@@ -103,6 +119,7 @@ export default function AgreementFormPage() {
         autoRenew: existingAgreement.autoRenew || false,
         internalNotes: existingAgreement.internalNotes || "",
       });
+      codeManuallyEdited.current = true;
     }
   }, [existingAgreement]);
 
@@ -135,7 +152,11 @@ export default function AgreementFormPage() {
     onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ["/api/universities"] });
       queryClient.invalidateQueries({ queryKey: ["/api/providers"] });
-      setForm({ ...form, universityId: String(result.id) });
+      const updates: any = { universityId: String(result.id) };
+      if (!codeManuallyEdited.current && result.name) {
+        updates.agreementCode = generateAgreementCode(result.name);
+      }
+      setForm(f => ({ ...f, ...updates }));
       setShowProviderModal(false);
       setProviderForm({ name: "", providerType: "university", countryId: "", website: "", status: "active", notes: "" });
       toast({ title: "Provider added" });
@@ -235,7 +256,12 @@ export default function AgreementFormPage() {
                       if (v === "__add_new__") {
                         setShowProviderModal(true);
                       } else {
-                        setForm({...form, universityId: v});
+                        const provider = providers?.find((p: any) => String(p.id) === v);
+                        const updates: any = { universityId: v };
+                        if (!codeManuallyEdited.current && provider) {
+                          updates.agreementCode = generateAgreementCode(provider.name);
+                        }
+                        setForm(f => ({ ...f, ...updates }));
                       }
                     }}
                     options={providerOptions}
@@ -247,7 +273,7 @@ export default function AgreementFormPage() {
               </div>
               <div>
                 <Label>Agreement Code <span className="text-red-500">*</span></Label>
-                <Input value={form.agreementCode} onChange={e => setForm({...form, agreementCode: e.target.value})} placeholder="UON-2026-BD-AGT-01" required data-testid="input-agreement-code" />
+                <Input value={form.agreementCode} onChange={e => { codeManuallyEdited.current = true; setForm({...form, agreementCode: e.target.value}); }} placeholder="Auto-generated from provider" required data-testid="input-agreement-code" />
               </div>
             </div>
 
