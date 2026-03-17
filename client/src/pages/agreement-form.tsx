@@ -80,18 +80,28 @@ export default function AgreementFormPage() {
 
   const codeManuallyEdited = useRef(false);
 
-  const generateAgreementCode = (providerName: string): string => {
+  const generateAgreementCode = (providerName: string, expiryDate?: string): string => {
     if (!providerName) return "";
     const cleaned = providerName
-      .replace(/\s*—\s*/g, "-")
-      .replace(/[^a-zA-Z0-9\s-]/g, "")
+      .replace(/\s*—\s*/g, " ")
+      .replace(/[^a-zA-Z0-9\s]/g, "")
       .trim();
-    const words = cleaned.split(/[\s-]+/).filter(Boolean);
+    const words = cleaned.split(/\s+/).filter(Boolean);
     if (words.length === 0) return "";
-    if (words.length === 1) return words[0];
-    const significant = words.filter(w => !["of", "the", "and", "for", "in", "at", "a", "an"].includes(w.toLowerCase()));
-    if (significant.length <= 3) return significant.join("-");
-    return significant.slice(0, 3).join("-");
+    const fillers = ["of", "the", "and", "for", "in", "at", "a", "an"];
+    const significant = words.filter(w => !fillers.includes(w.toLowerCase()));
+    const useWords = significant.length > 0 ? significant : words;
+    const abbr = useWords.map(w => w.substring(0, 3).toUpperCase()).join("-");
+    let code = abbr;
+    if (expiryDate) {
+      const parts = expiryDate.split("-");
+      if (parts.length >= 2 && parts[0].length === 4) {
+        const yy = parts[0].slice(-2);
+        const mm = parts[1].padStart(2, "0");
+        code += `-${yy}${mm}`;
+      }
+    }
+    return code;
   };
 
   const [showProviderModal, setShowProviderModal] = useState(false);
@@ -154,7 +164,7 @@ export default function AgreementFormPage() {
       queryClient.invalidateQueries({ queryKey: ["/api/providers"] });
       const updates: any = { universityId: String(result.id) };
       if (!codeManuallyEdited.current && result.name) {
-        updates.agreementCode = generateAgreementCode(result.name);
+        updates.agreementCode = generateAgreementCode(result.name, form.expiryDate);
       }
       setForm(f => ({ ...f, ...updates }));
       setShowProviderModal(false);
@@ -259,7 +269,7 @@ export default function AgreementFormPage() {
                         const provider = providers?.find((p: any) => String(p.id) === v);
                         const updates: any = { universityId: v };
                         if (!codeManuallyEdited.current && provider) {
-                          updates.agreementCode = generateAgreementCode(provider.name);
+                          updates.agreementCode = generateAgreementCode(provider.name, form.expiryDate);
                         }
                         setForm(f => ({ ...f, ...updates }));
                       }
@@ -353,7 +363,17 @@ export default function AgreementFormPage() {
               </div>
               <div>
                 <Label>Expiry Date <span className="text-red-500">*</span></Label>
-                <Input type="date" value={form.expiryDate} onChange={e => setForm({...form, expiryDate: e.target.value})} required data-testid="input-expiry-date" />
+                <Input type="date" value={form.expiryDate} onChange={e => {
+                  const newExpiry = e.target.value;
+                  const updates: any = { expiryDate: newExpiry };
+                  if (!codeManuallyEdited.current && form.universityId) {
+                    const provider = providers?.find((p: any) => String(p.id) === form.universityId);
+                    if (provider) {
+                      updates.agreementCode = generateAgreementCode(provider.name, newExpiry);
+                    }
+                  }
+                  setForm(f => ({ ...f, ...updates }));
+                }} required data-testid="input-expiry-date" />
               </div>
             </div>
 
