@@ -1303,12 +1303,14 @@ function TermTable({ termName, students, allEntries, allEntriesGlobal, terms, is
   const pageIntake = intakeFromTermName(termName, terms);
   const pageSortKey = pageIntake ? intakeSortKeyFromParsed(pageIntake) : 0;
 
-  const isHidden = (studentId: number, studentProviderId: number | null, startIntakeRaw: string | null | undefined): boolean => {
+  const isHidden = (studentId: number, studentProviderId: number | null, startIntakeRaw: string | null | undefined, currentStudentStatus?: string | null): boolean => {
     const studentStartIntake = parseIntake(startIntakeRaw);
     if (studentStartIntake && pageIntake) {
       const startKey = intakeSortKeyFromParsed(studentStartIntake);
       if (pageSortKey < startKey) return true;
     }
+
+    if (currentStudentStatus && !isFinalStatus(currentStudentStatus)) return false;
 
     const entries = (allEntriesGlobal[studentId] || []).filter(e => (e.studentProviderId || null) === studentProviderId);
     let earliestFinalKey = Infinity;
@@ -1496,9 +1498,9 @@ function TermTable({ termName, students, allEntries, allEntriesGlobal, terms, is
               for (const s of sortedStudents) {
                 const additionalProviders = providersByStudent?.[s.id] || [];
 
-                const primaryHidden = isHidden(s.id, null, s.startIntake);
+                const primaryHidden = isHidden(s.id, null, s.startIntake, s.status);
                 const visibleAdditional = additionalProviders.filter(ap =>
-                  !isHidden(s.id, ap.id, ap.startIntake || s.startIntake)
+                  !isHidden(s.id, ap.id, ap.startIntake || s.startIntake, ap.status || s.status)
                 );
 
                 if (primaryHidden && visibleAdditional.length === 0) continue;
