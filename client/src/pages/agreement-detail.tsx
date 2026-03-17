@@ -92,7 +92,7 @@ export default function AgreementDetailPage() {
             <span className="text-xs font-mono text-muted-foreground">{agreement.agreementCode}</span>
             {getStatusBadge(agreement.status)}
           </div>
-          <h1 className="text-xl font-semibold mt-1 truncate" data-testid="text-agreement-title">
+          <h1 className="text-xl font-bold tracking-tight mt-1 truncate" data-testid="text-agreement-title">
             {agreement.title}
           </h1>
         </div>

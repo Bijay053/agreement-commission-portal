@@ -157,7 +157,7 @@ export default function UsersManagementPage() {
     <div className="p-6 space-y-5 max-w-5xl mx-auto">
       <div className="flex items-center justify-between gap-4 flex-wrap">
         <div>
-          <h1 className="text-2xl font-semibold" data-testid="text-users-title">User Management</h1>
+          <h1 className="text-2xl font-bold tracking-tight" data-testid="text-users-title">User Management</h1>
           <p className="text-sm text-muted-foreground mt-1">Manage system users and role assignments</p>
         </div>
         <Dialog open={showCreateDialog} onOpenChange={(open) => { if (open) { setCreateForm({ fullName: "", email: "", password: "", roleId: "" }); setShowPassword(false); } setShowCreateDialog(open); }}>

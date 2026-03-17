@@ -74,22 +74,26 @@ export function AppSidebar() {
     navigate(`/agreements?status=${status}`);
   };
 
+  const userInitials = user?.user?.fullName
+    ? user.user.fullName.split(" ").map((n: string) => n[0]).join("").toUpperCase().slice(0, 2)
+    : "U";
+
   return (
     <Sidebar>
       <SidebarHeader className="p-4 border-b border-sidebar-border">
-        <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-md bg-primary flex items-center justify-center">
-            <Shield className="w-4 h-4 text-primary-foreground" />
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 rounded-lg bg-primary flex items-center justify-center shadow-sm">
+            <span className="text-sm font-bold text-primary-foreground">SIC</span>
           </div>
           <div>
-            <p className="text-sm font-semibold text-sidebar-foreground">Agreement Portal</p>
-            <p className="text-[10px] text-muted-foreground">Study Info Centre</p>
+            <p className="text-sm font-semibold text-sidebar-foreground leading-tight">Agreement Portal</p>
+            <p className="text-[10px] text-muted-foreground leading-tight">Study Info Centre</p>
           </div>
         </div>
       </SidebarHeader>
       <SidebarContent>
         <SidebarGroup>
-          <SidebarGroupLabel>Navigation</SidebarGroupLabel>
+          <SidebarGroupLabel className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground/70">Navigation</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
               {mainNav.filter(i => i.show).map((item) => (
@@ -125,20 +129,22 @@ export function AppSidebar() {
                       </SidebarMenuButton>
                       <button
                         onClick={() => setAgreementsExpanded(!agreementsExpanded)}
-                        className="p-1.5 rounded hover:bg-sidebar-accent shrink-0"
+                        className="p-1.5 rounded-md hover:bg-sidebar-accent shrink-0 transition-colors"
                         data-testid="button-toggle-agreement-statuses"
+                        aria-label={agreementsExpanded ? "Collapse agreement statuses" : "Expand agreement statuses"}
+                        aria-expanded={agreementsExpanded}
                       >
                         {agreementsExpanded ? (
-                          <ChevronDown className="w-3.5 h-3.5" />
+                          <ChevronDown className="w-3.5 h-3.5 text-muted-foreground" />
                         ) : (
-                          <ChevronRight className="w-3.5 h-3.5" />
+                          <ChevronRight className="w-3.5 h-3.5 text-muted-foreground" />
                         )}
                       </button>
                     </div>
                   </SidebarMenuItem>
 
                   {agreementsExpanded && (
-                    <div className="ml-4 space-y-0.5">
+                    <div className="ml-4 space-y-0.5 border-l-2 border-sidebar-border pl-2">
                       {STATUS_ITEMS.map((item) => (
                         <SidebarMenuItem key={item.key}>
                           <SidebarMenuButton
@@ -155,7 +161,7 @@ export function AppSidebar() {
                               <span>{item.label}</span>
                             </span>
                             {statusCounts && statusCounts[item.key] !== undefined && (
-                              <Badge variant="secondary" className="h-5 min-w-[20px] text-[10px] px-1.5">
+                              <Badge variant="secondary" className="h-5 min-w-[20px] text-[10px] px-1.5 font-medium">
                                 {statusCounts[item.key]}
                               </Badge>
                             )}
@@ -172,7 +178,7 @@ export function AppSidebar() {
 
         {adminNav.some(i => i.show) && (
           <SidebarGroup>
-            <SidebarGroupLabel>Administration</SidebarGroupLabel>
+            <SidebarGroupLabel className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground/70">Administration</SidebarGroupLabel>
             <SidebarGroupContent>
               <SidebarMenu>
                 {adminNav.filter(i => i.show).map((item) => (
@@ -209,9 +215,9 @@ export function AppSidebar() {
             </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>
-        <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
-            <User className="w-4 h-4 text-primary" />
+        <div className="flex items-center gap-2.5 px-1">
+          <div className="w-8 h-8 rounded-full bg-primary/15 flex items-center justify-center shrink-0 ring-1 ring-primary/20">
+            <span className="text-[10px] font-bold text-primary">{userInitials}</span>
           </div>
           <div className="flex-1 min-w-0">
             <p className="text-xs font-medium truncate">{user?.user?.fullName}</p>
@@ -221,7 +227,9 @@ export function AppSidebar() {
             variant="ghost"
             size="icon"
             onClick={logout}
+            className="h-8 w-8 hover:text-red-500 transition-colors"
             data-testid="button-logout"
+            aria-label="Sign out"
           >
             <LogOut className="w-4 h-4" />
           </Button>

@@ -177,7 +177,7 @@ export default function CommissionTablePage() {
   return (
     <div className="p-6 space-y-5 max-w-[1400px] mx-auto">
       <div>
-        <h1 className="text-2xl font-semibold" data-testid="text-commission-title">Commission & Bonus</h1>
+        <h1 className="text-2xl font-bold tracking-tight" data-testid="text-commission-title">Commission & Bonus</h1>
         <p className="text-sm text-muted-foreground mt-1">Master view of all commission rules and bonus structures across agreements</p>
       </div>
 

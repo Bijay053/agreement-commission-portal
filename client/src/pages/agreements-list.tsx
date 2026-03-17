@@ -99,7 +99,7 @@ export default function AgreementsListPage() {
     <div className="p-6 space-y-5 max-w-7xl mx-auto">
       <div className="flex items-center justify-between gap-4 flex-wrap">
         <div>
-          <h1 className="text-2xl font-semibold" data-testid="text-agreements-title">Agreements</h1>
+          <h1 className="text-2xl font-bold tracking-tight" data-testid="text-agreements-title">Agreements</h1>
           <p className="text-sm text-muted-foreground mt-1">Manage provider partnership agreements</p>
         </div>
         {hasPermission("agreement.create") && (

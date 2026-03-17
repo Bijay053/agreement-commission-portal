@@ -262,7 +262,7 @@ export default function RolesManagementPage() {
     <div className="p-6 space-y-5 max-w-5xl mx-auto">
       <div className="flex items-center justify-between gap-4 flex-wrap">
         <div>
-          <h1 className="text-2xl font-semibold" data-testid="text-roles-title">Role Management</h1>
+          <h1 className="text-2xl font-bold tracking-tight" data-testid="text-roles-title">Role Management</h1>
           <p className="text-sm text-muted-foreground mt-1">Manage roles and their permissions</p>
         </div>
         <Button onClick={() => setShowCreateDialog(true)} data-testid="button-add-role">

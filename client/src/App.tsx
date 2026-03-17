@@ -202,11 +202,11 @@ function AuthenticatedApp() {
       <div className="flex h-screen w-full">
         <AppSidebar />
         <div className="flex flex-col flex-1 min-w-0">
-          <header className="flex items-center justify-between gap-2 p-2 border-b h-12 shrink-0">
+          <header className="flex items-center justify-between gap-2 px-3 border-b h-11 shrink-0 bg-background/80 backdrop-blur-sm">
             <SidebarTrigger data-testid="button-sidebar-toggle" />
           </header>
           <PasswordExpiryWarning />
-          <main className="flex-1 overflow-auto">
+          <main className="flex-1 overflow-auto bg-accent/20">
             <Router />
           </main>
         </div>

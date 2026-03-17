@@ -23,26 +23,48 @@ import { format, differenceInDays, parseISO } from "date-fns";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 
-function StatCard({ title, value, icon: Icon, variant }: {
-  title: string; value: number | string; icon: any; variant: string;
+function StatCard({ title, value, icon: Icon, variant, subtitle }: {
+  title: string; value: number | string; icon: any; variant: string; subtitle?: string;
 }) {
-  const colors: Record<string, string> = {
-    primary: "text-primary bg-primary/10",
-    warning: "text-amber-600 dark:text-amber-400 bg-amber-500/10",
-    success: "text-emerald-600 dark:text-emerald-400 bg-emerald-500/10",
-    danger: "text-red-600 dark:text-red-400 bg-red-500/10",
-    orange: "text-orange-600 dark:text-orange-400 bg-orange-500/10",
+  const styles: Record<string, { icon: string; border: string; gradient: string }> = {
+    primary: {
+      icon: "text-blue-600 dark:text-blue-400 bg-blue-500/10",
+      border: "border-l-blue-500",
+      gradient: "from-blue-50/50 dark:from-blue-950/20",
+    },
+    warning: {
+      icon: "text-amber-600 dark:text-amber-400 bg-amber-500/10",
+      border: "border-l-amber-500",
+      gradient: "from-amber-50/50 dark:from-amber-950/20",
+    },
+    success: {
+      icon: "text-emerald-600 dark:text-emerald-400 bg-emerald-500/10",
+      border: "border-l-emerald-500",
+      gradient: "from-emerald-50/50 dark:from-emerald-950/20",
+    },
+    danger: {
+      icon: "text-red-600 dark:text-red-400 bg-red-500/10",
+      border: "border-l-red-500",
+      gradient: "from-red-50/50 dark:from-red-950/20",
+    },
+    orange: {
+      icon: "text-orange-600 dark:text-orange-400 bg-orange-500/10",
+      border: "border-l-orange-500",
+      gradient: "from-orange-50/50 dark:from-orange-950/20",
+    },
   };
+  const s = styles[variant] || styles.primary;
 
   return (
-    <Card>
+    <Card className={`border-l-4 ${s.border} bg-gradient-to-r ${s.gradient} to-transparent overflow-hidden`}>
       <CardContent className="p-5">
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0 flex-1">
-            <p className="text-sm text-muted-foreground">{title}</p>
-            <p className="text-2xl font-semibold mt-1">{value}</p>
+            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">{title}</p>
+            <p className="text-3xl font-bold mt-1.5 tracking-tight">{value}</p>
+            {subtitle && <p className="text-xs text-muted-foreground mt-1">{subtitle}</p>}
           </div>
-          <div className={`p-2.5 rounded-md shrink-0 ${colors[variant]}`}>
+          <div className={`p-2.5 rounded-lg shrink-0 ${s.icon}`}>
             <Icon className="w-5 h-5" />
           </div>
         </div>
@@ -151,9 +173,11 @@ export default function DashboardPage() {
 
   return (
     <div className="p-6 space-y-6 max-w-7xl mx-auto">
-      <div>
-        <h1 className="text-2xl font-semibold" data-testid="text-dashboard-title">Dashboard</h1>
-        <p className="text-sm text-muted-foreground mt-1">Overview of your agreement portfolio</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight" data-testid="text-dashboard-title">Dashboard</h1>
+          <p className="text-sm text-muted-foreground mt-0.5">Overview of your agreement portfolio</p>
+        </div>
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
