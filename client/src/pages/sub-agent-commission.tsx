@@ -316,21 +316,38 @@ export default function SubAgentCommissionPage() {
     enabled: activeTab === "DASHBOARD",
   });
 
-  const buildFilterParams = useCallback(() => {
-    const params = new URLSearchParams();
-    if (search) params.set("search", search);
-    if (selectedAgents.length) params.set("agents", selectedAgents.join(","));
-    if (selectedProviders.length) params.set("providers", selectedProviders.join(","));
-    if (selectedStatuses.length) params.set("statuses", selectedStatuses.join(","));
-    return params.toString();
+  const applyFilters = useCallback(<T extends { student: any; status?: string; studentStatus?: string }>(rows: T[]): T[] => {
+    let filtered = rows;
+    if (search) {
+      const q = search.toLowerCase();
+      filtered = filtered.filter(r => {
+        const s = r.student;
+        return (s.studentName || "").toLowerCase().includes(q) ||
+          (s.agentName || "").toLowerCase().includes(q) ||
+          (s.agentsicId || "").toLowerCase().includes(q) ||
+          (s.provider || "").toLowerCase().includes(q) ||
+          (s.courseName || "").toLowerCase().includes(q);
+      });
+    }
+    if (selectedAgents.length) {
+      filtered = filtered.filter(r => selectedAgents.includes(r.student.agentName));
+    }
+    if (selectedProviders.length) {
+      filtered = filtered.filter(r => selectedProviders.includes(r.student.provider));
+    }
+    if (selectedStatuses.length) {
+      filtered = filtered.filter(r => {
+        const st = (r as any).studentStatus || (r as any).status || r.student.status || "Under Enquiry";
+        return selectedStatuses.includes(st);
+      });
+    }
+    return filtered;
   }, [search, selectedAgents, selectedProviders, selectedStatuses]);
 
   const masterQuery = useQuery<MasterRow[]>({
-    queryKey: ["/api/sub-agent-commission/master", buildFilterParams()],
+    queryKey: ["/api/sub-agent-commission/master"],
     queryFn: async () => {
-      const params = buildFilterParams();
-      const url = `/api/sub-agent-commission/master${params ? `?${params}` : ""}`;
-      const res = await fetch(url, { credentials: "include" });
+      const res = await fetch("/api/sub-agent-commission/master", { credentials: "include" });
       if (!res.ok) throw new Error("Failed to fetch");
       return res.json();
     },
@@ -338,11 +355,9 @@ export default function SubAgentCommissionPage() {
   });
 
   const termEntryQuery = useQuery<TermRow[]>({
-    queryKey: ["/api/sub-agent-commission/terms", activeTab, buildFilterParams()],
+    queryKey: ["/api/sub-agent-commission/terms", activeTab],
     queryFn: async () => {
-      const params = buildFilterParams();
-      const url = `/api/sub-agent-commission/terms/${activeTab}${params ? `?${params}` : ""}`;
-      const res = await fetch(url, { credentials: "include" });
+      const res = await fetch(`/api/sub-agent-commission/terms/${activeTab}`, { credentials: "include" });
       if (!res.ok) throw new Error("Failed to fetch");
       return res.json();
     },
@@ -399,9 +414,8 @@ export default function SubAgentCommissionPage() {
     },
   });
 
-  const allMasterRows = useMemo(() => {
-    const rows = (masterQuery.data || []).filter((r: any) => r && r.student);
-    return rows.sort((a: MasterRow, b: MasterRow) => {
+  const stableSort = <T extends { id: number; student: any }>(rows: T[]): T[] => {
+    return [...rows].sort((a, b) => {
       const keyA = intakeSortKey(a.student.startIntake);
       const keyB = intakeSortKey(b.student.startIntake);
       if (keyB !== keyA) return keyB - keyA;
@@ -411,9 +425,32 @@ export default function SubAgentCommissionPage() {
       if (nameCmp !== 0) return nameCmp;
       return a.id - b.id;
     });
+  };
+
+  const allMasterRows = useMemo(() => {
+    const rows = (masterQuery.data || []).filter((r: any) => r && r.student);
+    return stableSort(rows);
   }, [masterQuery.data]);
-  const allAgents = [...new Set(allMasterRows.map(r => r.student.agentName))].sort();
-  const allProviders = [...new Set(allMasterRows.map(r => r.student.provider))].sort();
+
+  const allTermRows = useMemo(() => {
+    const rows = (termEntryQuery.data || []).filter((r: any) => r && r.student);
+    return stableSort(rows);
+  }, [termEntryQuery.data]);
+
+  const allAgents = useMemo(() => {
+    const masterAgents = allMasterRows.map(r => r.student.agentName);
+    const termAgents = allTermRows.map(r => r.student.agentName);
+    return [...new Set([...masterAgents, ...termAgents])].filter(Boolean).sort();
+  }, [allMasterRows, allTermRows]);
+
+  const allProviders = useMemo(() => {
+    const masterProviders = allMasterRows.map(r => r.student.provider);
+    const termProviders = allTermRows.map(r => r.student.provider);
+    return [...new Set([...masterProviders, ...termProviders])].filter(Boolean).sort();
+  }, [allMasterRows, allTermRows]);
+
+  const filteredMasterRows = useMemo(() => applyFilters(allMasterRows), [allMasterRows, applyFilters]);
+  const filteredTermRows = useMemo(() => applyFilters(allTermRows), [allTermRows, applyFilters]);
 
   const isLoading = activeTab === "DASHBOARD" ? dashboardQuery.isLoading
     : activeTab === "MASTER" ? masterQuery.isLoading
@@ -465,39 +502,66 @@ export default function SubAgentCommissionPage() {
         </div>
       </div>
 
-      <div className="flex items-center gap-2 px-4 py-2 border-b bg-muted/30">
-        <div className="relative flex-1 max-w-xs">
-          <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Search student, agent, ID..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="pl-8 h-8 text-sm"
-            data-testid="input-search"
-          />
+      {activeTab !== "DASHBOARD" && (
+        <div className="px-4 py-2.5 border-b bg-muted/20">
+          <div className="flex items-center gap-2">
+            <div className="relative flex-1 max-w-[220px]">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+              <Input
+                placeholder="Search student, agent, ID..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="pl-8 h-8 text-xs border-gray-300 dark:border-gray-600 rounded-md"
+                data-testid="input-search"
+              />
+            </div>
+            <div className="flex-1 max-w-[200px]">
+              <MultiSearchableSelect
+                options={allAgents.map(a => ({ value: a, label: a }))}
+                values={selectedAgents}
+                onValuesChange={setSelectedAgents}
+                placeholder="All Agents"
+                data-testid="filter-agents"
+              />
+            </div>
+            <div className="flex-1 max-w-[200px]">
+              <MultiSearchableSelect
+                options={allProviders.map(p => ({ value: p, label: p }))}
+                values={selectedProviders}
+                onValuesChange={setSelectedProviders}
+                placeholder="All Providers"
+                data-testid="filter-providers"
+              />
+            </div>
+            <div className="flex-1 max-w-[180px]">
+              <MultiSearchableSelect
+                options={STUDENT_STATUSES.map(s => ({ value: s, label: s }))}
+                values={selectedStatuses}
+                onValuesChange={setSelectedStatuses}
+                placeholder="All Statuses"
+                data-testid="filter-statuses"
+              />
+            </div>
+            {(search || selectedAgents.length > 0 || selectedProviders.length > 0 || selectedStatuses.length > 0) && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-8 px-2 text-xs text-muted-foreground hover:text-foreground"
+                onClick={() => { setSearch(""); setSelectedAgents([]); setSelectedProviders([]); setSelectedStatuses([]); }}
+                data-testid="button-clear-filters"
+              >
+                Clear filters
+              </Button>
+            )}
+            {(search || selectedAgents.length > 0 || selectedProviders.length > 0 || selectedStatuses.length > 0) && (
+              <span className="text-xs text-muted-foreground whitespace-nowrap" data-testid="text-filter-count">
+                {activeTab === "MASTER" ? filteredMasterRows.length : filteredTermRows.length} of{" "}
+                {activeTab === "MASTER" ? allMasterRows.length : allTermRows.length} shown
+              </span>
+            )}
+          </div>
         </div>
-        <MultiSearchableSelect
-          options={allAgents.map(a => ({ value: a, label: a }))}
-          values={selectedAgents}
-          onValuesChange={setSelectedAgents}
-          placeholder="All Agents"
-          data-testid="filter-agents"
-        />
-        <MultiSearchableSelect
-          options={allProviders.map(p => ({ value: p, label: p }))}
-          values={selectedProviders}
-          onValuesChange={setSelectedProviders}
-          placeholder="All Providers"
-          data-testid="filter-providers"
-        />
-        <MultiSearchableSelect
-          options={STUDENT_STATUSES.map(s => ({ value: s, label: s }))}
-          values={selectedStatuses}
-          onValuesChange={setSelectedStatuses}
-          placeholder="All Statuses"
-          data-testid="filter-statuses"
-        />
-      </div>
+      )}
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col min-h-0">
         <div className="border-b px-4">
@@ -525,7 +589,7 @@ export default function SubAgentCommissionPage() {
             <DashboardView data={dashboardQuery.data} />
           ) : activeTab === "MASTER" ? (
             <MasterTable
-              rows={allMasterRows}
+              rows={filteredMasterRows}
               canEdit={canEdit}
               providerAgreementsMap={providerAgreementsMap}
               onUpdateRate={(studentId, rate) => updateMasterMutation.mutate({ studentId, data: { subAgentCommissionRatePct: rate } })}
@@ -533,7 +597,7 @@ export default function SubAgentCommissionPage() {
             />
           ) : (
             <TermTable
-              rows={(termEntryQuery.data || []).filter((r: any) => r && r.student)}
+              rows={filteredTermRows}
               termName={activeTab}
               canEdit={canEdit}
               providerAgreementsMap={providerAgreementsMap}
