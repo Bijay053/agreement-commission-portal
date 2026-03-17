@@ -405,6 +405,10 @@ export default function SubAgentCommissionPage() {
       const keyA = intakeSortKey(a.student.startIntake);
       const keyB = intakeSortKey(b.student.startIntake);
       if (keyB !== keyA) return keyB - keyA;
+      const agentCmp = (a.student.agentName || "").localeCompare(b.student.agentName || "");
+      if (agentCmp !== 0) return agentCmp;
+      const nameCmp = (a.student.studentName || "").localeCompare(b.student.studentName || "");
+      if (nameCmp !== 0) return nameCmp;
       return a.id - b.id;
     });
   }, [masterQuery.data]);

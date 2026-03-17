@@ -24,6 +24,16 @@ def _intake_sort_key(intake_str):
     return (year, term)
 
 
+def _stable_sort_key(r):
+    s = r.get('student') or {}
+    return (
+        _intake_sort_key(s.get('startIntake', '')),
+        (s.get('agentName') or '').lower(),
+        (s.get('studentName') or '').lower(),
+        r.get('id', 0),
+    )
+
+
 def student_to_dict(s):
     if not s:
         return None
@@ -136,7 +146,7 @@ class SubAgentMasterListView(APIView):
             student_ids = [m.commission_student_id for m in masters]
             students = {s.id: s for s in CommissionStudent.objects.filter(id__in=student_ids)}
             result = [master_to_dict(m, students.get(m.commission_student_id)) for m in masters if students.get(m.commission_student_id)]
-            result.sort(key=lambda r: _intake_sort_key(r['student']['startIntake'] if r.get('student') else ''), reverse=True)
+            result.sort(key=_stable_sort_key, reverse=True)
             return Response(result)
         except Exception as e:
             return Response({'message': str(e)}, status=500)
@@ -318,7 +328,7 @@ class SubAgentTermEntriesView(APIView):
                 s = students.get(e.commission_student_id)
                 d['student'] = student_to_dict(s)
                 result.append(d)
-            result.sort(key=lambda r: _intake_sort_key(r['student']['startIntake'] if r.get('student') and r['student'] else ''), reverse=True)
+            result.sort(key=_stable_sort_key, reverse=True)
             return Response(result)
         except Exception as e:
             return Response({'message': str(e)}, status=500)
