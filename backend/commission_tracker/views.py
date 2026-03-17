@@ -156,15 +156,27 @@ class StudentsListView(APIView):
         year = request.query_params.get('year')
 
         if agent:
-            qs = qs.filter(agent_name__icontains=agent)
+            agent_list = [a.strip() for a in agent.split(",") if a.strip()]
+            if len(agent_list) == 1:
+                qs = qs.filter(agent_name__icontains=agent_list[0])
+            else:
+                qs = qs.filter(agent_name__in=agent_list)
         if prov:
-            qs = qs.filter(provider__icontains=prov)
+            prov_list = [p.strip() for p in prov.split(",") if p.strip()]
+            if len(prov_list) == 1:
+                qs = qs.filter(provider__icontains=prov_list[0])
+            else:
+                qs = qs.filter(provider__in=prov_list)
         if country:
             qs = qs.filter(country__iexact=country)
         if status:
-            qs = qs.filter(status=status)
+            status_list = [s.strip() for s in status.split(",") if s.strip()]
+            if len(status_list) == 1:
+                qs = qs.filter(status=status_list[0])
+            else:
+                qs = qs.filter(status__in=status_list)
         if search:
-            qs = qs.filter(Q(student_name__icontains=search) | Q(student_id__icontains=search) | Q(agentsic_id__icontains=search))
+            qs = qs.filter(Q(student_name__icontains=search) | Q(student_id__icontains=search) | Q(agentsic_id__icontains=search) | Q(agent_name__icontains=search))
         if year:
             qs = qs.filter(start_intake__icontains=year)
 
