@@ -47,6 +47,9 @@ generated-icon.png
 *.jpg
 *.jpeg
 
+# Attached assets (may contain pasted secrets/logs)
+attached_assets/Pasted-*.txt
+
 # Uploads
 uploads/
 
@@ -54,5 +57,4 @@ uploads/
 pgdata/
 redisdata/
 
-# Package lock (frontend managed via Dockerfile)
-package-lock.json
+# Package lock is tracked (needed by Dockerfile npm ci)
