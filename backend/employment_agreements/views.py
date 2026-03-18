@@ -513,18 +513,17 @@ class AgreementDownloadView(APIView):
                 except Employee.DoesNotExist:
                     return Response({'message': 'Employee not found'}, status=404)
 
+                pdf_buf = generate_agreement_pdf(employee, agreement, agreement.clauses or [])
+                if not pdf_buf:
+                    return Response({'message': 'PDF generation not available'}, status=500)
+
+                base_pdf = pdf_buf.getvalue()
+
                 if agreement.signature_data:
-                    pdf_buf = generate_agreement_pdf(employee, agreement, agreement.clauses or [])
-                    if pdf_buf:
-                        signed_pdf_bytes = embed_signature_to_pdf(pdf_buf.getvalue(), agreement.signature_data, agreement.signed_at)
-                        if signed_pdf_bytes:
-                            file_data = signed_pdf_bytes
-                        else:
-                            return Response({'message': 'Could not generate signed PDF'}, status=500)
-                    else:
-                        return Response({'message': 'PDF generation not available'}, status=500)
+                    signed_pdf_bytes = embed_signature_to_pdf(base_pdf, agreement.signature_data, agreement.signed_at)
+                    file_data = signed_pdf_bytes if signed_pdf_bytes else base_pdf
                 else:
-                    return Response({'message': 'No signed document available'}, status=404)
+                    file_data = base_pdf
             else:
                 blocked, msg, file_bytes = _fetch_and_scan_s3(s3_key, request, label=f'agreement {agreement_id}')
                 if blocked:

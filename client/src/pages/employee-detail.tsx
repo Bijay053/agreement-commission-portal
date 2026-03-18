@@ -458,28 +458,31 @@ function AgreementsTab({ employeeId, employee }: { employeeId: string; employee:
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
-                        <DropdownMenuItem onClick={() => window.open(`/api/employment-agreements/${a.id}/download?mode=view`, '_blank')}>
-                          <Eye className="w-4 h-4 mr-2" /> View PDF
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => window.open(`/api/employment-agreements/${a.id}/download`, '_blank')}>
-                          <Download className="w-4 h-4 mr-2" /> Download PDF
-                        </DropdownMenuItem>
-                        {(a.manuallySignedPdfUrl || a.signedPdfUrl || a.signedAt) && (
-                          <DropdownMenuItem onClick={() => window.open(`/api/employment-agreements/${a.id}/download?type=signed&mode=view`, '_blank')}>
-                            <Eye className="w-4 h-4 mr-2" /> View Signed Copy
-                          </DropdownMenuItem>
-                        )}
-                        {(a.manuallySignedPdfUrl || a.signedPdfUrl || a.signedAt) && (
-                          <DropdownMenuItem onClick={() => window.open(`/api/employment-agreements/${a.id}/download?type=signed`, '_blank')}>
-                            <Download className="w-4 h-4 mr-2" /> Download Signed Copy
-                          </DropdownMenuItem>
+                        {['employee_signed', 'signed', 'manually_signed', 'completed'].includes(a.status) ? (
+                          <>
+                            <DropdownMenuItem onClick={() => window.open(`/api/employment-agreements/${a.id}/download?type=signed&mode=view`, '_blank')}>
+                              <Eye className="w-4 h-4 mr-2" /> View Agreement
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => window.open(`/api/employment-agreements/${a.id}/download?type=signed`, '_blank')}>
+                              <Download className="w-4 h-4 mr-2" /> Download Agreement
+                            </DropdownMenuItem>
+                          </>
+                        ) : (
+                          <>
+                            <DropdownMenuItem onClick={() => window.open(`/api/employment-agreements/${a.id}/download?mode=view`, '_blank')}>
+                              <Eye className="w-4 h-4 mr-2" /> View PDF
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => window.open(`/api/employment-agreements/${a.id}/download`, '_blank')}>
+                              <Download className="w-4 h-4 mr-2" /> Download PDF
+                            </DropdownMenuItem>
+                          </>
                         )}
                         {a.status === 'draft' && (
                           <DropdownMenuItem onClick={() => sendMutation.mutate(a.id)}>
                             <Send className="w-4 h-4 mr-2" /> Send for Signing
                           </DropdownMenuItem>
                         )}
-                        {!['signed', 'completed', 'manually_signed'].includes(a.status) && (
+                        {['employee_signed', 'sent', 'awaiting_signature'].includes(a.status) && (
                           <DropdownMenuItem onClick={() => { setCompanySignId(a.id); setShowCompanySign(true); }}>
                             <PenLine className="w-4 h-4 mr-2" /> Sign on Behalf of Company
                           </DropdownMenuItem>
@@ -494,7 +497,7 @@ function AgreementsTab({ employeeId, employee }: { employeeId: string; employee:
                             <CheckCircle className="w-4 h-4 mr-2" /> Mark as Manually Signed
                           </DropdownMenuItem>
                         )}
-                        {['signed', 'manually_signed'].includes(a.status) && (
+                        {['signed', 'manually_signed', 'employee_signed'].includes(a.status) && (
                           <DropdownMenuItem onClick={() => statusMutation.mutate({ id: a.id, status: 'completed' })}>
                             <CheckCircle className="w-4 h-4 mr-2" /> Mark as Completed
                           </DropdownMenuItem>
