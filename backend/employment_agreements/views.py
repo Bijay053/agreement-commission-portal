@@ -601,7 +601,7 @@ class AgreementDownloadView(APIView):
 
 class CompanySignView(APIView):
     @require_auth
-    @require_permission('employment_agreements.manage')
+    @require_permission("emp_agreement.edit", "employee.edit")
     def post(self, request, agreement_id):
         try:
             agreement = EmploymentAgreement.objects.get(id=agreement_id)

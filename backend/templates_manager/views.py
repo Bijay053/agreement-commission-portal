@@ -411,7 +411,9 @@ class TemplateDownloadView(APIView):
 
         file_data = pdf_buf.getvalue()
 
-        if HAS_PIKEPDF:
+        mode = request.query_params.get('mode', 'download')
+
+        if mode != 'view' and HAS_PIKEPDF:
             try:
                 pdf_password = getattr(settings, 'PDF_DOWNLOAD_PASSWORD', '')
                 if pdf_password:
@@ -428,8 +430,6 @@ class TemplateDownloadView(APIView):
                     file_data = output_buf.getvalue()
             except Exception as e:
                 print(f'PDF encryption failed for template {template_id}: {e}')
-
-        mode = request.query_params.get('mode', 'download')
         disposition = 'inline' if mode == 'view' else 'attachment'
         safe_name = template.name.replace('"', '').replace("'", '')[:80]
         filename = f'{safe_name}.pdf'
