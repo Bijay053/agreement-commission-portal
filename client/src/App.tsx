@@ -31,6 +31,7 @@ import ResetPasswordPage from "@/pages/reset-password";
 import VerifyOtpPage from "@/pages/verify-otp";
 import ChangePasswordPage from "@/pages/change-password";
 import AccountSecurityPage from "@/pages/account-security";
+import TemplatesPage from "@/pages/templates";
 import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 
@@ -104,6 +105,7 @@ function Router() {
           return null;
         }}
       </Route>
+      <Route path="/templates" component={TemplatesPage} />
       <Route path="/audit-logs">
         <AccessGuard permission="audit.view">
           <AuditLogsPage />

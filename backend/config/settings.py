@@ -29,6 +29,7 @@ INSTALLED_APPS = [
     'audit',
     'notifications',
     'dashboard',
+    'templates_manager',
 ]
 
 MIDDLEWARE = [
