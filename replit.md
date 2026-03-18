@@ -50,10 +50,11 @@ The portal adopts a client-server architecture:
 │   ├── audit/           # Audit logs
 │   ├── notifications/   # Agreement expiry notifications, email template management
 │   ├── dashboard/       # Dashboard stats, expiring agreements, recent activity
-│   ├── templates_manager/ # Agreement clause/template editor (19-clause default template)
-│   ├── employees/       # Employee CRUD (profile, position, salary, status)
-│   ├── employment_agreements/ # Employment agreement lifecycle, PDF generation, e-signature
-│   ├── employee_documents/   # Employee document management (CV, Citizenship, Tax, Academic, Other)
+│   ├── templates_manager/ # Agreement & offer letter clause/template editor (template_type: agreement|offer_letter)
+│   ├── employees/       # Employee CRUD (profile, position, salary with multi-currency, status)
+│   ├── employment_agreements/ # Employment agreement lifecycle (8 statuses), PDF generation, e-signature, download
+│   ├── employee_documents/   # Employee document management (9 categories: id_passport, contract_agreement, offer_letter, joining, cv, citizenship, tax, academic, other)
+│   ├── offer_letters/   # Offer letter CRUD (6 statuses: draft, sent, accepted, rejected, manually_signed, completed)
 │   └── requirements.txt # Python dependencies
 ├── client/              # React frontend
 │   └── src/             # Components, pages, hooks, lib
@@ -78,7 +79,7 @@ The portal adopts a client-server architecture:
 ### Key Configuration
 - Session cookie name: `connect.sid`
 - Session stores `userId`, `userPermissions`, `pendingUserId`, `otpRequired`, `passwordExpired`
-- All Django models use `managed = False` with `db_table` matching existing PostgreSQL tables
+- Most Django models use `managed = False` with `db_table` matching existing PostgreSQL tables; newer models (OfferLetter) use `managed = True`
 - Password hashing: bcrypt via Python `bcrypt` package
 - PDF download password: configured via `PDF_DOWNLOAD_PASSWORD` env var
 
@@ -131,10 +132,11 @@ All endpoints under `/api/`:
 - **Audit Logs**: list with filters, export
 - **Notifications**: agreement notifications list, expiry reminder emails, email template CRUD
 - **Health**: `/api/health` (no auth, checks DB/Redis/S3/Celery)
-- **Templates**: CRUD for agreement clause templates
-- **Employees**: CRUD for employee profiles
-- **Employment Agreements**: create, send-for-signing, verify/submit signing token, download PDF
-- **Employee Documents**: upload/download/delete by category (CV, Citizenship, Tax, Academic, Other)
+- **Templates**: CRUD for agreement/offer letter clause templates (filtered by `?type=agreement|offer_letter`)
+- **Employees**: CRUD for employee profiles (with multi-currency salary: NPR, AUD, USD, GBP, CAD, BDT, EUR, NZD)
+- **Employment Agreements**: create, send-for-signing, verify/submit signing token, download PDF, upload-signed, status transitions (8 statuses: draft, sent, awaiting_signature, signed, manually_signed, completed, expired, terminated)
+- **Employee Documents**: upload/download/replace/delete by category (9 categories: id_passport, contract_agreement, offer_letter, joining, cv, citizenship, tax, academic, other)
+- **Offer Letters**: CRUD, status transitions, upload-signed (6 statuses: draft, sent, accepted, rejected, manually_signed, completed)
 - **Signing (public)**: `/api/signing/verify/:token`, `/api/signing/submit/:token` — no auth required
 
 ## Permission System

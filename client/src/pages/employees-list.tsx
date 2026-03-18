@@ -13,21 +13,22 @@ import {
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
-import { Plus, Search, Users } from "lucide-react";
+import {
+  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
+} from "@/components/ui/table";
+import { Plus, Search, Users, Loader2 } from "lucide-react";
+
+const CURRENCIES = [
+  { code: 'NPR', symbol: 'रू' }, { code: 'AUD', symbol: 'A$' },
+  { code: 'USD', symbol: '$' }, { code: 'GBP', symbol: '£' },
+  { code: 'CAD', symbol: 'C$' }, { code: 'BDT', symbol: '৳' },
+  { code: 'EUR', symbol: '€' }, { code: 'NZD', symbol: 'NZ$' },
+];
 
 interface Employee {
-  id: string;
-  fullName: string;
-  email: string;
-  phone: string;
-  position: string;
-  department: string;
-  citizenshipNo: string;
-  panNo: string;
-  permanentAddress: string;
-  joinDate: string | null;
-  status: string;
-  createdAt: string;
+  id: string; fullName: string; email: string; phone: string; position: string;
+  department: string; joinDate: string | null; salaryAmount: string;
+  salaryCurrency: string; status: string;
 }
 
 async function apiRequest(url: string, options?: RequestInit) {
@@ -39,22 +40,31 @@ async function apiRequest(url: string, options?: RequestInit) {
   return res.json();
 }
 
-const STATUS_COLORS: Record<string, string> = {
-  active: "bg-emerald-100 text-emerald-800",
-  inactive: "bg-gray-100 text-gray-800",
-  terminated: "bg-red-100 text-red-800",
+const STATUS_STYLES: Record<string, string> = {
+  active: "bg-emerald-100 text-emerald-700 border-emerald-200",
+  inactive: "bg-gray-100 text-gray-700 border-gray-200",
+  terminated: "bg-red-100 text-red-700 border-red-200",
 };
 
 export default function EmployeesListPage() {
   const { toast } = useToast();
   const [, navigate] = useLocation();
   const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
   const [showAdd, setShowAdd] = useState(false);
-  const [form, setForm] = useState({ fullName: "", email: "", phone: "", position: "", department: "" });
+  const [form, setForm] = useState({
+    fullName: "", email: "", phone: "", position: "", department: "",
+    salaryAmount: "", salaryCurrency: "NPR",
+  });
 
   const { data, isLoading } = useQuery<{ results?: Employee[] }>({
-    queryKey: ["/api/employees", search],
-    queryFn: () => apiRequest(`/api/employees${search ? `?search=${encodeURIComponent(search)}` : ""}`),
+    queryKey: ["/api/employees", search, statusFilter],
+    queryFn: () => {
+      const params = new URLSearchParams();
+      if (search) params.set('search', search);
+      if (statusFilter !== 'all') params.set('status', statusFilter);
+      return apiRequest(`/api/employees${params.toString() ? `?${params}` : ''}`);
+    },
   });
 
   const employees: Employee[] = data?.results || (Array.isArray(data) ? data : []);
@@ -69,18 +79,20 @@ export default function EmployeesListPage() {
     onSuccess: (newEmp: Employee) => {
       queryClient.invalidateQueries({ queryKey: ["/api/employees"] });
       setShowAdd(false);
-      setForm({ fullName: "", email: "", phone: "", position: "", department: "" });
+      setForm({ fullName: "", email: "", phone: "", position: "", department: "", salaryAmount: "", salaryCurrency: "NPR" });
       toast({ title: "Employee created" });
       navigate(`/employees/${newEmp.id}`);
     },
     onError: (err: Error) => toast({ title: "Error", description: err.message, variant: "destructive" }),
   });
 
+  const getCurrencySymbol = (code: string) => CURRENCIES.find(c => c.code === code)?.symbol || code;
+
   return (
     <div className="p-6 max-w-6xl mx-auto" data-testid="page-employees">
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-xl font-semibold" data-testid="text-employees-title">Employees</h1>
+          <h1 className="text-2xl font-bold tracking-tight" data-testid="text-employees-title">Employees</h1>
           <p className="text-sm text-muted-foreground mt-1">{employees.length} employee{employees.length !== 1 ? "s" : ""}</p>
         </div>
         <Button onClick={() => setShowAdd(true)} data-testid="button-add-employee">
@@ -88,8 +100,8 @@ export default function EmployeesListPage() {
         </Button>
       </div>
 
-      <div className="mb-4">
-        <div className="relative max-w-sm">
+      <div className="flex items-center gap-3 mb-4">
+        <div className="relative flex-1 max-w-sm">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <Input
             placeholder="Search employees..."
@@ -99,6 +111,17 @@ export default function EmployeesListPage() {
             data-testid="input-search-employees"
           />
         </div>
+        <Select value={statusFilter} onValueChange={setStatusFilter}>
+          <SelectTrigger className="w-[140px]" data-testid="select-status-filter">
+            <SelectValue placeholder="Status" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Status</SelectItem>
+            <SelectItem value="active">Active</SelectItem>
+            <SelectItem value="inactive">Inactive</SelectItem>
+            <SelectItem value="terminated">Terminated</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
 
       {isLoading ? (
@@ -106,45 +129,54 @@ export default function EmployeesListPage() {
           {Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-14 w-full" />)}
         </div>
       ) : employees.length === 0 ? (
-        <div className="text-center py-16">
+        <div className="text-center py-16 border rounded-lg bg-muted/20">
           <Users className="w-12 h-12 mx-auto text-muted-foreground/30 mb-3" />
-          <p className="text-muted-foreground">No employees found</p>
+          <p className="text-muted-foreground font-medium">No employees found</p>
+          <p className="text-sm text-muted-foreground mt-1">Add your first employee to get started</p>
         </div>
       ) : (
         <div className="border rounded-lg overflow-hidden">
-          <table className="w-full text-sm">
-            <thead className="bg-muted/50">
-              <tr>
-                <th className="text-left px-4 py-2.5 font-medium">Name</th>
-                <th className="text-left px-4 py-2.5 font-medium">Email</th>
-                <th className="text-left px-4 py-2.5 font-medium">Position</th>
-                <th className="text-left px-4 py-2.5 font-medium">Department</th>
-                <th className="text-left px-4 py-2.5 font-medium">Join Date</th>
-                <th className="text-left px-4 py-2.5 font-medium">Status</th>
-              </tr>
-            </thead>
-            <tbody>
+          <Table>
+            <TableHeader>
+              <TableRow className="bg-muted/50">
+                <TableHead className="font-medium">Name</TableHead>
+                <TableHead className="font-medium">Email</TableHead>
+                <TableHead className="font-medium">Position</TableHead>
+                <TableHead className="font-medium">Department</TableHead>
+                <TableHead className="font-medium">Salary</TableHead>
+                <TableHead className="font-medium">Join Date</TableHead>
+                <TableHead className="font-medium">Status</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
               {employees.map((emp) => (
-                <tr
+                <TableRow
                   key={emp.id}
-                  className="border-t hover:bg-muted/30 cursor-pointer transition-colors"
+                  className="cursor-pointer hover:bg-muted/30 transition-colors"
                   onClick={() => navigate(`/employees/${emp.id}`)}
                   data-testid={`row-employee-${emp.id}`}
                 >
-                  <td className="px-4 py-3 font-medium">{emp.fullName}</td>
-                  <td className="px-4 py-3 text-muted-foreground">{emp.email}</td>
-                  <td className="px-4 py-3">{emp.position}</td>
-                  <td className="px-4 py-3">{emp.department}</td>
-                  <td className="px-4 py-3">{emp.joinDate || "—"}</td>
-                  <td className="px-4 py-3">
-                    <Badge className={`text-[10px] ${STATUS_COLORS[emp.status] || "bg-gray-100 text-gray-800"}`}>
+                  <TableCell className="font-medium">{emp.fullName}</TableCell>
+                  <TableCell className="text-muted-foreground">{emp.email}</TableCell>
+                  <TableCell>{emp.position || '—'}</TableCell>
+                  <TableCell>{emp.department || '—'}</TableCell>
+                  <TableCell>
+                    {emp.salaryAmount
+                      ? `${getCurrencySymbol(emp.salaryCurrency)} ${Number(emp.salaryAmount).toLocaleString()}`
+                      : '—'}
+                  </TableCell>
+                  <TableCell className="text-muted-foreground">
+                    {emp.joinDate ? new Date(emp.joinDate).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }) : '—'}
+                  </TableCell>
+                  <TableCell>
+                    <Badge variant="outline" className={`text-[10px] ${STATUS_STYLES[emp.status] || "bg-gray-100 text-gray-700"}`}>
                       {emp.status}
                     </Badge>
-                  </td>
-                </tr>
+                  </TableCell>
+                </TableRow>
               ))}
-            </tbody>
-          </table>
+            </TableBody>
+          </Table>
         </div>
       )}
 
@@ -154,27 +186,43 @@ export default function EmployeesListPage() {
             <DialogTitle>Add New Employee</DialogTitle>
           </DialogHeader>
           <div className="space-y-3">
-            <div>
-              <label className="text-xs font-medium mb-1 block">Full Name *</label>
-              <Input value={form.fullName} onChange={(e) => setForm({ ...form, fullName: e.target.value })} data-testid="input-emp-name" />
-            </div>
-            <div>
-              <label className="text-xs font-medium mb-1 block">Email *</label>
-              <Input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} data-testid="input-emp-email" />
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs font-medium text-muted-foreground mb-1 block">Full Name *</label>
+                <Input value={form.fullName} onChange={(e) => setForm({ ...form, fullName: e.target.value })} data-testid="input-emp-name" />
+              </div>
+              <div>
+                <label className="text-xs font-medium text-muted-foreground mb-1 block">Email *</label>
+                <Input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} data-testid="input-emp-email" />
+              </div>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="text-xs font-medium mb-1 block">Position</label>
+                <label className="text-xs font-medium text-muted-foreground mb-1 block">Position</label>
                 <Input value={form.position} onChange={(e) => setForm({ ...form, position: e.target.value })} data-testid="input-emp-position" />
               </div>
               <div>
-                <label className="text-xs font-medium mb-1 block">Department</label>
+                <label className="text-xs font-medium text-muted-foreground mb-1 block">Department</label>
                 <Input value={form.department} onChange={(e) => setForm({ ...form, department: e.target.value })} data-testid="input-emp-department" />
               </div>
             </div>
             <div>
-              <label className="text-xs font-medium mb-1 block">Phone</label>
+              <label className="text-xs font-medium text-muted-foreground mb-1 block">Phone</label>
               <Input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} data-testid="input-emp-phone" />
+            </div>
+            <div>
+              <label className="text-xs font-medium text-muted-foreground mb-1 block">Salary</label>
+              <div className="flex gap-2">
+                <Select value={form.salaryCurrency} onValueChange={v => setForm({ ...form, salaryCurrency: v })}>
+                  <SelectTrigger className="w-[100px]" data-testid="select-emp-currency"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {CURRENCIES.map(c => <SelectItem key={c.code} value={c.code}>{c.code}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+                <Input type="number" placeholder="Amount" value={form.salaryAmount}
+                  onChange={e => setForm({ ...form, salaryAmount: e.target.value })}
+                  data-testid="input-emp-salary" />
+              </div>
             </div>
           </div>
           <DialogFooter>
@@ -184,7 +232,8 @@ export default function EmployeesListPage() {
               disabled={!form.fullName.trim() || !form.email.trim() || createMutation.isPending}
               data-testid="button-submit-employee"
             >
-              {createMutation.isPending ? "Creating..." : "Create Employee"}
+              {createMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : null}
+              Create Employee
             </Button>
           </DialogFooter>
         </DialogContent>

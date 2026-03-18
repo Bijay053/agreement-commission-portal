@@ -1,7 +1,8 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { useSearch } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -29,6 +30,7 @@ interface Template {
   id: string;
   name: string;
   description: string;
+  templateType: string;
   clauses: Clause[];
   isDefault: boolean;
   createdAt: string;
@@ -46,24 +48,31 @@ async function apiRequest(url: string, options?: RequestInit) {
 
 export default function TemplatesPage() {
   const { toast } = useToast();
+  const searchString = useSearch();
+  const searchParams = useMemo(() => new URLSearchParams(searchString), [searchString]);
+  const templateType = searchParams.get('type') || 'agreement';
+  const typeLabel = templateType === 'offer_letter' ? 'Offer Letter' : 'Agreement';
+
   const [editing, setEditing] = useState<Template | null>(null);
   const [isNew, setIsNew] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Template | null>(null);
 
   const { data: templates = [], isLoading } = useQuery<Template[]>({
-    queryKey: ["/api/templates"],
-    queryFn: () => apiRequest("/api/templates"),
+    queryKey: ["/api/templates", { type: templateType }],
+    queryFn: () => apiRequest(`/api/templates?type=${templateType}`),
   });
+
+  const invalidateTemplates = () => queryClient.invalidateQueries({ queryKey: ["/api/templates"] });
 
   const createMutation = useMutation({
     mutationFn: (data: Partial<Template>) =>
       apiRequest("/api/templates", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
+        body: JSON.stringify({ ...data, templateType }),
       }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/templates"] });
+      invalidateTemplates();
       setEditing(null);
       setIsNew(false);
       toast({ title: "Template created" });
@@ -79,7 +88,7 @@ export default function TemplatesPage() {
         body: JSON.stringify(data),
       }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/templates"] });
+      invalidateTemplates();
       setEditing(null);
       toast({ title: "Template saved" });
     },
@@ -90,7 +99,7 @@ export default function TemplatesPage() {
     mutationFn: (id: string) =>
       apiRequest(`/api/templates/${id}`, { method: "DELETE" }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/templates"] });
+      invalidateTemplates();
       setDeleteTarget(null);
       if (editing?.id === deleteTarget?.id) setEditing(null);
       toast({ title: "Template deleted" });
@@ -102,7 +111,7 @@ export default function TemplatesPage() {
     mutationFn: (id: string) =>
       apiRequest(`/api/templates/${id}/duplicate`, { method: "POST" }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/templates"] });
+      invalidateTemplates();
       toast({ title: "Template duplicated" });
     },
     onError: (err: Error) => toast({ title: "Error", description: err.message, variant: "destructive" }),
@@ -112,7 +121,7 @@ export default function TemplatesPage() {
     mutationFn: () =>
       apiRequest("/api/templates/seed-default", { method: "POST" }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/templates"] });
+      invalidateTemplates();
       toast({ title: "Default template created" });
     },
     onError: (err: Error) => toast({ title: "Error", description: err.message, variant: "destructive" }),
@@ -123,6 +132,7 @@ export default function TemplatesPage() {
       id: "",
       name: "",
       description: "",
+      templateType,
       clauses: [],
       isDefault: false,
       createdAt: "",
@@ -156,7 +166,7 @@ export default function TemplatesPage() {
     <div className="flex h-full" data-testid="page-templates">
       <div className="w-[360px] border-r bg-background flex flex-col shrink-0">
         <div className="p-4 border-b flex items-center justify-between">
-          <h2 className="text-sm font-semibold" data-testid="text-templates-title">Agreement Templates</h2>
+          <h2 className="text-sm font-semibold" data-testid="text-templates-title">{typeLabel} Templates</h2>
           <Button size="sm" onClick={handleNew} data-testid="button-new-template">
             <Plus className="w-4 h-4 mr-1" /> New Template
           </Button>

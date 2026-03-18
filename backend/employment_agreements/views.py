@@ -421,3 +421,35 @@ class SubmitSignatureView(APIView):
             'message': f'Thank you {employee.full_name}. Your agreement has been signed successfully. A copy has been sent to your email.',
             'signedAt': now.isoformat(),
         })
+
+
+class AgreementDownloadView(APIView):
+    @require_auth
+    def get(self, request, agreement_id):
+        try:
+            agreement = EmploymentAgreement.objects.get(id=agreement_id)
+        except EmploymentAgreement.DoesNotExist:
+            return Response({'message': 'Agreement not found'}, status=404)
+
+        doc_type = request.query_params.get('type', 'original')
+        if doc_type == 'signed':
+            s3_key = agreement.manually_signed_pdf_url or agreement.signed_pdf_url
+        else:
+            s3_key = agreement.pdf_url
+
+        if not s3_key:
+            return Response({'message': 'No document available'}, status=404)
+
+        if not s3_client:
+            return Response({'message': 'S3 not configured'}, status=500)
+
+        try:
+            presigned_url = s3_client.generate_presigned_url(
+                'get_object',
+                Params={'Bucket': settings.AWS_S3_BUCKET_NAME, 'Key': s3_key},
+                ExpiresIn=300,
+            )
+            from django.http import HttpResponseRedirect
+            return HttpResponseRedirect(presigned_url)
+        except Exception as e:
+            return Response({'message': f'Download failed: {str(e)}'}, status=500)
