@@ -7,11 +7,39 @@ from datetime import datetime, date, timedelta, timezone as dt_timezone
 
 NEPAL_TZ = dt_timezone(timedelta(hours=5, minutes=45))
 
+TIMEZONE_MAP = {
+    'Asia/Kathmandu': (timedelta(hours=5, minutes=45), 'NPT'),
+    'Asia/Kolkata': (timedelta(hours=5, minutes=30), 'IST'),
+    'Australia/Sydney': (timedelta(hours=11), 'AEDT'),
+    'Australia/Melbourne': (timedelta(hours=11), 'AEDT'),
+    'Australia/Brisbane': (timedelta(hours=10), 'AEST'),
+    'Australia/Perth': (timedelta(hours=8), 'AWST'),
+    'Australia/Adelaide': (timedelta(hours=10, minutes=30), 'ACDT'),
+    'Australia/Hobart': (timedelta(hours=11), 'AEDT'),
+    'Australia/Darwin': (timedelta(hours=9, minutes=30), 'ACST'),
+    'Australia/Lord_Howe': (timedelta(hours=11), 'LHDT'),
+    'Pacific/Auckland': (timedelta(hours=13), 'NZDT'),
+    'Europe/London': (timedelta(hours=0), 'GMT'),
+    'America/New_York': (timedelta(hours=-5), 'EST'),
+    'America/Chicago': (timedelta(hours=-6), 'CST'),
+    'America/Denver': (timedelta(hours=-7), 'MST'),
+    'America/Los_Angeles': (timedelta(hours=-8), 'PST'),
+    'Asia/Dubai': (timedelta(hours=4), 'GST'),
+    'Asia/Tokyo': (timedelta(hours=9), 'JST'),
+    'Asia/Singapore': (timedelta(hours=8), 'SGT'),
+    'Asia/Hong_Kong': (timedelta(hours=8), 'HKT'),
+}
 
-def _format_signing_date(dt_val):
+
+def _format_signing_date(dt_val, tz_name=None):
     if not dt_val:
         return '____________________'
     try:
+        if tz_name and tz_name in TIMEZONE_MAP:
+            offset, abbrev = TIMEZONE_MAP[tz_name]
+            tz = dt_timezone(offset)
+            local_dt = dt_val.astimezone(tz)
+            return local_dt.strftime('%d %B %Y, %I:%M %p') + f' {abbrev}'
         nepal_dt = dt_val.astimezone(NEPAL_TZ)
         return nepal_dt.strftime('%d %B %Y, %I:%M %p') + ' NPT'
     except Exception:
@@ -476,8 +504,14 @@ def generate_offer_letter_pdf(offer, employee,
 
     co_name_val = f'Name: {_safe_text(company_signer_name)}' if company_signer_name else 'Name: ____________________'
     co_pos_val = f'Position: {_safe_text(company_signer_position)}' if company_signer_position else 'Position: ____________________'
-    co_date_val = f'Date: {_format_signing_date(company_signed_date)}'
-    emp_date_val = f'Date: {_format_signing_date(employee_signed_date)}'
+    emp_tz = None
+    if employee_esignature_metadata and isinstance(employee_esignature_metadata, dict):
+        emp_tz = employee_esignature_metadata.get('timezone')
+    co_tz = None
+    if company_esignature_metadata and isinstance(company_esignature_metadata, dict):
+        co_tz = company_esignature_metadata.get('timezone')
+    co_date_val = f'Date: {_format_signing_date(company_signed_date, tz_name=co_tz)}'
+    emp_date_val = f'Date: {_format_signing_date(employee_signed_date, tz_name=emp_tz)}'
 
     sig_data = [
         [

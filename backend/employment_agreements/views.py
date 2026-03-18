@@ -24,12 +24,16 @@ except ImportError:
 
 
 def _collect_esig_metadata(request):
+    tz = ''
+    if hasattr(request, 'data') and isinstance(request.data, dict):
+        tz = request.data.get('timezone', '')
     return {
         'ip_address': request.META.get('HTTP_X_FORWARDED_FOR', '').split(',')[0].strip() or request.META.get('REMOTE_ADDR', ''),
         'user_agent': request.META.get('HTTP_USER_AGENT', ''),
         'accept_language': request.META.get('HTTP_ACCEPT_LANGUAGE', ''),
         'timestamp': timezone.now().isoformat(),
         'referer': request.META.get('HTTP_REFERER', ''),
+        'timezone': tz,
     }
 
 

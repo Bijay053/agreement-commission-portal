@@ -151,6 +151,15 @@ def _generate_template_pdf(template):
                 return ''
             return text.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
 
+        def safe_text_with_formatting(text):
+            if not text:
+                return ''
+            escaped = text.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
+            escaped = re.sub(r'\*\*(.+?)\*\*', r'<b>\1</b>', escaped)
+            escaped = re.sub(r'__(.+?)__', r'<u>\1</u>', escaped)
+            escaped = re.sub(r'\*(.+?)\*', r'<i>\1</i>', escaped)
+            return escaped
+
         def process_content(content, styles_map):
             elements = []
             for line in content.split('\n'):
@@ -163,9 +172,9 @@ def _generate_template_pdf(template):
                     is_bullet = True
                     line = line[2:]
                 elif re.match(r'^\([a-g]\)', line):
-                    elements.append(Paragraph(safe_text(line), styles_map['bullet']))
+                    elements.append(Paragraph(safe_text_with_formatting(line), styles_map['bullet']))
                     continue
-                safe = safe_text(line)
+                safe = safe_text_with_formatting(line)
                 if is_bullet:
                     elements.append(Paragraph(f'&#8226; {safe}', styles_map['bullet']))
                 else:
@@ -219,7 +228,7 @@ def _generate_template_pdf(template):
                 first_line = lines[0].strip() if lines else ''
                 sub_match = re.match(r'^(\d+\.\d+)\s+(.+)', first_line)
                 if sub_match and len(lines) > 1:
-                    story.append(Paragraph(f'<b>{safe_text(first_line)}</b>', subheading_style))
+                    story.append(Paragraph(f'<b>{safe_text_with_formatting(first_line)}</b>', subheading_style))
                     remaining = '\n'.join(lines[1:])
                     story.extend(process_content(remaining, styles_map))
                 else:

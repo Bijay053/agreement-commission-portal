@@ -182,7 +182,7 @@ export default function SignOfferPage({ params }: { params: { token: string } })
       const data = await apiRequest(`/api/offer-signing/submit/${token}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ signatureData }),
+        body: JSON.stringify({ signatureData, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone }),
       });
       setSuccess(data.message);
     } catch (err: any) {

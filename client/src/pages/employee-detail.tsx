@@ -379,7 +379,7 @@ function AgreementsTab({ employeeId, employee }: { employeeId: string; employee:
       const res = await fetch(`/api/employment-agreements/${id}/company-sign`, {
         method: 'POST', credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ signatureData, signerName, signerPosition }),
+        body: JSON.stringify({ signatureData, signerName, signerPosition, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone }),
       });
       if (!res.ok) throw new Error((await res.json()).message);
       return res.json();
@@ -882,7 +882,7 @@ function OfferLettersTab({ employeeId, employee }: { employeeId: string; employe
     mutationFn: async ({ id, signatureData, signerName, signerPosition }: { id: string; signatureData: string; signerName: string; signerPosition: string }) => {
       const res = await fetch(`/api/offer-letters/${id}/company-sign`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        credentials: 'include', body: JSON.stringify({ signatureData, signerName, signerPosition }),
+        credentials: 'include', body: JSON.stringify({ signatureData, signerName, signerPosition, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone }),
       });
       if (!res.ok) throw new Error((await res.json()).message);
       return res.json();
