@@ -334,7 +334,10 @@ def generate_offer_letter_pdf(offer, employee):
         emp_phone = getattr(employee, 'phone', '') or ''
         emp_department = getattr(employee, 'department', '') or offer.department or ''
         salary_currency = offer.salary_currency or 'NPR'
-        salary_amount = f'{offer.proposed_salary:,.0f}' if offer.proposed_salary else ''
+        try:
+            salary_amount = f'{float(offer.proposed_salary):,.0f}' if offer.proposed_salary else ''
+        except (ValueError, TypeError):
+            salary_amount = str(offer.proposed_salary) if offer.proposed_salary else ''
         salary_full = f'{salary_currency} {salary_amount}' if salary_amount else ''
 
         replacements = {

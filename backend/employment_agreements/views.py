@@ -466,57 +466,30 @@ class SubmitSignatureView(APIView):
                     signed_pdf_key = f'employment-agreements/{agreement.id}/signed_agreement.pdf'
                     upload_pdf_to_s3(signed_pdf_bytes, signed_pdf_key)
 
-        import secrets
-        import string
-        pw_chars = string.ascii_letters + string.digits + '!@#$%'
-        unique_password = ''.join(secrets.choice(pw_chars) for _ in range(10))
-
-        encrypted_pdf_for_email = None
-        if signed_pdf_bytes and HAS_PIKEPDF:
-            try:
-                input_pdf = pikepdf.open(io.BytesIO(signed_pdf_bytes))
-                enc_buf = io.BytesIO()
-                input_pdf.save(
-                    enc_buf,
-                    encryption=pikepdf.Encryption(
-                        owner=unique_password,
-                        user=unique_password,
-                    )
-                )
-                input_pdf.close()
-                encrypted_pdf_for_email = enc_buf.getvalue()
-            except Exception as e:
-                print(f'PDF encryption for email failed: {e}')
-                encrypted_pdf_for_email = signed_pdf_bytes
-        else:
-            encrypted_pdf_for_email = signed_pdf_bytes
-
         now = timezone.now()
-        agreement.status = 'signed'
+        agreement.status = 'employee_signed'
         agreement.signed_at = now
         agreement.signature_data = signature_data
-        agreement.pdf_password = unique_password
         if signed_pdf_key:
             agreement.signed_pdf_url = signed_pdf_key
         agreement.save()
 
-        admin_email = getattr(settings, 'DEFAULT_FROM_EMAIL', 'au@studyinfocentre.com')
+        from .email_service import send_employee_signed_notification
         from .pdf_service import get_company_name as _gcn
         co_name2 = _gcn(agreement.company_entity or 'nepal')
         try:
-            send_signed_confirmation_email(
+            send_employee_signed_notification(
                 employee_name=employee.full_name,
                 employee_email=employee.email,
-                admin_email=admin_email,
-                signed_pdf_bytes=encrypted_pdf_for_email,
-                pdf_password=unique_password,
+                agreement_id=str(agreement.id),
                 company_name=co_name2,
+                position=agreement.position or '',
             )
         except Exception as e:
-            print(f'Confirmation emails failed: {e}')
+            print(f'Employee signed notification failed: {e}')
 
         return Response({
-            'message': f'Thank you {employee.full_name}. Your agreement has been signed successfully. A password-protected copy has been sent to your email.',
+            'message': f'Thank you {employee.full_name}. Your agreement has been signed successfully. The company will now complete the signing process.',
             'signedAt': now.isoformat(),
         })
 
@@ -653,21 +626,63 @@ class CompanySignView(APIView):
         s3_key = f'agreements/{agreement.id}/company_signed_{uuid.uuid4().hex[:8]}.pdf'
         uploaded_key = upload_pdf_to_s3(signed_bytes, s3_key)
 
+        import secrets as _secrets
+        import string as _string
+        pw_chars = _string.ascii_letters + _string.digits + '!@#$%'
+        unique_password = ''.join(_secrets.choice(pw_chars) for _ in range(10))
+
+        encrypted_pdf_for_email = None
+        if signed_bytes and HAS_PIKEPDF:
+            try:
+                input_pdf = pikepdf.open(io.BytesIO(signed_bytes))
+                enc_buf = io.BytesIO()
+                input_pdf.save(
+                    enc_buf,
+                    encryption=pikepdf.Encryption(
+                        owner=unique_password,
+                        user=unique_password,
+                    )
+                )
+                input_pdf.close()
+                encrypted_pdf_for_email = enc_buf.getvalue()
+            except Exception as e:
+                print(f'PDF encryption for email failed: {e}')
+                encrypted_pdf_for_email = signed_bytes
+        else:
+            encrypted_pdf_for_email = signed_bytes
+
         agreement.company_signature_data = signature_data
         agreement.company_signer_name = signer_name
         agreement.company_signer_position = signer_position
         agreement.company_signed_at = timezone.now()
+        agreement.pdf_password = unique_password
 
         if uploaded_key:
             agreement.signed_pdf_url = uploaded_key
 
-        if agreement.status in ('draft', 'sent', 'awaiting_signature'):
-            agreement.status = 'signed'
-
+        agreement.status = 'signed'
         agreement.save()
 
+        from .pdf_service import get_company_name as _gcn2
+        co_name = _gcn2(agreement.company_entity or 'nepal')
+        portal_url = getattr(settings, 'PORTAL_URL', 'https://portal.studyinfocentre.com')
+        download_link = f'{portal_url}/api/employment-agreements/{agreement.id}/download?type=signed&mode=download'
+
+        try:
+            send_signed_confirmation_email(
+                employee_name=employee.full_name,
+                employee_email=employee.email,
+                admin_email='accounts@studyinfocentre.com',
+                signed_pdf_bytes=encrypted_pdf_for_email,
+                pdf_password=unique_password,
+                company_name=co_name,
+                download_link=download_link,
+            )
+        except Exception as e:
+            print(f'Confirmation emails after company sign failed: {e}')
+
         return Response({
-            'message': 'Agreement signed on behalf of company',
+            'message': 'Agreement fully signed. Signed copy has been sent to the employee.',
             'id': str(agreement.id),
             'status': agreement.status,
         })

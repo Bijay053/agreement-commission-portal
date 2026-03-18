@@ -297,7 +297,10 @@ def generate_agreement_pdf(employee, agreement, clauses):
         emp_department = getattr(employee, 'department', '') or ''
 
         salary_currency = agreement.salary_currency or 'NPR'
-        salary_amount = f'{agreement.gross_salary:,.0f}' if agreement.gross_salary else ''
+        try:
+            salary_amount = f'{float(agreement.gross_salary):,.0f}' if agreement.gross_salary else ''
+        except (ValueError, TypeError):
+            salary_amount = str(agreement.gross_salary) if agreement.gross_salary else ''
         salary_full = f'{salary_currency} {salary_amount}' if salary_amount else ''
 
         replacements = {
