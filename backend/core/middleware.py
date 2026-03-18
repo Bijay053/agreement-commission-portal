@@ -31,6 +31,7 @@ CSRF_EXEMPT_PATHS = [
     '/api/auth/resend-otp',
     '/api/auth/forgot-password',
     '/api/auth/reset-password',
+    '/api/signing/',
 ]
 
 

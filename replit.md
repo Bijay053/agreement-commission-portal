@@ -50,6 +50,10 @@ The portal adopts a client-server architecture:
 │   ├── audit/           # Audit logs
 │   ├── notifications/   # Agreement expiry notifications, email template management
 │   ├── dashboard/       # Dashboard stats, expiring agreements, recent activity
+│   ├── templates_manager/ # Agreement clause/template editor (19-clause default template)
+│   ├── employees/       # Employee CRUD (profile, position, salary, status)
+│   ├── employment_agreements/ # Employment agreement lifecycle, PDF generation, e-signature
+│   ├── employee_documents/   # Employee document management (CV, Citizenship, Tax, Academic, Other)
 │   └── requirements.txt # Python dependencies
 ├── client/              # React frontend
 │   └── src/             # Components, pages, hooks, lib
@@ -127,6 +131,11 @@ All endpoints under `/api/`:
 - **Audit Logs**: list with filters, export
 - **Notifications**: agreement notifications list, expiry reminder emails, email template CRUD
 - **Health**: `/api/health` (no auth, checks DB/Redis/S3/Celery)
+- **Templates**: CRUD for agreement clause templates
+- **Employees**: CRUD for employee profiles
+- **Employment Agreements**: create, send-for-signing, verify/submit signing token, download PDF
+- **Employee Documents**: upload/download/delete by category (CV, Citizenship, Tax, Academic, Other)
+- **Signing (public)**: `/api/signing/verify/:token`, `/api/signing/submit/:token` — no auth required
 
 ## Permission System
 Fine-grained RBAC with permission codes like `agreement.view`, `commission_tracker.student.read`, `document.upload`, etc. Permissions are linked to roles via `role_permissions` table. Each API endpoint checks specific permission codes via `@require_permission` decorator.
@@ -149,12 +158,15 @@ Fine-grained RBAC with permission codes like `agreement.view`, `commission_track
 - **pyclamd**: ClamAV antivirus integration (optional)
 - **openpyxl**: Excel export support
 - **cryptography**: Fernet encryption for portal credential vault
+- **reportlab**: PDF generation for employment agreements
+- **pypdf**: PDF manipulation for agreement signing
 
 ### JavaScript (frontend only)
 - **React + Vite**: Frontend build
 - **TanStack Query**: Data fetching
 - **shadcn/ui + Radix**: UI components
 - **wouter**: Client-side routing
+- **react-signature-canvas**: E-Signature capture for employment agreements
 
 ## Deployment
 - **Production URL**: https://portal.studyinfocentre.com

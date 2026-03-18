@@ -30,6 +30,9 @@ INSTALLED_APPS = [
     'notifications',
     'dashboard',
     'templates_manager',
+    'employees',
+    'employment_agreements',
+    'employee_documents',
 ]
 
 MIDDLEWARE = [

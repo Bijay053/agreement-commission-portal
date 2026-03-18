@@ -32,6 +32,9 @@ import VerifyOtpPage from "@/pages/verify-otp";
 import ChangePasswordPage from "@/pages/change-password";
 import AccountSecurityPage from "@/pages/account-security";
 import TemplatesPage from "@/pages/templates";
+import EmployeesListPage from "@/pages/employees-list";
+import EmployeeDetailPage from "@/pages/employee-detail";
+import SignAgreementPage from "@/pages/sign-agreement";
 import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 
@@ -106,6 +109,10 @@ function Router() {
         }}
       </Route>
       <Route path="/templates" component={TemplatesPage} />
+      <Route path="/employees" component={EmployeesListPage} />
+      <Route path="/employees/:id">
+        {(params) => <EmployeeDetailPage params={params} />}
+      </Route>
       <Route path="/audit-logs">
         <AccessGuard permission="audit.view">
           <AuditLogsPage />
@@ -222,9 +229,16 @@ function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
-        <AuthProvider>
-          <AuthenticatedApp />
-        </AuthProvider>
+        <Switch>
+          <Route path="/sign/:token">
+            {(params: { token: string }) => <SignAgreementPage params={params} />}
+          </Route>
+          <Route>
+            <AuthProvider>
+              <AuthenticatedApp />
+            </AuthProvider>
+          </Route>
+        </Switch>
         <Toaster />
       </TooltipProvider>
     </QueryClientProvider>

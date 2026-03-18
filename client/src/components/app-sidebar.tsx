@@ -11,7 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
   LayoutDashboard, FileText, Users, Shield, LogOut, User, Building2,
-  ChevronDown, ChevronRight, Circle, KeyRound, Contact, DollarSign, Calculator, ShieldCheck, ArrowDownUp, ClipboardList,
+  ChevronDown, ChevronRight, Circle, KeyRound, Contact, DollarSign, Calculator, ShieldCheck, ArrowDownUp, ClipboardList, UserCheck,
 } from "lucide-react";
 
 const STATUS_ITEMS = [
@@ -46,6 +46,7 @@ export function AppSidebar() {
     { title: "Commission Tracker", url: "/commission-tracker", icon: Calculator, show: hasPermission("commission_tracker.student.read") },
     { title: "Sub-Agent Commission", url: "/sub-agent-commission", icon: ArrowDownUp, show: hasPermission("sub_agent_commission.view") },
     { title: "Templates", url: "/templates", icon: ClipboardList, show: true },
+    { title: "Employees", url: "/employees", icon: UserCheck, show: true },
   ];
 
   const adminNav = [
