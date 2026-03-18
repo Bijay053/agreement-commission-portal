@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo, useEffect } from "react";
+import { useState, useCallback, useMemo, useEffect, useRef } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import {
   Plus, Pencil, Copy, Trash2, GripVertical, X, Save, ChevronUp, ChevronDown, FileText, Download, Eye,
+  Bold, Italic, Underline,
 } from "lucide-react";
 
 interface Clause {
@@ -44,6 +45,96 @@ async function apiRequest(url: string, options?: RequestInit) {
     throw new Error(body.message || `Request failed (${res.status})`);
   }
   return res.json();
+}
+
+function ClauseContentEditor({ value, onChange, index }: { value: string; onChange: (val: string) => void; index: number }) {
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  const wrapSelection = (prefix: string, suffix: string) => {
+    const el = textareaRef.current;
+    if (!el) return;
+    const start = el.selectionStart;
+    const end = el.selectionEnd;
+    const text = el.value;
+    const selected = text.slice(start, end);
+
+    if (selected && text.slice(start - prefix.length, start) === prefix && text.slice(end, end + suffix.length) === suffix) {
+      const newVal = text.slice(0, start - prefix.length) + selected + text.slice(end + suffix.length);
+      onChange(newVal);
+      setTimeout(() => {
+        el.focus();
+        el.setSelectionRange(start - prefix.length, end - prefix.length);
+      }, 0);
+      return;
+    }
+
+    if (selected && selected.startsWith(prefix) && selected.endsWith(suffix)) {
+      const unwrapped = selected.slice(prefix.length, -suffix.length);
+      const newVal = text.slice(0, start) + unwrapped + text.slice(end);
+      onChange(newVal);
+      setTimeout(() => {
+        el.focus();
+        el.setSelectionRange(start, start + unwrapped.length);
+      }, 0);
+      return;
+    }
+
+    const wrapped = prefix + selected + suffix;
+    const newVal = text.slice(0, start) + wrapped + text.slice(end);
+    onChange(newVal);
+    setTimeout(() => {
+      el.focus();
+      if (selected) {
+        el.setSelectionRange(start, start + wrapped.length);
+      } else {
+        el.setSelectionRange(start + prefix.length, start + prefix.length);
+      }
+    }, 0);
+  };
+
+  return (
+    <div className="border rounded-md overflow-hidden focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-blue-500">
+      <div className="flex items-center gap-0.5 px-2 py-1 bg-gray-50 border-b">
+        <button
+          type="button"
+          onClick={() => wrapSelection("**", "**")}
+          className="p-1.5 rounded hover:bg-gray-200 transition-colors"
+          title="Bold (**text**)"
+          data-testid={`button-bold-${index}`}
+        >
+          <Bold className="w-3.5 h-3.5" />
+        </button>
+        <button
+          type="button"
+          onClick={() => wrapSelection("*", "*")}
+          className="p-1.5 rounded hover:bg-gray-200 transition-colors"
+          title="Italic (*text*)"
+          data-testid={`button-italic-${index}`}
+        >
+          <Italic className="w-3.5 h-3.5" />
+        </button>
+        <button
+          type="button"
+          onClick={() => wrapSelection("__", "__")}
+          className="p-1.5 rounded hover:bg-gray-200 transition-colors"
+          title="Underline (__text__)"
+          data-testid={`button-underline-${index}`}
+        >
+          <Underline className="w-3.5 h-3.5" />
+        </button>
+        <span className="ml-2 text-[10px] text-gray-400">Use **bold**, *italic*, __underline__</span>
+      </div>
+      <textarea
+        ref={textareaRef}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder="Clause content..."
+        rows={4}
+        className="w-full text-sm resize-y min-h-[80px] p-3 border-0 outline-none focus:ring-0"
+        data-testid={`input-clause-content-${index}`}
+      />
+    </div>
+  );
 }
 
 export default function TemplatesPage() {
@@ -486,13 +577,10 @@ function TemplateEditor({
                   <Trash2 className="w-3.5 h-3.5" />
                 </Button>
               </div>
-              <Textarea
+              <ClauseContentEditor
                 value={clause.content}
-                onChange={(e) => updateClause(index, "content", e.target.value)}
-                placeholder="Clause content..."
-                rows={4}
-                className="text-sm resize-y min-h-[80px]"
-                data-testid={`input-clause-content-${index}`}
+                onChange={(val) => updateClause(index, "content", val)}
+                index={index}
               />
             </CardContent>
           </Card>

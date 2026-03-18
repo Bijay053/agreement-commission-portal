@@ -221,6 +221,17 @@ def _safe_text(text):
     return text.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
 
 
+def _safe_text_with_formatting(text):
+    if not text:
+        return ''
+    import re
+    escaped = text.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
+    escaped = re.sub(r'\*\*(.+?)\*\*', r'<b>\1</b>', escaped)
+    escaped = re.sub(r'__(.+?)__', r'<u>\1</u>', escaped)
+    escaped = re.sub(r'\*(.+?)\*', r'<i>\1</i>', escaped)
+    return escaped
+
+
 def _process_content_lines(content, styles):
     elements = []
     lines = content.split('\n')
@@ -238,7 +249,7 @@ def _process_content_lines(content, styles):
             elements.append(Paragraph(_safe_text(line), styles['bullet']))
             continue
 
-        safe = _safe_text(line)
+        safe = _safe_text_with_formatting(line)
         if is_bullet:
             elements.append(Paragraph(f'&#8226; {safe}', styles['bullet']))
         else:

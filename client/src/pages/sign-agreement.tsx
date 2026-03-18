@@ -18,6 +18,14 @@ interface AgreementData {
   message?: string;
 }
 
+function formatClauseContent(text: string): string {
+  let escaped = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  escaped = escaped.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+  escaped = escaped.replace(/__(.+?)__/g, '<u>$1</u>');
+  escaped = escaped.replace(/\*(.+?)\*/g, '<em>$1</em>');
+  return escaped;
+}
+
 async function apiRequest(url: string, options?: RequestInit) {
   const res = await fetch(url, { credentials: "include", ...options });
   if (!res.ok) {
@@ -294,9 +302,10 @@ export default function SignAgreementPage({ params }: { params: { token: string 
                   <h3 className="font-semibold text-sm text-blue-800 mb-2">
                     {clause.order}. {clause.title}
                   </h3>
-                  <div className="text-sm text-gray-700 whitespace-pre-line leading-relaxed">
-                    {clause.content}
-                  </div>
+                  <div
+                    className="text-sm text-gray-700 whitespace-pre-line leading-relaxed"
+                    dangerouslySetInnerHTML={{ __html: formatClauseContent(clause.content) }}
+                  />
                 </div>
               ))}
             </div>
