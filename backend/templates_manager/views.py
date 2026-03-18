@@ -182,15 +182,21 @@ def _generate_template_pdf(template):
         story.append(Paragraph(type_label, title_style))
         story.append(Spacer(1, 4))
 
-        story.append(Paragraph(f'Template: {safe_text(template.name)}', subtitle_style))
-        if template.description:
-            story.append(Paragraph(safe_text(template.description), subtitle_style))
-        story.append(Spacer(1, 6))
-
-        if template.template_type != 'offer_letter':
+        if template.template_type == 'offer_letter':
+            story.append(Paragraph(f'Date: <b>[Issue Date]</b>', subtitle_style))
+            story.append(Spacer(1, 6))
             story.append(Paragraph(
-                'This Employment Agreement ("Agreement") is made on &lt;date&gt;',
-                ParagraphStyle('TplDateLine', parent=subtitle_style, fontName='Helvetica-Oblique')
+                'Dear <b>[Employee Name]</b>,<br/><br/>'
+                'We are pleased to extend this offer of employment for the position of '
+                '<b>[Position Name]</b> at Study Info Centre Pvt. Ltd. '
+                'This letter outlines the terms and conditions of your employment.',
+                body_style
+            ))
+            story.append(Spacer(1, 8))
+        else:
+            story.append(Paragraph(
+                'This Employment Agreement ("Agreement") is made on <b>[Date]</b>',
+                subtitle_style
             ))
             story.append(Spacer(1, 10))
 
@@ -202,11 +208,7 @@ def _generate_template_pdf(template):
             content = clause.get('content', '')
             editable = clause.get('is_editable', True)
 
-            tag = ''
-            if not editable:
-                tag = ' <font color="#9ca3af">[Fixed]</font>'
-
-            story.append(Paragraph(f'<b>{order}. {safe_text(title)}</b>{tag}', heading_style))
+            story.append(Paragraph(f'<b>{order}. {safe_text(title)}</b>', heading_style))
 
             sub_sections = content.split('\n\n')
             for section in sub_sections:

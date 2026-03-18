@@ -317,42 +317,79 @@ class OfferLetterDownloadView(APIView):
             return Response({'message': 'Offer letter not found'}, status=404)
 
         doc_type = request.query_params.get('type', 'original')
+
         if doc_type == 'signed':
             s3_key = offer.signed_pdf_url
-        else:
-            s3_key = offer.pdf_url
+            if not s3_key:
+                return Response({'message': 'No signed document available'}, status=404)
 
-        if not s3_key:
-            return Response({'message': 'No document available'}, status=404)
+            blocked, msg, file_bytes = _fetch_and_scan_s3(s3_key, request, label=f'offer letter {offer_id}')
+            if blocked:
+                status_code = 403 if 'blocked' in msg.lower() or 'scan' in msg.lower() else 500
+                return Response({'message': msg}, status=status_code)
 
-        blocked, msg, file_bytes = _fetch_and_scan_s3(s3_key, request, label=f'offer letter {offer_id}')
-        if blocked:
-            status_code = 403 if 'blocked' in msg.lower() or 'scan' in msg.lower() else 500
-            return Response({'message': msg}, status=status_code)
+            file_data = file_bytes
+            is_pdf = s3_key.lower().endswith('.pdf')
 
-        file_data = file_bytes
-        is_pdf = s3_key.lower().endswith('.pdf')
-
-        if is_pdf and HAS_PIKEPDF:
-            try:
-                pdf_password = getattr(settings, 'PDF_DOWNLOAD_PASSWORD', '')
-                if pdf_password:
-                    input_pdf = pikepdf.open(io.BytesIO(file_data))
-                    output_buf = io.BytesIO()
-                    input_pdf.save(
-                        output_buf,
-                        encryption=pikepdf.Encryption(
-                            owner=pdf_password,
-                            user=pdf_password,
+            if is_pdf and HAS_PIKEPDF:
+                try:
+                    pdf_password = getattr(settings, 'PDF_DOWNLOAD_PASSWORD', '')
+                    if pdf_password:
+                        input_pdf = pikepdf.open(io.BytesIO(file_data))
+                        output_buf = io.BytesIO()
+                        input_pdf.save(
+                            output_buf,
+                            encryption=pikepdf.Encryption(
+                                owner=pdf_password,
+                                user=pdf_password,
+                            )
                         )
-                    )
-                    input_pdf.close()
-                    file_data = output_buf.getvalue()
-            except Exception as e:
-                print(f'PDF encryption failed for offer letter {offer_id}: {e}')
+                        input_pdf.close()
+                        file_data = output_buf.getvalue()
+                except Exception as e:
+                    print(f'PDF encryption failed for offer letter {offer_id}: {e}')
 
-        filename = f'offer_letter_{doc_type}.pdf' if is_pdf else os.path.basename(s3_key)
-        content_type = 'application/pdf' if is_pdf else 'application/octet-stream'
+            filename = f'offer_letter_signed.pdf' if is_pdf else os.path.basename(s3_key)
+            content_type = 'application/pdf' if is_pdf else 'application/octet-stream'
+        else:
+            if offer.pdf_url:
+                blocked, msg, file_bytes = _fetch_and_scan_s3(offer.pdf_url, request, label=f'offer letter {offer_id}')
+                if blocked:
+                    status_code = 403 if 'blocked' in msg.lower() or 'scan' in msg.lower() else 500
+                    return Response({'message': msg}, status=status_code)
+                file_data = file_bytes
+            else:
+                try:
+                    employee = Employee.objects.get(id=offer.employee_id)
+                except Employee.DoesNotExist:
+                    return Response({'message': 'Employee not found'}, status=404)
+
+                from .pdf_service import generate_offer_letter_pdf
+                pdf_buf = generate_offer_letter_pdf(offer, employee)
+                if not pdf_buf:
+                    return Response({'message': 'PDF generation not available'}, status=500)
+                file_data = pdf_buf.getvalue()
+
+            if HAS_PIKEPDF:
+                try:
+                    pdf_password = getattr(settings, 'PDF_DOWNLOAD_PASSWORD', '')
+                    if pdf_password:
+                        input_pdf = pikepdf.open(io.BytesIO(file_data))
+                        output_buf = io.BytesIO()
+                        input_pdf.save(
+                            output_buf,
+                            encryption=pikepdf.Encryption(
+                                owner=pdf_password,
+                                user=pdf_password,
+                            )
+                        )
+                        input_pdf.close()
+                        file_data = output_buf.getvalue()
+                except Exception as e:
+                    print(f'PDF encryption failed for offer letter {offer_id}: {e}')
+
+            filename = 'offer_letter.pdf'
+            content_type = 'application/pdf'
 
         mode = request.query_params.get('mode', 'download')
         disposition = 'inline' if mode == 'view' else 'attachment'
