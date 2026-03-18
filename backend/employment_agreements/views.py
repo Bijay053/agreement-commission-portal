@@ -425,8 +425,56 @@ class VerifySigningTokenView(APIView):
         except Employee.DoesNotExist:
             return Response({'message': 'Employee record not found.'}, status=400)
 
-        clause_text = ''
+        from .pdf_service import get_company_name
+        company_name = get_company_name(agreement.company_entity or 'nepal')
+        emp_name = employee.full_name or ''
+        position = agreement.position or getattr(employee, 'position', '') or ''
+        citizenship_no = getattr(employee, 'citizenship_no', '') or ''
+        pan_no = getattr(employee, 'pan_no', '') or ''
+        permanent_address = getattr(employee, 'permanent_address', '') or ''
+        passport_number = getattr(employee, 'passport_number', '') or ''
+        emp_email = getattr(employee, 'email', '') or ''
+        emp_phone = getattr(employee, 'phone', '') or ''
+        emp_department = getattr(employee, 'department', '') or ''
+        join_date = _safe_iso(agreement.effective_from) or ''
+        expire_date = _safe_iso(agreement.effective_to) or ''
+        salary_currency = agreement.salary_currency or 'NPR'
+        try:
+            salary_amount = f'{float(agreement.gross_salary):,.0f}' if agreement.gross_salary else ''
+        except (ValueError, TypeError):
+            salary_amount = str(agreement.gross_salary) if agreement.gross_salary else ''
+        salary_full = f'{salary_currency} {salary_amount}' if salary_amount else ''
+
+        replacements = {
+            '[Employee Name]': emp_name, '[Employee name]': emp_name,
+            '[Position Name]': position, '[Position name]': position, '[Position]': position,
+            '[Join Date]': join_date, '[Join date]': join_date, '[Joint date ]': join_date, '[Joint date]': join_date,
+            '[Expire Date]': expire_date, '[Expire date]': expire_date,
+            '[Citizenship No]': citizenship_no, '[Citizenship no]': citizenship_no, '[Citizenship Number]': citizenship_no,
+            '[PAN No]': pan_no, '[PAN no]': pan_no, '[PAN Number]': pan_no,
+            '[Permanent Address]': permanent_address, '[Permanent address]': permanent_address, '[Address]': permanent_address,
+            '[Passport Number]': passport_number, '[Passport number]': passport_number, '[Passport No]': passport_number,
+            '[Email Address]': emp_email, '[Email address]': emp_email, '[Email]': emp_email,
+            '[Phone Number]': emp_phone, '[Phone number]': emp_phone, '[Phone]': emp_phone,
+            '[Department]': emp_department,
+            '[Amount]': salary_amount, '[Salary Amount]': salary_amount,
+            '[Salary]': salary_full, '[Gross Salary]': salary_full,
+            '[Currency]': salary_currency,
+            '[Company Name]': company_name, '[Company name]': company_name, '[Company]': company_name,
+        }
+
+        resolved_clauses = []
         for clause in (agreement.clauses or []):
+            title = clause.get('title', '')
+            content = clause.get('content', '')
+            for placeholder, value in replacements.items():
+                if value:
+                    title = title.replace(placeholder, value)
+                    content = content.replace(placeholder, value)
+            resolved_clauses.append({**clause, 'title': title, 'content': content})
+
+        clause_text = ''
+        for clause in resolved_clauses:
             clause_text += f"\n\n{clause.get('order', '')}. {clause.get('title', '')}\n\n{clause.get('content', '')}"
 
         return Response({
@@ -435,7 +483,7 @@ class VerifySigningTokenView(APIView):
             'agreementDate': _safe_iso(agreement.agreement_date) or '',
             'effectiveFrom': _safe_iso(agreement.effective_from) or '',
             'effectiveTo': _safe_iso(agreement.effective_to) or '',
-            'clauses': agreement.clauses or [],
+            'clauses': resolved_clauses,
             'agreementText': clause_text.strip(),
         })
 

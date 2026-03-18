@@ -358,25 +358,6 @@ class OfferLetterDownloadView(APIView):
 
             file_data = file_bytes
             is_pdf = s3_key.lower().endswith('.pdf')
-
-            if is_pdf and HAS_PIKEPDF:
-                try:
-                    pdf_password = getattr(settings, 'PDF_DOWNLOAD_PASSWORD', '')
-                    if pdf_password:
-                        input_pdf = pikepdf.open(io.BytesIO(file_data))
-                        output_buf = io.BytesIO()
-                        input_pdf.save(
-                            output_buf,
-                            encryption=pikepdf.Encryption(
-                                owner=pdf_password,
-                                user=pdf_password,
-                            )
-                        )
-                        input_pdf.close()
-                        file_data = output_buf.getvalue()
-                except Exception as e:
-                    print(f'PDF encryption failed for offer letter {offer_id}: {e}')
-
             filename = f'offer_letter_signed.pdf' if is_pdf else os.path.basename(s3_key)
             content_type = 'application/pdf' if is_pdf else 'application/octet-stream'
         else:
@@ -397,24 +378,6 @@ class OfferLetterDownloadView(APIView):
                 if not pdf_buf:
                     return Response({'message': 'PDF generation not available'}, status=500)
                 file_data = pdf_buf.getvalue()
-
-            if HAS_PIKEPDF:
-                try:
-                    pdf_password = getattr(settings, 'PDF_DOWNLOAD_PASSWORD', '')
-                    if pdf_password:
-                        input_pdf = pikepdf.open(io.BytesIO(file_data))
-                        output_buf = io.BytesIO()
-                        input_pdf.save(
-                            output_buf,
-                            encryption=pikepdf.Encryption(
-                                owner=pdf_password,
-                                user=pdf_password,
-                            )
-                        )
-                        input_pdf.close()
-                        file_data = output_buf.getvalue()
-                except Exception as e:
-                    print(f'PDF encryption failed for offer letter {offer_id}: {e}')
 
             filename = 'offer_letter.pdf'
             content_type = 'application/pdf'
@@ -513,8 +476,54 @@ class VerifyOfferSigningTokenView(APIView):
         except Employee.DoesNotExist:
             return Response({'message': 'Employee record not found.'}, status=400)
 
-        clause_text = ''
+        from .pdf_service import get_company_name
+        company_name = get_company_name(offer.company_entity or 'nepal')
+        emp_name = employee.full_name or ''
+        position = offer.position or getattr(employee, 'position', '') or ''
+        citizenship_no = getattr(employee, 'citizenship_no', '') or ''
+        pan_no = getattr(employee, 'pan_no', '') or ''
+        permanent_address = getattr(employee, 'permanent_address', '') or ''
+        passport_number = getattr(employee, 'passport_number', '') or ''
+        emp_email = getattr(employee, 'email', '') or ''
+        emp_phone = getattr(employee, 'phone', '') or ''
+        emp_department = getattr(employee, 'department', '') or offer.department or ''
+        start_date = _safe_iso(offer.start_date) or ''
+        salary_currency = offer.salary_currency or 'NPR'
+        try:
+            salary_amount = f'{float(offer.proposed_salary):,.0f}' if offer.proposed_salary else ''
+        except (ValueError, TypeError):
+            salary_amount = str(offer.proposed_salary) if offer.proposed_salary else ''
+        salary_full = f'{salary_currency} {salary_amount}' if salary_amount else ''
+
+        replacements = {
+            '[Employee Name]': emp_name, '[Employee name]': emp_name,
+            '[Position Name]': position, '[Position name]': position, '[Position]': position,
+            '[Join Date]': start_date, '[Join date]': start_date, '[Joint date ]': start_date, '[Joint date]': start_date,
+            '[Citizenship No]': citizenship_no, '[Citizenship no]': citizenship_no, '[Citizenship Number]': citizenship_no,
+            '[PAN No]': pan_no, '[PAN no]': pan_no, '[PAN Number]': pan_no,
+            '[Permanent Address]': permanent_address, '[Permanent address]': permanent_address, '[Address]': permanent_address,
+            '[Passport Number]': passport_number, '[Passport number]': passport_number, '[Passport No]': passport_number,
+            '[Email Address]': emp_email, '[Email address]': emp_email, '[Email]': emp_email,
+            '[Phone Number]': emp_phone, '[Phone number]': emp_phone, '[Phone]': emp_phone,
+            '[Department]': emp_department,
+            '[Amount]': salary_amount, '[Salary Amount]': salary_amount,
+            '[Salary]': salary_full, '[Gross Salary]': salary_full,
+            '[Currency]': salary_currency,
+            '[Company Name]': company_name, '[Company name]': company_name, '[Company]': company_name,
+        }
+
+        resolved_clauses = []
         for clause in (offer.clauses or []):
+            title = clause.get('title', '')
+            content = clause.get('content', '')
+            for placeholder, value in replacements.items():
+                if value:
+                    title = title.replace(placeholder, value)
+                    content = content.replace(placeholder, value)
+            resolved_clauses.append({**clause, 'title': title, 'content': content})
+
+        clause_text = ''
+        for clause in resolved_clauses:
             clause_text += f"\n\n{clause.get('order', '')}. {clause.get('title', '')}\n\n{clause.get('content', '')}"
 
         return Response({
@@ -528,7 +537,7 @@ class VerifyOfferSigningTokenView(APIView):
             'department': offer.department or '',
             'workLocation': offer.work_location or '',
             'probationPeriod': offer.probation_period or '',
-            'clauses': offer.clauses or [],
+            'clauses': resolved_clauses,
             'clauseText': clause_text.strip(),
             'documentType': 'offer_letter',
         })
