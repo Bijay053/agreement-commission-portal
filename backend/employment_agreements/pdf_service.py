@@ -375,6 +375,8 @@ def generate_agreement_pdf(employee, agreement, clauses,
             '[Company Name]': company_name,
             '[Company name]': company_name,
             '[Company]': company_name,
+            '[Response Date]': '',
+            '[Response date]': '',
         }
         for placeholder, value in replacements.items():
             if value is not None:

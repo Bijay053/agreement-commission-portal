@@ -963,21 +963,24 @@ function OfferLettersTab({ employeeId, employee }: { employeeId: string; employe
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
-                        <DropdownMenuItem onClick={() => window.open(`/api/offer-letters/${o.id}/download?mode=view`, '_blank')}>
-                          <Eye className="w-4 h-4 mr-2" /> View PDF
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => window.open(`/api/offer-letters/${o.id}/download`, '_blank')}>
-                          <Download className="w-4 h-4 mr-2" /> Download PDF
-                        </DropdownMenuItem>
-                        {o.signedPdfUrl && (
-                          <DropdownMenuItem onClick={() => window.open(`/api/offer-letters/${o.id}/download?type=signed&mode=view`, '_blank')}>
-                            <Eye className="w-4 h-4 mr-2" /> View Signed Copy
-                          </DropdownMenuItem>
-                        )}
-                        {o.signedPdfUrl && (
-                          <DropdownMenuItem onClick={() => window.open(`/api/offer-letters/${o.id}/download?type=signed`, '_blank')}>
-                            <Download className="w-4 h-4 mr-2" /> Download Signed Copy
-                          </DropdownMenuItem>
+                        {['employee_signed', 'signed', 'manually_signed', 'completed'].includes(o.status) ? (
+                          <>
+                            <DropdownMenuItem onClick={() => window.open(`/api/offer-letters/${o.id}/download?type=signed&mode=view`, '_blank')}>
+                              <Eye className="w-4 h-4 mr-2" /> View Offer Letter
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => window.open(`/api/offer-letters/${o.id}/download?type=signed`, '_blank')}>
+                              <Download className="w-4 h-4 mr-2" /> Download Offer Letter
+                            </DropdownMenuItem>
+                          </>
+                        ) : (
+                          <>
+                            <DropdownMenuItem onClick={() => window.open(`/api/offer-letters/${o.id}/download?mode=view`, '_blank')}>
+                              <Eye className="w-4 h-4 mr-2" /> View PDF
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => window.open(`/api/offer-letters/${o.id}/download`, '_blank')}>
+                              <Download className="w-4 h-4 mr-2" /> Download PDF
+                            </DropdownMenuItem>
+                          </>
                         )}
                         {['draft', 'sent'].includes(o.status) && (
                           <DropdownMenuItem onClick={() => sendForSigningMutation.mutate(o.id)} data-testid={`button-offer-send-signing-${o.id}`}>

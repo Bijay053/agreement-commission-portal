@@ -348,18 +348,40 @@ class OfferLetterDownloadView(APIView):
 
         if doc_type == 'signed':
             s3_key = offer.signed_pdf_url
-            if not s3_key:
+            if s3_key:
+                blocked, msg, file_bytes = _fetch_and_scan_s3(s3_key, request, label=f'offer letter {offer_id}')
+                if blocked:
+                    status_code = 403 if 'blocked' in msg.lower() or 'scan' in msg.lower() else 500
+                    return Response({'message': msg}, status=status_code)
+
+                file_data = file_bytes
+                is_pdf = s3_key.lower().endswith('.pdf')
+                filename = f'offer_letter_signed.pdf' if is_pdf else os.path.basename(s3_key)
+                content_type = 'application/pdf' if is_pdf else 'application/octet-stream'
+            elif offer.signature_data or offer.company_signature_data:
+                try:
+                    employee = Employee.objects.get(id=offer.employee_id)
+                except Employee.DoesNotExist:
+                    return Response({'message': 'Employee not found'}, status=404)
+                from .pdf_service import generate_offer_letter_pdf
+                pdf_buf = generate_offer_letter_pdf(
+                    offer, employee,
+                    employee_signature=offer.signature_data,
+                    employee_signed_date=offer.signed_at,
+                    company_signature=getattr(offer, 'company_signature_data', None),
+                    company_signer_name=getattr(offer, 'company_signer_name', ''),
+                    company_signer_position=getattr(offer, 'company_signer_position', ''),
+                    company_signed_date=getattr(offer, 'company_signed_at', None),
+                    employee_esignature_metadata=getattr(offer, 'esignature_metadata', None),
+                    company_esignature_metadata=getattr(offer, 'company_esignature_metadata', None),
+                )
+                if not pdf_buf:
+                    return Response({'message': 'PDF generation failed'}, status=500)
+                file_data = pdf_buf.getvalue()
+                filename = 'offer_letter_signed.pdf'
+                content_type = 'application/pdf'
+            else:
                 return Response({'message': 'No signed document available'}, status=404)
-
-            blocked, msg, file_bytes = _fetch_and_scan_s3(s3_key, request, label=f'offer letter {offer_id}')
-            if blocked:
-                status_code = 403 if 'blocked' in msg.lower() or 'scan' in msg.lower() else 500
-                return Response({'message': msg}, status=status_code)
-
-            file_data = file_bytes
-            is_pdf = s3_key.lower().endswith('.pdf')
-            filename = f'offer_letter_signed.pdf' if is_pdf else os.path.basename(s3_key)
-            content_type = 'application/pdf' if is_pdf else 'application/octet-stream'
         else:
             if offer.pdf_url:
                 blocked, msg, file_bytes = _fetch_and_scan_s3(offer.pdf_url, request, label=f'offer letter {offer_id}')
