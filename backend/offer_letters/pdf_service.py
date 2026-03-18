@@ -24,7 +24,7 @@ try:
     from reportlab.pdfgen import canvas as rl_canvas
     from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
     from reportlab.platypus import (
-        SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle,
+        SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, KeepTogether,
     )
     from reportlab.lib.enums import TA_LEFT, TA_CENTER, TA_JUSTIFY
     from reportlab.lib.colors import HexColor
@@ -390,11 +390,12 @@ def generate_offer_letter_pdf(offer, employee):
     page_w = A4[0] - doc.leftMargin - doc.rightMargin
     col_w = (page_w - 20 * mm) / 2
 
-    elements.append(Spacer(1, 14))
+    sig_block = []
+    sig_block.append(Spacer(1, 14))
 
     sig_heading = ParagraphStyle('OfrSigHeading', parent=styles['heading'], keepWithNext=1)
-    elements.append(Paragraph('<b>SIGNATURES</b>', sig_heading))
-    elements.append(Spacer(1, 10))
+    sig_block.append(Paragraph('<b>SIGNATURES</b>', sig_heading))
+    sig_block.append(Spacer(1, 10))
 
     sig_data = [
         [
@@ -435,7 +436,8 @@ def generate_offer_letter_pdf(offer, employee):
         ('TOPPADDING', (0, 0), (-1, -1), 1),
         ('BOTTOMPADDING', (0, 0), (-1, -1), 1),
     ]))
-    elements.append(sig_table)
+    sig_block.append(sig_table)
+    elements.append(KeepTogether(sig_block))
 
     doc.build(elements, onFirstPage=_header_footer, onLaterPages=_header_footer)
     pdf_bytes = buf.getvalue()
