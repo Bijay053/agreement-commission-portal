@@ -13,6 +13,9 @@ interface AgreementData {
   effectiveTo: string;
   clauses: Array<{ order: number; title: string; content: string }>;
   agreementText: string;
+  alreadySigned?: boolean;
+  status?: string;
+  message?: string;
 }
 
 async function apiRequest(url: string, options?: RequestInit) {
@@ -194,6 +197,38 @@ export default function SignAgreementPage({ params }: { params: { token: string 
             <CheckCircle className="w-16 h-16 mx-auto text-emerald-500" />
             <h2 className="text-xl font-semibold text-gray-900" data-testid="text-sign-success">Agreement Signed</h2>
             <p className="text-gray-600" data-testid="text-sign-message">{success}</p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  if (agreement?.alreadySigned) {
+    const isFullySigned = agreement.status === 'signed' || agreement.status === 'completed';
+    const iconColor = isFullySigned ? 'text-emerald-500' : 'text-amber-500';
+    const title = isFullySigned ? 'Agreement Fully Signed' : 'Agreement Already Signed';
+
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
+        <Card className="max-w-lg w-full">
+          <CardContent className="p-8 text-center space-y-4">
+            <CheckCircle className={`w-16 h-16 mx-auto ${iconColor}`} />
+            <h2 className="text-xl font-semibold text-gray-900" data-testid="text-already-signed-title">{title}</h2>
+            <p className="text-gray-600 leading-relaxed" data-testid="text-already-signed-message">{agreement.message}</p>
+            {!isFullySigned && (
+              <div className="mt-4 p-4 bg-amber-50 border border-amber-200 rounded-lg">
+                <p className="text-sm text-amber-800">
+                  No further action is needed from your side. You will be notified once the process is complete.
+                </p>
+              </div>
+            )}
+            {isFullySigned && (
+              <div className="mt-4 p-4 bg-emerald-50 border border-emerald-200 rounded-lg">
+                <p className="text-sm text-emerald-800">
+                  Please check your email for the signed copy. If you haven't received it, contact HR.
+                </p>
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>

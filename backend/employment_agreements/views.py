@@ -388,8 +388,26 @@ class VerifySigningTokenView(APIView):
         if agreement.token_expires_at and timezone.now() > agreement.token_expires_at:
             return Response({'message': 'This signing link has expired. Please contact HR.'}, status=400)
 
-        if agreement.status in ('signed', 'manually_signed', 'completed'):
-            return Response({'message': 'This agreement has already been signed.'}, status=400)
+        if agreement.status == 'employee_signed':
+            return Response({
+                'alreadySigned': True,
+                'status': 'employee_signed',
+                'message': 'You have already signed this agreement. The company is currently reviewing it. Once the company completes their review and signs, you will receive the fully signed document via email.',
+            })
+
+        if agreement.status in ('signed', 'completed'):
+            return Response({
+                'alreadySigned': True,
+                'status': agreement.status,
+                'message': 'This agreement has been fully signed by both you and the company. A copy of the signed agreement has been sent to your email. If you did not receive it, please contact HR.',
+            })
+
+        if agreement.status == 'manually_signed':
+            return Response({
+                'alreadySigned': True,
+                'status': 'manually_signed',
+                'message': 'This agreement has already been signed. If you have any questions, please contact HR.',
+            })
 
         try:
             employee = Employee.objects.get(id=agreement.employee_id)
@@ -421,7 +439,7 @@ class SubmitSignatureView(APIView):
         if agreement.token_expires_at and timezone.now() > agreement.token_expires_at:
             return Response({'message': 'This signing link has expired.'}, status=400)
 
-        if agreement.status in ('signed', 'manually_signed', 'completed'):
+        if agreement.status in ('employee_signed', 'signed', 'manually_signed', 'completed'):
             return Response({'message': 'This agreement has already been signed.'}, status=400)
 
         signature_data = request.data.get('signatureData', '')
