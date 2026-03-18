@@ -1,8 +1,17 @@
+from datetime import datetime, date
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from core.permissions import require_auth, require_permission
 from core.pagination import StandardPagination
 from .models import Employee
+
+
+def _safe_iso(val):
+    if not val:
+        return None
+    if isinstance(val, (datetime, date)):
+        return val.isoformat()
+    return str(val)
 
 
 def _serialize_employee(e):
@@ -17,12 +26,12 @@ def _serialize_employee(e):
         'panNo': e.pan_no or '',
         'permanentAddress': e.permanent_address or '',
         'passportNumber': e.passport_number or '',
-        'joinDate': e.join_date.isoformat() if e.join_date else None,
+        'joinDate': _safe_iso(e.join_date),
         'salaryAmount': str(e.salary_amount) if e.salary_amount else '',
         'salaryCurrency': e.salary_currency or 'NPR',
         'status': e.status,
-        'createdAt': e.created_at.isoformat() if e.created_at else None,
-        'updatedAt': e.updated_at.isoformat() if e.updated_at else None,
+        'createdAt': _safe_iso(e.created_at),
+        'updatedAt': _safe_iso(e.updated_at),
     }
 
 
