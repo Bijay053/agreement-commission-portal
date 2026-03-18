@@ -24,6 +24,7 @@ except ImportError:
 
 
 def _geolocate_ip(ip_address):
+    result = {'location': '', 'latitude': '', 'longitude': ''}
     try:
         import requests as http_requests
         resp = http_requests.get(f'https://ipapi.co/{ip_address}/json/', timeout=3,
@@ -34,28 +35,46 @@ def _geolocate_ip(ip_address):
             country = data.get('country_name', '')
             region = data.get('region', '')
             if city and country:
-                return f'{city}, {region}, {country}' if region else f'{city}, {country}'
+                result['location'] = f'{city}, {region}, {country}' if region else f'{city}, {country}'
             elif country:
-                return country
+                result['location'] = country
+            lat = data.get('latitude')
+            lon = data.get('longitude')
+            if lat is not None and lon is not None:
+                result['latitude'] = str(lat)
+                result['longitude'] = str(lon)
     except Exception:
         pass
-    return ''
+    return result
 
 
-def _collect_esig_metadata(request):
+def _generate_signature_id(prefix='AGR'):
+    now = timezone.now()
+    date_part = now.strftime('%Y%m%d')
+    random_part = uuid.uuid4().hex[:4].upper()
+    return f'SIC-{prefix}-{date_part}-{random_part}'
+
+
+def _collect_esig_metadata(request, sig_prefix='AGR'):
     tz = ''
     if hasattr(request, 'data') and isinstance(request.data, dict):
         tz = request.data.get('timezone', '')
     ip_address = request.META.get('HTTP_X_FORWARDED_FOR', '').split(',')[0].strip() or request.META.get('REMOTE_ADDR', '')
-    location = _geolocate_ip(ip_address)
+    geo = _geolocate_ip(ip_address)
+    now = timezone.now()
     return {
         'ip_address': ip_address,
         'user_agent': request.META.get('HTTP_USER_AGENT', ''),
         'accept_language': request.META.get('HTTP_ACCEPT_LANGUAGE', ''),
-        'timestamp': timezone.now().isoformat(),
+        'timestamp': now.isoformat(),
+        'timestamp_utc': now.strftime('%Y-%m-%d %H:%M:%S'),
         'referer': request.META.get('HTTP_REFERER', ''),
         'timezone': tz,
-        'location': location,
+        'location': geo['location'],
+        'latitude': geo['latitude'],
+        'longitude': geo['longitude'],
+        'signature_id': _generate_signature_id(sig_prefix),
+        'verification_method': 'Email Link Verified',
     }
 
 
