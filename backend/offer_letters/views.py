@@ -577,6 +577,7 @@ class SubmitOfferSignatureView(APIView):
                 offer, employee,
                 employee_signature=signature_data,
                 employee_signed_date=timezone.now(),
+                employee_esignature_metadata=esig_metadata,
             )
             if pdf_buf:
                 signed_pdf_key = f'offer-letters/{offer.id}/signed_offer_letter.pdf'
@@ -653,6 +654,8 @@ class OfferCompanySignView(APIView):
             company_signer_name=signer_name,
             company_signer_position=signer_position,
             company_signed_date=timezone.now(),
+            employee_esignature_metadata=offer.esignature_metadata,
+            company_esignature_metadata=esig_metadata,
         )
         if not pdf_buf:
             return Response({'message': 'Failed to generate PDF'}, status=500)

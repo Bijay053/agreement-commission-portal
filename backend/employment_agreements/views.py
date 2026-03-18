@@ -510,6 +510,8 @@ class SubmitSignatureView(APIView):
         except Employee.DoesNotExist:
             return Response({'message': 'Employee record not found.'}, status=400)
 
+        esig_metadata = _collect_esig_metadata(request)
+
         signed_pdf_bytes = None
         signed_pdf_key = None
 
@@ -518,6 +520,7 @@ class SubmitSignatureView(APIView):
                 employee, agreement, agreement.clauses or [],
                 employee_signature=signature_data,
                 employee_signed_date=timezone.now(),
+                employee_esignature_metadata=esig_metadata,
             )
             if pdf_buf:
                 signed_pdf_bytes = pdf_buf.getvalue()
@@ -525,8 +528,6 @@ class SubmitSignatureView(APIView):
                 upload_pdf_to_s3(signed_pdf_bytes, signed_pdf_key)
         except Exception as e:
             print(f'PDF generation with signature failed: {e}')
-
-        esig_metadata = _collect_esig_metadata(request)
 
         now = timezone.now()
         agreement.status = 'employee_signed'
@@ -665,6 +666,8 @@ class CompanySignView(APIView):
         except Employee.DoesNotExist:
             return Response({'message': 'Employee not found'}, status=404)
 
+        company_esig_metadata = _collect_esig_metadata(request)
+
         pdf_buf = generate_agreement_pdf(
             employee, agreement, agreement.clauses or [],
             employee_signature=agreement.signature_data,
@@ -673,6 +676,8 @@ class CompanySignView(APIView):
             company_signer_name=signer_name,
             company_signer_position=signer_position,
             company_signed_date=timezone.now(),
+            employee_esignature_metadata=agreement.esignature_metadata,
+            company_esignature_metadata=company_esig_metadata,
         )
         if not pdf_buf:
             return Response({'message': 'Failed to generate PDF'}, status=500)
@@ -681,8 +686,6 @@ class CompanySignView(APIView):
 
         s3_key = f'agreements/{agreement.id}/company_signed_{uuid.uuid4().hex[:8]}.pdf'
         uploaded_key = upload_pdf_to_s3(signed_bytes, s3_key)
-
-        company_esig_metadata = _collect_esig_metadata(request)
 
         agreement.company_signature_data = signature_data
         agreement.company_signer_name = signer_name

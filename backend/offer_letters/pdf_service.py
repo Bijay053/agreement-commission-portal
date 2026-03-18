@@ -2,7 +2,20 @@ import io
 import os
 import re
 import base64
-from datetime import datetime, date
+from datetime import datetime, date, timedelta, timezone as dt_timezone
+
+
+NEPAL_TZ = dt_timezone(timedelta(hours=5, minutes=45))
+
+
+def _format_signing_date(dt_val):
+    if not dt_val:
+        return '____________________'
+    try:
+        nepal_dt = dt_val.astimezone(NEPAL_TZ)
+        return nepal_dt.strftime('%d %B %Y, %I:%M %p') + ' NPT'
+    except Exception:
+        return dt_val.strftime('%d %B %Y, %I:%M %p') + ' UTC'
 
 
 def _safe_date_format(val, fmt='%d %B %Y'):
@@ -27,6 +40,7 @@ try:
     from reportlab.platypus import (
         SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, KeepTogether,
     )
+    from reportlab.platypus.flowables import HRFlowable
     from reportlab.lib.enums import TA_LEFT, TA_CENTER, TA_JUSTIFY
     from reportlab.lib.colors import HexColor
     from reportlab.lib.utils import ImageReader
@@ -245,7 +259,8 @@ def _process_content_lines(content, styles):
 def generate_offer_letter_pdf(offer, employee,
                               employee_signature=None, employee_signed_date=None,
                               company_signature=None, company_signer_name=None,
-                              company_signer_position=None, company_signed_date=None):
+                              company_signer_position=None, company_signed_date=None,
+                              employee_esignature_metadata=None, company_esignature_metadata=None):
     if not HAS_REPORTLAB:
         return None
 
@@ -455,8 +470,8 @@ def generate_offer_letter_pdf(offer, employee,
 
     co_name_val = f'Name: {_safe_text(company_signer_name)}' if company_signer_name else 'Name: ____________________'
     co_pos_val = f'Position: {_safe_text(company_signer_position)}' if company_signer_position else 'Position: ____________________'
-    co_date_val = f'Date: {company_signed_date.strftime("%d %B %Y, %I:%M %p %Z").strip() if company_signed_date else "____________________"}'
-    emp_date_val = f'Date: {employee_signed_date.strftime("%d %B %Y, %I:%M %p %Z").strip() if employee_signed_date else "____________________"}'
+    co_date_val = f'Date: {_format_signing_date(company_signed_date)}'
+    emp_date_val = f'Date: {_format_signing_date(employee_signed_date)}'
 
     sig_data = [
         [
@@ -498,6 +513,56 @@ def generate_offer_letter_pdf(offer, employee,
         ('BOTTOMPADDING', (0, 0), (-1, -1), 1),
     ]))
     elements.append(sig_table)
+
+    if employee_esignature_metadata or company_esignature_metadata:
+        elements.append(Spacer(1, 20))
+        elements.append(HRFlowable(width='100%', thickness=0.5, color=HexColor('#d1d5db')))
+        elements.append(Spacer(1, 8))
+
+        esig_style = ParagraphStyle(
+            'esig_meta', fontName='Helvetica', fontSize=7,
+            textColor=HexColor('#6b7280'), leading=10,
+        )
+        esig_heading = ParagraphStyle(
+            'esig_heading', fontName='Helvetica-Bold', fontSize=8,
+            textColor=HexColor('#374151'), leading=11, spaceBefore=4, spaceAfter=4,
+        )
+
+        elements.append(Paragraph('E-SIGNATURE VERIFICATION', esig_heading))
+
+        if employee_esignature_metadata and isinstance(employee_esignature_metadata, dict):
+            m = employee_esignature_metadata
+            elements.append(Paragraph(f'<b>Employee Signature:</b> {_safe_text(employee.full_name or "")}', esig_style))
+            if m.get('ip_address'):
+                elements.append(Paragraph(f'IP Address: {_safe_text(m["ip_address"])}', esig_style))
+            if m.get('timestamp'):
+                elements.append(Paragraph(f'Signed At: {_safe_text(m["timestamp"])}', esig_style))
+            if m.get('user_agent'):
+                ua = m['user_agent']
+                if len(ua) > 120:
+                    ua = ua[:120] + '...'
+                elements.append(Paragraph(f'User Agent: {_safe_text(ua)}', esig_style))
+            elements.append(Spacer(1, 6))
+
+        if company_esignature_metadata and isinstance(company_esignature_metadata, dict):
+            m = company_esignature_metadata
+            signer = company_signer_name or 'Authorized Signatory'
+            elements.append(Paragraph(f'<b>Company Signature:</b> {_safe_text(signer)}', esig_style))
+            if m.get('ip_address'):
+                elements.append(Paragraph(f'IP Address: {_safe_text(m["ip_address"])}', esig_style))
+            if m.get('timestamp'):
+                elements.append(Paragraph(f'Signed At: {_safe_text(m["timestamp"])}', esig_style))
+            if m.get('user_agent'):
+                ua = m['user_agent']
+                if len(ua) > 120:
+                    ua = ua[:120] + '...'
+                elements.append(Paragraph(f'User Agent: {_safe_text(ua)}', esig_style))
+
+        elements.append(Spacer(1, 4))
+        elements.append(Paragraph(
+            'This document was electronically signed. The signatures above are legally binding under applicable electronic signature laws.',
+            esig_style
+        ))
 
     hf = _make_header_footer(company_name=company_name)
     doc.build(elements, onFirstPage=hf, onLaterPages=hf)
