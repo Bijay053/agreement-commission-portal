@@ -24,6 +24,7 @@ class Employee(models.Model):
     citizenship_no = models.CharField(max_length=64, null=True, blank=True)
     pan_no = models.CharField(max_length=64, null=True, blank=True)
     permanent_address = models.TextField(null=True, blank=True)
+    passport_number = models.CharField(max_length=64, null=True, blank=True)
     join_date = models.DateField(null=True, blank=True)
     salary_amount = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
     salary_currency = models.CharField(max_length=3, default='NPR', choices=CURRENCY_CHOICES)

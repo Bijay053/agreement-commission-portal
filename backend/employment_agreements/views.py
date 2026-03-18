@@ -13,7 +13,7 @@ from core.pagination import StandardPagination
 from employees.models import Employee
 from templates_manager.models import AgreementTemplate
 from .models import EmploymentAgreement
-from .pdf_service import generate_agreement_pdf, embed_signature_to_pdf, upload_pdf_to_s3
+from .pdf_service import generate_agreement_pdf, embed_signature_to_pdf, embed_company_signature_to_pdf, upload_pdf_to_s3
 from .email_service import send_signing_request_email, send_signed_confirmation_email
 
 try:
@@ -52,6 +52,9 @@ def _serialize_agreement(a, employee=None):
         'signedPdfUrl': a.signed_pdf_url or '',
         'manuallySignedPdfUrl': a.manually_signed_pdf_url or '',
         'notes': a.notes or '',
+        'companySignerName': a.company_signer_name or '',
+        'companySignerPosition': a.company_signer_position or '',
+        'companySignedAt': a.company_signed_at.isoformat() if a.company_signed_at else None,
         'createdBy': a.created_by or '',
         'createdAt': a.created_at.isoformat() if a.created_at else None,
         'updatedAt': a.updated_at.isoformat() if a.updated_at else None,
@@ -511,23 +514,54 @@ class AgreementDownloadView(APIView):
             return Response({'message': 'Agreement not found'}, status=404)
 
         doc_type = request.query_params.get('type', 'original')
+        mode = request.query_params.get('mode', 'download')
+
         if doc_type == 'signed':
             s3_key = agreement.manually_signed_pdf_url or agreement.signed_pdf_url
+            if not s3_key:
+                try:
+                    employee = Employee.objects.get(id=agreement.employee_id)
+                except Employee.DoesNotExist:
+                    return Response({'message': 'Employee not found'}, status=404)
+
+                if agreement.signature_data:
+                    pdf_buf = generate_agreement_pdf(employee, agreement, agreement.clauses or [])
+                    if pdf_buf:
+                        signed_pdf_bytes = embed_signature_to_pdf(pdf_buf.getvalue(), agreement.signature_data, agreement.signed_at)
+                        if signed_pdf_bytes:
+                            file_data = signed_pdf_bytes
+                        else:
+                            return Response({'message': 'Could not generate signed PDF'}, status=500)
+                    else:
+                        return Response({'message': 'PDF generation not available'}, status=500)
+                else:
+                    return Response({'message': 'No signed document available'}, status=404)
+            else:
+                blocked, msg, file_bytes = _fetch_and_scan_s3(s3_key, request, label=f'agreement {agreement_id}')
+                if blocked:
+                    status_code = 403 if 'blocked' in msg.lower() or 'scan' in msg.lower() else 500
+                    return Response({'message': msg}, status=status_code)
+                file_data = file_bytes
         else:
             s3_key = agreement.pdf_url
+            if not s3_key:
+                try:
+                    employee = Employee.objects.get(id=agreement.employee_id)
+                except Employee.DoesNotExist:
+                    return Response({'message': 'Employee not found'}, status=404)
+                pdf_buf = generate_agreement_pdf(employee, agreement, agreement.clauses or [])
+                if pdf_buf:
+                    file_data = pdf_buf.getvalue()
+                else:
+                    return Response({'message': 'No document available'}, status=404)
+            else:
+                blocked, msg, file_bytes = _fetch_and_scan_s3(s3_key, request, label=f'agreement {agreement_id}')
+                if blocked:
+                    status_code = 403 if 'blocked' in msg.lower() or 'scan' in msg.lower() else 500
+                    return Response({'message': msg}, status=status_code)
+                file_data = file_bytes
 
-        if not s3_key:
-            return Response({'message': 'No document available'}, status=404)
-
-        blocked, msg, file_bytes = _fetch_and_scan_s3(s3_key, request, label=f'agreement {agreement_id}')
-        if blocked:
-            status_code = 403 if 'blocked' in msg.lower() or 'scan' in msg.lower() else 500
-            return Response({'message': msg}, status=status_code)
-
-        file_data = file_bytes
-        is_pdf = s3_key.lower().endswith('.pdf')
-
-        if is_pdf and HAS_PIKEPDF:
+        if mode != 'view' and HAS_PIKEPDF:
             try:
                 pdf_password = getattr(settings, 'PDF_DOWNLOAD_PASSWORD', '')
                 if pdf_password:
@@ -545,16 +579,79 @@ class AgreementDownloadView(APIView):
             except Exception as e:
                 print(f'PDF encryption failed for agreement {agreement_id}: {e}')
 
-        filename = f'agreement_{doc_type}.pdf' if is_pdf else os.path.basename(s3_key)
-        content_type = 'application/pdf' if is_pdf else 'application/octet-stream'
-
-        mode = request.query_params.get('mode', 'download')
+        filename = f'agreement_{doc_type}.pdf'
         disposition = 'inline' if mode == 'view' else 'attachment'
 
-        response = HttpResponse(file_data, content_type=content_type)
+        response = HttpResponse(file_data, content_type='application/pdf')
         response['Content-Disposition'] = f'{disposition}; filename="{filename}"'
         response['Content-Length'] = len(file_data)
         response['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
         response['Pragma'] = 'no-cache'
         response['X-Content-Type-Options'] = 'nosniff'
         return response
+
+
+class CompanySignView(APIView):
+    @require_auth
+    @require_permission('employment_agreements.manage')
+    def post(self, request, agreement_id):
+        try:
+            agreement = EmploymentAgreement.objects.get(id=agreement_id)
+        except EmploymentAgreement.DoesNotExist:
+            return Response({'message': 'Agreement not found'}, status=404)
+
+        signature_data = request.data.get('signatureData')
+        signer_name = request.data.get('signerName', '')
+        signer_position = request.data.get('signerPosition', '')
+
+        if not signature_data:
+            return Response({'message': 'Signature data is required'}, status=400)
+
+        try:
+            employee = Employee.objects.get(id=agreement.employee_id)
+        except Employee.DoesNotExist:
+            return Response({'message': 'Employee not found'}, status=404)
+
+        template = None
+        if agreement.template_id:
+            try:
+                template = AgreementTemplate.objects.get(id=agreement.template_id)
+            except AgreementTemplate.DoesNotExist:
+                pass
+
+        pdf_buf = generate_agreement_pdf(agreement, employee, template)
+        if not pdf_buf:
+            return Response({'message': 'Failed to generate PDF'}, status=500)
+
+        pdf_bytes = pdf_buf.getvalue()
+
+        signed_bytes = embed_company_signature_to_pdf(
+            pdf_bytes, signature_data, signer_name, signer_position,
+            signed_date=timezone.now(),
+            employee_signature=agreement.signature_data,
+            employee_signed_date=agreement.signed_at,
+        )
+        if not signed_bytes:
+            return Response({'message': 'Failed to embed company signature'}, status=500)
+
+        s3_key = f'agreements/{agreement.id}/company_signed_{uuid.uuid4().hex[:8]}.pdf'
+        uploaded_key = upload_pdf_to_s3(signed_bytes, s3_key)
+
+        agreement.company_signature_data = signature_data
+        agreement.company_signer_name = signer_name
+        agreement.company_signer_position = signer_position
+        agreement.company_signed_at = timezone.now()
+
+        if uploaded_key:
+            agreement.signed_pdf_url = uploaded_key
+
+        if agreement.status in ('draft', 'sent', 'awaiting_signature'):
+            agreement.status = 'signed'
+
+        agreement.save()
+
+        return Response({
+            'message': 'Agreement signed on behalf of company',
+            'id': str(agreement.id),
+            'status': agreement.status,
+        })

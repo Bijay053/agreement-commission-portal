@@ -16,6 +16,7 @@ def _serialize_employee(e):
         'citizenshipNo': e.citizenship_no or '',
         'panNo': e.pan_no or '',
         'permanentAddress': e.permanent_address or '',
+        'passportNumber': e.passport_number or '',
         'joinDate': e.join_date.isoformat() if e.join_date else None,
         'salaryAmount': str(e.salary_amount) if e.salary_amount else '',
         'salaryCurrency': e.salary_currency or 'NPR',
@@ -70,6 +71,7 @@ class EmployeeListView(APIView):
             citizenship_no=data.get('citizenshipNo', ''),
             pan_no=data.get('panNo', ''),
             permanent_address=data.get('permanentAddress', ''),
+            passport_number=data.get('passportNumber', ''),
             join_date=data.get('joinDate') or None,
             salary_amount=data.get('salaryAmount') or None,
             salary_currency=data.get('salaryCurrency', 'NPR'),
@@ -103,6 +105,7 @@ class EmployeeDetailView(APIView):
         employee.citizenship_no = data.get('citizenshipNo', employee.citizenship_no)
         employee.pan_no = data.get('panNo', employee.pan_no)
         employee.permanent_address = data.get('permanentAddress', employee.permanent_address)
+        employee.passport_number = data.get('passportNumber', employee.passport_number)
         employee.join_date = data.get('joinDate') or employee.join_date
         employee.salary_amount = data.get('salaryAmount') or employee.salary_amount
         employee.salary_currency = data.get('salaryCurrency', employee.salary_currency)

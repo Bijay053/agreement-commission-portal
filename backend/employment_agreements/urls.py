@@ -8,6 +8,7 @@ urlpatterns = [
     path('employment-agreements/<uuid:agreement_id>/upload-signed', views.UploadSignedAgreementView.as_view()),
     path('employment-agreements/<uuid:agreement_id>/send-for-signing', views.SendForSigningView.as_view()),
     path('employment-agreements/<uuid:agreement_id>/download', views.AgreementDownloadView.as_view()),
+    path('employment-agreements/<uuid:agreement_id>/company-sign', views.CompanySignView.as_view()),
     path('signing/verify/<str:token>', views.VerifySigningTokenView.as_view()),
     path('signing/submit/<str:token>', views.SubmitSignatureView.as_view()),
 ]

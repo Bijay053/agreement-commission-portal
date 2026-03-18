@@ -257,6 +257,13 @@ def generate_agreement_pdf(employee, agreement, clauses):
         position = agreement.position or getattr(employee, 'position', '') or ''
         join_date = agreement.effective_from.strftime('%d %B %Y') if agreement.effective_from else '[Join Date]'
         expire_date = agreement.effective_to.strftime('%d %B %Y') if agreement.effective_to else '[Expire Date]'
+        citizenship_no = getattr(employee, 'citizenship_no', '') or ''
+        pan_no = getattr(employee, 'pan_no', '') or ''
+        permanent_address = getattr(employee, 'permanent_address', '') or ''
+        passport_number = getattr(employee, 'passport_number', '') or ''
+        emp_email = getattr(employee, 'email', '') or ''
+        emp_phone = getattr(employee, 'phone', '') or ''
+        emp_department = getattr(employee, 'department', '') or ''
 
         content = content.replace('[Employee Name]', emp_name)
         content = content.replace('[Position Name]', position)
@@ -266,6 +273,18 @@ def generate_agreement_pdf(employee, agreement, clauses):
         content = content.replace('[Expire date]', expire_date)
         content = content.replace('[Joint date ]', join_date)
         content = content.replace('[Joint date]', join_date)
+        content = content.replace('[Citizenship No]', citizenship_no)
+        content = content.replace('[Citizenship no]', citizenship_no)
+        content = content.replace('[PAN No]', pan_no)
+        content = content.replace('[PAN no]', pan_no)
+        content = content.replace('[Permanent Address]', permanent_address)
+        content = content.replace('[Passport Number]', passport_number)
+        content = content.replace('[Passport number]', passport_number)
+        content = content.replace('[Email Address]', emp_email)
+        content = content.replace('[Email address]', emp_email)
+        content = content.replace('[Phone Number]', emp_phone)
+        content = content.replace('[Phone number]', emp_phone)
+        content = content.replace('[Department]', emp_department)
         if agreement.gross_salary:
             content = content.replace('[Amount]', f'{agreement.gross_salary:,.0f}')
 
@@ -395,6 +414,88 @@ def embed_signature_to_pdf(pdf_bytes, signature_base64, signed_date=None):
     c.setFont("Helvetica", 9)
     c.setFillColorRGB(0.3, 0.3, 0.3)
     c.drawString(sig_x, sig_y - 15, f"Signed on: {date_str}")
+
+    c.save()
+    overlay_buf.seek(0)
+
+    overlay_reader = PdfReader(overlay_buf)
+    overlay_page = overlay_reader.pages[0]
+
+    writer = PdfWriter()
+    for i, page in enumerate(reader.pages):
+        if i == len(reader.pages) - 1:
+            page.merge_page(overlay_page)
+        writer.add_page(page)
+
+    output_buf = io.BytesIO()
+    writer.write(output_buf)
+    output_buf.seek(0)
+    return output_buf.getvalue()
+
+
+def embed_company_signature_to_pdf(pdf_bytes, company_sig_base64, signer_name='', signer_position='',
+                                    signed_date=None, employee_signature=None, employee_signed_date=None):
+    if not HAS_REPORTLAB or not HAS_PYPDF:
+        return None
+
+    if ',' in company_sig_base64:
+        company_sig_base64 = company_sig_base64.split(',', 1)[1]
+
+    company_sig_bytes = base64.b64decode(company_sig_base64)
+    company_sig_image = io.BytesIO(company_sig_bytes)
+
+    reader = PdfReader(io.BytesIO(pdf_bytes))
+    last_page = reader.pages[-1]
+    page_width = float(last_page.mediabox.width)
+    page_height = float(last_page.mediabox.height)
+
+    overlay_buf = io.BytesIO()
+    c = rl_canvas.Canvas(overlay_buf, pagesize=(page_width, page_height))
+
+    sig_width = 140
+    sig_height = 55
+    company_sig_x = 72
+    company_sig_y = 185
+
+    try:
+        company_sig_image.seek(0)
+        img_reader = ImageReader(company_sig_image)
+        c.drawImage(img_reader, company_sig_x, company_sig_y, width=sig_width, height=sig_height, mask='auto')
+    except Exception:
+        company_sig_image.seek(0)
+        ir = ImageReader(company_sig_image)
+        c.drawImage(ir, company_sig_x, company_sig_y, width=sig_width, height=sig_height, mask='auto')
+
+    c.setFont("Helvetica", 8)
+    c.setFillColorRGB(0.3, 0.3, 0.3)
+    if signer_name:
+        c.drawString(company_sig_x, company_sig_y - 14, f"Name: {signer_name}")
+    if signer_position:
+        c.drawString(company_sig_x, company_sig_y - 26, f"Position: {signer_position}")
+    if signed_date:
+        date_str = signed_date.strftime('%d %B %Y, %I:%M %p')
+    else:
+        date_str = datetime.utcnow().strftime('%d %B %Y, %I:%M %p')
+    c.drawString(company_sig_x, company_sig_y - 38, f"Date: {date_str}")
+
+    if employee_signature:
+        emp_sig_base64 = employee_signature
+        if ',' in emp_sig_base64:
+            emp_sig_base64 = emp_sig_base64.split(',', 1)[1]
+        try:
+            emp_sig_bytes = base64.b64decode(emp_sig_base64)
+            emp_sig_image = io.BytesIO(emp_sig_bytes)
+            emp_sig_x = page_width - 72 - sig_width
+            emp_sig_y = company_sig_y
+            emp_sig_image.seek(0)
+            emp_reader = ImageReader(emp_sig_image)
+            c.drawImage(emp_reader, emp_sig_x, emp_sig_y, width=sig_width, height=sig_height, mask='auto')
+
+            if employee_signed_date:
+                emp_date_str = employee_signed_date.strftime('%d %B %Y, %I:%M %p')
+                c.drawString(emp_sig_x, emp_sig_y - 14, f"Signed on: {emp_date_str}")
+        except Exception as e:
+            print(f'Failed to embed employee signature: {e}')
 
     c.save()
     overlay_buf.seek(0)

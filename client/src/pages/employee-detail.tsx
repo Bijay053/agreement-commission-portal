@@ -24,8 +24,9 @@ import {
 import {
   ArrowLeft, Save, FileText, Upload, Download, Trash2, Send, CheckCircle, Clock,
   Loader2, Plus, Eye, Edit, UploadCloud, RefreshCw, File, FileImage, FileArchive,
-  MoreHorizontal, X, Briefcase, Mail,
+  MoreHorizontal, X, Briefcase, Mail, PenLine,
 } from "lucide-react";
+import SignatureCanvas from "react-signature-canvas";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
@@ -66,7 +67,7 @@ const DOC_CATEGORIES = [
 interface Employee {
   id: string; fullName: string; email: string; phone: string; position: string;
   department: string; citizenshipNo: string; panNo: string; permanentAddress: string;
-  joinDate: string | null; salaryAmount: string; salaryCurrency: string; status: string;
+  passportNumber: string; joinDate: string | null; salaryAmount: string; salaryCurrency: string; status: string;
 }
 
 interface Agreement {
@@ -74,7 +75,8 @@ interface Agreement {
   effectiveFrom: string | null; effectiveTo: string | null; position: string;
   grossSalary: string; salaryCurrency: string; clauses: any[]; status: string; pdfUrl: string;
   signedAt: string | null; signedPdfUrl: string; manuallySignedPdfUrl: string;
-  notes: string; createdBy: string; createdAt: string;
+  notes: string; companySignerName: string; companySignerPosition: string;
+  companySignedAt: string | null; createdBy: string; createdAt: string;
 }
 
 interface OfferLetter {
@@ -143,7 +145,8 @@ function ProfileTab({ employee, onUpdate }: { employee: Employee; onUpdate: () =
       fullName: form.fullName, email: form.email, phone: form.phone,
       position: form.position, department: form.department,
       citizenshipNo: form.citizenshipNo, panNo: form.panNo,
-      permanentAddress: form.permanentAddress, joinDate: form.joinDate,
+      permanentAddress: form.permanentAddress, passportNumber: form.passportNumber,
+      joinDate: form.joinDate,
       salaryAmount: form.salaryAmount, salaryCurrency: form.salaryCurrency,
       status: form.status,
     });
@@ -158,6 +161,7 @@ function ProfileTab({ employee, onUpdate }: { employee: Employee; onUpdate: () =
     { label: 'Join Date', key: 'joinDate', type: 'date' },
     { label: 'Citizenship No', key: 'citizenshipNo', type: 'text' },
     { label: 'PAN No', key: 'panNo', type: 'text' },
+    { label: 'Passport Number', key: 'passportNumber', type: 'text' },
   ];
 
   return (
@@ -273,6 +277,8 @@ function AgreementsTab({ employeeId, employee }: { employeeId: string; employee:
   const [showCreate, setShowCreate] = useState(false);
   const [statusFilter, setStatusFilter] = useState('all');
   const [uploadAgreementId, setUploadAgreementId] = useState<string | null>(null);
+  const [showCompanySign, setShowCompanySign] = useState(false);
+  const [companySignId, setCompanySignId] = useState<string | null>(null);
   const uploadRef = useRef<HTMLInputElement | null>(null);
   const [createForm, setCreateForm] = useState({
     templateId: '', position: employee.position || '', effectiveFrom: '', effectiveTo: '',
@@ -364,6 +370,25 @@ function AgreementsTab({ employeeId, employee }: { employeeId: string; employee:
     onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
   });
 
+  const companySignMutation = useMutation({
+    mutationFn: async ({ id, signatureData, signerName, signerPosition }: { id: string; signatureData: string; signerName: string; signerPosition: string }) => {
+      const res = await fetch(`/api/employment-agreements/${id}/company-sign`, {
+        method: 'POST', credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ signatureData, signerName, signerPosition }),
+      });
+      if (!res.ok) throw new Error((await res.json()).message);
+      return res.json();
+    },
+    onSuccess: () => {
+      toast({ title: "Agreement signed on behalf of company" });
+      queryClient.invalidateQueries({ queryKey: ['/api/employment-agreements'] });
+      setShowCompanySign(false);
+      setCompanySignId(null);
+    },
+    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+  });
+
   const filtered = statusFilter === 'all' ? agreements : agreements.filter(a => a.status === statusFilter);
 
   return (
@@ -431,22 +456,18 @@ function AgreementsTab({ employeeId, employee }: { employeeId: string; employee:
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
-                        {a.pdfUrl && (
-                          <DropdownMenuItem onClick={() => window.open(`/api/employment-agreements/${a.id}/download?mode=view`, '_blank')}>
-                            <Eye className="w-4 h-4 mr-2" /> View PDF
-                          </DropdownMenuItem>
-                        )}
-                        {a.pdfUrl && (
-                          <DropdownMenuItem onClick={() => window.open(`/api/employment-agreements/${a.id}/download`, '_blank')}>
-                            <Download className="w-4 h-4 mr-2" /> Download PDF
-                          </DropdownMenuItem>
-                        )}
-                        {(a.manuallySignedPdfUrl || a.signedPdfUrl) && (
+                        <DropdownMenuItem onClick={() => window.open(`/api/employment-agreements/${a.id}/download?mode=view`, '_blank')}>
+                          <Eye className="w-4 h-4 mr-2" /> View PDF
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => window.open(`/api/employment-agreements/${a.id}/download`, '_blank')}>
+                          <Download className="w-4 h-4 mr-2" /> Download PDF
+                        </DropdownMenuItem>
+                        {(a.manuallySignedPdfUrl || a.signedPdfUrl || a.signedAt) && (
                           <DropdownMenuItem onClick={() => window.open(`/api/employment-agreements/${a.id}/download?type=signed&mode=view`, '_blank')}>
                             <Eye className="w-4 h-4 mr-2" /> View Signed Copy
                           </DropdownMenuItem>
                         )}
-                        {(a.manuallySignedPdfUrl || a.signedPdfUrl) && (
+                        {(a.manuallySignedPdfUrl || a.signedPdfUrl || a.signedAt) && (
                           <DropdownMenuItem onClick={() => window.open(`/api/employment-agreements/${a.id}/download?type=signed`, '_blank')}>
                             <Download className="w-4 h-4 mr-2" /> Download Signed Copy
                           </DropdownMenuItem>
@@ -454,6 +475,11 @@ function AgreementsTab({ employeeId, employee }: { employeeId: string; employee:
                         {a.status === 'draft' && (
                           <DropdownMenuItem onClick={() => sendMutation.mutate(a.id)}>
                             <Send className="w-4 h-4 mr-2" /> Send for Signing
+                          </DropdownMenuItem>
+                        )}
+                        {!['signed', 'completed', 'manually_signed'].includes(a.status) && (
+                          <DropdownMenuItem onClick={() => { setCompanySignId(a.id); setShowCompanySign(true); }}>
+                            <PenLine className="w-4 h-4 mr-2" /> Sign on Behalf of Company
                           </DropdownMenuItem>
                         )}
                         {['draft', 'sent', 'awaiting_signature'].includes(a.status) && (
@@ -556,7 +582,163 @@ function AgreementsTab({ employeeId, employee }: { employeeId: string; employee:
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <CompanySignDialog
+        open={showCompanySign}
+        onOpenChange={(v) => { setShowCompanySign(v); if (!v) setCompanySignId(null); }}
+        onSubmit={(signatureData, signerName, signerPosition) => {
+          if (companySignId) companySignMutation.mutate({ id: companySignId, signatureData, signerName, signerPosition });
+        }}
+        isPending={companySignMutation.isPending}
+      />
     </div>
+  );
+}
+
+function CompanySignDialog({ open, onOpenChange, onSubmit, isPending }: {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  onSubmit: (signatureData: string, signerName: string, signerPosition: string) => void;
+  isPending: boolean;
+}) {
+  const sigRef = useRef<any>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [signerName, setSignerName] = useState('');
+  const [signerPosition, setSignerPosition] = useState('');
+  const [signMode, setSignMode] = useState<'draw' | 'upload'>('draw');
+  const [uploadedSig, setUploadedSig] = useState<string | null>(null);
+  const [hasSigned, setHasSigned] = useState(false);
+
+  const handleClear = () => {
+    if (signMode === 'draw') { sigRef.current?.clear(); }
+    else { setUploadedSig(null); }
+    setHasSigned(false);
+  };
+
+  const removeBackground = (img: HTMLImageElement, canvas: HTMLCanvasElement): string => {
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return canvas.toDataURL('image/png');
+    canvas.width = img.naturalWidth;
+    canvas.height = img.naturalHeight;
+    ctx.drawImage(img, 0, 0);
+    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    const data = imageData.data;
+    const corners = [[0, 0], [canvas.width - 1, 0], [0, canvas.height - 1], [canvas.width - 1, canvas.height - 1]];
+    let bgR = 0, bgG = 0, bgB = 0, cnt = 0;
+    for (const [cx, cy] of corners) {
+      for (let dx = 0; dx < 5; dx++) {
+        for (let dy = 0; dy < 5; dy++) {
+          const idx = (Math.min(cy + dy, canvas.height - 1) * canvas.width + Math.min(cx + dx, canvas.width - 1)) * 4;
+          bgR += data[idx]; bgG += data[idx + 1]; bgB += data[idx + 2]; cnt++;
+        }
+      }
+    }
+    bgR = Math.round(bgR / cnt); bgG = Math.round(bgG / cnt); bgB = Math.round(bgB / cnt);
+    for (let i = 0; i < data.length; i += 4) {
+      const dist = Math.sqrt((data[i] - bgR) ** 2 + (data[i + 1] - bgG) ** 2 + (data[i + 2] - bgB) ** 2);
+      if (dist < 60) data[i + 3] = 0;
+      else data[i + 3] = Math.round(255 * Math.min(1, (dist - 60) / 40));
+    }
+    ctx.putImageData(imageData, 0, 0);
+    return canvas.toDataURL('image/png');
+  };
+
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = canvasRef.current;
+        if (canvas) {
+          setUploadedSig(removeBackground(img, canvas));
+          setHasSigned(true);
+        }
+      };
+      img.src = reader.result as string;
+    };
+    reader.readAsDataURL(file);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  const handleSubmit = () => {
+    let sigData = '';
+    if (signMode === 'draw') {
+      if (!sigRef.current || sigRef.current.isEmpty()) return;
+      sigData = sigRef.current.toDataURL('image/png');
+    } else {
+      if (!uploadedSig) return;
+      sigData = uploadedSig;
+    }
+    onSubmit(sigData, signerName, signerPosition);
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle>Sign on Behalf of Company</DialogTitle>
+        </DialogHeader>
+        <canvas ref={canvasRef} style={{ display: 'none' }} />
+        <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleImageUpload} />
+        <div className="space-y-4">
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-muted-foreground">Signer Name</label>
+              <Input value={signerName} onChange={e => setSignerName(e.target.value)} placeholder="e.g. John Doe" data-testid="input-company-signer-name" />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-muted-foreground">Signer Position</label>
+              <Input value={signerPosition} onChange={e => setSignerPosition(e.target.value)} placeholder="e.g. HR Manager" data-testid="input-company-signer-position" />
+            </div>
+          </div>
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <label className="text-xs font-medium text-muted-foreground">Company Signature</label>
+              <div className="flex gap-1 bg-muted rounded-lg p-0.5">
+                <button type="button" onClick={() => { setSignMode('draw'); setUploadedSig(null); setHasSigned(false); }}
+                  className={`flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium transition-colors ${signMode === 'draw' ? 'bg-background shadow-sm' : 'text-muted-foreground'}`}>
+                  <PenLine className="w-3 h-3" /> Draw
+                </button>
+                <button type="button" onClick={() => { setSignMode('upload'); sigRef.current?.clear(); setHasSigned(false); }}
+                  className={`flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium transition-colors ${signMode === 'upload' ? 'bg-background shadow-sm' : 'text-muted-foreground'}`}>
+                  <UploadCloud className="w-3 h-3" /> Upload
+                </button>
+              </div>
+            </div>
+            {signMode === 'draw' ? (
+              <div className="border-2 border-dashed rounded-lg bg-white">
+                <SignatureCanvas ref={sigRef} canvasProps={{ className: 'w-full', style: { width: '100%', height: '140px' }, 'data-testid': 'canvas-company-signature' }} onEnd={() => setHasSigned(true)} />
+              </div>
+            ) : (
+              <div className="border-2 border-dashed rounded-lg bg-white flex items-center justify-center" style={{ minHeight: '140px' }}>
+                {uploadedSig ? (
+                  <div className="p-3 w-full flex justify-center" style={{ background: 'repeating-conic-gradient(#e5e7eb 0% 25%, transparent 0% 50%) 50% / 16px 16px' }}>
+                    <img src={uploadedSig} alt="Company signature" className="max-h-[120px] max-w-full object-contain" />
+                  </div>
+                ) : (
+                  <button type="button" onClick={() => fileInputRef.current?.click()} className="text-center space-y-1 p-6 w-full hover:bg-muted/50 transition-colors rounded-lg cursor-pointer">
+                    <UploadCloud className="w-8 h-8 mx-auto text-muted-foreground" />
+                    <p className="text-xs text-muted-foreground">Click to upload signature image</p>
+                  </button>
+                )}
+              </div>
+            )}
+            <Button size="sm" variant="outline" onClick={handleClear} className="mt-2">Clear</Button>
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+          <Button onClick={handleSubmit} disabled={isPending || !hasSigned || !signerName}
+            data-testid="button-submit-company-sign">
+            {isPending ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : null}
+            Sign Agreement
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
