@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo } from "react";
+import { useState, useCallback, useMemo, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -56,6 +56,12 @@ export default function TemplatesPage() {
   const [editing, setEditing] = useState<Template | null>(null);
   const [isNew, setIsNew] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Template | null>(null);
+
+  useEffect(() => {
+    setEditing(null);
+    setIsNew(false);
+    setDeleteTarget(null);
+  }, [templateType]);
 
   const { data: templates = [], isLoading } = useQuery<Template[]>({
     queryKey: ["/api/templates", { type: templateType }],

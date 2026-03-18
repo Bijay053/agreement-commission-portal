@@ -182,10 +182,14 @@ class DocumentViewView(APIView):
             return Response({'message': 'File not available'}, status=500)
 
         content_type = doc.file_type or 'application/octet-stream'
+        filename = doc.original_file_name or 'document'
+        if content_type == 'application/octet-stream' and filename.lower().endswith('.pdf'):
+            content_type = 'application/pdf'
         response = HttpResponse(file_bytes, content_type=content_type)
-        response['Content-Disposition'] = f'inline; filename="{doc.original_file_name}"'
+        response['Content-Disposition'] = f'inline; filename="{filename}"'
         response['Content-Length'] = len(file_bytes)
         response['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+        response['X-Content-Type-Options'] = 'nosniff'
         return response
 
 
