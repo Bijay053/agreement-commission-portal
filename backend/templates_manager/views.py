@@ -192,9 +192,6 @@ class TemplateDetailView(APIView):
         except AgreementTemplate.DoesNotExist:
             return Response({'message': 'Template not found'}, status=404)
 
-        if template.is_default:
-            return Response({'message': 'Cannot delete the default template'}, status=400)
-
         template.delete()
         return Response({'message': 'Template deleted'})
 

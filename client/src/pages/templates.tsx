@@ -255,17 +255,15 @@ export default function TemplatesPage() {
                     >
                       <Download className="w-3.5 h-3.5" />
                     </Button>
-                    {!t.isDefault && (
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        className="h-7 w-7 text-red-500 hover:text-red-600"
-                        onClick={(e) => { e.stopPropagation(); setDeleteTarget(t); }}
-                        data-testid={`button-delete-template-${t.id}`}
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </Button>
-                    )}
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="h-7 w-7 text-red-500 hover:text-red-600"
+                      onClick={(e) => { e.stopPropagation(); setDeleteTarget(t); }}
+                      data-testid={`button-delete-template-${t.id}`}
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </Button>
                   </div>
                 </CardContent>
               </Card>
@@ -300,6 +298,11 @@ export default function TemplatesPage() {
             <AlertDialogTitle>Delete Template</AlertDialogTitle>
             <AlertDialogDescription>
               Are you sure you want to delete "{deleteTarget?.name}"? This cannot be undone.
+              {deleteTarget?.isDefault && (
+                <span className="block mt-2 font-medium text-red-600">
+                  Warning: This is the default template. Deleting it may affect new agreements/offer letters. You can re-create it using "Create Default Template".
+                </span>
+              )}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
