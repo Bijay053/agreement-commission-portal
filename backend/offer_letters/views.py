@@ -1,6 +1,7 @@
 import os
 import io
 import uuid
+from datetime import date, datetime
 from django.conf import settings
 from django.http import HttpResponse
 from rest_framework.views import APIView
@@ -10,6 +11,16 @@ from core.permissions import require_auth, require_permission
 from core.pagination import StandardPagination
 from employees.models import Employee
 from .models import OfferLetter
+
+
+def _safe_iso(val):
+    if val is None:
+        return None
+    if isinstance(val, (date, datetime)):
+        return val.isoformat()
+    if isinstance(val, str):
+        return val
+    return str(val)
 
 try:
     import pikepdf
@@ -39,8 +50,8 @@ def _serialize_offer(o, employee=None):
         'department': o.department or '',
         'proposedSalary': str(o.proposed_salary) if o.proposed_salary else '',
         'salaryCurrency': o.salary_currency or 'NPR',
-        'issueDate': o.issue_date.isoformat() if o.issue_date else None,
-        'startDate': o.start_date.isoformat() if o.start_date else None,
+        'issueDate': _safe_iso(o.issue_date),
+        'startDate': _safe_iso(o.start_date),
         'workLocation': o.work_location or '',
         'workingHours': o.working_hours or '',
         'benefits': o.benefits or '',
@@ -52,8 +63,8 @@ def _serialize_offer(o, employee=None):
         'notes': o.notes or '',
         'companyEntity': o.company_entity or 'nepal',
         'createdBy': o.created_by or '',
-        'createdAt': o.created_at.isoformat() if o.created_at else None,
-        'updatedAt': o.updated_at.isoformat() if o.updated_at else None,
+        'createdAt': _safe_iso(o.created_at),
+        'updatedAt': _safe_iso(o.updated_at),
     }
     if employee:
         result['employeeName'] = employee.full_name
