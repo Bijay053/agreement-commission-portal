@@ -16,6 +16,7 @@ import {
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
+import { Textarea } from "@/components/ui/textarea";
 import { Plus, Search, Users, Loader2 } from "lucide-react";
 import { CURRENCIES, getCurrencySymbol } from "@/lib/currencies";
 
@@ -48,7 +49,8 @@ export default function EmployeesListPage() {
   const [showAdd, setShowAdd] = useState(false);
   const [form, setForm] = useState({
     fullName: "", email: "", phone: "", position: "", department: "",
-    salaryAmount: "", salaryCurrency: "NPR",
+    joinDate: "", citizenshipNo: "", panNo: "", passportNumber: "",
+    permanentAddress: "", salaryAmount: "", salaryCurrency: "NPR",
   });
 
   const { data, isLoading } = useQuery<{ results?: Employee[] }>({
@@ -73,7 +75,7 @@ export default function EmployeesListPage() {
     onSuccess: (newEmp: Employee) => {
       queryClient.invalidateQueries({ queryKey: ["/api/employees"] });
       setShowAdd(false);
-      setForm({ fullName: "", email: "", phone: "", position: "", department: "", salaryAmount: "", salaryCurrency: "NPR" });
+      setForm({ fullName: "", email: "", phone: "", position: "", department: "", joinDate: "", citizenshipNo: "", panNo: "", passportNumber: "", permanentAddress: "", salaryAmount: "", salaryCurrency: "NPR" });
       toast({ title: "Employee created" });
       navigate(`/employees/${newEmp.id}`);
     },
@@ -173,7 +175,7 @@ export default function EmployeesListPage() {
       )}
 
       <Dialog open={showAdd} onOpenChange={setShowAdd}>
-        <DialogContent>
+        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Add New Employee</DialogTitle>
           </DialogHeader>
@@ -190,17 +192,37 @@ export default function EmployeesListPage() {
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
+                <label className="text-xs font-medium text-muted-foreground mb-1 block">Phone</label>
+                <Input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} data-testid="input-emp-phone" />
+              </div>
+              <div>
                 <label className="text-xs font-medium text-muted-foreground mb-1 block">Position</label>
                 <Input value={form.position} onChange={(e) => setForm({ ...form, position: e.target.value })} data-testid="input-emp-position" />
               </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="text-xs font-medium text-muted-foreground mb-1 block">Department</label>
                 <Input value={form.department} onChange={(e) => setForm({ ...form, department: e.target.value })} data-testid="input-emp-department" />
               </div>
+              <div>
+                <label className="text-xs font-medium text-muted-foreground mb-1 block">Join Date</label>
+                <Input type="date" value={form.joinDate} onChange={(e) => setForm({ ...form, joinDate: e.target.value })} data-testid="input-emp-join-date" />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs font-medium text-muted-foreground mb-1 block">Citizenship No</label>
+                <Input value={form.citizenshipNo} onChange={(e) => setForm({ ...form, citizenshipNo: e.target.value })} data-testid="input-emp-citizenship" />
+              </div>
+              <div>
+                <label className="text-xs font-medium text-muted-foreground mb-1 block">PAN No</label>
+                <Input value={form.panNo} onChange={(e) => setForm({ ...form, panNo: e.target.value })} data-testid="input-emp-pan" />
+              </div>
             </div>
             <div>
-              <label className="text-xs font-medium text-muted-foreground mb-1 block">Phone</label>
-              <Input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} data-testid="input-emp-phone" />
+              <label className="text-xs font-medium text-muted-foreground mb-1 block">Passport Number</label>
+              <Input value={form.passportNumber} onChange={(e) => setForm({ ...form, passportNumber: e.target.value })} data-testid="input-emp-passport" />
             </div>
             <div>
               <label className="text-xs font-medium text-muted-foreground mb-1 block">Salary</label>
@@ -215,6 +237,10 @@ export default function EmployeesListPage() {
                   onChange={e => setForm({ ...form, salaryAmount: e.target.value })}
                   data-testid="input-emp-salary" />
               </div>
+            </div>
+            <div>
+              <label className="text-xs font-medium text-muted-foreground mb-1 block">Permanent Address</label>
+              <Textarea value={form.permanentAddress} onChange={(e) => setForm({ ...form, permanentAddress: e.target.value })} rows={2} data-testid="input-emp-address" />
             </div>
           </div>
           <DialogFooter>
