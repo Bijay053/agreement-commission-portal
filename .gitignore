@@ -46,6 +46,9 @@ generated-icon.png
 *.png
 *.jpg
 *.jpeg
+!backend/static/logo.png
+!client/public/favicon*.png
+!client/public/apple-touch-icon.png
 
 # Attached assets (may contain pasted secrets/logs)
 attached_assets/Pasted-*.txt

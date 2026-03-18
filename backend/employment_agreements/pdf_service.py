@@ -7,11 +7,16 @@ from django.conf import settings
 
 try:
     from reportlab.lib.pagesizes import A4
-    from reportlab.lib.units import mm
+    from reportlab.lib.units import mm, inch
     from reportlab.pdfgen import canvas as rl_canvas
     from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image as RLImage, PageBreak
-    from reportlab.lib.enums import TA_LEFT, TA_CENTER, TA_JUSTIFY
+    from reportlab.platypus import (
+        SimpleDocTemplate, Paragraph, Spacer, Image as RLImage,
+        PageBreak, Table, TableStyle, Frame, PageTemplate, BaseDocTemplate
+    )
+    from reportlab.lib.enums import TA_LEFT, TA_CENTER, TA_JUSTIFY, TA_RIGHT
+    from reportlab.lib.colors import HexColor
+    from reportlab.lib.utils import ImageReader
     HAS_REPORTLAB = True
 except ImportError:
     HAS_REPORTLAB = False
@@ -23,68 +28,298 @@ except ImportError:
     HAS_PYPDF = False
 
 
+LOGO_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'static', 'logo.png')
+BLUE_DARK = HexColor('#1a237e') if HAS_REPORTLAB else None
+BLUE_MED = HexColor('#1e40af') if HAS_REPORTLAB else None
+BLUE_LIGHT = HexColor('#2563eb') if HAS_REPORTLAB else None
+GRAY_TEXT = HexColor('#4b5563') if HAS_REPORTLAB else None
+GRAY_LIGHT = HexColor('#9ca3af') if HAS_REPORTLAB else None
+BORDER_BLUE = HexColor('#1e40af') if HAS_REPORTLAB else None
+
+
+def _header_footer(canvas, doc):
+    canvas.saveState()
+    width, height = A4
+
+    if os.path.exists(LOGO_PATH):
+        try:
+            logo = ImageReader(LOGO_PATH)
+            iw, ih = logo.getSize()
+            aspect = ih / float(iw)
+            logo_w = 55 * mm
+            logo_h = logo_w * aspect
+            logo_x = doc.leftMargin
+            logo_y = height - 18 * mm - logo_h
+            canvas.drawImage(logo, logo_x, logo_y, width=logo_w, height=logo_h, preserveAspectRatio=True, mask='auto')
+        except Exception:
+            pass
+
+    canvas.setStrokeColor(BORDER_BLUE)
+    canvas.setLineWidth(1.5)
+    line_y = height - doc.topMargin + 4 * mm
+    canvas.line(doc.leftMargin, line_y, width - doc.rightMargin, line_y)
+
+    canvas.setStrokeColor(BORDER_BLUE)
+    canvas.setLineWidth(0.75)
+    footer_line_y = doc.bottomMargin - 2 * mm
+    canvas.line(doc.leftMargin, footer_line_y, width - doc.rightMargin, footer_line_y)
+
+    canvas.setFont("Helvetica", 8)
+    canvas.setFillColor(GRAY_LIGHT)
+    page_num = canvas.getPageNumber()
+    canvas.drawCentredString(width / 2, footer_line_y - 12, f"Page {page_num}")
+
+    canvas.setFont("Helvetica", 6.5)
+    canvas.setFillColor(GRAY_LIGHT)
+    canvas.drawString(doc.leftMargin, footer_line_y - 12, "Study Info Centre Pvt. Ltd.")
+    canvas.drawRightString(width - doc.rightMargin, footer_line_y - 12, "Confidential")
+
+    canvas.restoreState()
+
+
+def _get_styles():
+    styles = getSampleStyleSheet()
+
+    title_style = ParagraphStyle(
+        'AgrTitle', parent=styles['Title'],
+        fontName='Helvetica-Bold', fontSize=16, leading=20,
+        spaceAfter=6, spaceBefore=0, alignment=TA_CENTER,
+        textColor=BLUE_DARK
+    )
+
+    subtitle_style = ParagraphStyle(
+        'AgrSubtitle', parent=styles['Normal'],
+        fontName='Helvetica', fontSize=10, leading=14,
+        spaceAfter=16, alignment=TA_CENTER,
+        textColor=GRAY_TEXT
+    )
+
+    heading_style = ParagraphStyle(
+        'AgrHeading', parent=styles['Heading2'],
+        fontName='Helvetica-Bold', fontSize=11, leading=15,
+        spaceBefore=14, spaceAfter=6,
+        textColor=BLUE_DARK,
+        borderPadding=(0, 0, 2, 0),
+    )
+
+    subheading_style = ParagraphStyle(
+        'AgrSubheading', parent=styles['Normal'],
+        fontName='Helvetica-Bold', fontSize=10, leading=13,
+        spaceBefore=8, spaceAfter=4,
+        textColor=BLUE_MED,
+    )
+
+    body_style = ParagraphStyle(
+        'AgrBody', parent=styles['Normal'],
+        fontName='Helvetica', fontSize=9.5, leading=13,
+        alignment=TA_JUSTIFY, spaceAfter=4,
+        textColor=HexColor('#1f2937'),
+    )
+
+    bullet_style = ParagraphStyle(
+        'AgrBullet', parent=body_style,
+        leftIndent=18, firstLineIndent=0,
+        spaceBefore=2, spaceAfter=2,
+    )
+
+    party_style = ParagraphStyle(
+        'AgrParty', parent=body_style,
+        fontName='Helvetica', fontSize=9.5, leading=13,
+        leftIndent=12,
+    )
+
+    sig_label = ParagraphStyle(
+        'AgrSigLabel', parent=styles['Normal'],
+        fontName='Helvetica', fontSize=9, leading=12,
+        alignment=TA_LEFT, textColor=GRAY_TEXT,
+    )
+
+    sig_line = ParagraphStyle(
+        'AgrSigLine', parent=styles['Normal'],
+        fontName='Helvetica', fontSize=9, leading=12,
+        alignment=TA_LEFT, textColor=HexColor('#1f2937'),
+    )
+
+    footer_style = ParagraphStyle(
+        'AgrFooter', parent=styles['Normal'],
+        fontName='Helvetica', fontSize=8, leading=10,
+        alignment=TA_CENTER, textColor=GRAY_LIGHT,
+    )
+
+    return {
+        'title': title_style,
+        'subtitle': subtitle_style,
+        'heading': heading_style,
+        'subheading': subheading_style,
+        'body': body_style,
+        'bullet': bullet_style,
+        'party': party_style,
+        'sig_label': sig_label,
+        'sig_line': sig_line,
+        'footer': footer_style,
+    }
+
+
+def _safe_text(text):
+    if not text:
+        return ''
+    return text.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
+
+
+def _process_content_lines(content, styles):
+    elements = []
+    lines = content.split('\n')
+    for line in lines:
+        line = line.strip()
+        if not line:
+            elements.append(Spacer(1, 3))
+            continue
+
+        is_bullet = False
+        if line.startswith('- ') or line.startswith('• ') or line.startswith('· '):
+            is_bullet = True
+            line = line[2:]
+        elif line.startswith('(a)') or line.startswith('(b)') or line.startswith('(c)') or line.startswith('(d)') or line.startswith('(e)') or line.startswith('(f)') or line.startswith('(g)'):
+            elements.append(Paragraph(_safe_text(line), styles['bullet']))
+            continue
+
+        safe = _safe_text(line)
+        if is_bullet:
+            elements.append(Paragraph(f'&#8226; {safe}', styles['bullet']))
+        else:
+            elements.append(Paragraph(safe, styles['body']))
+
+    return elements
+
+
 def generate_agreement_pdf(employee, agreement, clauses):
     if not HAS_REPORTLAB:
         return None
 
     buf = io.BytesIO()
-    doc = SimpleDocTemplate(buf, pagesize=A4, topMargin=30*mm, bottomMargin=25*mm, leftMargin=25*mm, rightMargin=25*mm)
 
-    styles = getSampleStyleSheet()
-    title_style = ParagraphStyle('AgrTitle', parent=styles['Title'], fontSize=18, spaceAfter=20, alignment=TA_CENTER)
-    heading_style = ParagraphStyle('AgrHeading', parent=styles['Heading2'], fontSize=12, spaceBefore=16, spaceAfter=8, textColor='#1e40af')
-    body_style = ParagraphStyle('AgrBody', parent=styles['Normal'], fontSize=10, leading=14, alignment=TA_JUSTIFY, spaceAfter=6)
-    meta_style = ParagraphStyle('AgrMeta', parent=styles['Normal'], fontSize=10, leading=14, alignment=TA_CENTER, spaceAfter=4)
-    footer_style = ParagraphStyle('AgrFooter', parent=styles['Normal'], fontSize=9, leading=12, alignment=TA_CENTER, textColor='#6b7280')
+    styles = _get_styles()
+
+    doc = SimpleDocTemplate(
+        buf, pagesize=A4,
+        topMargin=35 * mm,
+        bottomMargin=22 * mm,
+        leftMargin=22 * mm,
+        rightMargin=22 * mm,
+    )
 
     elements = []
 
-    elements.append(Paragraph("EMPLOYMENT AGREEMENT", title_style))
-    elements.append(Spacer(1, 6))
+    elements.append(Spacer(1, 8))
+
+    elements.append(Paragraph("EMPLOYMENT AGREEMENT", styles['title']))
+    elements.append(Spacer(1, 4))
 
     agreement_date = ''
     if agreement.agreement_date:
         agreement_date = agreement.agreement_date.strftime('%d %B %Y')
-    elements.append(Paragraph(f'This Employment Agreement ("Agreement") is made on {agreement_date}', meta_style))
-    elements.append(Spacer(1, 16))
+    elements.append(Paragraph(
+        f'This Employment Agreement ("Agreement") is made on <b>{agreement_date}</b>',
+        styles['subtitle']
+    ))
+    elements.append(Spacer(1, 10))
 
     for clause in clauses:
         title = clause.get('title', '')
         content = clause.get('content', '')
         order = clause.get('order', 0)
 
-        content = content.replace('[Employee Name]', employee.full_name or '')
-        content = content.replace('[Position Name]', agreement.position or employee.position or '')
-        content = content.replace('[Join Date]', agreement.effective_from.strftime('%d %B %Y') if agreement.effective_from else '[Join Date]')
-        content = content.replace('[Expire Date]', agreement.effective_to.strftime('%d %B %Y') if agreement.effective_to else '[Expire Date]')
-        content = content.replace('[Join date]', agreement.effective_from.strftime('%d %B %Y') if agreement.effective_from else '[Join Date]')
-        content = content.replace('[Expire date]', agreement.effective_to.strftime('%d %B %Y') if agreement.effective_to else '[Expire Date]')
+        emp_name = employee.full_name or ''
+        position = agreement.position or getattr(employee, 'position', '') or ''
+        join_date = agreement.effective_from.strftime('%d %B %Y') if agreement.effective_from else '[Join Date]'
+        expire_date = agreement.effective_to.strftime('%d %B %Y') if agreement.effective_to else '[Expire Date]'
+
+        content = content.replace('[Employee Name]', emp_name)
+        content = content.replace('[Position Name]', position)
+        content = content.replace('[Join Date]', join_date)
+        content = content.replace('[Expire Date]', expire_date)
+        content = content.replace('[Join date]', join_date)
+        content = content.replace('[Expire date]', expire_date)
+        content = content.replace('[Joint date ]', join_date)
+        content = content.replace('[Joint date]', join_date)
         if agreement.gross_salary:
             content = content.replace('[Amount]', f'{agreement.gross_salary:,.0f}')
 
-        elements.append(Paragraph(f'{order}. {title}', heading_style))
-        for line in content.split('\n'):
-            line = line.strip()
-            if line:
-                line_safe = line.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
-                if line.startswith('- ') or line.startswith('• '):
-                    line_safe = '&bull; ' + line_safe[2:]
-                elements.append(Paragraph(line_safe, body_style))
+        elements.append(Paragraph(
+            f'<b>{order}. {_safe_text(title)}</b>',
+            styles['heading']
+        ))
+
+        sub_sections = content.split('\n\n')
+        for section in sub_sections:
+            section = section.strip()
+            if not section:
+                continue
+
+            lines = section.split('\n')
+            first_line = lines[0].strip() if lines else ''
+
+            import re
+            sub_match = re.match(r'^(\d+\.\d+)\s+(.+)', first_line)
+            if sub_match and len(lines) > 1:
+                elements.append(Paragraph(
+                    f'<b>{_safe_text(first_line)}</b>',
+                    styles['subheading']
+                ))
+                remaining = '\n'.join(lines[1:])
+                elements.extend(_process_content_lines(remaining, styles))
             else:
-                elements.append(Spacer(1, 4))
+                elements.extend(_process_content_lines(section, styles))
 
-    elements.append(Spacer(1, 40))
-    elements.append(Paragraph("_" * 40, body_style))
-    elements.append(Paragraph("Employee Signature", footer_style))
-    elements.append(Spacer(1, 8))
-    elements.append(Paragraph("Date: _______________", footer_style))
     elements.append(Spacer(1, 30))
-    elements.append(Paragraph("_" * 40, body_style))
-    elements.append(Paragraph("For Study Info Centre Pvt. Ltd.", footer_style))
-    elements.append(Spacer(1, 20))
-    elements.append(Paragraph("Study Info Centre Pvt. Ltd. | New Baneshwor, Kathmandu 44600, Nepal", footer_style))
 
-    doc.build(elements)
+    elements.append(Paragraph('<b>SIGNATURES</b>', styles['heading']))
+    elements.append(Spacer(1, 16))
+
+    sig_data = [
+        [
+            Paragraph('<b>For Study Info Centre Pvt. Ltd.</b>', styles['sig_label']),
+            Paragraph('', styles['sig_label']),
+            Paragraph('<b>Accepted By (Employee)</b>', styles['sig_label']),
+        ],
+        [
+            Spacer(1, 30),
+            Spacer(1, 30),
+            Spacer(1, 30),
+        ],
+        [
+            Paragraph('_' * 30, styles['sig_line']),
+            Paragraph('', styles['sig_line']),
+            Paragraph('_' * 30, styles['sig_line']),
+        ],
+        [
+            Paragraph('Name: ____________________', styles['sig_label']),
+            Paragraph('', styles['sig_label']),
+            Paragraph(f'Name: {_safe_text(employee.full_name or "")}', styles['sig_label']),
+        ],
+        [
+            Paragraph('Position: ____________________', styles['sig_label']),
+            Paragraph('', styles['sig_label']),
+            Paragraph(f'Position: {_safe_text(agreement.position or "")}', styles['sig_label']),
+        ],
+        [
+            Paragraph('Date: ____________________', styles['sig_label']),
+            Paragraph('', styles['sig_label']),
+            Paragraph('Date: ____________________', styles['sig_label']),
+        ],
+    ]
+
+    page_w = A4[0] - doc.leftMargin - doc.rightMargin
+    col_w = (page_w - 20 * mm) / 2
+    sig_table = Table(sig_data, colWidths=[col_w, 20 * mm, col_w])
+    sig_table.setStyle(TableStyle([
+        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+        ('TOPPADDING', (0, 0), (-1, -1), 2),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 2),
+    ]))
+    elements.append(sig_table)
+
+    doc.build(elements, onFirstPage=_header_footer, onLaterPages=_header_footer)
     buf.seek(0)
     return buf
 
@@ -114,15 +349,13 @@ def embed_signature_to_pdf(pdf_bytes, signature_base64, signed_date=None):
 
     try:
         sig_image.seek(0)
-        c.drawImage(
-            RLImage(sig_image, width=sig_width, height=sig_height) if False else None,
-            sig_x, sig_y, width=sig_width, height=sig_height, mask='auto'
-        )
-    except Exception:
-        from reportlab.lib.utils import ImageReader
-        sig_image.seek(0)
         img_reader = ImageReader(sig_image)
         c.drawImage(img_reader, sig_x, sig_y, width=sig_width, height=sig_height, mask='auto')
+    except Exception:
+        from reportlab.lib.utils import ImageReader as IR2
+        sig_image.seek(0)
+        ir = IR2(sig_image)
+        c.drawImage(ir, sig_x, sig_y, width=sig_width, height=sig_height, mask='auto')
 
     if signed_date:
         date_str = signed_date.strftime('%d %B %Y, %I:%M %p')
