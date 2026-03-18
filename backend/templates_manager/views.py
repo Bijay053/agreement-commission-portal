@@ -140,7 +140,7 @@ def _generate_template_pdf(template):
         title_style = ParagraphStyle('TplTitle', parent=styles['Title'], fontName='Helvetica-Bold', fontSize=16, leading=20, spaceAfter=6, alignment=TA_CENTER, textColor=BLUE_DARK)
         subtitle_style = ParagraphStyle('TplSub', parent=styles['Normal'], fontName='Helvetica', fontSize=10, leading=14, spaceAfter=16, alignment=TA_CENTER, textColor=GRAY_TEXT)
         heading_style = ParagraphStyle('TplHead', parent=styles['Heading2'], fontName='Helvetica-Bold', fontSize=11, leading=15, spaceBefore=14, spaceAfter=6, textColor=BLUE_DARK)
-        subheading_style = ParagraphStyle('TplSubHead', parent=styles['Normal'], fontName='Helvetica-Bold', fontSize=10, leading=13, spaceBefore=8, spaceAfter=4, textColor=BLUE_MED)
+        subheading_style = ParagraphStyle('TplSubHead', parent=styles['Normal'], fontName='Helvetica-Bold', fontSize=10, leading=13, spaceBefore=8, spaceAfter=4, textColor=HexColor('#1f2937'))
         body_style = ParagraphStyle('TplBody', parent=styles['Normal'], fontName='Helvetica', fontSize=9.5, leading=13, alignment=TA_JUSTIFY, spaceAfter=4, textColor=HexColor('#1f2937'))
         bullet_style = ParagraphStyle('TplBullet', parent=body_style, leftIndent=18, firstLineIndent=0, spaceBefore=2, spaceAfter=2)
         sig_label = ParagraphStyle('TplSigLabel', parent=styles['Normal'], fontName='Helvetica', fontSize=9, leading=12, textColor=GRAY_TEXT)

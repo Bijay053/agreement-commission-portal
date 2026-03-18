@@ -217,7 +217,7 @@ def _get_styles():
         'OfrSubheading', parent=styles['Normal'],
         fontName='Helvetica-Bold', fontSize=10, leading=13,
         spaceBefore=8, spaceAfter=4,
-        textColor=BLUE_MED,
+        textColor=HexColor('#1f2937'),
     )
 
     body_style = ParagraphStyle(
