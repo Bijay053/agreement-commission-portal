@@ -29,17 +29,7 @@ import {
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-
-const CURRENCIES = [
-  { code: 'NPR', label: 'NPR - Nepalese Rupee', symbol: 'रू' },
-  { code: 'AUD', label: 'AUD - Australian Dollar', symbol: 'A$' },
-  { code: 'USD', label: 'USD - US Dollar', symbol: '$' },
-  { code: 'GBP', label: 'GBP - British Pound', symbol: '£' },
-  { code: 'CAD', label: 'CAD - Canadian Dollar', symbol: 'C$' },
-  { code: 'BDT', label: 'BDT - Bangladeshi Taka', symbol: '৳' },
-  { code: 'EUR', label: 'EUR - Euro', symbol: '€' },
-  { code: 'NZD', label: 'NZD - New Zealand Dollar', symbol: 'NZ$' },
-];
+import { CURRENCIES, getCurrencySymbol } from "@/lib/currencies";
 
 const AGREEMENT_STATUSES: Record<string, { label: string; color: string }> = {
   draft: { label: 'Draft', color: 'bg-slate-100 text-slate-700 border-slate-200' },
@@ -118,10 +108,6 @@ function formatBytes(bytes: number) {
 function formatDate(d: string | null) {
   if (!d) return '—';
   return new Date(d).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
-}
-
-function getCurrencySymbol(code: string) {
-  return CURRENCIES.find(c => c.code === code)?.symbol || code;
 }
 
 function StatusBadge({ status, map }: { status: string; map: Record<string, { label: string; color: string }> }) {
@@ -446,13 +432,23 @@ function AgreementsTab({ employeeId, employee }: { employeeId: string; employee:
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
                         {a.pdfUrl && (
-                          <DropdownMenuItem onClick={() => window.open(`/api/employment-agreements/${a.id}/download`, '_blank')}>
+                          <DropdownMenuItem onClick={() => window.open(`/api/employment-agreements/${a.id}/download?mode=view`, '_blank')}>
                             <Eye className="w-4 h-4 mr-2" /> View PDF
                           </DropdownMenuItem>
                         )}
-                        {a.manuallySignedPdfUrl && (
-                          <DropdownMenuItem onClick={() => window.open(`/api/employment-agreements/${a.id}/download?type=signed`, '_blank')}>
+                        {a.pdfUrl && (
+                          <DropdownMenuItem onClick={() => window.open(`/api/employment-agreements/${a.id}/download`, '_blank')}>
+                            <Download className="w-4 h-4 mr-2" /> Download PDF
+                          </DropdownMenuItem>
+                        )}
+                        {(a.manuallySignedPdfUrl || a.signedPdfUrl) && (
+                          <DropdownMenuItem onClick={() => window.open(`/api/employment-agreements/${a.id}/download?type=signed&mode=view`, '_blank')}>
                             <Eye className="w-4 h-4 mr-2" /> View Signed Copy
+                          </DropdownMenuItem>
+                        )}
+                        {(a.manuallySignedPdfUrl || a.signedPdfUrl) && (
+                          <DropdownMenuItem onClick={() => window.open(`/api/employment-agreements/${a.id}/download?type=signed`, '_blank')}>
+                            <Download className="w-4 h-4 mr-2" /> Download Signed Copy
                           </DropdownMenuItem>
                         )}
                         {a.status === 'draft' && (
@@ -724,6 +720,26 @@ function OfferLettersTab({ employeeId, employee }: { employeeId: string; employe
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
+                        {o.pdfUrl && (
+                          <DropdownMenuItem onClick={() => window.open(`/api/offer-letters/${o.id}/download?mode=view`, '_blank')}>
+                            <Eye className="w-4 h-4 mr-2" /> View PDF
+                          </DropdownMenuItem>
+                        )}
+                        {o.pdfUrl && (
+                          <DropdownMenuItem onClick={() => window.open(`/api/offer-letters/${o.id}/download`, '_blank')}>
+                            <Download className="w-4 h-4 mr-2" /> Download PDF
+                          </DropdownMenuItem>
+                        )}
+                        {o.signedPdfUrl && (
+                          <DropdownMenuItem onClick={() => window.open(`/api/offer-letters/${o.id}/download?type=signed&mode=view`, '_blank')}>
+                            <Eye className="w-4 h-4 mr-2" /> View Signed Copy
+                          </DropdownMenuItem>
+                        )}
+                        {o.signedPdfUrl && (
+                          <DropdownMenuItem onClick={() => window.open(`/api/offer-letters/${o.id}/download?type=signed`, '_blank')}>
+                            <Download className="w-4 h-4 mr-2" /> Download Signed Copy
+                          </DropdownMenuItem>
+                        )}
                         {o.status === 'draft' && (
                           <DropdownMenuItem onClick={() => statusMutation.mutate({ id: o.id, status: 'sent' })}>
                             <Send className="w-4 h-4 mr-2" /> Mark as Sent
@@ -983,6 +999,12 @@ function DocumentsTab({ employeeId }: { employeeId: string }) {
                             </div>
                           </div>
                           <div className="flex items-center gap-1 shrink-0">
+                            <Button variant="ghost" size="icon" className="h-7 w-7"
+                              onClick={() => window.open(`/api/employee-documents/${doc.id}/view`, '_blank')}
+                              data-testid={`button-view-${doc.id}`}
+                            >
+                              <Eye className="w-3.5 h-3.5" />
+                            </Button>
                             <Button variant="ghost" size="icon" className="h-7 w-7"
                               onClick={() => window.open(`/api/employee-documents/${doc.id}/download`, '_blank')}
                               data-testid={`button-download-${doc.id}`}

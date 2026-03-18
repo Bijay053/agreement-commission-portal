@@ -1,6 +1,6 @@
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from core.permissions import require_auth
+from core.permissions import require_auth, require_permission
 from core.pagination import StandardPagination
 from .models import Employee
 
@@ -28,7 +28,7 @@ def _serialize_employee(e):
 class EmployeeListView(APIView):
     pagination_class = StandardPagination
 
-    @require_auth
+    @require_permission("employee.view")
     def get(self, request):
         qs = Employee.objects.all()
         search = request.query_params.get('search', '').strip()
@@ -50,7 +50,7 @@ class EmployeeListView(APIView):
             return paginator.get_paginated_response(result)
         return Response(result)
 
-    @require_auth
+    @require_permission("employee.add")
     def post(self, request):
         data = request.data
         full_name = data.get('fullName', '').strip()
@@ -79,7 +79,7 @@ class EmployeeListView(APIView):
 
 
 class EmployeeDetailView(APIView):
-    @require_auth
+    @require_permission("employee.view")
     def get(self, request, employee_id):
         try:
             employee = Employee.objects.get(id=employee_id)
@@ -87,7 +87,7 @@ class EmployeeDetailView(APIView):
         except Employee.DoesNotExist:
             return Response({'message': 'Employee not found'}, status=404)
 
-    @require_auth
+    @require_permission("employee.edit")
     def put(self, request, employee_id):
         try:
             employee = Employee.objects.get(id=employee_id)
@@ -110,7 +110,7 @@ class EmployeeDetailView(APIView):
         employee.save()
         return Response(_serialize_employee(employee))
 
-    @require_auth
+    @require_permission("employee.delete")
     def delete(self, request, employee_id):
         try:
             employee = Employee.objects.get(id=employee_id)

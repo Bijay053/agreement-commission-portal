@@ -17,13 +17,7 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
 import { Plus, Search, Users, Loader2 } from "lucide-react";
-
-const CURRENCIES = [
-  { code: 'NPR', symbol: 'रू' }, { code: 'AUD', symbol: 'A$' },
-  { code: 'USD', symbol: '$' }, { code: 'GBP', symbol: '£' },
-  { code: 'CAD', symbol: 'C$' }, { code: 'BDT', symbol: '৳' },
-  { code: 'EUR', symbol: '€' }, { code: 'NZD', symbol: 'NZ$' },
-];
+import { CURRENCIES, getCurrencySymbol } from "@/lib/currencies";
 
 interface Employee {
   id: string; fullName: string; email: string; phone: string; position: string;
@@ -85,8 +79,6 @@ export default function EmployeesListPage() {
     },
     onError: (err: Error) => toast({ title: "Error", description: err.message, variant: "destructive" }),
   });
-
-  const getCurrencySymbol = (code: string) => CURRENCIES.find(c => c.code === code)?.symbol || code;
 
   return (
     <div className="p-6 max-w-6xl mx-auto" data-testid="page-employees">

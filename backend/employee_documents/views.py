@@ -6,8 +6,14 @@ from django.http import HttpResponse
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.parsers import MultiPartParser, FormParser
-from core.permissions import require_auth
+from core.permissions import require_auth, require_permission
 from .models import EmployeeDocument
+
+try:
+    import pikepdf
+    HAS_PIKEPDF = True
+except ImportError:
+    HAS_PIKEPDF = False
 
 try:
     import boto3
@@ -33,6 +39,8 @@ CATEGORY_LABELS = {
     'other': 'Other Documents',
 }
 
+MAX_SCAN_ON_SERVE_SIZE = 50 * 1024 * 1024
+
 
 def _serialize_doc(d):
     return {
@@ -50,10 +58,43 @@ def _serialize_doc(d):
     }
 
 
+def _fetch_and_scan_s3(doc, request):
+    if not s3_client:
+        return False, 'S3 not configured', None
+
+    try:
+        s3_obj = s3_client.get_object(Bucket=settings.AWS_S3_BUCKET_NAME, Key=doc.file_url)
+        file_bytes = s3_obj['Body'].read()
+
+        if len(file_bytes) <= MAX_SCAN_ON_SERVE_SIZE:
+            try:
+                from core.file_security import validate_uploaded_file
+                file_obj = io.BytesIO(file_bytes)
+                file_obj.size = len(file_bytes)
+                is_safe, msg = validate_uploaded_file(
+                    file_obj, doc.file_type or 'application/octet-stream',
+                    filename=doc.original_file_name,
+                    user_id=request.session.get('userId'),
+                    ip_address=request.META.get('REMOTE_ADDR', ''),
+                    user_agent=request.META.get('HTTP_USER_AGENT', ''),
+                )
+                if not is_safe:
+                    return True, f'File blocked: {msg}', None
+            except ImportError:
+                pass
+            except Exception as e:
+                print(f'Scan-on-serve failed for employee doc {doc.id}: {e}')
+                return True, 'File scan failed — access denied for safety', None
+
+        return False, '', file_bytes
+    except Exception as e:
+        return True, f'Failed to retrieve file: {str(e)}', None
+
+
 class EmployeeDocumentsView(APIView):
     parser_classes = [MultiPartParser, FormParser]
 
-    @require_auth
+    @require_permission("emp_document.view", "employee.view")
     def get(self, request, employee_id):
         docs = EmployeeDocument.objects.filter(employee_id=employee_id).order_by('category', '-uploaded_at')
         grouped = {cat: [] for cat in VALID_CATEGORIES}
@@ -75,7 +116,7 @@ class EmployeeDocumentsView(APIView):
             'categories': grouped,
         })
 
-    @require_auth
+    @require_permission("emp_document.upload", "employee.edit")
     def post(self, request, employee_id):
         file = request.FILES.get('file')
         if not file:
@@ -125,32 +166,77 @@ class EmployeeDocumentsView(APIView):
         return Response(_serialize_doc(doc), status=201)
 
 
-class DocumentDownloadView(APIView):
-    @require_auth
+class DocumentViewView(APIView):
+    @require_permission("emp_document.view", "employee.view")
     def get(self, request, document_id):
         try:
             doc = EmployeeDocument.objects.get(id=document_id)
         except EmployeeDocument.DoesNotExist:
             return Response({'message': 'Document not found'}, status=404)
 
-        if not s3_client:
-            return Response({'message': 'S3 not configured'}, status=500)
+        blocked, block_msg, file_bytes = _fetch_and_scan_s3(doc, request)
+        if blocked:
+            return Response({'message': block_msg}, status=403)
 
+        if file_bytes is None:
+            return Response({'message': 'File not available'}, status=500)
+
+        content_type = doc.file_type or 'application/octet-stream'
+        response = HttpResponse(file_bytes, content_type=content_type)
+        response['Content-Disposition'] = f'inline; filename="{doc.original_file_name}"'
+        response['Content-Length'] = len(file_bytes)
+        response['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+        return response
+
+
+class DocumentDownloadView(APIView):
+    @require_permission("emp_document.download", "employee.view")
+    def get(self, request, document_id):
         try:
-            s3_obj = s3_client.get_object(Bucket=settings.AWS_S3_BUCKET_NAME, Key=doc.file_url)
-            file_bytes = s3_obj['Body'].read()
-            content_type = s3_obj.get('ContentType', 'application/octet-stream')
+            doc = EmployeeDocument.objects.get(id=document_id)
+        except EmployeeDocument.DoesNotExist:
+            return Response({'message': 'Document not found'}, status=404)
 
-            response = HttpResponse(file_bytes, content_type=content_type)
-            response['Content-Disposition'] = f'attachment; filename="{doc.original_file_name}"'
-            response['Content-Length'] = len(file_bytes)
-            return response
-        except Exception as e:
-            return Response({'message': f'Download failed: {str(e)}'}, status=500)
+        blocked, block_msg, file_bytes = _fetch_and_scan_s3(doc, request)
+        if blocked:
+            return Response({'message': block_msg}, status=403)
+
+        if file_bytes is None:
+            return Response({'message': 'File not available'}, status=500)
+
+        file_data = file_bytes
+        content_type = doc.file_type or 'application/octet-stream'
+        is_pdf = content_type == 'application/pdf'
+
+        if is_pdf and HAS_PIKEPDF:
+            try:
+                pdf_password = getattr(settings, 'PDF_DOWNLOAD_PASSWORD', '')
+                if pdf_password:
+                    input_pdf = pikepdf.open(io.BytesIO(file_data))
+                    output_buf = io.BytesIO()
+                    input_pdf.save(
+                        output_buf,
+                        encryption=pikepdf.Encryption(
+                            owner=pdf_password,
+                            user=pdf_password,
+                        )
+                    )
+                    input_pdf.close()
+                    file_data = output_buf.getvalue()
+            except Exception as e:
+                print(f'PDF encryption failed for employee doc {doc.id}: {e}')
+
+        response = HttpResponse(file_data, content_type=content_type)
+        response['Content-Disposition'] = f'attachment; filename="{doc.original_file_name}"'
+        response['Content-Length'] = len(file_data)
+        response['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+        response['Pragma'] = 'no-cache'
+        response['X-Content-Type-Options'] = 'nosniff'
+        return response
 
 
 class DocumentDeleteView(APIView):
-    @require_auth
+    @require_permission("emp_document.delete", "employee.edit")
     def delete(self, request, document_id):
         try:
             doc = EmployeeDocument.objects.get(id=document_id)
@@ -170,7 +256,7 @@ class DocumentDeleteView(APIView):
 class DocumentReplaceView(APIView):
     parser_classes = [MultiPartParser, FormParser]
 
-    @require_auth
+    @require_permission("emp_document.replace", "employee.edit")
     def post(self, request, document_id):
         try:
             doc = EmployeeDocument.objects.get(id=document_id)

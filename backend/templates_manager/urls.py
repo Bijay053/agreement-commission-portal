@@ -5,5 +5,6 @@ urlpatterns = [
     path('templates', views.TemplateListView.as_view()),
     path('templates/<uuid:template_id>', views.TemplateDetailView.as_view()),
     path('templates/<uuid:template_id>/duplicate', views.TemplateDuplicateView.as_view()),
+    path('templates/<uuid:template_id>/download', views.TemplateDownloadView.as_view()),
     path('templates/seed-default', views.SeedDefaultTemplateView.as_view()),
 ]

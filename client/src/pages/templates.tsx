@@ -15,7 +15,7 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import {
-  Plus, Pencil, Copy, Trash2, GripVertical, X, Save, ChevronUp, ChevronDown, FileText,
+  Plus, Pencil, Copy, Trash2, GripVertical, X, Save, ChevronUp, ChevronDown, FileText, Download, Eye,
 } from "lucide-react";
 
 interface Clause {
@@ -119,7 +119,11 @@ export default function TemplatesPage() {
 
   const seedMutation = useMutation({
     mutationFn: () =>
-      apiRequest("/api/templates/seed-default", { method: "POST" }),
+      apiRequest("/api/templates/seed-default", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ type: templateType }),
+      }),
     onSuccess: () => {
       invalidateTemplates();
       toast({ title: "Default template created" });
@@ -224,6 +228,26 @@ export default function TemplatesPage() {
                       data-testid={`button-duplicate-template-${t.id}`}
                     >
                       <Copy className="w-3.5 h-3.5" />
+                    </Button>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="h-7 w-7"
+                      onClick={(e) => { e.stopPropagation(); window.open(`/api/templates/${t.id}/download?mode=view`, '_blank'); }}
+                      data-testid={`button-preview-template-${t.id}`}
+                      title="Preview PDF"
+                    >
+                      <Eye className="w-3.5 h-3.5" />
+                    </Button>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="h-7 w-7"
+                      onClick={(e) => { e.stopPropagation(); window.open(`/api/templates/${t.id}/download`, '_blank'); }}
+                      data-testid={`button-download-template-${t.id}`}
+                      title="Download PDF"
+                    >
+                      <Download className="w-3.5 h-3.5" />
                     </Button>
                     {!t.isDefault && (
                       <Button

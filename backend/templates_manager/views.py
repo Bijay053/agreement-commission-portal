@@ -1,10 +1,19 @@
+import io
 import uuid
 import copy
+from django.conf import settings
+from django.http import HttpResponse
 from django.utils import timezone
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from core.permissions import require_auth
+from core.permissions import require_auth, require_permission
 from .models import AgreementTemplate
+
+try:
+    import pikepdf
+    HAS_PIKEPDF = True
+except ImportError:
+    HAS_PIKEPDF = False
 
 
 def _serialize_template(t):
@@ -42,9 +51,71 @@ DEFAULT_CLAUSES = [
     {"id": "clause_19", "title": "Governing Law", "content": "This Agreement shall be governed by and construed in accordance with the laws of Nepal, including but not limited to the Labour Act 2017, the Income Tax Act 2058, and other applicable legislation.\n\nAny disputes arising from this Agreement shall be resolved through mutual negotiation, and if unresolved, through the Labour Court of Nepal.", "is_editable": False, "order": 19},
 ]
 
+DEFAULT_OFFER_LETTER_CLAUSES = [
+    {"id": "ol_clause_1", "title": "Position & Department", "content": "We are pleased to offer you the position of [Position Name] in the [Department Name] department at Study Info Centre Pvt. Ltd.", "is_editable": True, "order": 1},
+    {"id": "ol_clause_2", "title": "Compensation", "content": "Your proposed monthly gross salary will be NPR [Amount]. This is subject to applicable tax deductions as per the Income Tax Act of Nepal.", "is_editable": True, "order": 2},
+    {"id": "ol_clause_3", "title": "Start Date & Working Hours", "content": "Your employment will commence on [Start Date]. Regular working hours are 9:00 AM to 5:00 PM, Sunday through Friday, with Saturday as a weekly holiday.", "is_editable": True, "order": 3},
+    {"id": "ol_clause_4", "title": "Probation Period", "content": "The first six (6) months of your employment will be a probation period. Confirmation of permanent employment will depend upon satisfactory performance during this period.", "is_editable": True, "order": 4},
+    {"id": "ol_clause_5", "title": "Benefits", "content": "You will be entitled to benefits as per Company policy, including annual leave, sick leave, and public holidays as outlined in the employment agreement.", "is_editable": True, "order": 5},
+    {"id": "ol_clause_6", "title": "Conditions", "content": "This offer is contingent upon:\n- Verification of your educational qualifications\n- Satisfactory reference checks\n- Submission of required documents (citizenship, PAN, academic certificates)\n\nPlease sign and return this offer letter by [Response Date] to confirm your acceptance.", "is_editable": True, "order": 6},
+]
+
+
+def _generate_template_pdf(template):
+    try:
+        from reportlab.lib.pagesizes import A4
+        from reportlab.lib.units import mm
+        from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+        from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
+        from reportlab.lib.enums import TA_CENTER
+
+        buf = io.BytesIO()
+        doc = SimpleDocTemplate(buf, pagesize=A4, topMargin=25*mm, bottomMargin=25*mm, leftMargin=20*mm, rightMargin=20*mm)
+        styles = getSampleStyleSheet()
+
+        title_style = ParagraphStyle('TemplateTitle', parent=styles['Heading1'], fontSize=16, alignment=TA_CENTER, spaceAfter=12)
+        desc_style = ParagraphStyle('TemplateDesc', parent=styles['Normal'], fontSize=10, alignment=TA_CENTER, textColor='#666666', spaceAfter=20)
+        clause_title_style = ParagraphStyle('ClauseTitle', parent=styles['Heading2'], fontSize=12, spaceBefore=14, spaceAfter=6)
+        clause_body_style = ParagraphStyle('ClauseBody', parent=styles['Normal'], fontSize=10, leading=14, spaceAfter=10)
+
+        story = []
+        story.append(Paragraph(template.name, title_style))
+        if template.description:
+            story.append(Paragraph(template.description, desc_style))
+        story.append(Spacer(1, 10))
+
+        type_label = 'Offer Letter Template' if template.template_type == 'offer_letter' else 'Agreement Template'
+        story.append(Paragraph(f'<i>{type_label}</i>', desc_style))
+        story.append(Spacer(1, 10))
+
+        for clause in (template.clauses or []):
+            order = clause.get('order', '')
+            title = clause.get('title', 'Untitled')
+            content = clause.get('content', '')
+            editable = clause.get('is_editable', True)
+
+            tag = ' <font color="#999999">[Fixed]</font>' if not editable else ''
+            story.append(Paragraph(f'{order}. {title}{tag}', clause_title_style))
+
+            for line in content.split('\n'):
+                safe_line = line.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
+                if safe_line.strip():
+                    story.append(Paragraph(safe_line, clause_body_style))
+                else:
+                    story.append(Spacer(1, 4))
+
+        doc.build(story)
+        buf.seek(0)
+        return buf
+    except ImportError:
+        return None
+    except Exception as e:
+        print(f'Template PDF generation failed: {e}')
+        return None
+
 
 class TemplateListView(APIView):
-    @require_auth
+    @require_permission("emp_template.view", "employee.view")
     def get(self, request):
         qs = AgreementTemplate.objects.all()
         template_type = request.query_params.get('type')
@@ -53,7 +124,7 @@ class TemplateListView(APIView):
         qs = qs.order_by('-is_default', '-updated_at')
         return Response([_serialize_template(t) for t in qs])
 
-    @require_auth
+    @require_permission("emp_template.create", "employee.edit")
     def post(self, request):
         try:
             data = request.data
@@ -81,7 +152,7 @@ class TemplateListView(APIView):
 
 
 class TemplateDetailView(APIView):
-    @require_auth
+    @require_permission("emp_template.view", "employee.view")
     def get(self, request, template_id):
         try:
             template = AgreementTemplate.objects.get(id=template_id)
@@ -89,7 +160,7 @@ class TemplateDetailView(APIView):
         except AgreementTemplate.DoesNotExist:
             return Response({'message': 'Template not found'}, status=404)
 
-    @require_auth
+    @require_permission("emp_template.edit", "employee.edit")
     def put(self, request, template_id):
         try:
             template = AgreementTemplate.objects.get(id=template_id)
@@ -114,7 +185,7 @@ class TemplateDetailView(APIView):
         template.save()
         return Response(_serialize_template(template))
 
-    @require_auth
+    @require_permission("emp_template.delete", "employee.edit")
     def delete(self, request, template_id):
         try:
             template = AgreementTemplate.objects.get(id=template_id)
@@ -129,7 +200,7 @@ class TemplateDetailView(APIView):
 
 
 class TemplateDuplicateView(APIView):
-    @require_auth
+    @require_permission("emp_template.create", "employee.edit")
     def post(self, request, template_id):
         try:
             original = AgreementTemplate.objects.get(id=template_id)
@@ -143,6 +214,7 @@ class TemplateDuplicateView(APIView):
         duplicate = AgreementTemplate.objects.create(
             name=f'Copy of {original.name}',
             description=original.description,
+            template_type=original.template_type or 'agreement',
             clauses=new_clauses,
             is_default=False,
         )
@@ -150,15 +222,76 @@ class TemplateDuplicateView(APIView):
 
 
 class SeedDefaultTemplateView(APIView):
-    @require_auth
+    @require_permission("emp_template.create", "employee.edit")
     def post(self, request):
-        if AgreementTemplate.objects.filter(is_default=True).exists():
-            return Response({'message': 'Default template already exists'})
+        template_type = request.data.get('type', request.query_params.get('type', 'agreement'))
+        if template_type not in ('agreement', 'offer_letter'):
+            template_type = 'agreement'
+
+        existing = AgreementTemplate.objects.filter(is_default=True, template_type=template_type).exists()
+        if existing:
+            return Response({'message': f'Default {template_type} template already exists'})
+
+        if template_type == 'offer_letter':
+            name = 'Standard Offer Letter'
+            description = 'Standard job offer letter template for Study Info Centre Pvt. Ltd.'
+            clauses = DEFAULT_OFFER_LETTER_CLAUSES
+        else:
+            name = 'Standard Employment Contract'
+            description = 'Standard employment agreement template for Study Info Centre Pvt. Ltd. based on Labour Act 2017 of Nepal.'
+            clauses = DEFAULT_CLAUSES
 
         template = AgreementTemplate.objects.create(
-            name='Standard Employment Contract',
-            description='Standard employment agreement template for Study Info Centre Pvt. Ltd. based on Labour Act 2017 of Nepal.',
-            clauses=DEFAULT_CLAUSES,
+            name=name,
+            description=description,
+            template_type=template_type,
+            clauses=clauses,
             is_default=True,
         )
         return Response(_serialize_template(template), status=201)
+
+
+class TemplateDownloadView(APIView):
+    @require_permission("emp_template.download", "emp_template.view", "employee.view")
+    def get(self, request, template_id):
+        try:
+            template = AgreementTemplate.objects.get(id=template_id)
+        except AgreementTemplate.DoesNotExist:
+            return Response({'message': 'Template not found'}, status=404)
+
+        pdf_buf = _generate_template_pdf(template)
+        if pdf_buf is None:
+            return Response({'message': 'PDF generation not available. Install reportlab.'}, status=500)
+
+        file_data = pdf_buf.getvalue()
+
+        if HAS_PIKEPDF:
+            try:
+                pdf_password = getattr(settings, 'PDF_DOWNLOAD_PASSWORD', '')
+                if pdf_password:
+                    input_pdf = pikepdf.open(io.BytesIO(file_data))
+                    output_buf = io.BytesIO()
+                    input_pdf.save(
+                        output_buf,
+                        encryption=pikepdf.Encryption(
+                            owner=pdf_password,
+                            user=pdf_password,
+                        )
+                    )
+                    input_pdf.close()
+                    file_data = output_buf.getvalue()
+            except Exception as e:
+                print(f'PDF encryption failed for template {template_id}: {e}')
+
+        mode = request.query_params.get('mode', 'download')
+        disposition = 'inline' if mode == 'view' else 'attachment'
+        safe_name = template.name.replace('"', '').replace("'", '')[:80]
+        filename = f'{safe_name}.pdf'
+
+        response = HttpResponse(file_data, content_type='application/pdf')
+        response['Content-Disposition'] = f'{disposition}; filename="{filename}"'
+        response['Content-Length'] = len(file_data)
+        response['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+        response['Pragma'] = 'no-cache'
+        response['X-Content-Type-Options'] = 'nosniff'
+        return response

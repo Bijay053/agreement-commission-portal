@@ -1,18 +1,26 @@
 import os
+import io
 import uuid
 from datetime import timedelta
 from django.conf import settings
+from django.http import HttpResponse
 from django.utils import timezone
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.parsers import MultiPartParser, FormParser
-from core.permissions import require_auth
+from core.permissions import require_auth, require_permission
 from core.pagination import StandardPagination
 from employees.models import Employee
 from templates_manager.models import AgreementTemplate
 from .models import EmploymentAgreement
 from .pdf_service import generate_agreement_pdf, embed_signature_to_pdf, upload_pdf_to_s3
 from .email_service import send_signing_request_email, send_signed_confirmation_email
+
+try:
+    import pikepdf
+    HAS_PIKEPDF = True
+except ImportError:
+    HAS_PIKEPDF = False
 
 try:
     import boto3
@@ -54,10 +62,48 @@ def _serialize_agreement(a, employee=None):
     return result
 
 
+MAX_SCAN_ON_SERVE_SIZE = 50 * 1024 * 1024
+
+
+def _fetch_and_scan_s3(s3_key, request, label='agreement'):
+    if not s3_client or not s3_key:
+        return True, 'S3 not configured or no file key', None
+
+    try:
+        s3_obj = s3_client.get_object(Bucket=settings.AWS_S3_BUCKET_NAME, Key=s3_key)
+        file_bytes = s3_obj['Body'].read()
+
+        if len(file_bytes) <= MAX_SCAN_ON_SERVE_SIZE:
+            try:
+                from core.file_security import validate_uploaded_file
+                file_obj = io.BytesIO(file_bytes)
+                file_obj.size = len(file_bytes)
+                content_type = 'application/pdf' if s3_key.lower().endswith('.pdf') else 'application/octet-stream'
+                is_safe, msg = validate_uploaded_file(
+                    file_obj, content_type,
+                    filename=os.path.basename(s3_key),
+                    user_id=request.session.get('userId'),
+                    ip_address=request.META.get('REMOTE_ADDR', ''),
+                    user_agent=request.META.get('HTTP_USER_AGENT', ''),
+                )
+                if not is_safe:
+                    return True, f'File blocked: {msg}', None
+            except ImportError:
+                pass
+            except Exception as e:
+                print(f'Scan-on-serve failed for {label}: {e}')
+                return True, 'File scan failed — access denied for safety', None
+
+        return False, '', file_bytes
+    except Exception as e:
+        print(f'S3 fetch failed for {s3_key}: {e}')
+        return True, f'Failed to retrieve file: {str(e)}', None
+
+
 class EmploymentAgreementListView(APIView):
     pagination_class = StandardPagination
 
-    @require_auth
+    @require_permission("emp_agreement.view", "employee.view")
     def get(self, request):
         qs = EmploymentAgreement.objects.all()
         employee_id = request.query_params.get('employeeId')
@@ -80,7 +126,7 @@ class EmploymentAgreementListView(APIView):
             return paginator.get_paginated_response(result)
         return Response(result)
 
-    @require_auth
+    @require_permission("emp_agreement.create", "employee.edit")
     def post(self, request):
         data = request.data
         employee_id = data.get('employeeId')
@@ -138,7 +184,7 @@ class EmploymentAgreementListView(APIView):
 
 
 class EmploymentAgreementDetailView(APIView):
-    @require_auth
+    @require_permission("emp_agreement.view", "employee.view")
     def get(self, request, agreement_id):
         try:
             agreement = EmploymentAgreement.objects.get(id=agreement_id)
@@ -153,7 +199,7 @@ class EmploymentAgreementDetailView(APIView):
 
         return Response(_serialize_agreement(agreement, employee))
 
-    @require_auth
+    @require_permission("emp_agreement.edit", "employee.edit")
     def put(self, request, agreement_id):
         try:
             agreement = EmploymentAgreement.objects.get(id=agreement_id)
@@ -191,7 +237,7 @@ class EmploymentAgreementDetailView(APIView):
 
         return Response(_serialize_agreement(agreement, employee))
 
-    @require_auth
+    @require_permission("emp_agreement.delete", "employee.edit")
     def delete(self, request, agreement_id):
         try:
             agreement = EmploymentAgreement.objects.get(id=agreement_id)
@@ -206,7 +252,7 @@ class EmploymentAgreementDetailView(APIView):
 
 
 class AgreementStatusView(APIView):
-    @require_auth
+    @require_permission("emp_agreement.edit", "employee.edit")
     def put(self, request, agreement_id):
         try:
             agreement = EmploymentAgreement.objects.get(id=agreement_id)
@@ -217,6 +263,12 @@ class AgreementStatusView(APIView):
         valid = ['draft', 'sent', 'awaiting_signature', 'signed', 'manually_signed', 'completed', 'expired', 'terminated']
         if new_status not in valid:
             return Response({'message': f'Invalid status. Must be one of: {", ".join(valid)}'}, status=400)
+
+        user_perms = request.session.get('userPermissions', [])
+        if new_status == 'completed' and 'emp_agreement.complete' not in user_perms and 'emp_agreement.edit' not in user_perms:
+            return Response({'message': 'Insufficient permissions to complete agreement'}, status=403)
+        if new_status == 'terminated' and 'emp_agreement.terminate' not in user_perms and 'emp_agreement.edit' not in user_perms:
+            return Response({'message': 'Insufficient permissions to terminate agreement'}, status=403)
 
         agreement.status = new_status
         if new_status == 'manually_signed':
@@ -234,7 +286,7 @@ class AgreementStatusView(APIView):
 class UploadSignedAgreementView(APIView):
     parser_classes = [MultiPartParser, FormParser]
 
-    @require_auth
+    @require_permission("emp_agreement.upload_signed", "employee.edit")
     def post(self, request, agreement_id):
         try:
             agreement = EmploymentAgreement.objects.get(id=agreement_id)
@@ -274,7 +326,7 @@ class UploadSignedAgreementView(APIView):
 
 
 class SendForSigningView(APIView):
-    @require_auth
+    @require_permission("emp_agreement.send", "employee.edit")
     def post(self, request, agreement_id):
         try:
             agreement = EmploymentAgreement.objects.get(id=agreement_id)
@@ -424,7 +476,7 @@ class SubmitSignatureView(APIView):
 
 
 class AgreementDownloadView(APIView):
-    @require_auth
+    @require_permission("emp_agreement.download", "employee.view")
     def get(self, request, agreement_id):
         try:
             agreement = EmploymentAgreement.objects.get(id=agreement_id)
@@ -440,16 +492,42 @@ class AgreementDownloadView(APIView):
         if not s3_key:
             return Response({'message': 'No document available'}, status=404)
 
-        if not s3_client:
-            return Response({'message': 'S3 not configured'}, status=500)
+        blocked, msg, file_bytes = _fetch_and_scan_s3(s3_key, request, label=f'agreement {agreement_id}')
+        if blocked:
+            status_code = 403 if 'blocked' in msg.lower() or 'scan' in msg.lower() else 500
+            return Response({'message': msg}, status=status_code)
 
-        try:
-            presigned_url = s3_client.generate_presigned_url(
-                'get_object',
-                Params={'Bucket': settings.AWS_S3_BUCKET_NAME, 'Key': s3_key},
-                ExpiresIn=300,
-            )
-            from django.http import HttpResponseRedirect
-            return HttpResponseRedirect(presigned_url)
-        except Exception as e:
-            return Response({'message': f'Download failed: {str(e)}'}, status=500)
+        file_data = file_bytes
+        is_pdf = s3_key.lower().endswith('.pdf')
+
+        if is_pdf and HAS_PIKEPDF:
+            try:
+                pdf_password = getattr(settings, 'PDF_DOWNLOAD_PASSWORD', '')
+                if pdf_password:
+                    input_pdf = pikepdf.open(io.BytesIO(file_data))
+                    output_buf = io.BytesIO()
+                    input_pdf.save(
+                        output_buf,
+                        encryption=pikepdf.Encryption(
+                            owner=pdf_password,
+                            user=pdf_password,
+                        )
+                    )
+                    input_pdf.close()
+                    file_data = output_buf.getvalue()
+            except Exception as e:
+                print(f'PDF encryption failed for agreement {agreement_id}: {e}')
+
+        filename = f'agreement_{doc_type}.pdf' if is_pdf else os.path.basename(s3_key)
+        content_type = 'application/pdf' if is_pdf else 'application/octet-stream'
+
+        mode = request.query_params.get('mode', 'download')
+        disposition = 'inline' if mode == 'view' else 'attachment'
+
+        response = HttpResponse(file_data, content_type=content_type)
+        response['Content-Disposition'] = f'{disposition}; filename="{filename}"'
+        response['Content-Length'] = len(file_data)
+        response['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+        response['Pragma'] = 'no-cache'
+        response['X-Content-Type-Options'] = 'nosniff'
+        return response

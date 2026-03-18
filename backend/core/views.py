@@ -88,6 +88,41 @@ PERMISSION_REGISTRY = [
             {"resource": "reminder", "label": "Reminders", "actions": ["read", "update"]},
         ],
     },
+    {
+        "module": "employees",
+        "label": "Employees",
+        "resources": [
+            {"resource": "employee", "label": "Employees", "actions": ["read", "add", "update", "delete"]},
+        ],
+    },
+    {
+        "module": "emp_agreements",
+        "label": "Employment Agreements",
+        "resources": [
+            {"resource": "agreement", "label": "Employment Agreements", "actions": ["read", "add", "update", "delete", "send", "upload_signed", "complete", "download", "terminate"]},
+        ],
+    },
+    {
+        "module": "offer_letters",
+        "label": "Offer Letters",
+        "resources": [
+            {"resource": "offer_letter", "label": "Offer Letters", "actions": ["read", "add", "update", "delete", "send", "upload_signed", "complete", "download"]},
+        ],
+    },
+    {
+        "module": "emp_templates",
+        "label": "Employee Templates",
+        "resources": [
+            {"resource": "template", "label": "Agreement / Offer Templates", "actions": ["read", "add", "update", "delete", "download"]},
+        ],
+    },
+    {
+        "module": "emp_documents",
+        "label": "Employee Documents",
+        "resources": [
+            {"resource": "document", "label": "Employee Documents", "actions": ["read", "upload", "replace", "delete", "download", "view_confidential"]},
+        ],
+    },
 ]
 
 
