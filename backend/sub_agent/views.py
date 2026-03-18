@@ -164,15 +164,44 @@ class SubAgentMasterUpdateView(APIView):
                 }
             )
 
+            rate_changed = False
+            gst_changed = False
             if not created:
                 if 'subAgentCommissionRatePct' in request.data:
-                    master.sub_agent_commission_rate_pct = request.data['subAgentCommissionRatePct']
+                    new_rate = request.data['subAgentCommissionRatePct']
+                    if float(new_rate or 0) != float(master.sub_agent_commission_rate_pct or 0):
+                        rate_changed = True
+                    master.sub_agent_commission_rate_pct = new_rate
                 if 'gstApplicable' in request.data:
+                    if request.data['gstApplicable'] != master.gst_applicable:
+                        gst_changed = True
                     master.gst_applicable = request.data['gstApplicable']
                 if 'status' in request.data:
                     master.status = request.data['status']
 
-            term_entries = SubAgentTermEntry.objects.filter(commission_student_id=student_id)
+            term_entries = list(SubAgentTermEntry.objects.filter(commission_student_id=student_id))
+
+            if rate_changed or gst_changed:
+                sa_rate = float(master.sub_agent_commission_rate_pct or 0)
+                gst_applicable = master.gst_applicable or 'No'
+                for te in term_entries:
+                    if not te.commission_rate_override_pct or float(te.commission_rate_override_pct or 0) == 0:
+                        te.commission_rate_auto = sa_rate
+                    calc = calculate_sub_agent_term_entry(
+                        fee_net=te.fee_net, main_commission=te.main_commission,
+                        commission_rate_auto=te.commission_rate_auto,
+                        commission_rate_override_pct=te.commission_rate_override_pct,
+                        bonus_paid=te.bonus_paid, gst_pct=te.gst_pct,
+                        gst_applicable=gst_applicable,
+                    )
+                    te.commission_rate_used_pct = calc['commissionRateUsedPct']
+                    te.sub_agent_commission = calc['subAgentCommission']
+                    te.gst_amount = calc['gstAmount']
+                    te.total_paid = calc['totalPaid']
+                    te.rate_override_warning = calc.get('rateOverrideWarning')
+                    te.exceeds_main_warning = calc.get('exceedsMainWarning')
+                    te.save()
+
             total_paid = sum(float(te.total_paid or 0) for te in term_entries)
 
             student = CommissionStudent.objects.filter(id=student_id).first()
@@ -259,6 +288,31 @@ class SubAgentSyncView(APIView):
                             exceeds_main_warning=calc.get('exceedsMainWarning'),
                         )
                         term_entries_added += 1
+                    else:
+                        needs_update = False
+                        if not existing.commission_rate_override_pct or float(existing.commission_rate_override_pct or 0) == 0:
+                            if float(existing.commission_rate_auto or 0) != sa_rate:
+                                existing.commission_rate_auto = sa_rate
+                                needs_update = True
+                        if existing.student_status != (student.status or 'Under Enquiry'):
+                            existing.student_status = student.status or 'Under Enquiry'
+                            needs_update = True
+                        if needs_update:
+                            calc = calculate_sub_agent_term_entry(
+                                fee_net=existing.fee_net, main_commission=existing.main_commission,
+                                commission_rate_auto=existing.commission_rate_auto,
+                                commission_rate_override_pct=existing.commission_rate_override_pct,
+                                bonus_paid=existing.bonus_paid, gst_pct=existing.gst_pct,
+                                gst_applicable=gst_applicable,
+                            )
+                            existing.commission_rate_used_pct = calc['commissionRateUsedPct']
+                            existing.sub_agent_commission = calc['subAgentCommission']
+                            existing.gst_amount = calc['gstAmount']
+                            existing.total_paid = calc['totalPaid']
+                            existing.rate_override_warning = calc.get('rateOverrideWarning')
+                            existing.exceeds_main_warning = calc.get('exceedsMainWarning')
+                            existing.save()
+                            updated += 1
 
                 intake_str = (student.start_intake or '').strip()
                 if intake_str:
@@ -292,6 +346,31 @@ class SubAgentSyncView(APIView):
                                     student_status=student.status or 'Under Enquiry',
                                 )
                                 term_entries_added += 1
+                            else:
+                                needs_upd = False
+                                if not existing.commission_rate_override_pct or float(existing.commission_rate_override_pct or 0) == 0:
+                                    if float(existing.commission_rate_auto or 0) != sa_rate:
+                                        existing.commission_rate_auto = sa_rate
+                                        needs_upd = True
+                                if existing.student_status != (student.status or 'Under Enquiry'):
+                                    existing.student_status = student.status or 'Under Enquiry'
+                                    needs_upd = True
+                                if needs_upd:
+                                    calc = calculate_sub_agent_term_entry(
+                                        fee_net=existing.fee_net, main_commission=existing.main_commission,
+                                        commission_rate_auto=existing.commission_rate_auto,
+                                        commission_rate_override_pct=existing.commission_rate_override_pct,
+                                        bonus_paid=existing.bonus_paid, gst_pct=existing.gst_pct,
+                                        gst_applicable=gst_applicable,
+                                    )
+                                    existing.commission_rate_used_pct = calc['commissionRateUsedPct']
+                                    existing.sub_agent_commission = calc['subAgentCommission']
+                                    existing.gst_amount = calc['gstAmount']
+                                    existing.total_paid = calc['totalPaid']
+                                    existing.rate_override_warning = calc.get('rateOverrideWarning')
+                                    existing.exceeds_main_warning = calc.get('exceedsMainWarning')
+                                    existing.save()
+                                    updated += 1
 
                 all_term_entries = SubAgentTermEntry.objects.filter(commission_student_id=student.id)
                 total_paid = sum(float(te.total_paid or 0) for te in all_term_entries)
