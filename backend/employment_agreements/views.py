@@ -597,11 +597,13 @@ class AgreementDownloadView(APIView):
         doc_type = request.query_params.get('type', 'original')
         mode = request.query_params.get('mode', 'download')
 
+        try:
+            employee = Employee.objects.get(id=agreement.employee_id)
+        except Employee.DoesNotExist:
+            return Response({'message': 'Employee not found'}, status=404)
+
         if doc_type == 'signed':
-            regen = False
-            if mode == 'view':
-                regen = True
-            if agreement.manually_signed_pdf_url and not regen:
+            if agreement.manually_signed_pdf_url:
                 s3_key = agreement.manually_signed_pdf_url
                 blocked, msg, file_bytes = _fetch_and_scan_s3(s3_key, request, label=f'agreement {agreement_id}')
                 if blocked:
@@ -609,11 +611,6 @@ class AgreementDownloadView(APIView):
                     return Response({'message': msg}, status=status_code)
                 file_data = file_bytes
             else:
-                try:
-                    employee = Employee.objects.get(id=agreement.employee_id)
-                except Employee.DoesNotExist:
-                    return Response({'message': 'Employee not found'}, status=404)
-
                 pdf_buf = generate_agreement_pdf(
                     employee, agreement, agreement.clauses or [],
                     employee_signature=agreement.signature_data,
@@ -627,37 +624,13 @@ class AgreementDownloadView(APIView):
                 )
                 if not pdf_buf:
                     return Response({'message': 'PDF generation not available'}, status=500)
-
                 file_data = pdf_buf.getvalue()
         else:
-            if mode == 'view':
-                try:
-                    employee = Employee.objects.get(id=agreement.employee_id)
-                except Employee.DoesNotExist:
-                    return Response({'message': 'Employee not found'}, status=404)
-                pdf_buf = generate_agreement_pdf(employee, agreement, agreement.clauses or [])
-                if pdf_buf:
-                    file_data = pdf_buf.getvalue()
-                else:
-                    return Response({'message': 'No document available'}, status=404)
+            pdf_buf = generate_agreement_pdf(employee, agreement, agreement.clauses or [])
+            if pdf_buf:
+                file_data = pdf_buf.getvalue()
             else:
-                s3_key = agreement.pdf_url
-                if not s3_key:
-                    try:
-                        employee = Employee.objects.get(id=agreement.employee_id)
-                    except Employee.DoesNotExist:
-                        return Response({'message': 'Employee not found'}, status=404)
-                    pdf_buf = generate_agreement_pdf(employee, agreement, agreement.clauses or [])
-                    if pdf_buf:
-                        file_data = pdf_buf.getvalue()
-                    else:
-                        return Response({'message': 'No document available'}, status=404)
-                else:
-                    blocked, msg, file_bytes = _fetch_and_scan_s3(s3_key, request, label=f'agreement {agreement_id}')
-                    if blocked:
-                        status_code = 403 if 'blocked' in msg.lower() or 'scan' in msg.lower() else 500
-                        return Response({'message': msg}, status=status_code)
-                    file_data = file_bytes
+                return Response({'message': 'No document available'}, status=404)
 
         if mode != 'view' and HAS_PIKEPDF:
             try:
