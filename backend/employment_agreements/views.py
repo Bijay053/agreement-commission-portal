@@ -450,10 +450,36 @@ class SubmitSignatureView(APIView):
                     signed_pdf_key = f'employment-agreements/{agreement.id}/signed_agreement.pdf'
                     upload_pdf_to_s3(signed_pdf_bytes, signed_pdf_key)
 
+        import secrets
+        import string
+        pw_chars = string.ascii_letters + string.digits + '!@#$%'
+        unique_password = ''.join(secrets.choice(pw_chars) for _ in range(10))
+
+        encrypted_pdf_for_email = None
+        if signed_pdf_bytes and HAS_PIKEPDF:
+            try:
+                input_pdf = pikepdf.open(io.BytesIO(signed_pdf_bytes))
+                enc_buf = io.BytesIO()
+                input_pdf.save(
+                    enc_buf,
+                    encryption=pikepdf.Encryption(
+                        owner=unique_password,
+                        user=unique_password,
+                    )
+                )
+                input_pdf.close()
+                encrypted_pdf_for_email = enc_buf.getvalue()
+            except Exception as e:
+                print(f'PDF encryption for email failed: {e}')
+                encrypted_pdf_for_email = signed_pdf_bytes
+        else:
+            encrypted_pdf_for_email = signed_pdf_bytes
+
         now = timezone.now()
         agreement.status = 'signed'
         agreement.signed_at = now
         agreement.signature_data = signature_data
+        agreement.pdf_password = unique_password
         if signed_pdf_key:
             agreement.signed_pdf_url = signed_pdf_key
         agreement.save()
@@ -464,13 +490,14 @@ class SubmitSignatureView(APIView):
                 employee_name=employee.full_name,
                 employee_email=employee.email,
                 admin_email=admin_email,
-                signed_pdf_bytes=signed_pdf_bytes,
+                signed_pdf_bytes=encrypted_pdf_for_email,
+                pdf_password=unique_password,
             )
         except Exception as e:
             print(f'Confirmation emails failed: {e}')
 
         return Response({
-            'message': f'Thank you {employee.full_name}. Your agreement has been signed successfully. A copy has been sent to your email.',
+            'message': f'Thank you {employee.full_name}. Your agreement has been signed successfully. A password-protected copy has been sent to your email.',
             'signedAt': now.isoformat(),
         })
 

@@ -72,11 +72,25 @@ def send_signing_request_email(employee_name, employee_email, signing_token, fro
         return False
 
 
-def send_signed_confirmation_email(employee_name, employee_email, admin_email, signed_pdf_bytes=None):
+def send_signed_confirmation_email(employee_name, employee_email, admin_email, signed_pdf_bytes=None, pdf_password=None):
     from_email = f'"{getattr(settings, "FROM_NAME", "Agreement Portal")}" <{settings.DEFAULT_FROM_EMAIL}>'
     name_safe = _esc(employee_name)
     from datetime import datetime
     signed_time = datetime.utcnow().strftime('%d %B %Y at %I:%M %p UTC')
+
+    password_section = ''
+    if pdf_password:
+        pw_safe = _esc(pdf_password)
+        password_section = f'''
+        <div style="background-color: #fef3c7; border: 1px solid #f59e0b; border-radius: 6px; padding: 16px; margin: 16px 0;">
+            <p style="color: #92400e; font-size: 14px; font-weight: 600; margin: 0 0 6px 0;">&#128274; PDF Password</p>
+            <p style="color: #78350f; font-size: 15px; margin: 0;">
+                Your document is password-protected. Use the password below to open the attached PDF:
+            </p>
+            <p style="color: #1e40af; font-size: 18px; font-weight: 700; margin: 12px 0 0 0; font-family: monospace; letter-spacing: 1px; background: #ffffff; padding: 10px 16px; border-radius: 4px; display: inline-block;">
+                {pw_safe}
+            </p>
+        </div>'''
 
     employee_subject = 'Your Signed Employment Agreement — Study Info Centre Pvt. Ltd.'
     employee_html = f'''<!DOCTYPE html>
@@ -93,6 +107,7 @@ def send_signed_confirmation_email(employee_name, employee_email, admin_email, s
         <p style="color: #374151; font-size: 15px; line-height: 1.6;">
             Thank you for signing your employment agreement. Please find your signed copy attached to this email.
         </p>
+        {password_section}
         <p style="color: #374151; font-size: 15px; line-height: 1.6;">Keep this for your records.</p>
         <p style="color: #6b7280; font-size: 14px; margin-top: 24px;">Regards,<br><strong>HR Department</strong><br>Study Info Centre Pvt. Ltd.</p>
     </div>

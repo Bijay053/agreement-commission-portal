@@ -33,6 +33,7 @@ class EmploymentAgreement(models.Model):
     signed_at = models.DateTimeField(null=True, blank=True)
     signed_pdf_url = models.TextField(null=True, blank=True)
     manually_signed_pdf_url = models.TextField(null=True, blank=True)
+    pdf_password = models.CharField(max_length=32, null=True, blank=True)
     notes = models.TextField(null=True, blank=True)
     created_by = models.CharField(max_length=255, null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
