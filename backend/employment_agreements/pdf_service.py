@@ -278,28 +278,53 @@ def generate_agreement_pdf(employee, agreement, clauses):
         emp_phone = getattr(employee, 'phone', '') or ''
         emp_department = getattr(employee, 'department', '') or ''
 
-        content = content.replace('[Employee Name]', emp_name)
-        content = content.replace('[Position Name]', position)
-        content = content.replace('[Join Date]', join_date)
-        content = content.replace('[Expire Date]', expire_date)
-        content = content.replace('[Join date]', join_date)
-        content = content.replace('[Expire date]', expire_date)
-        content = content.replace('[Joint date ]', join_date)
-        content = content.replace('[Joint date]', join_date)
-        content = content.replace('[Citizenship No]', citizenship_no)
-        content = content.replace('[Citizenship no]', citizenship_no)
-        content = content.replace('[PAN No]', pan_no)
-        content = content.replace('[PAN no]', pan_no)
-        content = content.replace('[Permanent Address]', permanent_address)
-        content = content.replace('[Passport Number]', passport_number)
-        content = content.replace('[Passport number]', passport_number)
-        content = content.replace('[Email Address]', emp_email)
-        content = content.replace('[Email address]', emp_email)
-        content = content.replace('[Phone Number]', emp_phone)
-        content = content.replace('[Phone number]', emp_phone)
-        content = content.replace('[Department]', emp_department)
-        if agreement.gross_salary:
-            content = content.replace('[Amount]', f'{agreement.gross_salary:,.0f}')
+        salary_currency = agreement.salary_currency or 'NPR'
+        salary_amount = f'{agreement.gross_salary:,.0f}' if agreement.gross_salary else ''
+        salary_full = f'{salary_currency} {salary_amount}' if salary_amount else ''
+
+        replacements = {
+            '[Employee Name]': emp_name,
+            '[Employee name]': emp_name,
+            '[Position Name]': position,
+            '[Position name]': position,
+            '[Position]': position,
+            '[Join Date]': join_date,
+            '[Join date]': join_date,
+            '[Joint date ]': join_date,
+            '[Joint date]': join_date,
+            '[Expire Date]': expire_date,
+            '[Expire date]': expire_date,
+            '[Citizenship No]': citizenship_no,
+            '[Citizenship no]': citizenship_no,
+            '[Citizenship Number]': citizenship_no,
+            '[PAN No]': pan_no,
+            '[PAN no]': pan_no,
+            '[PAN Number]': pan_no,
+            '[Permanent Address]': permanent_address,
+            '[Permanent address]': permanent_address,
+            '[Address]': permanent_address,
+            '[Passport Number]': passport_number,
+            '[Passport number]': passport_number,
+            '[Passport No]': passport_number,
+            '[Email Address]': emp_email,
+            '[Email address]': emp_email,
+            '[Email]': emp_email,
+            '[Phone Number]': emp_phone,
+            '[Phone number]': emp_phone,
+            '[Phone]': emp_phone,
+            '[Department]': emp_department,
+            '[Amount]': salary_amount,
+            '[Salary Amount]': salary_amount,
+            '[Salary]': salary_full,
+            '[Gross Salary]': salary_full,
+            '[Currency]': salary_currency,
+        }
+        for placeholder, value in replacements.items():
+            if value:
+                if placeholder in content:
+                    content = content.replace(placeholder, value)
+                if placeholder in title:
+                    title = title.replace(placeholder, value)
 
         elements.append(Paragraph(
             f'<b>{order}. {_safe_text(title)}</b>',

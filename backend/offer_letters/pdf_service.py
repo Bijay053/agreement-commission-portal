@@ -306,16 +306,61 @@ def generate_offer_letter_pdf(offer, employee):
         content = clause.get('content', '')
         order = clause.get('order', 0)
 
-        content = content.replace('[Employee Name]', employee.full_name or '')
-        content = content.replace('[Position Name]', offer.position or '')
-        if offer.start_date:
-            start_str = _safe_date_format(offer.start_date)
-            content = content.replace('[Join Date]', start_str)
-            content = content.replace('[Join date]', start_str)
-            content = content.replace('[Joint date ]', start_str)
-            content = content.replace('[Joint date]', start_str)
-        if offer.proposed_salary:
-            content = content.replace('[Amount]', f'{offer.proposed_salary:,.0f}')
+        emp_name = employee.full_name or ''
+        position = offer.position or getattr(employee, 'position', '') or ''
+        start_date = _safe_date_format(offer.start_date) if offer.start_date else '[Join Date]'
+        citizenship_no = getattr(employee, 'citizenship_no', '') or ''
+        pan_no = getattr(employee, 'pan_no', '') or ''
+        permanent_address = getattr(employee, 'permanent_address', '') or ''
+        passport_number = getattr(employee, 'passport_number', '') or ''
+        emp_email = getattr(employee, 'email', '') or ''
+        emp_phone = getattr(employee, 'phone', '') or ''
+        emp_department = getattr(employee, 'department', '') or offer.department or ''
+        salary_currency = offer.salary_currency or 'NPR'
+        salary_amount = f'{offer.proposed_salary:,.0f}' if offer.proposed_salary else ''
+        salary_full = f'{salary_currency} {salary_amount}' if salary_amount else ''
+
+        replacements = {
+            '[Employee Name]': emp_name,
+            '[Employee name]': emp_name,
+            '[Position Name]': position,
+            '[Position name]': position,
+            '[Position]': position,
+            '[Join Date]': start_date,
+            '[Join date]': start_date,
+            '[Joint date ]': start_date,
+            '[Joint date]': start_date,
+            '[Citizenship No]': citizenship_no,
+            '[Citizenship no]': citizenship_no,
+            '[Citizenship Number]': citizenship_no,
+            '[PAN No]': pan_no,
+            '[PAN no]': pan_no,
+            '[PAN Number]': pan_no,
+            '[Permanent Address]': permanent_address,
+            '[Permanent address]': permanent_address,
+            '[Address]': permanent_address,
+            '[Passport Number]': passport_number,
+            '[Passport number]': passport_number,
+            '[Passport No]': passport_number,
+            '[Email Address]': emp_email,
+            '[Email address]': emp_email,
+            '[Email]': emp_email,
+            '[Phone Number]': emp_phone,
+            '[Phone number]': emp_phone,
+            '[Phone]': emp_phone,
+            '[Department]': emp_department,
+            '[Amount]': salary_amount,
+            '[Salary Amount]': salary_amount,
+            '[Salary]': salary_full,
+            '[Gross Salary]': salary_full,
+            '[Currency]': salary_currency,
+        }
+        for placeholder, value in replacements.items():
+            if value:
+                if placeholder in content:
+                    content = content.replace(placeholder, value)
+                if placeholder in title:
+                    title = title.replace(placeholder, value)
 
         elements.append(Paragraph(
             f'<b>{order}. {_safe_text(title)}</b>',
