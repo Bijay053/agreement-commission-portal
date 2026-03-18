@@ -33,6 +33,7 @@ INSTALLED_APPS = [
     'employees',
     'employment_agreements',
     'employee_documents',
+    'offer_letters',
 ]
 
 MIDDLEWARE = [

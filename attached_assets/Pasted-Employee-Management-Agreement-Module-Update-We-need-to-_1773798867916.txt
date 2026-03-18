@@ -1,0 +1,283 @@
+Employee Management & Agreement Module Update
+
+We need to improve the current Templates and Employees sections and make the module more practical for daily HR use.
+
+1. Merge Templates and Employees in one section
+
+The Templates and Employees menus should be kept under the same tab/module instead of separate unrelated sections.
+
+Suggested structure:
+
+Employees
+
+Agreement Templates
+
+Offer Letter Templates
+
+From the employee profile, the user should be able to access all related records easily.
+
+2. Employee profile improvements
+
+Inside each employee profile, there should be properly designed tabs such as:
+
+Profile
+
+Agreements
+
+Offer Letters
+
+Documents
+
+The design should be cleaner and more professional than the current layout.
+
+3. Agreement management features
+
+From the employee profile, users should be able to:
+
+Create new agreement
+
+View agreement
+
+Edit draft agreement
+
+Send agreement for signing
+
+Track agreement status
+
+Upload manually signed agreement
+
+Mark agreement as completed manually
+
+4. Agreement statuses
+
+The system should support proper agreement statuses such as:
+
+Draft
+
+Sent for signing
+
+Awaiting signature
+
+Signed
+
+Manually signed
+
+Completed
+
+Expired
+
+Terminated
+
+5. Manual signing option
+
+There should be an option for cases where the agreement is not signed digitally.
+
+Required flow:
+
+User creates agreement
+
+Instead of only “Send for Signing,” there should also be:
+
+Mark as Manually Signed
+
+Upload Signed Agreement
+
+User can upload the final signed PDF/document
+
+After upload, the agreement status should become Completed or Manually Signed Completed
+
+This is important because some employees may sign offline or on paper.
+
+6. Better document design
+
+The Documents section needs a better design and structure.
+
+Suggested improvements:
+
+Show uploaded files in card/list view
+
+Show file type, upload date, uploaded by, and status
+
+Allow preview, download, replace, and delete
+
+Separate documents by category, such as:
+
+ID/Passport
+
+Contract/Agreement
+
+Offer Letter
+
+Joining Documents
+
+Other Documents
+
+7. Multi-currency salary support
+
+Salary should not be limited to one local currency.
+
+Add:
+
+Salary Amount
+
+Currency
+
+Currency dropdown should support multiple countries, for example:
+
+NPR
+
+AUD
+
+USD
+
+GBP
+
+CAD
+
+BDT
+
+EUR
+
+NZD
+
+Currency symbol and code should display correctly in agreements and offer letters
+
+This is needed because employees may work in different countries.
+
+8. Job offer letter feature
+
+Add a new feature to create and manage Job Offer Letters for employees.
+
+Required functions:
+
+Create offer letter from template
+
+Edit draft offer letter
+
+View offer letter
+
+Send offer letter
+
+Upload manually signed offer letter
+
+Track status
+
+Suggested statuses:
+
+Draft
+
+Sent
+
+Accepted
+
+Rejected
+
+Manually Signed
+
+Completed
+
+9. Template management
+
+There should be separate template management for:
+
+Employment Agreement Templates
+
+Job Offer Letter Templates
+
+Each template should allow placeholders such as:
+
+Employee Name
+
+Position
+
+Department
+
+Salary Amount
+
+Currency
+
+Start Date
+
+End Date
+
+Work Location
+
+Working Hours
+
+Benefits
+
+Probation Period
+
+10. Better UI/UX expectations
+
+The overall design should be improved.
+
+Expected UI changes:
+
+Cleaner employee detail page
+
+Better spacing and alignment
+
+Clear action buttons such as:
+
+View
+
+Edit
+
+Send
+
+Download
+
+Upload Signed Copy
+
+More professional cards/tables for agreements, offer letters, and documents
+
+Easy filtering by status
+
+11. Suggested employee detail page structure
+
+Inside one employee profile:
+
+Tabs
+
+Profile
+
+Agreements
+
+Offer Letters
+
+Documents
+
+Agreements tab
+
+Agreement title
+
+Start date / end date
+
+Salary + currency
+
+Status
+
+Actions: View / Edit / Send / Upload Signed / Download
+
+Offer Letters tab
+
+Offer letter title
+
+Proposed salary + currency
+
+Issue date
+
+Status
+
+Actions: View / Edit / Send / Upload Signed / Download
+
+Documents tab
+
+File name
+
+Category
+
+Upload date
+
+Actions: Preview / Download / Replace / Delete

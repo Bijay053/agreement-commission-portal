@@ -1,3 +1,4 @@
+import os
 import uuid
 from datetime import timedelta
 from django.conf import settings
@@ -13,6 +14,17 @@ from .models import EmploymentAgreement
 from .pdf_service import generate_agreement_pdf, embed_signature_to_pdf, upload_pdf_to_s3
 from .email_service import send_signing_request_email, send_signed_confirmation_email
 
+try:
+    import boto3
+    s3_client = boto3.client(
+        's3',
+        aws_access_key_id=settings.AWS_ACCESS_KEY_ID,
+        aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY,
+        region_name=settings.AWS_S3_REGION_NAME,
+    )
+except Exception:
+    s3_client = None
+
 
 def _serialize_agreement(a, employee=None):
     result = {
@@ -24,11 +36,14 @@ def _serialize_agreement(a, employee=None):
         'effectiveTo': a.effective_to.isoformat() if a.effective_to else None,
         'position': a.position or '',
         'grossSalary': str(a.gross_salary) if a.gross_salary else '',
+        'salaryCurrency': a.salary_currency or 'NPR',
         'clauses': a.clauses or [],
         'status': a.status,
         'pdfUrl': a.pdf_url or '',
         'signedAt': a.signed_at.isoformat() if a.signed_at else None,
         'signedPdfUrl': a.signed_pdf_url or '',
+        'manuallySignedPdfUrl': a.manually_signed_pdf_url or '',
+        'notes': a.notes or '',
         'createdBy': a.created_by or '',
         'createdAt': a.created_at.isoformat() if a.created_at else None,
         'updatedAt': a.updated_at.isoformat() if a.updated_at else None,
@@ -105,6 +120,7 @@ class EmploymentAgreementListView(APIView):
             effective_to=data.get('effectiveTo') or None,
             position=data.get('position', employee.position or ''),
             gross_salary=data.get('grossSalary') or None,
+            salary_currency=data.get('salaryCurrency', 'NPR'),
             clauses=clauses,
             status='draft',
             created_by=user_name,
@@ -144,8 +160,8 @@ class EmploymentAgreementDetailView(APIView):
         except EmploymentAgreement.DoesNotExist:
             return Response({'message': 'Agreement not found'}, status=404)
 
-        if agreement.status == 'signed':
-            return Response({'message': 'Cannot edit a signed agreement'}, status=400)
+        if agreement.status in ('signed', 'completed'):
+            return Response({'message': 'Cannot edit a signed or completed agreement'}, status=400)
 
         data = request.data
         agreement.agreement_date = data.get('agreementDate', agreement.agreement_date) or agreement.agreement_date
@@ -153,7 +169,9 @@ class EmploymentAgreementDetailView(APIView):
         agreement.effective_to = data.get('effectiveTo', agreement.effective_to) or agreement.effective_to
         agreement.position = data.get('position', agreement.position)
         agreement.gross_salary = data.get('grossSalary') or agreement.gross_salary
+        agreement.salary_currency = data.get('salaryCurrency', agreement.salary_currency)
         agreement.clauses = data.get('clauses', agreement.clauses)
+        agreement.notes = data.get('notes', agreement.notes)
         agreement.save()
 
         employee = None
@@ -180,11 +198,79 @@ class EmploymentAgreementDetailView(APIView):
         except EmploymentAgreement.DoesNotExist:
             return Response({'message': 'Agreement not found'}, status=404)
 
-        if agreement.status == 'signed':
-            return Response({'message': 'Cannot delete a signed agreement'}, status=400)
+        if agreement.status in ('signed', 'completed'):
+            return Response({'message': 'Cannot delete a signed or completed agreement'}, status=400)
 
         agreement.delete()
         return Response({'message': 'Agreement deleted'})
+
+
+class AgreementStatusView(APIView):
+    @require_auth
+    def put(self, request, agreement_id):
+        try:
+            agreement = EmploymentAgreement.objects.get(id=agreement_id)
+        except EmploymentAgreement.DoesNotExist:
+            return Response({'message': 'Agreement not found'}, status=404)
+
+        new_status = request.data.get('status')
+        valid = ['draft', 'sent', 'awaiting_signature', 'signed', 'manually_signed', 'completed', 'expired', 'terminated']
+        if new_status not in valid:
+            return Response({'message': f'Invalid status. Must be one of: {", ".join(valid)}'}, status=400)
+
+        agreement.status = new_status
+        if new_status == 'manually_signed':
+            agreement.signed_at = timezone.now()
+        agreement.save(update_fields=['status', 'signed_at', 'updated_at'])
+
+        employee = None
+        try:
+            employee = Employee.objects.get(id=agreement.employee_id)
+        except Employee.DoesNotExist:
+            pass
+        return Response(_serialize_agreement(agreement, employee))
+
+
+class UploadSignedAgreementView(APIView):
+    parser_classes = [MultiPartParser, FormParser]
+
+    @require_auth
+    def post(self, request, agreement_id):
+        try:
+            agreement = EmploymentAgreement.objects.get(id=agreement_id)
+        except EmploymentAgreement.DoesNotExist:
+            return Response({'message': 'Agreement not found'}, status=404)
+
+        file = request.FILES.get('file')
+        if not file:
+            return Response({'message': 'No file provided'}, status=400)
+
+        if not s3_client:
+            return Response({'message': 'S3 not configured'}, status=500)
+
+        ext = os.path.splitext(file.name)[1]
+        storage_key = f'employment-agreements/{agreement.id}/manually_signed{ext}'
+
+        try:
+            s3_client.upload_fileobj(
+                file, settings.AWS_S3_BUCKET_NAME, storage_key,
+                ExtraArgs={'ContentType': file.content_type}
+            )
+        except Exception as e:
+            return Response({'message': f'Upload failed: {str(e)}'}, status=500)
+
+        agreement.manually_signed_pdf_url = storage_key
+        if agreement.status in ('draft', 'sent', 'awaiting_signature'):
+            agreement.status = 'manually_signed'
+            agreement.signed_at = timezone.now()
+        agreement.save(update_fields=['manually_signed_pdf_url', 'status', 'signed_at', 'updated_at'])
+
+        employee = None
+        try:
+            employee = Employee.objects.get(id=agreement.employee_id)
+        except Employee.DoesNotExist:
+            pass
+        return Response(_serialize_agreement(agreement, employee))
 
 
 class SendForSigningView(APIView):
@@ -195,8 +281,8 @@ class SendForSigningView(APIView):
         except EmploymentAgreement.DoesNotExist:
             return Response({'message': 'Agreement not found'}, status=404)
 
-        if agreement.status == 'signed':
-            return Response({'message': 'Agreement is already signed'}, status=400)
+        if agreement.status in ('signed', 'completed', 'manually_signed'):
+            return Response({'message': 'Agreement is already signed or completed'}, status=400)
 
         try:
             employee = Employee.objects.get(id=agreement.employee_id)
@@ -234,7 +320,7 @@ class VerifySigningTokenView(APIView):
         if agreement.token_expires_at and timezone.now() > agreement.token_expires_at:
             return Response({'message': 'This signing link has expired. Please contact HR.'}, status=400)
 
-        if agreement.status == 'signed':
+        if agreement.status in ('signed', 'manually_signed', 'completed'):
             return Response({'message': 'This agreement has already been signed.'}, status=400)
 
         try:
@@ -267,7 +353,7 @@ class SubmitSignatureView(APIView):
         if agreement.token_expires_at and timezone.now() > agreement.token_expires_at:
             return Response({'message': 'This signing link has expired.'}, status=400)
 
-        if agreement.status == 'signed':
+        if agreement.status in ('signed', 'manually_signed', 'completed'):
             return Response({'message': 'This agreement has already been signed.'}, status=400)
 
         signature_data = request.data.get('signatureData', '')
@@ -285,13 +371,13 @@ class SubmitSignatureView(APIView):
         if agreement.pdf_url:
             try:
                 import boto3
-                s3_client = boto3.client(
+                s3 = boto3.client(
                     's3',
                     aws_access_key_id=settings.AWS_ACCESS_KEY_ID,
                     aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY,
                     region_name=settings.AWS_S3_REGION_NAME,
                 )
-                s3_obj = s3_client.get_object(
+                s3_obj = s3.get_object(
                     Bucket=settings.AWS_S3_BUCKET_NAME,
                     Key=agreement.pdf_url,
                 )

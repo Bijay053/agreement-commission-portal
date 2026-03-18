@@ -45,8 +45,12 @@ export function AppSidebar() {
     { title: "Commission Table", url: "/commission", icon: DollarSign, show: hasPermission("commission.view") || hasPermission("bonus.view") },
     { title: "Commission Tracker", url: "/commission-tracker", icon: Calculator, show: hasPermission("commission_tracker.student.read") },
     { title: "Sub-Agent Commission", url: "/sub-agent-commission", icon: ArrowDownUp, show: hasPermission("sub_agent_commission.view") },
-    { title: "Templates", url: "/templates", icon: ClipboardList, show: true },
+  ];
+
+  const employeeNav = [
     { title: "Employees", url: "/employees", icon: UserCheck, show: true },
+    { title: "Agreement Templates", url: "/templates?type=agreement", icon: ClipboardList, show: true },
+    { title: "Offer Letter Templates", url: "/templates?type=offer_letter", icon: ClipboardList, show: true },
   ];
 
   const adminNav = [
@@ -174,6 +178,28 @@ export function AppSidebar() {
                   )}
                 </>
               )}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+
+        <SidebarGroup>
+          <SidebarGroupLabel className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground/70">Employee Management</SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              {employeeNav.filter(i => i.show).map((item) => (
+                <SidebarMenuItem key={item.title}>
+                  <SidebarMenuButton
+                    asChild
+                    data-active={item.url.includes('?') ? location === item.url || location.startsWith(item.url.split('?')[0]) && location.includes(item.url.split('?')[1]) : isActive(item.url)}
+                    data-testid={`nav-${item.title.toLowerCase().replace(/\s/g, "-")}`}
+                  >
+                    <a href={item.url} onClick={(e) => { e.preventDefault(); navigate(item.url); }}>
+                      <item.icon className="w-4 h-4" />
+                      <span>{item.title}</span>
+                    </a>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              ))}
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>

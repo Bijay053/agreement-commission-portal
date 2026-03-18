@@ -17,6 +17,8 @@ def _serialize_employee(e):
         'panNo': e.pan_no or '',
         'permanentAddress': e.permanent_address or '',
         'joinDate': e.join_date.isoformat() if e.join_date else None,
+        'salaryAmount': str(e.salary_amount) if e.salary_amount else '',
+        'salaryCurrency': e.salary_currency or 'NPR',
         'status': e.status,
         'createdAt': e.created_at.isoformat() if e.created_at else None,
         'updatedAt': e.updated_at.isoformat() if e.updated_at else None,
@@ -69,6 +71,8 @@ class EmployeeListView(APIView):
             pan_no=data.get('panNo', ''),
             permanent_address=data.get('permanentAddress', ''),
             join_date=data.get('joinDate') or None,
+            salary_amount=data.get('salaryAmount') or None,
+            salary_currency=data.get('salaryCurrency', 'NPR'),
             status=data.get('status', 'active'),
         )
         return Response(_serialize_employee(employee), status=201)
@@ -100,6 +104,8 @@ class EmployeeDetailView(APIView):
         employee.pan_no = data.get('panNo', employee.pan_no)
         employee.permanent_address = data.get('permanentAddress', employee.permanent_address)
         employee.join_date = data.get('joinDate') or employee.join_date
+        employee.salary_amount = data.get('salaryAmount') or employee.salary_amount
+        employee.salary_currency = data.get('salaryCurrency', employee.salary_currency)
         employee.status = data.get('status', employee.status)
         employee.save()
         return Response(_serialize_employee(employee))

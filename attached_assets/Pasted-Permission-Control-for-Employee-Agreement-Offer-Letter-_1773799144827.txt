@@ -1,0 +1,147 @@
+Permission Control for Employee, Agreement, Offer Letter, Template, and Document Module
+
+All actions in the employee module should be controlled by role and permission, so users only see and use what they are allowed to access.
+
+Main permission groups
+1. Employee permissions
+
+View employees
+
+Add employee
+
+Edit employee
+
+Delete employee
+
+View employee profile
+
+View only own assigned employees
+
+2. Agreement permissions
+
+View agreements
+
+Create agreement
+
+Edit draft agreement
+
+Delete draft agreement
+
+Send agreement for signing
+
+View sent agreement
+
+Upload manually signed agreement
+
+Mark agreement as manually completed
+
+Download agreement
+
+Terminate agreement
+
+View all agreements or only assigned/team agreements
+
+3. Offer letter permissions
+
+View offer letters
+
+Create offer letter
+
+Edit draft offer letter
+
+Delete draft offer letter
+
+Send offer letter
+
+Upload manually signed offer letter
+
+Mark offer letter as completed
+
+Download offer letter
+
+View all offer letters or only assigned/team offer letters
+
+4. Template permissions
+
+View templates
+
+Create template
+
+Edit template
+
+Delete template
+
+Use template for agreement creation
+
+Use template for offer letter creation
+
+5. Document permissions
+
+View documents
+
+Upload documents
+
+Replace documents
+
+Delete documents
+
+Download documents
+
+View confidential documents
+
+Status/action based permission
+
+Permissions should also control actions by status. Example:
+
+A user may edit only draft agreements
+
+A user may send for signing
+
+A user may not edit once already sent
+
+A user may upload signed copy only after sent
+
+A user may mark agreement completed manually
+
+A user may terminate only active agreements
+
+Suggested role examples
+
+Example roles can be:
+
+Super Admin
+Full access to all employees, templates, agreements, offer letters, and documents
+
+HR Manager
+Full employee and document access, create/edit/send agreements and offer letters
+
+HR Staff
+Can create and edit draft, upload documents, but cannot delete templates or terminate agreements
+
+Department Manager
+Can view only their department employees and related agreements/offer letters
+
+Viewer / Read Only
+Can only view records and download allowed documents
+
+UI behavior based on permission
+
+The system should hide or disable buttons based on permission. For example:
+
+If user has no template edit permission, hide Edit Template
+
+If user has no send permission, hide Send for Signing
+
+If user has no upload permission, hide Upload Signed Agreement
+
+If user has no view confidential documents permission, hide those files
+
+Additional requirement
+
+Permission should work at 3 levels if possible:
+
+All records
+
+Department/team records
+
+Own/assigned records only

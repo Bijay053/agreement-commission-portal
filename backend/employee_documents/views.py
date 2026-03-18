@@ -20,8 +20,12 @@ try:
 except Exception:
     s3_client = None
 
-VALID_CATEGORIES = ['cv', 'citizenship', 'tax', 'academic', 'other']
+VALID_CATEGORIES = ['id_passport', 'contract_agreement', 'offer_letter', 'joining', 'cv', 'citizenship', 'tax', 'academic', 'other']
 CATEGORY_LABELS = {
+    'id_passport': 'ID / Passport',
+    'contract_agreement': 'Contract / Agreement',
+    'offer_letter': 'Offer Letter',
+    'joining': 'Joining Documents',
     'cv': 'CV / Resume',
     'citizenship': 'Citizenship Certificate',
     'tax': 'Tax / PAN Document',
@@ -40,6 +44,7 @@ def _serialize_doc(d):
         'originalFileName': d.original_file_name,
         'fileUrl': d.file_url,
         'fileSize': d.file_size,
+        'fileType': d.file_type or '',
         'uploadedBy': d.uploaded_by or '',
         'uploadedAt': d.uploaded_at.isoformat() if d.uploaded_at else None,
     }
@@ -61,11 +66,12 @@ class EmployeeDocumentsView(APIView):
         total = sum(len(v) for v in grouped.values())
         summary_parts = []
         for cat in VALID_CATEGORIES:
-            summary_parts.append(f'{CATEGORY_LABELS[cat]} ({len(grouped[cat])})')
+            if grouped[cat]:
+                summary_parts.append(f'{CATEGORY_LABELS[cat]} ({len(grouped[cat])})')
 
         return Response({
             'total': total,
-            'summary': f'{total} document{"s" if total != 1 else ""} — ' + ', '.join(summary_parts),
+            'summary': f'{total} document{"s" if total != 1 else ""}' + ((' — ' + ', '.join(summary_parts)) if summary_parts else ''),
             'categories': grouped,
         })
 
@@ -113,6 +119,7 @@ class EmployeeDocumentsView(APIView):
             original_file_name=file.name,
             file_url=storage_key,
             file_size=file.size,
+            file_type=file.content_type or '',
             uploaded_by=user_name,
         )
         return Response(_serialize_doc(doc), status=201)
@@ -158,3 +165,50 @@ class DocumentDeleteView(APIView):
 
         doc.delete()
         return Response({'message': 'Document deleted'})
+
+
+class DocumentReplaceView(APIView):
+    parser_classes = [MultiPartParser, FormParser]
+
+    @require_auth
+    def post(self, request, document_id):
+        try:
+            doc = EmployeeDocument.objects.get(id=document_id)
+        except EmployeeDocument.DoesNotExist:
+            return Response({'message': 'Document not found'}, status=404)
+
+        file = request.FILES.get('file')
+        if not file:
+            return Response({'message': 'No file provided'}, status=400)
+
+        max_size = 25 * 1024 * 1024
+        if file.size > max_size:
+            return Response({'message': 'File too large. Maximum size is 25MB.'}, status=400)
+
+        if s3_client and doc.file_url:
+            try:
+                s3_client.delete_object(Bucket=settings.AWS_S3_BUCKET_NAME, Key=doc.file_url)
+            except Exception:
+                pass
+
+        ext = os.path.splitext(file.name)[1]
+        stored_name = f'{uuid.uuid4().hex[:12]}{ext}'
+        storage_key = f'employees/{doc.employee_id}/{doc.category}/{stored_name}'
+
+        if s3_client:
+            try:
+                s3_client.upload_fileobj(
+                    file, settings.AWS_S3_BUCKET_NAME, storage_key,
+                    ExtraArgs={'ContentType': file.content_type}
+                )
+            except Exception as e:
+                return Response({'message': f'Upload failed: {str(e)}'}, status=500)
+
+        doc.file_name = stored_name
+        doc.original_file_name = file.name
+        doc.file_url = storage_key
+        doc.file_size = file.size
+        doc.file_type = file.content_type or ''
+        doc.save()
+
+        return Response(_serialize_doc(doc))

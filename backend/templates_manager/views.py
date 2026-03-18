@@ -12,6 +12,7 @@ def _serialize_template(t):
         'id': str(t.id),
         'name': t.name,
         'description': t.description or '',
+        'templateType': t.template_type or 'agreement',
         'clauses': t.clauses or [],
         'isDefault': t.is_default,
         'createdAt': t.created_at.isoformat() if t.created_at else None,
@@ -45,8 +46,12 @@ DEFAULT_CLAUSES = [
 class TemplateListView(APIView):
     @require_auth
     def get(self, request):
-        templates = AgreementTemplate.objects.all().order_by('-is_default', '-updated_at')
-        return Response([_serialize_template(t) for t in templates])
+        qs = AgreementTemplate.objects.all()
+        template_type = request.query_params.get('type')
+        if template_type:
+            qs = qs.filter(template_type=template_type)
+        qs = qs.order_by('-is_default', '-updated_at')
+        return Response([_serialize_template(t) for t in qs])
 
     @require_auth
     def post(self, request):
@@ -66,6 +71,7 @@ class TemplateListView(APIView):
             template = AgreementTemplate.objects.create(
                 name=name,
                 description=data.get('description', ''),
+                template_type=data.get('templateType', 'agreement'),
                 clauses=clauses,
                 is_default=False,
             )

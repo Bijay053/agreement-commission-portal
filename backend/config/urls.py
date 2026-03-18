@@ -30,6 +30,7 @@ urlpatterns = [
     path('api/', include('employees.urls')),
     path('api/', include('employment_agreements.urls')),
     path('api/', include('employee_documents.urls')),
+    path('api/', include('offer_letters.urls')),
 
     path('api/users', account_views.UsersListView.as_view()),
     path('api/users/<int:user_id>/roles', account_views.UserRolesView.as_view()),
