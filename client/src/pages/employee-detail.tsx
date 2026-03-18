@@ -24,7 +24,7 @@ import {
 import {
   ArrowLeft, Save, FileText, Upload, Download, Trash2, Send, CheckCircle, Clock,
   Loader2, Plus, Eye, Edit, UploadCloud, RefreshCw, File, FileImage, FileArchive,
-  MoreHorizontal, X, Briefcase, Mail, PenLine,
+  MoreHorizontal, X, Briefcase, Mail, PenLine, Pen, FileSignature,
 } from "lucide-react";
 import SignatureCanvas from "react-signature-canvas";
 import {
@@ -46,9 +46,11 @@ const AGREEMENT_STATUSES: Record<string, { label: string; color: string }> = {
 
 const OFFER_STATUSES: Record<string, { label: string; color: string }> = {
   draft: { label: 'Draft', color: 'bg-slate-100 text-slate-700 border-slate-200' },
-  sent: { label: 'Sent', color: 'bg-amber-50 text-amber-700 border-amber-200' },
+  sent: { label: 'Sent for Signing', color: 'bg-amber-50 text-amber-700 border-amber-200' },
+  employee_signed: { label: 'Employee Signed', color: 'bg-blue-50 text-blue-700 border-blue-200' },
   accepted: { label: 'Accepted', color: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
   rejected: { label: 'Rejected', color: 'bg-red-50 text-red-700 border-red-200' },
+  signed: { label: 'Fully Signed', color: 'bg-green-50 text-green-700 border-green-200' },
   manually_signed: { label: 'Manually Signed', color: 'bg-teal-50 text-teal-700 border-teal-200' },
   completed: { label: 'Completed', color: 'bg-green-50 text-green-700 border-green-200' },
 };
@@ -855,6 +857,47 @@ function OfferLettersTab({ employeeId, employee }: { employeeId: string; employe
     onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
   });
 
+  const sendForSigningMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const res = await fetch(`/api/offer-letters/${id}/send-for-signing`, {
+        method: 'POST', credentials: 'include',
+      });
+      if (!res.ok) throw new Error((await res.json()).message);
+      return res.json();
+    },
+    onSuccess: () => {
+      toast({ title: "Signing request sent", description: "The employee will receive an email with a signing link." });
+      queryClient.invalidateQueries({ queryKey: ['/api/offer-letters'] });
+    },
+    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+  });
+
+  const [offerCompanySignId, setOfferCompanySignId] = useState<string | null>(null);
+  const [offerSignerName, setOfferSignerName] = useState('');
+  const [offerSignerPosition, setOfferSignerPosition] = useState('');
+  const [offerHasSigned, setOfferHasSigned] = useState(false);
+  const offerSigRef = useRef<any>(null);
+
+  const offerCompanySignMutation = useMutation({
+    mutationFn: async ({ id, signatureData, signerName, signerPosition }: { id: string; signatureData: string; signerName: string; signerPosition: string }) => {
+      const res = await fetch(`/api/offer-letters/${id}/company-sign`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        credentials: 'include', body: JSON.stringify({ signatureData, signerName, signerPosition }),
+      });
+      if (!res.ok) throw new Error((await res.json()).message);
+      return res.json();
+    },
+    onSuccess: () => {
+      toast({ title: "Offer letter signed by company", description: "The fully signed offer letter has been sent to the employee." });
+      queryClient.invalidateQueries({ queryKey: ['/api/offer-letters'] });
+      setOfferCompanySignId(null);
+      setOfferSignerName('');
+      setOfferSignerPosition('');
+      setOfferHasSigned(false);
+    },
+    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+  });
+
   const filtered = statusFilter === 'all' ? offers : offers.filter(o => o.status === statusFilter);
 
   return (
@@ -940,6 +983,16 @@ function OfferLettersTab({ employeeId, employee }: { employeeId: string; employe
                             <Download className="w-4 h-4 mr-2" /> Download Signed Copy
                           </DropdownMenuItem>
                         )}
+                        {['draft', 'sent'].includes(o.status) && (
+                          <DropdownMenuItem onClick={() => sendForSigningMutation.mutate(o.id)} data-testid={`button-offer-send-signing-${o.id}`}>
+                            <Pen className="w-4 h-4 mr-2" /> Send for E-Signing
+                          </DropdownMenuItem>
+                        )}
+                        {o.status === 'employee_signed' && (
+                          <DropdownMenuItem onClick={() => setOfferCompanySignId(o.id)} data-testid={`button-offer-company-sign-${o.id}`}>
+                            <FileSignature className="w-4 h-4 mr-2" /> Company Sign
+                          </DropdownMenuItem>
+                        )}
                         {o.status === 'draft' && (
                           <DropdownMenuItem onClick={() => statusMutation.mutate({ id: o.id, status: 'sent' })}>
                             <Send className="w-4 h-4 mr-2" /> Mark as Sent
@@ -960,7 +1013,7 @@ function OfferLettersTab({ employeeId, employee }: { employeeId: string; employe
                             <UploadCloud className="w-4 h-4 mr-2" /> Upload Signed Copy
                           </DropdownMenuItem>
                         )}
-                        {['accepted', 'manually_signed'].includes(o.status) && (
+                        {['accepted', 'manually_signed', 'signed'].includes(o.status) && (
                           <DropdownMenuItem onClick={() => statusMutation.mutate({ id: o.id, status: 'completed' })}>
                             <CheckCircle className="w-4 h-4 mr-2" /> Mark as Completed
                           </DropdownMenuItem>
@@ -1065,6 +1118,45 @@ function OfferLettersTab({ employeeId, employee }: { employeeId: string; employe
             <Button onClick={() => createMutation.mutate(createForm)} disabled={createMutation.isPending} data-testid="button-submit-offer">
               {createMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : null}
               Create Offer Letter
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!offerCompanySignId} onOpenChange={(open) => { if (!open) { setOfferCompanySignId(null); setOfferSignerName(''); setOfferSignerPosition(''); setOfferHasSigned(false); } }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Company Sign — Offer Letter</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-muted-foreground">Signer Name</label>
+              <Input value={offerSignerName} onChange={e => setOfferSignerName(e.target.value)} placeholder="e.g. John Doe" data-testid="input-offer-company-signer-name" />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-muted-foreground">Signer Position</label>
+              <Input value={offerSignerPosition} onChange={e => setOfferSignerPosition(e.target.value)} placeholder="e.g. HR Manager" data-testid="input-offer-company-signer-position" />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-muted-foreground">Sign Below</label>
+              <div className="border-2 border-dashed border-gray-300 rounded-lg bg-white">
+                <SignatureCanvas ref={offerSigRef} canvasProps={{ className: 'w-full', style: { width: '100%', height: '140px' }, 'data-testid': 'canvas-offer-company-signature' }} onEnd={() => setOfferHasSigned(true)} />
+              </div>
+              <Button size="sm" variant="outline" onClick={() => { offerSigRef.current?.clear(); setOfferHasSigned(false); }}>Clear</Button>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setOfferCompanySignId(null)}>Cancel</Button>
+            <Button
+              disabled={!offerHasSigned || !offerSignerName.trim() || offerCompanySignMutation.isPending}
+              onClick={() => {
+                if (!offerCompanySignId || !offerSigRef.current || offerSigRef.current.isEmpty()) return;
+                const signatureData = offerSigRef.current.toDataURL('image/png');
+                offerCompanySignMutation.mutate({ id: offerCompanySignId, signatureData, signerName: offerSignerName, signerPosition: offerSignerPosition });
+              }}
+              data-testid="button-submit-offer-company-sign"
+            >
+              {offerCompanySignMutation.isPending ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Signing...</> : 'Sign & Send'}
             </Button>
           </DialogFooter>
         </DialogContent>

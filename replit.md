@@ -18,7 +18,7 @@ Key architectural decisions include:
     - **Agreement Management**: CRUD operations, status tracking, alerts, and notifications.
     - **Commission Tracking**: Student and sub-agent commission tracking, bulk uploads, and recalculations.
     - **Document Management**: Secure upload, view, and download of documents (including PDF password protection) with integrated malware scanning.
-    - **Employee Management**: CRUD for employee profiles, employment agreements (with e-signature via draw or image upload with auto background removal, unique PDF passwords per agreement emailed to employees, and professional PDF generation), and offer letters (with logo/design PDF generation), all with multi-status workflows and secure document handling.
+    - **Employee Management**: CRUD for employee profiles, employment agreements (with e-signature via draw or image upload with auto background removal, unique PDF passwords per agreement emailed to employees, and professional PDF generation), and offer letters (with e-signature signing flow matching agreements — send for e-signing, employee signs via `/sign-offer/:token`, company signs in portal, fully signed PDF emailed with unique password), all with multi-status workflows, e-signature legal metadata capture (IP, user agent, timestamp), and secure document handling.
     - **Portal Access Manager**: Secure storage for credentials with Fernet encryption and access auditing.
     - **Reporting**: Export functionalities for agreements, commission tracking, and audit logs in CSV/XLSX formats.
     - **Email Templates**: Dynamic email template management with variables and preview functionality.

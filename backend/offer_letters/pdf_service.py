@@ -1,6 +1,7 @@
 import io
 import os
 import re
+import base64
 from datetime import datetime, date
 
 
@@ -241,7 +242,10 @@ def _process_content_lines(content, styles):
     return elements
 
 
-def generate_offer_letter_pdf(offer, employee):
+def generate_offer_letter_pdf(offer, employee,
+                              employee_signature=None, employee_signed_date=None,
+                              company_signature=None, company_signer_name=None,
+                              company_signer_position=None, company_signed_date=None):
     if not HAS_REPORTLAB:
         return None
 
@@ -424,12 +428,35 @@ def generate_offer_letter_pdf(offer, employee):
     page_w = A4[0] - doc.leftMargin - doc.rightMargin
     col_w = (page_w - 20 * mm) / 2
 
-    sig_block = []
-    sig_block.append(Spacer(1, 14))
+    elements.append(Spacer(1, 14))
 
     sig_heading = ParagraphStyle('OfrSigHeading', parent=styles['heading'], keepWithNext=1)
-    sig_block.append(Paragraph('<b>SIGNATURES</b>', sig_heading))
-    sig_block.append(Spacer(1, 10))
+    elements.append(Paragraph('<b>SIGNATURES</b>', sig_heading))
+    elements.append(Spacer(1, 10))
+
+    def _make_sig_image(sig_data_str, width=130, height=50):
+        if not sig_data_str:
+            return Spacer(1, 50)
+        try:
+            raw = sig_data_str
+            if ',' in raw:
+                raw = raw.split(',', 1)[1]
+            sig_bytes = base64.b64decode(raw)
+            sig_io = io.BytesIO(sig_bytes)
+            from reportlab.platypus import Image as RLImage
+            img = RLImage(sig_io, width=width, height=height)
+            img.hAlign = 'LEFT'
+            return img
+        except Exception:
+            return Spacer(1, 50)
+
+    company_sig_cell = _make_sig_image(company_signature) if company_signature else Spacer(1, 50)
+    employee_sig_cell = _make_sig_image(employee_signature) if employee_signature else Spacer(1, 50)
+
+    co_name_val = f'Name: {_safe_text(company_signer_name)}' if company_signer_name else 'Name: ____________________'
+    co_pos_val = f'Position: {_safe_text(company_signer_position)}' if company_signer_position else 'Position: ____________________'
+    co_date_val = f'Date: {company_signed_date.strftime("%d %B %Y, %I:%M %p") if company_signed_date else "____________________"}'
+    emp_date_val = f'Date: {employee_signed_date.strftime("%d %B %Y, %I:%M %p") if employee_signed_date else "____________________"}'
 
     sig_data = [
         [
@@ -438,9 +465,9 @@ def generate_offer_letter_pdf(offer, employee):
             Paragraph('<b>Accepted By (Employee)</b>', styles['sig_label']),
         ],
         [
+            company_sig_cell,
             Spacer(1, 20),
-            Spacer(1, 20),
-            Spacer(1, 20),
+            employee_sig_cell,
         ],
         [
             Paragraph('_' * 30, styles['sig_line']),
@@ -448,19 +475,19 @@ def generate_offer_letter_pdf(offer, employee):
             Paragraph('_' * 30, styles['sig_line']),
         ],
         [
-            Paragraph('Name: ____________________', styles['sig_label']),
+            Paragraph(co_name_val, styles['sig_label']),
             Paragraph('', styles['sig_label']),
             Paragraph(f'Name: {_safe_text(employee.full_name or "")}', styles['sig_label']),
         ],
         [
-            Paragraph('Position: ____________________', styles['sig_label']),
+            Paragraph(co_pos_val, styles['sig_label']),
             Paragraph('', styles['sig_label']),
             Paragraph(f'Position: {_safe_text(offer.position or "")}', styles['sig_label']),
         ],
         [
-            Paragraph('Date: ____________________', styles['sig_label']),
+            Paragraph(co_date_val, styles['sig_label']),
             Paragraph('', styles['sig_label']),
-            Paragraph('Date: ____________________', styles['sig_label']),
+            Paragraph(emp_date_val, styles['sig_label']),
         ],
     ]
 
@@ -470,8 +497,7 @@ def generate_offer_letter_pdf(offer, employee):
         ('TOPPADDING', (0, 0), (-1, -1), 1),
         ('BOTTOMPADDING', (0, 0), (-1, -1), 1),
     ]))
-    sig_block.append(sig_table)
-    elements.append(KeepTogether(sig_block))
+    elements.append(sig_table)
 
     hf = _make_header_footer(company_name=company_name)
     doc.build(elements, onFirstPage=hf, onLaterPages=hf)

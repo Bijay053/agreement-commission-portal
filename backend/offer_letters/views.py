@@ -1,9 +1,12 @@
 import os
 import io
 import uuid
-from datetime import date, datetime
+import secrets
+import string
+from datetime import date, datetime, timedelta
 from django.conf import settings
 from django.http import HttpResponse
+from django.utils import timezone
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.parsers import MultiPartParser, FormParser
@@ -40,6 +43,16 @@ except Exception:
     s3_client = None
 
 
+def _collect_esig_metadata(request):
+    return {
+        'ip_address': request.META.get('HTTP_X_FORWARDED_FOR', '').split(',')[0].strip() or request.META.get('REMOTE_ADDR', ''),
+        'user_agent': request.META.get('HTTP_USER_AGENT', ''),
+        'accept_language': request.META.get('HTTP_ACCEPT_LANGUAGE', ''),
+        'timestamp': timezone.now().isoformat(),
+        'referer': request.META.get('HTTP_REFERER', ''),
+    }
+
+
 def _serialize_offer(o, employee=None):
     result = {
         'id': str(o.id),
@@ -63,6 +76,8 @@ def _serialize_offer(o, employee=None):
         'notes': o.notes or '',
         'companyEntity': o.company_entity or 'nepal',
         'createdBy': o.created_by or '',
+        'signedAt': _safe_iso(o.signed_at),
+        'companySignedAt': _safe_iso(getattr(o, 'company_signed_at', None)),
         'createdAt': _safe_iso(o.created_at),
         'updatedAt': _safe_iso(o.updated_at),
     }
@@ -261,7 +276,7 @@ class OfferLetterStatusView(APIView):
             return Response({'message': 'Offer letter not found'}, status=404)
 
         new_status = request.data.get('status')
-        valid = ['draft', 'sent', 'accepted', 'rejected', 'manually_signed', 'completed']
+        valid = ['draft', 'sent', 'employee_signed', 'accepted', 'rejected', 'signed', 'manually_signed', 'completed']
         if new_status not in valid:
             return Response({'message': f'Invalid status. Must be one of: {", ".join(valid)}'}, status=400)
 
@@ -414,3 +429,277 @@ class OfferLetterDownloadView(APIView):
         response['Pragma'] = 'no-cache'
         response['X-Content-Type-Options'] = 'nosniff'
         return response
+
+
+class SendOfferForSigningView(APIView):
+    @require_permission("offer_letter.edit", "employee.edit")
+    def post(self, request, offer_id):
+        try:
+            offer = OfferLetter.objects.get(id=offer_id)
+        except OfferLetter.DoesNotExist:
+            return Response({'message': 'Offer letter not found'}, status=404)
+
+        try:
+            employee = Employee.objects.get(id=offer.employee_id)
+        except Employee.DoesNotExist:
+            return Response({'message': 'Employee not found'}, status=404)
+
+        if not employee.email:
+            return Response({'message': 'Employee does not have an email address'}, status=400)
+
+        token = secrets.token_urlsafe(48)
+        offer.signing_token = token
+        offer.token_expires_at = timezone.now() + timedelta(days=7)
+        offer.status = 'sent'
+
+        if not offer.pdf_url:
+            from .pdf_service import generate_offer_letter_pdf
+            from employment_agreements.pdf_service import upload_pdf_to_s3
+            pdf_buf = generate_offer_letter_pdf(offer, employee)
+            if pdf_buf:
+                s3_key = f'offer-letters/{offer.id}/offer_letter.pdf'
+                upload_pdf_to_s3(pdf_buf.getvalue(), s3_key)
+                offer.pdf_url = s3_key
+
+        offer.save()
+
+        from .pdf_service import get_company_name
+        company_name = get_company_name(offer.company_entity or 'nepal')
+
+        from .email_service import send_offer_signing_request_email
+        send_offer_signing_request_email(
+            employee_name=employee.full_name,
+            employee_email=employee.email,
+            signing_token=token,
+            company_name=company_name,
+        )
+
+        return Response(_serialize_offer(offer, employee))
+
+
+class VerifyOfferSigningTokenView(APIView):
+    def get(self, request, token):
+        try:
+            offer = OfferLetter.objects.get(signing_token=token)
+        except OfferLetter.DoesNotExist:
+            return Response({'message': 'This signing link is invalid or has expired. Please contact HR.'}, status=400)
+
+        if offer.token_expires_at and timezone.now() > offer.token_expires_at:
+            return Response({'message': 'This signing link has expired. Please contact HR.'}, status=400)
+
+        if offer.status == 'employee_signed':
+            return Response({
+                'alreadySigned': True,
+                'status': 'employee_signed',
+                'message': 'You have already signed this offer letter. The company is currently reviewing it. Once the company completes their review and signs, you will receive the fully signed document via email.',
+            })
+
+        if offer.status in ('signed', 'completed', 'accepted'):
+            return Response({
+                'alreadySigned': True,
+                'status': offer.status,
+                'message': 'This offer letter has been fully signed. A copy has been sent to your email. If you did not receive it, please contact HR.',
+            })
+
+        if offer.status == 'manually_signed':
+            return Response({
+                'alreadySigned': True,
+                'status': 'manually_signed',
+                'message': 'This offer letter has already been signed. If you have any questions, please contact HR.',
+            })
+
+        try:
+            employee = Employee.objects.get(id=offer.employee_id)
+        except Employee.DoesNotExist:
+            return Response({'message': 'Employee record not found.'}, status=400)
+
+        clause_text = ''
+        for clause in (offer.clauses or []):
+            clause_text += f"\n\n{clause.get('order', '')}. {clause.get('title', '')}\n\n{clause.get('content', '')}"
+
+        return Response({
+            'employeeName': employee.full_name,
+            'position': offer.position or employee.position or '',
+            'title': offer.title,
+            'issueDate': _safe_iso(offer.issue_date) or '',
+            'startDate': _safe_iso(offer.start_date) or '',
+            'proposedSalary': str(offer.proposed_salary) if offer.proposed_salary else '',
+            'salaryCurrency': offer.salary_currency or 'NPR',
+            'department': offer.department or '',
+            'workLocation': offer.work_location or '',
+            'probationPeriod': offer.probation_period or '',
+            'clauses': offer.clauses or [],
+            'clauseText': clause_text.strip(),
+            'documentType': 'offer_letter',
+        })
+
+
+class SubmitOfferSignatureView(APIView):
+    def post(self, request, token):
+        try:
+            offer = OfferLetter.objects.get(signing_token=token)
+        except OfferLetter.DoesNotExist:
+            return Response({'message': 'Invalid signing link.'}, status=400)
+
+        if offer.token_expires_at and timezone.now() > offer.token_expires_at:
+            return Response({'message': 'This signing link has expired.'}, status=400)
+
+        if offer.status not in ('sent',):
+            if offer.status in ('employee_signed', 'signed', 'manually_signed', 'completed', 'accepted'):
+                return Response({'message': 'This offer letter has already been signed.'}, status=400)
+            return Response({'message': 'This offer letter is not available for signing.'}, status=400)
+
+        signature_data = request.data.get('signatureData', '')
+        if not signature_data:
+            return Response({'message': 'Signature is required.'}, status=400)
+
+        try:
+            employee = Employee.objects.get(id=offer.employee_id)
+        except Employee.DoesNotExist:
+            return Response({'message': 'Employee record not found.'}, status=400)
+
+        esig_metadata = _collect_esig_metadata(request)
+
+        signed_pdf_key = None
+        try:
+            from .pdf_service import generate_offer_letter_pdf
+            from employment_agreements.pdf_service import upload_pdf_to_s3
+            pdf_buf = generate_offer_letter_pdf(
+                offer, employee,
+                employee_signature=signature_data,
+                employee_signed_date=timezone.now(),
+            )
+            if pdf_buf:
+                signed_pdf_key = f'offer-letters/{offer.id}/signed_offer_letter.pdf'
+                upload_pdf_to_s3(pdf_buf.getvalue(), signed_pdf_key)
+        except Exception as e:
+            print(f'Offer letter PDF with signature failed: {e}')
+
+        now = timezone.now()
+        offer.status = 'employee_signed'
+        offer.signed_at = now
+        offer.signature_data = signature_data
+        offer.esignature_metadata = esig_metadata
+        if signed_pdf_key:
+            offer.signed_pdf_url = signed_pdf_key
+        offer.save()
+
+        from .pdf_service import get_company_name
+        co_name = get_company_name(offer.company_entity or 'nepal')
+        from .email_service import send_offer_employee_signed_notification
+        try:
+            send_offer_employee_signed_notification(
+                employee_name=employee.full_name,
+                employee_email=employee.email,
+                offer_id=str(offer.id),
+                company_name=co_name,
+                position=offer.position or '',
+            )
+        except Exception as e:
+            print(f'Offer letter employee signed notification failed: {e}')
+
+        return Response({
+            'message': f'Thank you {employee.full_name}. Your offer letter has been signed successfully. The company will now complete the signing process.',
+            'signedAt': now.isoformat(),
+        })
+
+
+class OfferCompanySignView(APIView):
+    @require_auth
+    @require_permission("offer_letter.edit", "employee.edit")
+    def post(self, request, offer_id):
+        try:
+            offer = OfferLetter.objects.get(id=offer_id)
+        except OfferLetter.DoesNotExist:
+            return Response({'message': 'Offer letter not found'}, status=404)
+
+        if offer.status != 'employee_signed':
+            return Response({'message': 'This offer letter must be signed by the employee first.'}, status=400)
+
+        if not offer.signature_data:
+            return Response({'message': 'Employee signature is missing.'}, status=400)
+
+        signature_data = request.data.get('signatureData')
+        signer_name = request.data.get('signerName', '')
+        signer_position = request.data.get('signerPosition', '')
+
+        if not signature_data:
+            return Response({'message': 'Signature data is required'}, status=400)
+
+        try:
+            employee = Employee.objects.get(id=offer.employee_id)
+        except Employee.DoesNotExist:
+            return Response({'message': 'Employee not found'}, status=404)
+
+        esig_metadata = _collect_esig_metadata(request)
+
+        from .pdf_service import generate_offer_letter_pdf
+        from employment_agreements.pdf_service import upload_pdf_to_s3
+
+        pdf_buf = generate_offer_letter_pdf(
+            offer, employee,
+            employee_signature=offer.signature_data,
+            employee_signed_date=offer.signed_at,
+            company_signature=signature_data,
+            company_signer_name=signer_name,
+            company_signer_position=signer_position,
+            company_signed_date=timezone.now(),
+        )
+        if not pdf_buf:
+            return Response({'message': 'Failed to generate PDF'}, status=500)
+
+        signed_bytes = pdf_buf.getvalue()
+
+        s3_key = f'offer-letters/{offer.id}/company_signed_{uuid.uuid4().hex[:8]}.pdf'
+        uploaded_key = upload_pdf_to_s3(signed_bytes, s3_key)
+
+        pw_chars = string.ascii_letters + string.digits + '!@#$%'
+        unique_password = ''.join(secrets.choice(pw_chars) for _ in range(10))
+
+        encrypted_pdf_for_email = None
+        if signed_bytes and HAS_PIKEPDF:
+            try:
+                input_pdf = pikepdf.open(io.BytesIO(signed_bytes))
+                enc_buf = io.BytesIO()
+                input_pdf.save(enc_buf, encryption=pikepdf.Encryption(owner=unique_password, user=unique_password))
+                input_pdf.close()
+                encrypted_pdf_for_email = enc_buf.getvalue()
+            except Exception as e:
+                print(f'Offer letter PDF encryption for email failed: {e}')
+                encrypted_pdf_for_email = signed_bytes
+        else:
+            encrypted_pdf_for_email = signed_bytes
+
+        offer.company_signature_data = signature_data
+        offer.company_signer_name = signer_name
+        offer.company_signer_position = signer_position
+        offer.company_signed_at = timezone.now()
+        offer.company_esignature_metadata = esig_metadata
+        offer.pdf_password = unique_password
+
+        if uploaded_key:
+            offer.signed_pdf_url = uploaded_key
+
+        offer.status = 'signed'
+        offer.save()
+
+        from .pdf_service import get_company_name
+        co_name = get_company_name(offer.company_entity or 'nepal')
+        portal_url = getattr(settings, 'PORTAL_URL', 'https://portal.studyinfocentre.com')
+        download_link = f'{portal_url}/api/offer-letters/{offer.id}/download?type=signed&mode=download'
+
+        from .email_service import send_offer_signed_confirmation_email
+        try:
+            send_offer_signed_confirmation_email(
+                employee_name=employee.full_name,
+                employee_email=employee.email,
+                admin_email=getattr(settings, 'DEFAULT_FROM_EMAIL', ''),
+                signed_pdf_bytes=encrypted_pdf_for_email,
+                pdf_password=unique_password,
+                company_name=co_name,
+                download_link=download_link,
+            )
+        except Exception as e:
+            print(f'Offer letter signed confirmation email failed: {e}')
+
+        return Response(_serialize_offer(offer, employee))

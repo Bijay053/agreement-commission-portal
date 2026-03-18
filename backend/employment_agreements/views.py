@@ -22,6 +22,17 @@ try:
 except ImportError:
     HAS_PIKEPDF = False
 
+
+def _collect_esig_metadata(request):
+    return {
+        'ip_address': request.META.get('HTTP_X_FORWARDED_FOR', '').split(',')[0].strip() or request.META.get('REMOTE_ADDR', ''),
+        'user_agent': request.META.get('HTTP_USER_AGENT', ''),
+        'accept_language': request.META.get('HTTP_ACCEPT_LANGUAGE', ''),
+        'timestamp': timezone.now().isoformat(),
+        'referer': request.META.get('HTTP_REFERER', ''),
+    }
+
+
 try:
     import boto3
     s3_client = boto3.client(
@@ -467,10 +478,13 @@ class SubmitSignatureView(APIView):
         except Exception as e:
             print(f'PDF generation with signature failed: {e}')
 
+        esig_metadata = _collect_esig_metadata(request)
+
         now = timezone.now()
         agreement.status = 'employee_signed'
         agreement.signed_at = now
         agreement.signature_data = signature_data
+        agreement.esignature_metadata = esig_metadata
         if signed_pdf_key:
             agreement.signed_pdf_url = signed_pdf_key
         agreement.save()
@@ -645,10 +659,13 @@ class CompanySignView(APIView):
         else:
             encrypted_pdf_for_email = signed_bytes
 
+        company_esig_metadata = _collect_esig_metadata(request)
+
         agreement.company_signature_data = signature_data
         agreement.company_signer_name = signer_name
         agreement.company_signer_position = signer_position
         agreement.company_signed_at = timezone.now()
+        agreement.company_esignature_metadata = company_esig_metadata
         agreement.pdf_password = unique_password
 
         if uploaded_key:

@@ -35,6 +35,7 @@ import TemplatesPage from "@/pages/templates";
 import EmployeesListPage from "@/pages/employees-list";
 import EmployeeDetailPage from "@/pages/employee-detail";
 import SignAgreementPage from "@/pages/sign-agreement";
+import SignOfferPage from "@/pages/sign-offer";
 import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 
@@ -232,6 +233,9 @@ function App() {
         <Switch>
           <Route path="/sign/:token">
             {(params: { token: string }) => <SignAgreementPage params={params} />}
+          </Route>
+          <Route path="/sign-offer/:token">
+            {(params: { token: string }) => <SignOfferPage params={params} />}
           </Route>
           <Route>
             <AuthProvider>
