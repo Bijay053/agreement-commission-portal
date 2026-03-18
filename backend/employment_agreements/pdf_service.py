@@ -12,7 +12,8 @@ try:
     from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
     from reportlab.platypus import (
         SimpleDocTemplate, Paragraph, Spacer, Image as RLImage,
-        PageBreak, Table, TableStyle, Frame, PageTemplate, BaseDocTemplate
+        PageBreak, Table, TableStyle, Frame, PageTemplate, BaseDocTemplate,
+        KeepTogether
     )
     from reportlab.lib.enums import TA_LEFT, TA_CENTER, TA_JUSTIFY, TA_RIGHT
     from reportlab.lib.colors import HexColor
@@ -46,10 +47,10 @@ def _header_footer(canvas, doc):
             logo = ImageReader(LOGO_PATH)
             iw, ih = logo.getSize()
             aspect = ih / float(iw)
-            logo_w = 55 * mm
+            logo_w = 45 * mm
             logo_h = logo_w * aspect
-            logo_x = doc.leftMargin
-            logo_y = height - 18 * mm - logo_h
+            logo_x = width - doc.rightMargin - logo_w
+            logo_y = height - 12 * mm - logo_h
             canvas.drawImage(logo, logo_x, logo_y, width=logo_w, height=logo_h, preserveAspectRatio=True, mask='auto')
         except Exception:
             pass
@@ -64,17 +65,40 @@ def _header_footer(canvas, doc):
     footer_line_y = doc.bottomMargin - 2 * mm
     canvas.line(doc.leftMargin, footer_line_y, width - doc.rightMargin, footer_line_y)
 
-    canvas.setFont("Helvetica", 8)
-    canvas.setFillColor(GRAY_LIGHT)
-    page_num = canvas.getPageNumber()
-    canvas.drawCentredString(width / 2, footer_line_y - 12, f"Page {page_num}")
-
     canvas.setFont("Helvetica", 6.5)
     canvas.setFillColor(GRAY_LIGHT)
     canvas.drawString(doc.leftMargin, footer_line_y - 12, "Study Info Centre Pvt. Ltd.")
     canvas.drawRightString(width - doc.rightMargin, footer_line_y - 12, "Confidential")
 
     canvas.restoreState()
+
+
+def _add_total_pages(pdf_bytes):
+    if not HAS_PYPDF:
+        return pdf_bytes
+    try:
+        reader = PdfReader(io.BytesIO(pdf_bytes))
+        total = len(reader.pages)
+        writer = PdfWriter()
+        for i, page in enumerate(reader.pages):
+            overlay_buf = io.BytesIO()
+            width = float(page.mediabox.width)
+            height = float(page.mediabox.height)
+            c = rl_canvas.Canvas(overlay_buf, pagesize=(width, height))
+            c.setFont("Helvetica", 8)
+            c.setFillColor(GRAY_LIGHT)
+            footer_y = 22 * mm - 2 * mm - 12
+            c.drawCentredString(width / 2, footer_y, f"Page {i + 1} of {total}")
+            c.save()
+            overlay_buf.seek(0)
+            overlay_page = PdfReader(overlay_buf).pages[0]
+            page.merge_page(overlay_page)
+            writer.add_page(page)
+        out = io.BytesIO()
+        writer.write(out)
+        return out.getvalue()
+    except Exception:
+        return pdf_bytes
 
 
 def _get_styles():
@@ -271,10 +295,13 @@ def generate_agreement_pdf(employee, agreement, clauses):
             else:
                 elements.extend(_process_content_lines(section, styles))
 
-    elements.append(Spacer(1, 30))
+    page_w = A4[0] - doc.leftMargin - doc.rightMargin
+    col_w = (page_w - 20 * mm) / 2
 
-    elements.append(Paragraph('<b>SIGNATURES</b>', styles['heading']))
-    elements.append(Spacer(1, 16))
+    sig_block = []
+    sig_block.append(Spacer(1, 20))
+    sig_block.append(Paragraph('<b>SIGNATURES</b>', styles['heading']))
+    sig_block.append(Spacer(1, 16))
 
     sig_data = [
         [
@@ -309,19 +336,21 @@ def generate_agreement_pdf(employee, agreement, clauses):
         ],
     ]
 
-    page_w = A4[0] - doc.leftMargin - doc.rightMargin
-    col_w = (page_w - 20 * mm) / 2
     sig_table = Table(sig_data, colWidths=[col_w, 20 * mm, col_w])
     sig_table.setStyle(TableStyle([
         ('VALIGN', (0, 0), (-1, -1), 'TOP'),
         ('TOPPADDING', (0, 0), (-1, -1), 2),
         ('BOTTOMPADDING', (0, 0), (-1, -1), 2),
     ]))
-    elements.append(sig_table)
+    sig_block.append(sig_table)
+    elements.append(KeepTogether(sig_block))
 
     doc.build(elements, onFirstPage=_header_footer, onLaterPages=_header_footer)
-    buf.seek(0)
-    return buf
+    pdf_bytes = buf.getvalue()
+    final_bytes = _add_total_pages(pdf_bytes)
+    result = io.BytesIO(final_bytes)
+    result.seek(0)
+    return result
 
 
 def embed_signature_to_pdf(pdf_bytes, signature_base64, signed_date=None):

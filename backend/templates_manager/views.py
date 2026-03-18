@@ -68,7 +68,7 @@ def _generate_template_pdf(template):
         from reportlab.lib.pagesizes import A4
         from reportlab.lib.units import mm
         from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-        from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+        from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, KeepTogether
         from reportlab.lib.enums import TA_CENTER, TA_JUSTIFY, TA_LEFT, TA_RIGHT
         from reportlab.lib.colors import HexColor
         from reportlab.lib.utils import ImageReader
@@ -88,10 +88,10 @@ def _generate_template_pdf(template):
                     logo = ImageReader(LOGO_PATH)
                     iw, ih = logo.getSize()
                     aspect = ih / float(iw)
-                    logo_w = 55 * mm
+                    logo_w = 45 * mm
                     logo_h = logo_w * aspect
-                    logo_x = doc.leftMargin
-                    logo_y = height - 18 * mm - logo_h
+                    logo_x = width - doc.rightMargin - logo_w
+                    logo_y = height - 12 * mm - logo_h
                     canvas.drawImage(logo, logo_x, logo_y, width=logo_w, height=logo_h, preserveAspectRatio=True, mask='auto')
                 except Exception:
                     pass
@@ -103,14 +103,38 @@ def _generate_template_pdf(template):
             canvas.setLineWidth(0.75)
             footer_line_y = doc.bottomMargin - 2 * mm
             canvas.line(doc.leftMargin, footer_line_y, width - doc.rightMargin, footer_line_y)
-            canvas.setFont("Helvetica", 8)
-            canvas.setFillColor(GRAY_LIGHT)
-            page_num = canvas.getPageNumber()
-            canvas.drawCentredString(width / 2, footer_line_y - 12, f"Page {page_num}")
             canvas.setFont("Helvetica", 6.5)
+            canvas.setFillColor(GRAY_LIGHT)
             canvas.drawString(doc.leftMargin, footer_line_y - 12, "Study Info Centre Pvt. Ltd.")
             canvas.drawRightString(width - doc.rightMargin, footer_line_y - 12, "Template")
             canvas.restoreState()
+
+        def add_total_pages(pdf_data):
+            try:
+                from pypdf import PdfReader as _PR, PdfWriter as _PW
+                from reportlab.pdfgen import canvas as _rl_c
+                reader = _PR(io.BytesIO(pdf_data))
+                total = len(reader.pages)
+                writer = _PW()
+                for i, page in enumerate(reader.pages):
+                    overlay_buf = io.BytesIO()
+                    pw = float(page.mediabox.width)
+                    ph = float(page.mediabox.height)
+                    c = _rl_c.Canvas(overlay_buf, pagesize=(pw, ph))
+                    c.setFont("Helvetica", 8)
+                    c.setFillColor(GRAY_LIGHT)
+                    fy = 22 * mm - 2 * mm - 12
+                    c.drawCentredString(pw / 2, fy, f"Page {i + 1} of {total}")
+                    c.save()
+                    overlay_buf.seek(0)
+                    op = _PR(overlay_buf).pages[0]
+                    page.merge_page(op)
+                    writer.add_page(page)
+                out = io.BytesIO()
+                writer.write(out)
+                return out.getvalue()
+            except Exception:
+                return pdf_data
 
         styles = getSampleStyleSheet()
         title_style = ParagraphStyle('TplTitle', parent=styles['Title'], fontName='Helvetica-Bold', fontSize=16, leading=20, spaceAfter=6, alignment=TA_CENTER, textColor=BLUE_DARK)
@@ -199,12 +223,14 @@ def _generate_template_pdf(template):
                 else:
                     story.extend(process_content(section, styles_map))
 
-        story.append(Spacer(1, 30))
-        story.append(Paragraph('<b>SIGNATURES</b>', heading_style))
-        story.append(Spacer(1, 16))
-
         page_w = A4[0] - doc.leftMargin - doc.rightMargin
         col_w = (page_w - 20 * mm) / 2
+
+        sig_block = []
+        sig_block.append(Spacer(1, 20))
+        sig_block.append(Paragraph('<b>SIGNATURES</b>', heading_style))
+        sig_block.append(Spacer(1, 16))
+
         sig_data = [
             [Paragraph('<b>For Study Info Centre Pvt. Ltd.</b>', sig_label), Paragraph('', sig_label), Paragraph('<b>Accepted By (Employee)</b>', sig_label)],
             [Spacer(1, 30), Spacer(1, 30), Spacer(1, 30)],
@@ -219,11 +245,15 @@ def _generate_template_pdf(template):
             ('TOPPADDING', (0, 0), (-1, -1), 2),
             ('BOTTOMPADDING', (0, 0), (-1, -1), 2),
         ]))
-        story.append(sig_table)
+        sig_block.append(sig_table)
+        story.append(KeepTogether(sig_block))
 
         doc.build(story, onFirstPage=header_footer, onLaterPages=header_footer)
-        buf.seek(0)
-        return buf
+        pdf_data = buf.getvalue()
+        final_data = add_total_pages(pdf_data)
+        result = io.BytesIO(final_data)
+        result.seek(0)
+        return result
     except ImportError:
         return None
     except Exception as e:
