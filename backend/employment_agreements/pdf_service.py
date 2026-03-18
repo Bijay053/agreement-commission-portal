@@ -119,7 +119,7 @@ def _add_total_pages(pdf_bytes):
             c.setFont("Helvetica", 8)
             c.setFillColor(GRAY_LIGHT)
             footer_y = 22 * mm - 2 * mm - 12
-            c.drawCentredString(width / 2, footer_y, f"Page {i + 1} of {total}")
+            c.drawCentredString(width / 2, footer_y, f"Page {i + 1} out of {total}")
             c.save()
             overlay_buf.seek(0)
             overlay_page = PdfReader(overlay_buf).pages[0]
@@ -421,8 +421,8 @@ def generate_agreement_pdf(employee, agreement, clauses,
 
     co_name_val = f'Name: {_safe_text(company_signer_name)}' if company_signer_name else 'Name: ____________________'
     co_pos_val = f'Position: {_safe_text(company_signer_position)}' if company_signer_position else 'Position: ____________________'
-    co_date_val = f'Date: {company_signed_date.strftime("%d %B %Y, %I:%M %p") if company_signed_date else "____________________"}'
-    emp_date_val = f'Date: {employee_signed_date.strftime("%d %B %Y, %I:%M %p") if employee_signed_date else "____________________"}'
+    co_date_val = f'Date: {company_signed_date.strftime("%d %B %Y, %I:%M %p %Z").strip() if company_signed_date else "____________________"}'
+    emp_date_val = f'Date: {employee_signed_date.strftime("%d %B %Y, %I:%M %p %Z").strip() if employee_signed_date else "____________________"}'
 
     sig_data = [
         [

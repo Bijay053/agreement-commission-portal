@@ -157,36 +157,6 @@ def send_offer_signed_confirmation_email(employee_name, employee_email, admin_em
     from datetime import datetime
     signed_time = datetime.utcnow().strftime('%d %B %Y at %I:%M %p UTC')
 
-    password_section = ''
-    if pdf_password:
-        pw_safe = _esc(pdf_password)
-        password_section = f'''
-        <div style="background-color: #fef3c7; border: 1px solid #f59e0b; border-radius: 6px; padding: 16px; margin: 16px 0;">
-            <p style="color: #92400e; font-size: 14px; font-weight: 600; margin: 0 0 6px 0;">&#128274; PDF Password</p>
-            <p style="color: #78350f; font-size: 15px; margin: 0;">Use the password below to open the PDF:</p>
-            <p style="color: #1e40af; font-size: 18px; font-weight: 700; margin: 12px 0 0 0; font-family: monospace; letter-spacing: 1px; background: #ffffff; padding: 10px 16px; border-radius: 4px; display: inline-block;">
-                {pw_safe}
-            </p>
-        </div>'''
-
-    download_section = ''
-    if download_link:
-        dl_safe = _esc(download_link)
-        download_section = f'''
-        <div style="text-align: center; margin: 24px 0;">
-            <a href="{dl_safe}" style="display: inline-block; background-color: #059669; color: #ffffff; text-decoration: none; padding: 12px 28px; border-radius: 6px; font-size: 15px; font-weight: 600;">
-                Download Signed Offer Letter
-            </a>
-        </div>'''
-
-    attachment_note = ''
-    if signed_pdf_bytes:
-        attachment_note = 'Please find your signed offer letter attached.'
-    elif download_link:
-        attachment_note = 'You can download your signed offer letter using the link below.'
-    else:
-        attachment_note = 'Your signed offer letter is available in the portal.'
-
     employee_subject = f'Your Signed Offer Letter — {company_name}'
     employee_html = f'''<!DOCTYPE html>
 <html>
@@ -200,12 +170,15 @@ def send_offer_signed_confirmation_email(employee_name, employee_email, admin_em
     <div style="padding: 32px;">
         <p style="color: #374151; font-size: 15px; line-height: 1.6;">Dear {name_safe},</p>
         <p style="color: #374151; font-size: 15px; line-height: 1.6;">
-            Your offer letter has been signed by both you and the company. {attachment_note}
+            Your offer letter from <strong>{co_safe}</strong> has been signed by both you and the company on <strong>{signed_time}</strong>.
         </p>
-        {password_section}
-        {download_section}
-        <p style="color: #374151; font-size: 15px; line-height: 1.6;">Keep this for your records.</p>
+        <p style="color: #374151; font-size: 15px; line-height: 1.6;">
+            Please find your signed copy attached to this email. Keep this for your records.
+        </p>
         <p style="color: #6b7280; font-size: 14px; margin-top: 24px;">Regards,<br><strong>HR Department</strong><br>{co_safe}</p>
+    </div>
+    <div style="padding: 20px 32px; background-color: #f9fafb; border-top: 1px solid #e5e7eb; font-size: 12px; color: #6b7280; text-align: center;">
+        <p style="margin: 0;">This is an automated notification from the Agreement Portal.</p>
     </div>
 </div>
 </body>
@@ -243,7 +216,10 @@ def send_offer_signed_confirmation_email(employee_name, employee_email, admin_em
         <p style="color: #374151; font-size: 15px; line-height: 1.6;">
             The offer letter for <strong>{name_safe}</strong> has been fully executed on <strong>{signed_time}</strong>.
         </p>
-        {download_section}
+        <p style="color: #374151; font-size: 15px; line-height: 1.6;">The signed copy has been sent to the employee and is also attached to this email.</p>
+    </div>
+    <div style="padding: 20px 32px; background-color: #f9fafb; border-top: 1px solid #e5e7eb; font-size: 12px; color: #6b7280; text-align: center;">
+        <p style="margin: 0;">This is an automated notification from the Agreement Portal.</p>
     </div>
 </div>
 </body>

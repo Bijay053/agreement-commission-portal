@@ -653,29 +653,11 @@ class OfferCompanySignView(APIView):
         s3_key = f'offer-letters/{offer.id}/company_signed_{uuid.uuid4().hex[:8]}.pdf'
         uploaded_key = upload_pdf_to_s3(signed_bytes, s3_key)
 
-        pw_chars = string.ascii_letters + string.digits + '!@#$%'
-        unique_password = ''.join(secrets.choice(pw_chars) for _ in range(10))
-
-        encrypted_pdf_for_email = None
-        if signed_bytes and HAS_PIKEPDF:
-            try:
-                input_pdf = pikepdf.open(io.BytesIO(signed_bytes))
-                enc_buf = io.BytesIO()
-                input_pdf.save(enc_buf, encryption=pikepdf.Encryption(owner=unique_password, user=unique_password))
-                input_pdf.close()
-                encrypted_pdf_for_email = enc_buf.getvalue()
-            except Exception as e:
-                print(f'Offer letter PDF encryption for email failed: {e}')
-                encrypted_pdf_for_email = signed_bytes
-        else:
-            encrypted_pdf_for_email = signed_bytes
-
         offer.company_signature_data = signature_data
         offer.company_signer_name = signer_name
         offer.company_signer_position = signer_position
         offer.company_signed_at = timezone.now()
         offer.company_esignature_metadata = esig_metadata
-        offer.pdf_password = unique_password
 
         if uploaded_key:
             offer.signed_pdf_url = uploaded_key
@@ -685,8 +667,6 @@ class OfferCompanySignView(APIView):
 
         from .pdf_service import get_company_name
         co_name = get_company_name(offer.company_entity or 'nepal')
-        portal_url = getattr(settings, 'PORTAL_URL', 'https://portal.studyinfocentre.com')
-        download_link = f'{portal_url}/api/offer-letters/{offer.id}/download?type=signed&mode=download'
 
         from .email_service import send_offer_signed_confirmation_email
         try:
@@ -694,10 +674,8 @@ class OfferCompanySignView(APIView):
                 employee_name=employee.full_name,
                 employee_email=employee.email,
                 admin_email=getattr(settings, 'DEFAULT_FROM_EMAIL', ''),
-                signed_pdf_bytes=encrypted_pdf_for_email,
-                pdf_password=unique_password,
+                signed_pdf_bytes=signed_bytes,
                 company_name=co_name,
-                download_link=download_link,
             )
         except Exception as e:
             print(f'Offer letter signed confirmation email failed: {e}')

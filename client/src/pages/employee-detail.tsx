@@ -963,16 +963,12 @@ function OfferLettersTab({ employeeId, employee }: { employeeId: string; employe
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
-                        {o.pdfUrl && (
-                          <DropdownMenuItem onClick={() => window.open(`/api/offer-letters/${o.id}/download?mode=view`, '_blank')}>
-                            <Eye className="w-4 h-4 mr-2" /> View PDF
-                          </DropdownMenuItem>
-                        )}
-                        {o.pdfUrl && (
-                          <DropdownMenuItem onClick={() => window.open(`/api/offer-letters/${o.id}/download`, '_blank')}>
-                            <Download className="w-4 h-4 mr-2" /> Download PDF
-                          </DropdownMenuItem>
-                        )}
+                        <DropdownMenuItem onClick={() => window.open(`/api/offer-letters/${o.id}/download?mode=view`, '_blank')}>
+                          <Eye className="w-4 h-4 mr-2" /> View PDF
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => window.open(`/api/offer-letters/${o.id}/download`, '_blank')}>
+                          <Download className="w-4 h-4 mr-2" /> Download PDF
+                        </DropdownMenuItem>
                         {o.signedPdfUrl && (
                           <DropdownMenuItem onClick={() => window.open(`/api/offer-letters/${o.id}/download?type=signed&mode=view`, '_blank')}>
                             <Eye className="w-4 h-4 mr-2" /> View Signed Copy
