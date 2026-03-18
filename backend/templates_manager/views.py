@@ -226,14 +226,15 @@ def _generate_template_pdf(template):
         page_w = A4[0] - doc.leftMargin - doc.rightMargin
         col_w = (page_w - 20 * mm) / 2
 
-        sig_block = []
-        sig_block.append(Spacer(1, 20))
-        sig_block.append(Paragraph('<b>SIGNATURES</b>', heading_style))
-        sig_block.append(Spacer(1, 16))
+        story.append(Spacer(1, 14))
+
+        sig_heading = ParagraphStyle('TplSigHeading', parent=heading_style, keepWithNext=1)
+        story.append(Paragraph('<b>SIGNATURES</b>', sig_heading))
+        story.append(Spacer(1, 10))
 
         sig_data = [
             [Paragraph('<b>For Study Info Centre Pvt. Ltd.</b>', sig_label), Paragraph('', sig_label), Paragraph('<b>Accepted By (Employee)</b>', sig_label)],
-            [Spacer(1, 30), Spacer(1, 30), Spacer(1, 30)],
+            [Spacer(1, 20), Spacer(1, 20), Spacer(1, 20)],
             [Paragraph('_' * 30, sig_line), Paragraph('', sig_line), Paragraph('_' * 30, sig_line)],
             [Paragraph('Name: ____________________', sig_label), Paragraph('', sig_label), Paragraph('Name: ____________________', sig_label)],
             [Paragraph('Position: ____________________', sig_label), Paragraph('', sig_label), Paragraph('Position: ____________________', sig_label)],
@@ -242,11 +243,10 @@ def _generate_template_pdf(template):
         sig_table = Table(sig_data, colWidths=[col_w, 20 * mm, col_w])
         sig_table.setStyle(TableStyle([
             ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-            ('TOPPADDING', (0, 0), (-1, -1), 2),
-            ('BOTTOMPADDING', (0, 0), (-1, -1), 2),
+            ('TOPPADDING', (0, 0), (-1, -1), 1),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 1),
         ]))
-        sig_block.append(sig_table)
-        story.append(KeepTogether(sig_block))
+        story.append(sig_table)
 
         doc.build(story, onFirstPage=header_footer, onLaterPages=header_footer)
         pdf_data = buf.getvalue()

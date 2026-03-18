@@ -298,10 +298,12 @@ def generate_agreement_pdf(employee, agreement, clauses):
     page_w = A4[0] - doc.leftMargin - doc.rightMargin
     col_w = (page_w - 20 * mm) / 2
 
-    sig_block = []
-    sig_block.append(Spacer(1, 20))
-    sig_block.append(Paragraph('<b>SIGNATURES</b>', styles['heading']))
-    sig_block.append(Spacer(1, 16))
+    elements.append(Spacer(1, 14))
+
+    from reportlab.lib.styles import ParagraphStyle as PS2
+    sig_heading = PS2('AgrSigHeading', parent=styles['heading'], keepWithNext=1)
+    elements.append(Paragraph('<b>SIGNATURES</b>', sig_heading))
+    elements.append(Spacer(1, 10))
 
     sig_data = [
         [
@@ -310,9 +312,9 @@ def generate_agreement_pdf(employee, agreement, clauses):
             Paragraph('<b>Accepted By (Employee)</b>', styles['sig_label']),
         ],
         [
-            Spacer(1, 30),
-            Spacer(1, 30),
-            Spacer(1, 30),
+            Spacer(1, 20),
+            Spacer(1, 20),
+            Spacer(1, 20),
         ],
         [
             Paragraph('_' * 30, styles['sig_line']),
@@ -339,11 +341,10 @@ def generate_agreement_pdf(employee, agreement, clauses):
     sig_table = Table(sig_data, colWidths=[col_w, 20 * mm, col_w])
     sig_table.setStyle(TableStyle([
         ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-        ('TOPPADDING', (0, 0), (-1, -1), 2),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 2),
+        ('TOPPADDING', (0, 0), (-1, -1), 1),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 1),
     ]))
-    sig_block.append(sig_table)
-    elements.append(KeepTogether(sig_block))
+    elements.append(sig_table)
 
     doc.build(elements, onFirstPage=_header_footer, onLaterPages=_header_footer)
     pdf_bytes = buf.getvalue()
