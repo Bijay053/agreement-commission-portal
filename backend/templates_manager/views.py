@@ -63,30 +63,114 @@ DEFAULT_OFFER_LETTER_CLAUSES = [
 
 def _generate_template_pdf(template):
     try:
+        import os
+        import re
         from reportlab.lib.pagesizes import A4
         from reportlab.lib.units import mm
         from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-        from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
-        from reportlab.lib.enums import TA_CENTER
+        from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+        from reportlab.lib.enums import TA_CENTER, TA_JUSTIFY, TA_LEFT, TA_RIGHT
+        from reportlab.lib.colors import HexColor
+        from reportlab.lib.utils import ImageReader
+
+        LOGO_PATH = os.path.join(os.path.dirname(__file__), '..', 'static', 'logo.png')
+        BLUE_DARK = HexColor('#1a237e')
+        BLUE_MED = HexColor('#1e40af')
+        GRAY_TEXT = HexColor('#4b5563')
+        GRAY_LIGHT = HexColor('#9ca3af')
+        BORDER_BLUE = HexColor('#1e40af')
+
+        def header_footer(canvas, doc):
+            canvas.saveState()
+            width, height = A4
+            if os.path.exists(LOGO_PATH):
+                try:
+                    logo = ImageReader(LOGO_PATH)
+                    iw, ih = logo.getSize()
+                    aspect = ih / float(iw)
+                    logo_w = 55 * mm
+                    logo_h = logo_w * aspect
+                    logo_x = doc.leftMargin
+                    logo_y = height - 18 * mm - logo_h
+                    canvas.drawImage(logo, logo_x, logo_y, width=logo_w, height=logo_h, preserveAspectRatio=True, mask='auto')
+                except Exception:
+                    pass
+            canvas.setStrokeColor(BORDER_BLUE)
+            canvas.setLineWidth(1.5)
+            line_y = height - doc.topMargin + 4 * mm
+            canvas.line(doc.leftMargin, line_y, width - doc.rightMargin, line_y)
+            canvas.setStrokeColor(BORDER_BLUE)
+            canvas.setLineWidth(0.75)
+            footer_line_y = doc.bottomMargin - 2 * mm
+            canvas.line(doc.leftMargin, footer_line_y, width - doc.rightMargin, footer_line_y)
+            canvas.setFont("Helvetica", 8)
+            canvas.setFillColor(GRAY_LIGHT)
+            page_num = canvas.getPageNumber()
+            canvas.drawCentredString(width / 2, footer_line_y - 12, f"Page {page_num}")
+            canvas.setFont("Helvetica", 6.5)
+            canvas.drawString(doc.leftMargin, footer_line_y - 12, "Study Info Centre Pvt. Ltd.")
+            canvas.drawRightString(width - doc.rightMargin, footer_line_y - 12, "Template")
+            canvas.restoreState()
+
+        styles = getSampleStyleSheet()
+        title_style = ParagraphStyle('TplTitle', parent=styles['Title'], fontName='Helvetica-Bold', fontSize=16, leading=20, spaceAfter=6, alignment=TA_CENTER, textColor=BLUE_DARK)
+        subtitle_style = ParagraphStyle('TplSub', parent=styles['Normal'], fontName='Helvetica', fontSize=10, leading=14, spaceAfter=16, alignment=TA_CENTER, textColor=GRAY_TEXT)
+        heading_style = ParagraphStyle('TplHead', parent=styles['Heading2'], fontName='Helvetica-Bold', fontSize=11, leading=15, spaceBefore=14, spaceAfter=6, textColor=BLUE_DARK)
+        subheading_style = ParagraphStyle('TplSubHead', parent=styles['Normal'], fontName='Helvetica-Bold', fontSize=10, leading=13, spaceBefore=8, spaceAfter=4, textColor=BLUE_MED)
+        body_style = ParagraphStyle('TplBody', parent=styles['Normal'], fontName='Helvetica', fontSize=9.5, leading=13, alignment=TA_JUSTIFY, spaceAfter=4, textColor=HexColor('#1f2937'))
+        bullet_style = ParagraphStyle('TplBullet', parent=body_style, leftIndent=18, firstLineIndent=0, spaceBefore=2, spaceAfter=2)
+        sig_label = ParagraphStyle('TplSigLabel', parent=styles['Normal'], fontName='Helvetica', fontSize=9, leading=12, textColor=GRAY_TEXT)
+        sig_line = ParagraphStyle('TplSigLine', parent=styles['Normal'], fontName='Helvetica', fontSize=9, leading=12, textColor=HexColor('#1f2937'))
+
+        def safe_text(text):
+            if not text:
+                return ''
+            return text.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
+
+        def process_content(content, styles_map):
+            elements = []
+            for line in content.split('\n'):
+                line = line.strip()
+                if not line:
+                    elements.append(Spacer(1, 3))
+                    continue
+                is_bullet = False
+                if line.startswith('- ') or line.startswith('• ') or line.startswith('· '):
+                    is_bullet = True
+                    line = line[2:]
+                elif re.match(r'^\([a-g]\)', line):
+                    elements.append(Paragraph(safe_text(line), styles_map['bullet']))
+                    continue
+                safe = safe_text(line)
+                if is_bullet:
+                    elements.append(Paragraph(f'&#8226; {safe}', styles_map['bullet']))
+                else:
+                    elements.append(Paragraph(safe, styles_map['body']))
+            return elements
 
         buf = io.BytesIO()
-        doc = SimpleDocTemplate(buf, pagesize=A4, topMargin=25*mm, bottomMargin=25*mm, leftMargin=20*mm, rightMargin=20*mm)
-        styles = getSampleStyleSheet()
-
-        title_style = ParagraphStyle('TemplateTitle', parent=styles['Heading1'], fontSize=16, alignment=TA_CENTER, spaceAfter=12)
-        desc_style = ParagraphStyle('TemplateDesc', parent=styles['Normal'], fontSize=10, alignment=TA_CENTER, textColor='#666666', spaceAfter=20)
-        clause_title_style = ParagraphStyle('ClauseTitle', parent=styles['Heading2'], fontSize=12, spaceBefore=14, spaceAfter=6)
-        clause_body_style = ParagraphStyle('ClauseBody', parent=styles['Normal'], fontSize=10, leading=14, spaceAfter=10)
+        doc = SimpleDocTemplate(buf, pagesize=A4, topMargin=35*mm, bottomMargin=22*mm, leftMargin=22*mm, rightMargin=22*mm)
 
         story = []
-        story.append(Paragraph(template.name, title_style))
-        if template.description:
-            story.append(Paragraph(template.description, desc_style))
-        story.append(Spacer(1, 10))
+        story.append(Spacer(1, 8))
 
-        type_label = 'Offer Letter Template' if template.template_type == 'offer_letter' else 'Agreement Template'
-        story.append(Paragraph(f'<i>{type_label}</i>', desc_style))
-        story.append(Spacer(1, 10))
+        type_label = 'OFFER LETTER' if template.template_type == 'offer_letter' else 'EMPLOYMENT AGREEMENT'
+        story.append(Paragraph(type_label, title_style))
+        story.append(Spacer(1, 4))
+
+        story.append(Paragraph(f'Template: {safe_text(template.name)}', subtitle_style))
+        if template.description:
+            story.append(Paragraph(safe_text(template.description), subtitle_style))
+        story.append(Spacer(1, 6))
+
+        if template.template_type != 'offer_letter':
+            story.append(Paragraph(
+                'This Employment Agreement ("Agreement") is made on &lt;date&gt;',
+                ParagraphStyle('TplDateLine', parent=subtitle_style, fontName='Helvetica-Oblique')
+            ))
+            story.append(Spacer(1, 10))
+
+        styles_map = {'body': body_style, 'bullet': bullet_style}
 
         for clause in (template.clauses or []):
             order = clause.get('order', '')
@@ -94,17 +178,50 @@ def _generate_template_pdf(template):
             content = clause.get('content', '')
             editable = clause.get('is_editable', True)
 
-            tag = ' <font color="#999999">[Fixed]</font>' if not editable else ''
-            story.append(Paragraph(f'{order}. {title}{tag}', clause_title_style))
+            tag = ''
+            if not editable:
+                tag = ' <font color="#9ca3af">[Fixed]</font>'
 
-            for line in content.split('\n'):
-                safe_line = line.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
-                if safe_line.strip():
-                    story.append(Paragraph(safe_line, clause_body_style))
+            story.append(Paragraph(f'<b>{order}. {safe_text(title)}</b>{tag}', heading_style))
+
+            sub_sections = content.split('\n\n')
+            for section in sub_sections:
+                section = section.strip()
+                if not section:
+                    continue
+                lines = section.split('\n')
+                first_line = lines[0].strip() if lines else ''
+                sub_match = re.match(r'^(\d+\.\d+)\s+(.+)', first_line)
+                if sub_match and len(lines) > 1:
+                    story.append(Paragraph(f'<b>{safe_text(first_line)}</b>', subheading_style))
+                    remaining = '\n'.join(lines[1:])
+                    story.extend(process_content(remaining, styles_map))
                 else:
-                    story.append(Spacer(1, 4))
+                    story.extend(process_content(section, styles_map))
 
-        doc.build(story)
+        story.append(Spacer(1, 30))
+        story.append(Paragraph('<b>SIGNATURES</b>', heading_style))
+        story.append(Spacer(1, 16))
+
+        page_w = A4[0] - doc.leftMargin - doc.rightMargin
+        col_w = (page_w - 20 * mm) / 2
+        sig_data = [
+            [Paragraph('<b>For Study Info Centre Pvt. Ltd.</b>', sig_label), Paragraph('', sig_label), Paragraph('<b>Accepted By (Employee)</b>', sig_label)],
+            [Spacer(1, 30), Spacer(1, 30), Spacer(1, 30)],
+            [Paragraph('_' * 30, sig_line), Paragraph('', sig_line), Paragraph('_' * 30, sig_line)],
+            [Paragraph('Name: ____________________', sig_label), Paragraph('', sig_label), Paragraph('Name: ____________________', sig_label)],
+            [Paragraph('Position: ____________________', sig_label), Paragraph('', sig_label), Paragraph('Position: ____________________', sig_label)],
+            [Paragraph('Date: ____________________', sig_label), Paragraph('', sig_label), Paragraph('Date: ____________________', sig_label)],
+        ]
+        sig_table = Table(sig_data, colWidths=[col_w, 20 * mm, col_w])
+        sig_table.setStyle(TableStyle([
+            ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+            ('TOPPADDING', (0, 0), (-1, -1), 2),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 2),
+        ]))
+        story.append(sig_table)
+
+        doc.build(story, onFirstPage=header_footer, onLaterPages=header_footer)
         buf.seek(0)
         return buf
     except ImportError:
