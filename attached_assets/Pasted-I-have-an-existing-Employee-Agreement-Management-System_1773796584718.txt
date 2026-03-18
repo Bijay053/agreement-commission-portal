@@ -1,0 +1,420 @@
+I have an existing Employee Agreement Management System built with 
+React (Create React App) frontend and Python FastAPI backend with 
+PostgreSQL database. The system already has employee profiles, 
+document upload, email sending, and basic agreement generation.
+
+DO NOT rebuild or touch any existing features.
+DO NOT change any existing database tables.
+DO NOT change any existing API routes.
+ONLY add the 4 new features described below on top of 
+what already exists.
+
+═══════════════════════════════════════════
+FEATURE 1 — E-SIGNATURE & SIGNING FLOW
+═══════════════════════════════════════════
+
+WHAT TO ADD IN BACKEND (Python FastAPI):
+
+Add these new columns to the existing 
+agreements table (use ALTER TABLE, do not 
+recreate the table):
+- signature_data (text)         ← base64 signature image
+- signing_token (varchar, unique) ← secure UUID for signing link
+- token_expires_at (timestamp)  ← 7 days from sent date
+- signed_at (timestamp)         ← when employee signed
+- signed_pdf_url (text)         ← path to signed PDF file
+
+Add new API routes in a new file 
+routers/signing.py:
+
+POST /api/signing/send/{agreement_id}
+- Generates a unique UUID signing token
+- Saves token + expiry (7 days from now) to agreement row
+- Updates agreement status to "sent"
+- Triggers the email (see Feature 2)
+- Returns success response
+
+GET /api/signing/verify/{token}
+- Checks if token exists in database
+- Checks token has not expired
+- Returns agreement details + employee name + 
+  full agreement text for display
+- If token invalid or expired return 400 error
+
+POST /api/signing/submit/{token}
+- Receives signature_data (base64 image string)
+- Validates token is still valid
+- Calls pdf_service to embed signature into 
+  the existing agreement PDF
+- Saves signed PDF to uploads/signed/ folder
+- Updates agreement row:
+  status = "signed"
+  signed_at = now()
+  signature_data = received base64
+  signed_pdf_url = path to new signed PDF
+- Triggers confirmation emails to both 
+  employee and admin (see Feature 2)
+- Returns success
+
+ADD in services/pdf_service.py:
+
+New function embed_signature_to_pdf():
+- Takes existing agreement PDF file path
+- Takes base64 signature image
+- Uses reportlab or pypdf to open the PDF
+- Goes to the last page (signature page)
+- Embeds the signature image at the 
+  signature line position
+- Adds signed date text below signature
+- Saves as a new file in uploads/signed/
+- Returns the new file path
+
+WHAT TO ADD IN FRONTEND (React):
+
+Create a new file src/pages/SignAgreement.jsx
+This is a PUBLIC page (no login required).
+Route: /sign/:token
+
+This page does the following:
+
+On load:
+- Calls GET /api/signing/verify/:token
+- If invalid or expired shows an error message:
+  "This signing link is invalid or has expired. 
+  Please contact HR."
+- If valid shows the signing page
+
+Signing page layout:
+- Company logo and name at top
+- Heading: "Employment Agreement — Please Review and Sign"
+- A scrollable box showing the full agreement text
+- A checkbox: "I have read and understood this 
+  agreement and agree to all terms and conditions"
+- Below checkbox: A signature pad component 
+  using react-signature-canvas library
+  with label "Sign Here"
+- Two buttons under the pad: 
+  "Clear" to reset signature
+  "Submit Signature" (disabled until checkbox 
+  ticked AND signature drawn)
+- On submit: POST to /api/signing/submit/:token
+  with the signature canvas data as base64
+- Show loading spinner while submitting
+- On success show confirmation message:
+  "Thank you [Name]. Your agreement has been 
+  signed successfully. A copy has been sent 
+  to your email."
+- On error show: "Something went wrong. 
+  Please try again or contact HR."
+
+Install required package:
+npm install react-signature-canvas
+
+═══════════════════════════════════════════
+FEATURE 2 — EMAIL AGREEMENT FOR SIGNATURE
+═══════════════════════════════════════════
+
+WHAT TO ADD IN BACKEND:
+
+Add two new functions in the existing 
+services/email_service.py file.
+Do not change any existing email functions.
+
+FUNCTION 1: send_signing_request_email()
+Parameters: employee_name, employee_email, 
+            signing_token, frontend_url
+
+Sends this email:
+To: employee email
+Subject: Action Required — Please Sign Your 
+         Employment Agreement
+Body (HTML email):
+  Dear [employee_name],
+
+  Your employment agreement with Study Info 
+  Centre Pvt. Ltd. is ready for your review 
+  and signature.
+
+  Please click the button below to read and 
+  sign your agreement. This link will expire 
+  in 7 days.
+
+  [SIGN MY AGREEMENT] button
+  → links to [frontend_url]/sign/[signing_token]
+
+  If the button does not work paste this link 
+  into your browser:
+  [frontend_url]/sign/[signing_token]
+
+  Regards,
+  HR Department
+  Study Info Centre Pvt. Ltd.
+
+FUNCTION 2: send_signed_confirmation_email()
+Parameters: employee_name, employee_email,
+            admin_email, signed_pdf_path
+
+Sends TWO emails:
+
+Email 1 — To Employee:
+Subject: Your Signed Employment Agreement — 
+         Study Info Centre Pvt. Ltd.
+Body:
+  Dear [employee_name],
+  Thank you for signing your employment agreement.
+  Please find your signed copy attached.
+  Keep this for your records.
+  Regards, HR Department
+Attachment: signed PDF file
+
+Email 2 — To Admin:
+Subject: Agreement Signed — [employee_name]
+Body:
+  [employee_name] has signed their employment 
+  agreement on [date and time].
+  Please find the signed copy attached.
+Attachment: signed PDF file
+
+═══════════════════════════════════════════
+FEATURE 3 — CLAUSE & TEMPLATE EDITOR
+═══════════════════════════════════════════
+
+WHAT TO ADD IN BACKEND:
+
+Create a new database table called 
+agreement_templates (do not touch any 
+existing tables):
+
+agreement_templates:
+- id (UUID, primary key)
+- name (varchar) ← e.g. "Standard Employment Contract"
+- description (text)
+- clauses (JSONB) ← array of clause objects
+- is_default (boolean, default false)
+- created_at (timestamp)
+- updated_at (timestamp)
+
+Each clause object in the JSONB array has:
+{
+  "id": "clause_1",
+  "title": "Term of Employment",
+  "content": "full clause text here",
+  "is_editable": true,
+  "order": 1
+}
+
+Create a new file routers/templates.py 
+with these routes:
+
+GET /api/templates
+- Returns list of all templates
+
+GET /api/templates/{template_id}
+- Returns single template with all clauses
+
+POST /api/templates
+- Creates new template
+- Body: name, description, clauses array
+
+PUT /api/templates/{template_id}
+- Updates template name, description, clauses
+
+DELETE /api/templates/{template_id}
+- Deletes template
+
+POST /api/templates/{template_id}/duplicate
+- Creates a copy of the template with 
+  name "Copy of [original name]"
+
+Also seed one default template on first run
+based on the Study Info Centre agreement 
+structure with these sections:
+1. Parties
+2. Appointment
+3. Term of Employment
+4. Duties and Responsibilities
+5. Working Hours
+6. Compensation
+7. CIT Contribution
+8. Performance Management
+9. Leave Entitlements
+10. Confidentiality
+11. Non-Disparagement
+12. Allowances and Benefits
+13. Intellectual Property
+14. Conflict of Interest
+15. Non-Solicitation
+16. Post-Employment Protection
+17. Disciplinary Procedure
+18. Termination
+19. Governing Law
+
+WHAT TO ADD IN FRONTEND:
+
+Create src/pages/Templates.jsx
+
+This page has two panels side by side:
+
+LEFT PANEL — Template List:
+- List of all saved templates
+- Each row shows template name and 
+  number of clauses
+- Buttons: Edit, Duplicate, Delete
+- Button at top: + New Template
+
+RIGHT PANEL — Template Editor:
+Opens when user clicks Edit or New Template.
+Shows:
+- Template Name field (text input)
+- Description field (textarea)
+- List of clauses in order
+  Each clause shows:
+  - Clause number and title (editable)
+  - Content text area (editable, resizable)
+  - Toggle: Editable during agreement / Fixed
+  - Drag handle to reorder clauses
+  - Delete clause button
+- Button: + Add New Clause (adds blank clause 
+  at bottom)
+- Button: Save Template
+- Button: Cancel
+
+When admin creates a new agreement and 
+selects a template, show each editable clause 
+in the agreement editor so admin can make 
+per-agreement adjustments before sending.
+
+═══════════════════════════════════════════
+FEATURE 4 — EMPLOYEE DOCUMENT FOLDERS
+═══════════════════════════════════════════
+
+WHAT TO ADD IN BACKEND:
+
+Add a new table called employee_documents
+(do not change any existing document/upload 
+tables that already exist):
+
+employee_documents:
+- id (UUID, primary key)
+- employee_id (UUID, foreign key → employees)
+- category (varchar) ← see categories below
+- file_name (varchar)
+- original_file_name (varchar)
+- file_url (text)
+- file_size (integer) ← in bytes
+- uploaded_by (varchar) ← admin name
+- uploaded_at (timestamp)
+
+Categories are exactly these 5:
+"cv" / "citizenship" / "tax" / "academic" / "other"
+
+Create routers/employee_documents.py with:
+
+GET /api/employees/{employee_id}/documents
+- Returns all documents grouped by category
+
+POST /api/employees/{employee_id}/documents
+- Accepts multipart form upload
+- Fields: category, file (the uploaded file)
+- Saves file to uploads/employees/{employee_id}/
+- Creates database record
+- Returns the new document record
+
+GET /api/documents/{document_id}/download
+- Returns the file as a download response
+
+DELETE /api/documents/{document_id}
+- Deletes file from disk
+- Deletes database record
+
+WHAT TO ADD IN FRONTEND:
+
+Add a Documents tab inside the existing 
+employee profile page.
+
+Do not rebuild the employee profile page.
+Just add a new tab called Documents to 
+the existing tab/section structure.
+
+The Documents tab shows:
+
+5 category sections displayed as accordion 
+panels or separate tabs:
+- CV / Resume
+- Citizenship Certificate  
+- Tax / PAN Document
+- Academic Certificates
+- Other Documents
+
+Each category section shows:
+- List of uploaded files with:
+  File name, file size, upload date
+  Download button (downloads the file)
+  Delete button (with confirmation popup)
+- An Upload button for that category
+  Opens a file picker (accept all file types)
+  Shows upload progress bar
+  On success adds file to the list instantly
+
+At the top of the Documents tab show a 
+summary: "5 documents — CV (1) Citizenship (1) 
+Tax (1) Academic (2) Other (0)"
+
+═══════════════════════════════════════════
+NAVIGATION — ADD TO EXISTING SIDEBAR
+═══════════════════════════════════════════
+
+In the existing sidebar/navigation component 
+add one new menu item:
+
+- Templates  (icon: document with lines)
+  → links to /templates
+
+Do not change or remove any existing 
+navigation items.
+
+═══════════════════════════════════════════
+NEW PACKAGES TO INSTALL
+═══════════════════════════════════════════
+
+Frontend (React):
+npm install react-signature-canvas
+
+Backend (Python):
+pip install pypdf reportlab python-multipart
+
+═══════════════════════════════════════════
+ROUTING — ADD TO EXISTING App.jsx
+═══════════════════════════════════════════
+
+Add these new routes to the existing 
+React Router setup in App.jsx.
+Do not change any existing routes.
+
+New routes to add:
+/sign/:token      → SignAgreement.jsx (public, no auth)
+/templates        → Templates.jsx (protected, needs login)
+
+═══════════════════════════════════════════
+IMPORTANT RULES FOR THE AGENT
+═══════════════════════════════════════════
+
+1. Do NOT recreate or overwrite any existing 
+   files unless adding to them
+
+2. When adding to an existing file only 
+   append new functions or sections, 
+   do not change existing code
+
+3. Use ALTER TABLE to add new columns, 
+   never DROP or recreate existing tables
+
+4. All new API routes must use the same 
+   authentication middleware already in place
+
+5. All new React pages must use the same 
+   existing layout component, styling, and 
+   design system already in the project
+
+6. Ask me if you are unsure which existing 
+   file to modify before making changes
