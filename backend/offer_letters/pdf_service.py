@@ -380,6 +380,8 @@ def generate_offer_letter_pdf(offer, employee,
             '[Join date]': start_date,
             '[Joint date ]': start_date,
             '[Joint date]': start_date,
+            '[Start Date]': start_date,
+            '[Start date]': start_date,
             '[Citizenship No]': citizenship_no,
             '[Citizenship no]': citizenship_no,
             '[Citizenship Number]': citizenship_no,
@@ -399,6 +401,8 @@ def generate_offer_letter_pdf(offer, employee,
             '[Phone number]': emp_phone,
             '[Phone]': emp_phone,
             '[Department]': emp_department,
+            '[Department Name]': emp_department,
+            '[Department name]': emp_department,
             '[Amount]': salary_amount,
             '[Salary Amount]': salary_amount,
             '[Salary]': salary_full,
@@ -407,9 +411,11 @@ def generate_offer_letter_pdf(offer, employee,
             '[Company Name]': company_name,
             '[Company name]': company_name,
             '[Company]': company_name,
+            '[Response Date]': '',
+            '[Response date]': '',
         }
         for placeholder, value in replacements.items():
-            if value:
+            if value is not None:
                 if placeholder in content:
                     content = content.replace(placeholder, value)
                 if placeholder in title:

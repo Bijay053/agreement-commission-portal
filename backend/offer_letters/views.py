@@ -499,17 +499,19 @@ class VerifyOfferSigningTokenView(APIView):
             '[Employee Name]': emp_name, '[Employee name]': emp_name,
             '[Position Name]': position, '[Position name]': position, '[Position]': position,
             '[Join Date]': start_date, '[Join date]': start_date, '[Joint date ]': start_date, '[Joint date]': start_date,
+            '[Start Date]': start_date, '[Start date]': start_date,
             '[Citizenship No]': citizenship_no, '[Citizenship no]': citizenship_no, '[Citizenship Number]': citizenship_no,
             '[PAN No]': pan_no, '[PAN no]': pan_no, '[PAN Number]': pan_no,
             '[Permanent Address]': permanent_address, '[Permanent address]': permanent_address, '[Address]': permanent_address,
             '[Passport Number]': passport_number, '[Passport number]': passport_number, '[Passport No]': passport_number,
             '[Email Address]': emp_email, '[Email address]': emp_email, '[Email]': emp_email,
             '[Phone Number]': emp_phone, '[Phone number]': emp_phone, '[Phone]': emp_phone,
-            '[Department]': emp_department,
+            '[Department]': emp_department, '[Department Name]': emp_department, '[Department name]': emp_department,
             '[Amount]': salary_amount, '[Salary Amount]': salary_amount,
             '[Salary]': salary_full, '[Gross Salary]': salary_full,
             '[Currency]': salary_currency,
             '[Company Name]': company_name, '[Company name]': company_name, '[Company]': company_name,
+            '[Response Date]': '', '[Response date]': '',
         }
 
         resolved_clauses = []
@@ -517,7 +519,7 @@ class VerifyOfferSigningTokenView(APIView):
             title = clause.get('title', '')
             content = clause.get('content', '')
             for placeholder, value in replacements.items():
-                if value:
+                if value is not None:
                     title = title.replace(placeholder, value)
                     content = content.replace(placeholder, value)
             resolved_clauses.append({**clause, 'title': title, 'content': content})

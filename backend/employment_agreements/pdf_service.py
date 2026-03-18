@@ -344,6 +344,8 @@ def generate_agreement_pdf(employee, agreement, clauses,
             '[Joint date]': join_date,
             '[Expire Date]': expire_date,
             '[Expire date]': expire_date,
+            '[Start Date]': join_date,
+            '[Start date]': join_date,
             '[Citizenship No]': citizenship_no,
             '[Citizenship no]': citizenship_no,
             '[Citizenship Number]': citizenship_no,
@@ -363,6 +365,8 @@ def generate_agreement_pdf(employee, agreement, clauses,
             '[Phone number]': emp_phone,
             '[Phone]': emp_phone,
             '[Department]': emp_department,
+            '[Department Name]': emp_department,
+            '[Department name]': emp_department,
             '[Amount]': salary_amount,
             '[Salary Amount]': salary_amount,
             '[Salary]': salary_full,
@@ -373,7 +377,7 @@ def generate_agreement_pdf(employee, agreement, clauses,
             '[Company]': company_name,
         }
         for placeholder, value in replacements.items():
-            if value:
+            if value is not None:
                 if placeholder in content:
                     content = content.replace(placeholder, value)
                 if placeholder in title:
