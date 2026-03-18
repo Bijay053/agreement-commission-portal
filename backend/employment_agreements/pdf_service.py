@@ -247,7 +247,10 @@ def _process_content_lines(content, styles):
     return elements
 
 
-def generate_agreement_pdf(employee, agreement, clauses):
+def generate_agreement_pdf(employee, agreement, clauses,
+                           employee_signature=None, employee_signed_date=None,
+                           company_signature=None, company_signer_name=None,
+                           company_signer_position=None, company_signed_date=None):
     if not HAS_REPORTLAB:
         return None
 
@@ -386,6 +389,30 @@ def generate_agreement_pdf(employee, agreement, clauses):
     elements.append(Paragraph('<b>SIGNATURES</b>', sig_heading))
     elements.append(Spacer(1, 10))
 
+    def _make_sig_image(sig_data_str, width=130, height=50):
+        if not sig_data_str:
+            return Spacer(1, 50)
+        try:
+            raw = sig_data_str
+            if ',' in raw:
+                raw = raw.split(',', 1)[1]
+            sig_bytes = base64.b64decode(raw)
+            sig_io = io.BytesIO(sig_bytes)
+            from reportlab.platypus import Image as RLImage
+            img = RLImage(sig_io, width=width, height=height)
+            img.hAlign = 'LEFT'
+            return img
+        except Exception:
+            return Spacer(1, 50)
+
+    company_sig_cell = _make_sig_image(company_signature) if company_signature else Spacer(1, 50)
+    employee_sig_cell = _make_sig_image(employee_signature) if employee_signature else Spacer(1, 50)
+
+    co_name_val = f'Name: {_safe_text(company_signer_name)}' if company_signer_name else 'Name: ____________________'
+    co_pos_val = f'Position: {_safe_text(company_signer_position)}' if company_signer_position else 'Position: ____________________'
+    co_date_val = f'Date: {company_signed_date.strftime("%d %B %Y, %I:%M %p") if company_signed_date else "____________________"}'
+    emp_date_val = f'Date: {employee_signed_date.strftime("%d %B %Y, %I:%M %p") if employee_signed_date else "____________________"}'
+
     sig_data = [
         [
             Paragraph(f'<b>For {_safe_text(company_name)}</b>', styles['sig_label']),
@@ -393,9 +420,9 @@ def generate_agreement_pdf(employee, agreement, clauses):
             Paragraph('<b>Accepted By (Employee)</b>', styles['sig_label']),
         ],
         [
+            company_sig_cell,
             Spacer(1, 20),
-            Spacer(1, 20),
-            Spacer(1, 20),
+            employee_sig_cell,
         ],
         [
             Paragraph('_' * 30, styles['sig_line']),
@@ -403,19 +430,19 @@ def generate_agreement_pdf(employee, agreement, clauses):
             Paragraph('_' * 30, styles['sig_line']),
         ],
         [
-            Paragraph('Name: ____________________', styles['sig_label']),
+            Paragraph(co_name_val, styles['sig_label']),
             Paragraph('', styles['sig_label']),
             Paragraph(f'Name: {_safe_text(employee.full_name or "")}', styles['sig_label']),
         ],
         [
-            Paragraph('Position: ____________________', styles['sig_label']),
+            Paragraph(co_pos_val, styles['sig_label']),
             Paragraph('', styles['sig_label']),
             Paragraph(f'Position: {_safe_text(agreement.position or "")}', styles['sig_label']),
         ],
         [
-            Paragraph('Date: ____________________', styles['sig_label']),
+            Paragraph(co_date_val, styles['sig_label']),
             Paragraph('', styles['sig_label']),
-            Paragraph('Date: ____________________', styles['sig_label']),
+            Paragraph(emp_date_val, styles['sig_label']),
         ],
     ]
 
@@ -436,6 +463,26 @@ def generate_agreement_pdf(employee, agreement, clauses):
     return result
 
 
+def _find_signature_y(pdf_bytes):
+    try:
+        from pypdf import PdfReader as _PR
+        reader = _PR(io.BytesIO(pdf_bytes))
+        last_page = reader.pages[-1]
+        text = last_page.extract_text() or ''
+        lines = text.split('\n')
+        for i, line in enumerate(lines):
+            if 'SIGNATURES' in line.upper():
+                page_height = float(last_page.mediabox.height)
+                total_lines = len(lines)
+                sig_line_idx = i
+                fraction_from_top = sig_line_idx / max(total_lines, 1)
+                estimated_y = page_height * (1 - fraction_from_top)
+                return max(estimated_y - 80, 60)
+    except Exception:
+        pass
+    return None
+
+
 def embed_signature_to_pdf(pdf_bytes, signature_base64, signed_date=None):
     if not HAS_REPORTLAB or not HAS_PYPDF:
         return None
@@ -454,29 +501,30 @@ def embed_signature_to_pdf(pdf_bytes, signature_base64, signed_date=None):
     overlay_buf = io.BytesIO()
     c = rl_canvas.Canvas(overlay_buf, pagesize=(page_width, page_height))
 
-    sig_width = 150
-    sig_height = 60
-    sig_x = 72
-    sig_y = 200
+    sig_width = 140
+    sig_height = 55
+    emp_sig_x = page_width - 72 - sig_width
+    detected_y = _find_signature_y(pdf_bytes)
+    emp_sig_y = detected_y if detected_y else 185
 
     try:
         sig_image.seek(0)
         img_reader = ImageReader(sig_image)
-        c.drawImage(img_reader, sig_x, sig_y, width=sig_width, height=sig_height, mask='auto')
+        c.drawImage(img_reader, emp_sig_x, emp_sig_y, width=sig_width, height=sig_height, mask='auto')
     except Exception:
         from reportlab.lib.utils import ImageReader as IR2
         sig_image.seek(0)
         ir = IR2(sig_image)
-        c.drawImage(ir, sig_x, sig_y, width=sig_width, height=sig_height, mask='auto')
+        c.drawImage(ir, emp_sig_x, emp_sig_y, width=sig_width, height=sig_height, mask='auto')
 
     if signed_date:
         date_str = signed_date.strftime('%d %B %Y, %I:%M %p')
     else:
         date_str = datetime.utcnow().strftime('%d %B %Y, %I:%M %p')
 
-    c.setFont("Helvetica", 9)
+    c.setFont("Helvetica", 8)
     c.setFillColorRGB(0.3, 0.3, 0.3)
-    c.drawString(sig_x, sig_y - 15, f"Signed on: {date_str}")
+    c.drawString(emp_sig_x, emp_sig_y - 14, f"Signed on: {date_str}")
 
     c.save()
     overlay_buf.seek(0)
@@ -518,7 +566,8 @@ def embed_company_signature_to_pdf(pdf_bytes, company_sig_base64, signer_name=''
     sig_width = 140
     sig_height = 55
     company_sig_x = 72
-    company_sig_y = 185
+    detected_y = _find_signature_y(pdf_bytes)
+    company_sig_y = detected_y if detected_y else 185
 
     try:
         company_sig_image.seek(0)

@@ -13,7 +13,7 @@ from core.pagination import StandardPagination
 from employees.models import Employee
 from templates_manager.models import AgreementTemplate
 from .models import EmploymentAgreement
-from .pdf_service import generate_agreement_pdf, embed_signature_to_pdf, embed_company_signature_to_pdf, upload_pdf_to_s3
+from .pdf_service import generate_agreement_pdf, upload_pdf_to_s3
 from .email_service import send_signing_request_email, send_signed_confirmation_email
 
 try:
@@ -454,35 +454,18 @@ class SubmitSignatureView(APIView):
         signed_pdf_bytes = None
         signed_pdf_key = None
 
-        if agreement.pdf_url:
-            try:
-                import boto3
-                s3 = boto3.client(
-                    's3',
-                    aws_access_key_id=settings.AWS_ACCESS_KEY_ID,
-                    aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY,
-                    region_name=settings.AWS_S3_REGION_NAME,
-                )
-                s3_obj = s3.get_object(
-                    Bucket=settings.AWS_S3_BUCKET_NAME,
-                    Key=agreement.pdf_url,
-                )
-                original_pdf = s3_obj['Body'].read()
-
-                signed_pdf_bytes = embed_signature_to_pdf(original_pdf, signature_data, timezone.now())
-
-                if signed_pdf_bytes:
-                    signed_pdf_key = f'employment-agreements/{agreement.id}/signed_agreement.pdf'
-                    upload_pdf_to_s3(signed_pdf_bytes, signed_pdf_key)
-            except Exception as e:
-                print(f'PDF signing failed: {e}')
-        else:
-            pdf_buf = generate_agreement_pdf(employee, agreement, agreement.clauses or [])
+        try:
+            pdf_buf = generate_agreement_pdf(
+                employee, agreement, agreement.clauses or [],
+                employee_signature=signature_data,
+                employee_signed_date=timezone.now(),
+            )
             if pdf_buf:
-                signed_pdf_bytes = embed_signature_to_pdf(pdf_buf.getvalue(), signature_data, timezone.now())
-                if signed_pdf_bytes:
-                    signed_pdf_key = f'employment-agreements/{agreement.id}/signed_agreement.pdf'
-                    upload_pdf_to_s3(signed_pdf_bytes, signed_pdf_key)
+                signed_pdf_bytes = pdf_buf.getvalue()
+                signed_pdf_key = f'employment-agreements/{agreement.id}/signed_agreement.pdf'
+                upload_pdf_to_s3(signed_pdf_bytes, signed_pdf_key)
+        except Exception as e:
+            print(f'PDF generation with signature failed: {e}')
 
         now = timezone.now()
         agreement.status = 'employee_signed'
@@ -531,17 +514,19 @@ class AgreementDownloadView(APIView):
                 except Employee.DoesNotExist:
                     return Response({'message': 'Employee not found'}, status=404)
 
-                pdf_buf = generate_agreement_pdf(employee, agreement, agreement.clauses or [])
+                pdf_buf = generate_agreement_pdf(
+                    employee, agreement, agreement.clauses or [],
+                    employee_signature=agreement.signature_data,
+                    employee_signed_date=agreement.signed_at,
+                    company_signature=getattr(agreement, 'company_signature_data', None),
+                    company_signer_name=getattr(agreement, 'company_signer_name', None),
+                    company_signer_position=getattr(agreement, 'company_signer_position', None),
+                    company_signed_date=getattr(agreement, 'company_signed_at', None),
+                )
                 if not pdf_buf:
                     return Response({'message': 'PDF generation not available'}, status=500)
 
-                base_pdf = pdf_buf.getvalue()
-
-                if agreement.signature_data:
-                    signed_pdf_bytes = embed_signature_to_pdf(base_pdf, agreement.signature_data, agreement.signed_at)
-                    file_data = signed_pdf_bytes if signed_pdf_bytes else base_pdf
-                else:
-                    file_data = base_pdf
+                file_data = pdf_buf.getvalue()
             else:
                 blocked, msg, file_bytes = _fetch_and_scan_s3(s3_key, request, label=f'agreement {agreement_id}')
                 if blocked:
@@ -618,27 +603,19 @@ class CompanySignView(APIView):
         except Employee.DoesNotExist:
             return Response({'message': 'Employee not found'}, status=404)
 
-        template = None
-        if agreement.template_id:
-            try:
-                template = AgreementTemplate.objects.get(id=agreement.template_id)
-            except AgreementTemplate.DoesNotExist:
-                pass
-
-        pdf_buf = generate_agreement_pdf(agreement, employee, template)
+        pdf_buf = generate_agreement_pdf(
+            employee, agreement, agreement.clauses or [],
+            employee_signature=agreement.signature_data,
+            employee_signed_date=agreement.signed_at,
+            company_signature=signature_data,
+            company_signer_name=signer_name,
+            company_signer_position=signer_position,
+            company_signed_date=timezone.now(),
+        )
         if not pdf_buf:
             return Response({'message': 'Failed to generate PDF'}, status=500)
 
-        pdf_bytes = pdf_buf.getvalue()
-
-        signed_bytes = embed_company_signature_to_pdf(
-            pdf_bytes, signature_data, signer_name, signer_position,
-            signed_date=timezone.now(),
-            employee_signature=agreement.signature_data,
-            employee_signed_date=agreement.signed_at,
-        )
-        if not signed_bytes:
-            return Response({'message': 'Failed to embed company signature'}, status=500)
+        signed_bytes = pdf_buf.getvalue()
 
         s3_key = f'agreements/{agreement.id}/company_signed_{uuid.uuid4().hex[:8]}.pdf'
         uploaded_key = upload_pdf_to_s3(signed_bytes, s3_key)
