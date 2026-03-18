@@ -6,6 +6,16 @@ from datetime import datetime, date
 from django.conf import settings
 
 
+COMPANY_NAMES = {
+    'nepal': 'Study Info Centre Pvt. Ltd.',
+    'australia': 'Study Info Centre Pty Ltd',
+}
+
+
+def get_company_name(entity_code):
+    return COMPANY_NAMES.get(entity_code, COMPANY_NAMES['nepal'])
+
+
 def _safe_date_format(val, fmt='%d %B %Y'):
     if not val:
         return ''
@@ -53,39 +63,45 @@ GRAY_LIGHT = HexColor('#9ca3af') if HAS_REPORTLAB else None
 BORDER_BLUE = HexColor('#1e40af') if HAS_REPORTLAB else None
 
 
+def _make_header_footer(company_name='Study Info Centre Pvt. Ltd.', right_label='Confidential'):
+    def _header_footer(canvas, doc):
+        canvas.saveState()
+        width, height = A4
+
+        if os.path.exists(LOGO_PATH):
+            try:
+                logo = ImageReader(LOGO_PATH)
+                iw, ih = logo.getSize()
+                aspect = ih / float(iw)
+                logo_w = 45 * mm
+                logo_h = logo_w * aspect
+                logo_x = width - doc.rightMargin - logo_w
+                logo_y = height - 12 * mm - logo_h
+                canvas.drawImage(logo, logo_x, logo_y, width=logo_w, height=logo_h, preserveAspectRatio=True, mask='auto')
+            except Exception:
+                pass
+
+        canvas.setStrokeColor(BORDER_BLUE)
+        canvas.setLineWidth(1.5)
+        line_y = height - doc.topMargin + 4 * mm
+        canvas.line(doc.leftMargin, line_y, width - doc.rightMargin, line_y)
+
+        canvas.setStrokeColor(BORDER_BLUE)
+        canvas.setLineWidth(0.75)
+        footer_line_y = doc.bottomMargin - 2 * mm
+        canvas.line(doc.leftMargin, footer_line_y, width - doc.rightMargin, footer_line_y)
+
+        canvas.setFont("Helvetica", 6.5)
+        canvas.setFillColor(GRAY_LIGHT)
+        canvas.drawString(doc.leftMargin, footer_line_y - 12, company_name)
+        canvas.drawRightString(width - doc.rightMargin, footer_line_y - 12, right_label)
+
+        canvas.restoreState()
+    return _header_footer
+
+
 def _header_footer(canvas, doc):
-    canvas.saveState()
-    width, height = A4
-
-    if os.path.exists(LOGO_PATH):
-        try:
-            logo = ImageReader(LOGO_PATH)
-            iw, ih = logo.getSize()
-            aspect = ih / float(iw)
-            logo_w = 45 * mm
-            logo_h = logo_w * aspect
-            logo_x = width - doc.rightMargin - logo_w
-            logo_y = height - 12 * mm - logo_h
-            canvas.drawImage(logo, logo_x, logo_y, width=logo_w, height=logo_h, preserveAspectRatio=True, mask='auto')
-        except Exception:
-            pass
-
-    canvas.setStrokeColor(BORDER_BLUE)
-    canvas.setLineWidth(1.5)
-    line_y = height - doc.topMargin + 4 * mm
-    canvas.line(doc.leftMargin, line_y, width - doc.rightMargin, line_y)
-
-    canvas.setStrokeColor(BORDER_BLUE)
-    canvas.setLineWidth(0.75)
-    footer_line_y = doc.bottomMargin - 2 * mm
-    canvas.line(doc.leftMargin, footer_line_y, width - doc.rightMargin, footer_line_y)
-
-    canvas.setFont("Helvetica", 6.5)
-    canvas.setFillColor(GRAY_LIGHT)
-    canvas.drawString(doc.leftMargin, footer_line_y - 12, "Study Info Centre Pvt. Ltd.")
-    canvas.drawRightString(width - doc.rightMargin, footer_line_y - 12, "Confidential")
-
-    canvas.restoreState()
+    return _make_header_footer()(canvas, doc)
 
 
 def _add_total_pages(pdf_bytes):
@@ -235,6 +251,8 @@ def generate_agreement_pdf(employee, agreement, clauses):
     if not HAS_REPORTLAB:
         return None
 
+    company_name = get_company_name(getattr(agreement, 'company_entity', 'nepal'))
+
     buf = io.BytesIO()
 
     styles = _get_styles()
@@ -318,6 +336,9 @@ def generate_agreement_pdf(employee, agreement, clauses):
             '[Salary]': salary_full,
             '[Gross Salary]': salary_full,
             '[Currency]': salary_currency,
+            '[Company Name]': company_name,
+            '[Company name]': company_name,
+            '[Company]': company_name,
         }
         for placeholder, value in replacements.items():
             if value:
@@ -364,7 +385,7 @@ def generate_agreement_pdf(employee, agreement, clauses):
 
     sig_data = [
         [
-            Paragraph('<b>For Study Info Centre Pvt. Ltd.</b>', styles['sig_label']),
+            Paragraph(f'<b>For {_safe_text(company_name)}</b>', styles['sig_label']),
             Paragraph('', styles['sig_label']),
             Paragraph('<b>Accepted By (Employee)</b>', styles['sig_label']),
         ],
@@ -403,7 +424,8 @@ def generate_agreement_pdf(employee, agreement, clauses):
     ]))
     elements.append(sig_table)
 
-    doc.build(elements, onFirstPage=_header_footer, onLaterPages=_header_footer)
+    hf = _make_header_footer(company_name=company_name)
+    doc.build(elements, onFirstPage=hf, onLaterPages=hf)
     pdf_bytes = buf.getvalue()
     final_bytes = _add_total_pages(pdf_bytes)
     result = io.BytesIO(final_bytes)

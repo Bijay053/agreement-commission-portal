@@ -4,21 +4,24 @@ from django.conf import settings
 from django.core.mail import EmailMessage
 
 
-def send_signing_request_email(employee_name, employee_email, signing_token, frontend_url=None):
+def send_signing_request_email(employee_name, employee_email, signing_token, frontend_url=None, company_name=None):
     if not frontend_url:
         frontend_url = getattr(settings, 'PORTAL_URL', 'https://portal.studyinfocentre.com')
+    if not company_name:
+        company_name = 'Study Info Centre Pvt. Ltd.'
 
     signing_link = f'{frontend_url}/sign/{signing_token}'
     name_safe = _esc(employee_name)
+    co_safe = _esc(company_name)
 
     subject = 'Action Required — Please Sign Your Employment Agreement'
 
     plain_text = (
         f'Dear {employee_name},\n\n'
-        f'Your employment agreement with Study Info Centre Pvt. Ltd. is ready for your review and signature.\n\n'
+        f'Your employment agreement with {company_name} is ready for your review and signature.\n\n'
         f'Please click the link below to read and sign your agreement. This link will expire in 7 days.\n\n'
         f'{signing_link}\n\n'
-        f'Regards,\nHR Department\nStudy Info Centre Pvt. Ltd.'
+        f'Regards,\nHR Department\n{company_name}'
     )
 
     html = f'''<!DOCTYPE html>
@@ -28,12 +31,12 @@ def send_signing_request_email(employee_name, employee_email, signing_token, fro
 <div style="max-width: 640px; margin: 0 auto; background-color: #ffffff; border: 1px solid #e5e7eb; border-radius: 8px; overflow: hidden;">
     <div style="background-color: #1e40af; padding: 24px 32px; color: #ffffff;">
         <h1 style="margin: 0; font-size: 20px; font-weight: 600;">Employment Agreement — Signature Required</h1>
-        <p style="margin: 8px 0 0 0; font-size: 13px; opacity: 0.9;">Study Info Centre Pvt. Ltd.</p>
+        <p style="margin: 8px 0 0 0; font-size: 13px; opacity: 0.9;">{co_safe}</p>
     </div>
     <div style="padding: 32px;">
         <p style="color: #374151; font-size: 15px; line-height: 1.6; margin: 0 0 20px 0;">Dear {name_safe},</p>
         <p style="color: #374151; font-size: 15px; line-height: 1.6; margin: 0 0 16px 0;">
-            Your employment agreement with <strong>Study Info Centre Pvt. Ltd.</strong> is ready for your review and signature.
+            Your employment agreement with <strong>{co_safe}</strong> is ready for your review and signature.
         </p>
         <p style="color: #374151; font-size: 15px; line-height: 1.6; margin: 0 0 24px 0;">
             Please click the button below to read and sign your agreement. This link will expire in <strong>7 days</strong>.
@@ -50,7 +53,7 @@ def send_signing_request_email(employee_name, employee_email, signing_token, fro
         <p style="color: #6b7280; font-size: 14px; line-height: 1.6; margin: 0;">
             Regards,<br>
             <strong style="color: #374151;">HR Department</strong><br>
-            Study Info Centre Pvt. Ltd.
+            {co_safe}
         </p>
     </div>
     <div style="padding: 20px 32px; background-color: #f9fafb; border-top: 1px solid #e5e7eb; font-size: 12px; color: #6b7280; text-align: center;">
@@ -72,9 +75,12 @@ def send_signing_request_email(employee_name, employee_email, signing_token, fro
         return False
 
 
-def send_signed_confirmation_email(employee_name, employee_email, admin_email, signed_pdf_bytes=None, pdf_password=None):
+def send_signed_confirmation_email(employee_name, employee_email, admin_email, signed_pdf_bytes=None, pdf_password=None, company_name=None):
+    if not company_name:
+        company_name = 'Study Info Centre Pvt. Ltd.'
     from_email = f'"{getattr(settings, "FROM_NAME", "Agreement Portal")}" <{settings.DEFAULT_FROM_EMAIL}>'
     name_safe = _esc(employee_name)
+    co_safe = _esc(company_name)
     from datetime import datetime
     signed_time = datetime.utcnow().strftime('%d %B %Y at %I:%M %p UTC')
 
@@ -92,7 +98,7 @@ def send_signed_confirmation_email(employee_name, employee_email, admin_email, s
             </p>
         </div>'''
 
-    employee_subject = 'Your Signed Employment Agreement — Study Info Centre Pvt. Ltd.'
+    employee_subject = f'Your Signed Employment Agreement — {company_name}'
     employee_html = f'''<!DOCTYPE html>
 <html>
 <head><meta charset="utf-8"></head>
@@ -100,7 +106,7 @@ def send_signed_confirmation_email(employee_name, employee_email, admin_email, s
 <div style="max-width: 640px; margin: 0 auto; background: #fff; border: 1px solid #e5e7eb; border-radius: 8px; overflow: hidden;">
     <div style="background-color: #059669; padding: 24px 32px; color: #fff;">
         <h1 style="margin: 0; font-size: 20px;">Agreement Signed Successfully</h1>
-        <p style="margin: 8px 0 0 0; font-size: 13px; opacity: 0.9;">Study Info Centre Pvt. Ltd.</p>
+        <p style="margin: 8px 0 0 0; font-size: 13px; opacity: 0.9;">{co_safe}</p>
     </div>
     <div style="padding: 32px;">
         <p style="color: #374151; font-size: 15px; line-height: 1.6;">Dear {name_safe},</p>
@@ -109,7 +115,7 @@ def send_signed_confirmation_email(employee_name, employee_email, admin_email, s
         </p>
         {password_section}
         <p style="color: #374151; font-size: 15px; line-height: 1.6;">Keep this for your records.</p>
-        <p style="color: #6b7280; font-size: 14px; margin-top: 24px;">Regards,<br><strong>HR Department</strong><br>Study Info Centre Pvt. Ltd.</p>
+        <p style="color: #6b7280; font-size: 14px; margin-top: 24px;">Regards,<br><strong>HR Department</strong><br>{co_safe}</p>
     </div>
 </div>
 </body>

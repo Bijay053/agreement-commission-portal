@@ -283,6 +283,7 @@ function AgreementsTab({ employeeId, employee }: { employeeId: string; employee:
   const [createForm, setCreateForm] = useState({
     templateId: '', position: employee.position || '', effectiveFrom: '', effectiveTo: '',
     agreementDate: '', grossSalary: employee.salaryAmount || '', salaryCurrency: employee.salaryCurrency || 'NPR',
+    companyEntity: 'nepal' as 'nepal' | 'australia',
   });
 
   const { data: agreements = [], isLoading } = useQuery<Agreement[]>({
@@ -531,14 +532,26 @@ function AgreementsTab({ employeeId, employee }: { employeeId: string; employee:
             <DialogTitle>Create Employment Agreement</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
-            <div className="space-y-1.5">
-              <label className="text-xs font-medium text-muted-foreground">Template</label>
-              <Select value={createForm.templateId} onValueChange={v => setCreateForm({ ...createForm, templateId: v })}>
-                <SelectTrigger data-testid="select-agreement-template"><SelectValue placeholder="Select template" /></SelectTrigger>
-                <SelectContent>
-                  {templates.map((t: any) => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}
-                </SelectContent>
-              </Select>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-muted-foreground">Template</label>
+                <Select value={createForm.templateId} onValueChange={v => setCreateForm({ ...createForm, templateId: v })}>
+                  <SelectTrigger data-testid="select-agreement-template"><SelectValue placeholder="Select template" /></SelectTrigger>
+                  <SelectContent>
+                    {templates.map((t: any) => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-muted-foreground">Company Entity</label>
+                <Select value={createForm.companyEntity} onValueChange={v => setCreateForm({ ...createForm, companyEntity: v as 'nepal' | 'australia' })}>
+                  <SelectTrigger data-testid="select-agreement-entity"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="nepal">Study Info Centre Pvt. Ltd. (Nepal)</SelectItem>
+                    <SelectItem value="australia">Study Info Centre Pty Ltd (Australia)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
@@ -753,6 +766,7 @@ function OfferLettersTab({ employeeId, employee }: { employeeId: string; employe
     department: employee.department || '', proposedSalary: employee.salaryAmount || '',
     salaryCurrency: employee.salaryCurrency || 'NPR', issueDate: '', startDate: '',
     workLocation: '', probationPeriod: '',
+    companyEntity: 'nepal' as 'nepal' | 'australia',
   });
 
   const { data: offers = [], isLoading } = useQuery<OfferLetter[]>({
@@ -976,14 +990,26 @@ function OfferLettersTab({ employeeId, employee }: { employeeId: string; employe
             <DialogTitle>Create Offer Letter</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
-            <div className="space-y-1.5">
-              <label className="text-xs font-medium text-muted-foreground">Template (Optional)</label>
-              <Select value={createForm.templateId} onValueChange={v => setCreateForm({ ...createForm, templateId: v })}>
-                <SelectTrigger data-testid="select-offer-template"><SelectValue placeholder="Select template" /></SelectTrigger>
-                <SelectContent>
-                  {templates.map((t: any) => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}
-                </SelectContent>
-              </Select>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-muted-foreground">Template (Optional)</label>
+                <Select value={createForm.templateId} onValueChange={v => setCreateForm({ ...createForm, templateId: v })}>
+                  <SelectTrigger data-testid="select-offer-template"><SelectValue placeholder="Select template" /></SelectTrigger>
+                  <SelectContent>
+                    {templates.map((t: any) => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-muted-foreground">Company Entity</label>
+                <Select value={createForm.companyEntity} onValueChange={v => setCreateForm({ ...createForm, companyEntity: v as 'nepal' | 'australia' })}>
+                  <SelectTrigger data-testid="select-offer-entity"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="nepal">Study Info Centre Pvt. Ltd. (Nepal)</SelectItem>
+                    <SelectItem value="australia">Study Info Centre Pty Ltd (Australia)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">

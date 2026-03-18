@@ -63,6 +63,7 @@ def _serialize_agreement(a, employee=None):
         'companySignerName': a.company_signer_name or '',
         'companySignerPosition': a.company_signer_position or '',
         'companySignedAt': _safe_iso(a.company_signed_at),
+        'companyEntity': a.company_entity or 'nepal',
         'createdBy': a.created_by or '',
         'createdAt': _safe_iso(a.created_at),
         'updatedAt': _safe_iso(a.updated_at),
@@ -178,6 +179,7 @@ class EmploymentAgreementListView(APIView):
             position=data.get('position', employee.position or ''),
             gross_salary=data.get('grossSalary') or None,
             salary_currency=data.get('salaryCurrency', 'NPR'),
+            company_entity=data.get('companyEntity', 'nepal'),
             clauses=clauses,
             status='draft',
             created_by=user_name,
@@ -359,11 +361,14 @@ class SendForSigningView(APIView):
         agreement.save(update_fields=['signing_token', 'token_expires_at', 'status'])
 
         frontend_url = getattr(settings, 'PORTAL_URL', 'https://portal.studyinfocentre.com')
+        from .pdf_service import get_company_name
+        co_name = get_company_name(agreement.company_entity or 'nepal')
         email_sent = send_signing_request_email(
             employee_name=employee.full_name,
             employee_email=employee.email,
             signing_token=token,
             frontend_url=frontend_url,
+            company_name=co_name,
         )
 
         return Response({
@@ -496,6 +501,8 @@ class SubmitSignatureView(APIView):
         agreement.save()
 
         admin_email = getattr(settings, 'DEFAULT_FROM_EMAIL', 'au@studyinfocentre.com')
+        from .pdf_service import get_company_name as _gcn
+        co_name2 = _gcn(agreement.company_entity or 'nepal')
         try:
             send_signed_confirmation_email(
                 employee_name=employee.full_name,
@@ -503,6 +510,7 @@ class SubmitSignatureView(APIView):
                 admin_email=admin_email,
                 signed_pdf_bytes=encrypted_pdf_for_email,
                 pdf_password=unique_password,
+                company_name=co_name2,
             )
         except Exception as e:
             print(f'Confirmation emails failed: {e}')

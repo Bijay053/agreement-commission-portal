@@ -2,6 +2,12 @@ import uuid
 from django.db import models
 
 
+COMPANY_ENTITY_CHOICES = [
+    ('nepal', 'Study Info Centre Pvt. Ltd.'),
+    ('australia', 'Study Info Centre Pty Ltd'),
+]
+
+
 AGREEMENT_STATUS_CHOICES = [
     ('draft', 'Draft'),
     ('sent', 'Sent for Signing'),
@@ -38,6 +44,7 @@ class EmploymentAgreement(models.Model):
     company_signer_name = models.CharField(max_length=255, null=True, blank=True)
     company_signer_position = models.CharField(max_length=255, null=True, blank=True)
     company_signed_at = models.DateTimeField(null=True, blank=True)
+    company_entity = models.CharField(max_length=24, default='nepal', choices=COMPANY_ENTITY_CHOICES)
     notes = models.TextField(null=True, blank=True)
     created_by = models.CharField(max_length=255, null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)

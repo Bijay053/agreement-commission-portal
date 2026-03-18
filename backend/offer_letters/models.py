@@ -31,6 +31,7 @@ class OfferLetter(models.Model):
     status = models.CharField(max_length=24, default='draft', choices=OFFER_STATUS_CHOICES)
     pdf_url = models.TextField(null=True, blank=True)
     signed_pdf_url = models.TextField(null=True, blank=True)
+    company_entity = models.CharField(max_length=24, default='nepal')
     notes = models.TextField(null=True, blank=True)
     created_by = models.CharField(max_length=255, null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
