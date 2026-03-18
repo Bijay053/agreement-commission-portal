@@ -152,6 +152,9 @@ REST_FRAMEWORK = {
     },
 }
 
+DATA_UPLOAD_MAX_MEMORY_SIZE = 30 * 1024 * 1024
+FILE_UPLOAD_MAX_MEMORY_SIZE = 30 * 1024 * 1024
+
 CORS_ALLOWED_ORIGINS = os.environ.get('CORS_ORIGINS', 'https://portal.studyinfocentre.com').split(',') if not DEBUG else []
 CORS_ALLOW_ALL_ORIGINS = DEBUG
 CORS_ALLOW_CREDENTIALS = True

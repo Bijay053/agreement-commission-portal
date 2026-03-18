@@ -1100,7 +1100,17 @@ function DocumentsTab({ employeeId }: { employeeId: string }) {
       const res = await fetch(`/api/employees/${employeeId}/documents`, {
         method: 'POST', credentials: 'include', body: fd,
       });
-      if (!res.ok) throw new Error((await res.json()).message);
+      const contentType = res.headers.get('content-type') || '';
+      if (!res.ok) {
+        if (contentType.includes('application/json')) {
+          const body = await res.json();
+          throw new Error(body.message || `Upload failed (${res.status})`);
+        }
+        throw new Error(res.status === 413 ? 'File too large. Please upload a smaller file.' : `Upload failed (${res.status}). Please try again.`);
+      }
+      if (!contentType.includes('application/json')) {
+        throw new Error('Server returned an unexpected response. Please try again.');
+      }
       return res.json();
     },
     onSuccess: () => {
