@@ -1,7 +1,22 @@
 import io
 import os
 import re
-from datetime import datetime
+from datetime import datetime, date
+
+
+def _safe_date_format(val, fmt='%d %B %Y'):
+    if not val:
+        return ''
+    if isinstance(val, (datetime, date)):
+        return val.strftime(fmt)
+    if isinstance(val, str):
+        for parse_fmt in ('%Y-%m-%d', '%d/%m/%Y', '%m/%d/%Y'):
+            try:
+                return datetime.strptime(val, parse_fmt).strftime(fmt)
+            except ValueError:
+                continue
+        return val
+    return str(val)
 
 try:
     from reportlab.lib.pagesizes import A4
@@ -223,7 +238,7 @@ def generate_offer_letter_pdf(offer, employee):
 
     issue_date_str = ''
     if offer.issue_date:
-        issue_date_str = offer.issue_date.strftime('%d %B %Y')
+        issue_date_str = _safe_date_format(offer.issue_date)
     else:
         issue_date_str = datetime.now().strftime('%d %B %Y')
 
@@ -248,7 +263,7 @@ def generate_offer_letter_pdf(offer, employee):
     if offer.department:
         details.append(('Department', offer.department))
     if offer.start_date:
-        details.append(('Start Date', offer.start_date.strftime('%d %B %Y')))
+        details.append(('Start Date', _safe_date_format(offer.start_date)))
     if offer.proposed_salary:
         salary_str = f'{offer.salary_currency} {offer.proposed_salary:,.2f}'
         details.append(('Proposed Salary', salary_str))
@@ -294,7 +309,7 @@ def generate_offer_letter_pdf(offer, employee):
         content = content.replace('[Employee Name]', employee.full_name or '')
         content = content.replace('[Position Name]', offer.position or '')
         if offer.start_date:
-            start_str = offer.start_date.strftime('%d %B %Y')
+            start_str = _safe_date_format(offer.start_date)
             content = content.replace('[Join Date]', start_str)
             content = content.replace('[Join date]', start_str)
             content = content.replace('[Joint date ]', start_str)

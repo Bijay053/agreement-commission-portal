@@ -2,8 +2,23 @@ import io
 import os
 import base64
 import uuid
-from datetime import datetime
+from datetime import datetime, date
 from django.conf import settings
+
+
+def _safe_date_format(val, fmt='%d %B %Y'):
+    if not val:
+        return ''
+    if isinstance(val, (datetime, date)):
+        return val.strftime(fmt)
+    if isinstance(val, str):
+        for parse_fmt in ('%Y-%m-%d', '%d/%m/%Y', '%m/%d/%Y'):
+            try:
+                return datetime.strptime(val, parse_fmt).strftime(fmt)
+            except ValueError:
+                continue
+        return val
+    return str(val)
 
 try:
     from reportlab.lib.pagesizes import A4
@@ -239,9 +254,7 @@ def generate_agreement_pdf(employee, agreement, clauses):
     elements.append(Paragraph("EMPLOYMENT AGREEMENT", styles['title']))
     elements.append(Spacer(1, 4))
 
-    agreement_date = ''
-    if agreement.agreement_date:
-        agreement_date = agreement.agreement_date.strftime('%d %B %Y')
+    agreement_date = _safe_date_format(agreement.agreement_date) if agreement.agreement_date else ''
     elements.append(Paragraph(
         f'This Employment Agreement ("Agreement") is made on <b>{agreement_date}</b>',
         styles['subtitle']
@@ -255,8 +268,8 @@ def generate_agreement_pdf(employee, agreement, clauses):
 
         emp_name = employee.full_name or ''
         position = agreement.position or getattr(employee, 'position', '') or ''
-        join_date = agreement.effective_from.strftime('%d %B %Y') if agreement.effective_from else '[Join Date]'
-        expire_date = agreement.effective_to.strftime('%d %B %Y') if agreement.effective_to else '[Expire Date]'
+        join_date = _safe_date_format(agreement.effective_from) if agreement.effective_from else '[Join Date]'
+        expire_date = _safe_date_format(agreement.effective_to) if agreement.effective_to else '[Expire Date]'
         citizenship_no = getattr(employee, 'citizenship_no', '') or ''
         pan_no = getattr(employee, 'pan_no', '') or ''
         permanent_address = getattr(employee, 'permanent_address', '') or ''

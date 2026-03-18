@@ -34,30 +34,38 @@ except Exception:
     s3_client = None
 
 
+def _safe_iso(val):
+    if not val:
+        return None
+    if hasattr(val, 'isoformat'):
+        return val.isoformat()
+    return str(val)
+
+
 def _serialize_agreement(a, employee=None):
     result = {
         'id': str(a.id),
         'employeeId': str(a.employee_id),
         'templateId': str(a.template_id) if a.template_id else None,
-        'agreementDate': a.agreement_date.isoformat() if a.agreement_date else None,
-        'effectiveFrom': a.effective_from.isoformat() if a.effective_from else None,
-        'effectiveTo': a.effective_to.isoformat() if a.effective_to else None,
+        'agreementDate': _safe_iso(a.agreement_date),
+        'effectiveFrom': _safe_iso(a.effective_from),
+        'effectiveTo': _safe_iso(a.effective_to),
         'position': a.position or '',
         'grossSalary': str(a.gross_salary) if a.gross_salary else '',
         'salaryCurrency': a.salary_currency or 'NPR',
         'clauses': a.clauses or [],
         'status': a.status,
         'pdfUrl': a.pdf_url or '',
-        'signedAt': a.signed_at.isoformat() if a.signed_at else None,
+        'signedAt': _safe_iso(a.signed_at),
         'signedPdfUrl': a.signed_pdf_url or '',
         'manuallySignedPdfUrl': a.manually_signed_pdf_url or '',
         'notes': a.notes or '',
         'companySignerName': a.company_signer_name or '',
         'companySignerPosition': a.company_signer_position or '',
-        'companySignedAt': a.company_signed_at.isoformat() if a.company_signed_at else None,
+        'companySignedAt': _safe_iso(a.company_signed_at),
         'createdBy': a.created_by or '',
-        'createdAt': a.created_at.isoformat() if a.created_at else None,
-        'updatedAt': a.updated_at.isoformat() if a.updated_at else None,
+        'createdAt': _safe_iso(a.created_at),
+        'updatedAt': _safe_iso(a.updated_at),
     }
     if employee:
         result['employeeName'] = employee.full_name
@@ -390,9 +398,9 @@ class VerifySigningTokenView(APIView):
         return Response({
             'employeeName': employee.full_name,
             'position': agreement.position or employee.position or '',
-            'agreementDate': agreement.agreement_date.isoformat() if agreement.agreement_date else '',
-            'effectiveFrom': agreement.effective_from.isoformat() if agreement.effective_from else '',
-            'effectiveTo': agreement.effective_to.isoformat() if agreement.effective_to else '',
+            'agreementDate': _safe_iso(agreement.agreement_date) or '',
+            'effectiveFrom': _safe_iso(agreement.effective_from) or '',
+            'effectiveTo': _safe_iso(agreement.effective_to) or '',
             'clauses': agreement.clauses or [],
             'agreementText': clause_text.strip(),
         })
