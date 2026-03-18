@@ -22,12 +22,12 @@ def calculate_sub_agent_term_entry(fee_net, main_commission, commission_rate_aut
 
     rate_override_warning = None
     if override_rate > 0 and abs(override_rate - num(commission_rate_auto, 0)) > 0.000001:
-        rate_override_warning = '⚠ Rate overridden'
+        rate_override_warning = 'Yes'
 
     exceeds_main_warning = None
     mc = num(main_commission, 0)
     if mc > 0 and sub_comm > mc:
-        exceeds_main_warning = '❌ Exceeds Main Commission'
+        exceeds_main_warning = 'Yes'
 
     gst = 0
     if gst_applicable and gst_applicable.lower() in ('yes', 'true') and num(gst_pct, 0) > 0:
@@ -49,7 +49,7 @@ def calculate_master_totals(sic_received_total, sub_agent_paid_total):
     margin = round2(num(sic_received_total, 0) - num(sub_agent_paid_total, 0))
     overpay_warning = None
     if num(sic_received_total, 0) > 0 and num(sub_agent_paid_total, 0) > num(sic_received_total, 0):
-        overpay_warning = '❌ Overpaid'
+        overpay_warning = 'Yes'
     return {
         'margin': str(margin),
         'overpayWarning': overpay_warning,

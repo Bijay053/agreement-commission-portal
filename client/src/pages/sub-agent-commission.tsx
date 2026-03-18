@@ -970,7 +970,7 @@ function TermTable({ rows, termName, canEdit, onUpdate, providerAgreementsMap }:
                     <TooltipProvider>
                       <Tooltip>
                         <TooltipTrigger><span className="text-amber-600">⚠</span></TooltipTrigger>
-                        <TooltipContent>{row.rateOverrideWarning}</TooltipContent>
+                        <TooltipContent>Rate overridden</TooltipContent>
                       </Tooltip>
                     </TooltipProvider>
                   )}
@@ -978,7 +978,7 @@ function TermTable({ rows, termName, canEdit, onUpdate, providerAgreementsMap }:
                     <TooltipProvider>
                       <Tooltip>
                         <TooltipTrigger><span className="text-red-600 ml-1">❌</span></TooltipTrigger>
-                        <TooltipContent>{row.exceedsMainWarning}</TooltipContent>
+                        <TooltipContent>Exceeds Main Commission</TooltipContent>
                       </Tooltip>
                     </TooltipProvider>
                   )}
