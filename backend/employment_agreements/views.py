@@ -23,17 +23,39 @@ except ImportError:
     HAS_PIKEPDF = False
 
 
+def _geolocate_ip(ip_address):
+    try:
+        import requests as http_requests
+        resp = http_requests.get(f'https://ipapi.co/{ip_address}/json/', timeout=3,
+                                  headers={'User-Agent': 'StudyInfoCentrePortal/1.0'})
+        if resp.status_code == 200:
+            data = resp.json()
+            city = data.get('city', '')
+            country = data.get('country_name', '')
+            region = data.get('region', '')
+            if city and country:
+                return f'{city}, {region}, {country}' if region else f'{city}, {country}'
+            elif country:
+                return country
+    except Exception:
+        pass
+    return ''
+
+
 def _collect_esig_metadata(request):
     tz = ''
     if hasattr(request, 'data') and isinstance(request.data, dict):
         tz = request.data.get('timezone', '')
+    ip_address = request.META.get('HTTP_X_FORWARDED_FOR', '').split(',')[0].strip() or request.META.get('REMOTE_ADDR', '')
+    location = _geolocate_ip(ip_address)
     return {
-        'ip_address': request.META.get('HTTP_X_FORWARDED_FOR', '').split(',')[0].strip() or request.META.get('REMOTE_ADDR', ''),
+        'ip_address': ip_address,
         'user_agent': request.META.get('HTTP_USER_AGENT', ''),
         'accept_language': request.META.get('HTTP_ACCEPT_LANGUAGE', ''),
         'timestamp': timezone.now().isoformat(),
         'referer': request.META.get('HTTP_REFERER', ''),
         'timezone': tz,
+        'location': location,
     }
 
 

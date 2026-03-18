@@ -109,32 +109,32 @@ def _generate_template_pdf(template):
             canvas.drawRightString(width - doc.rightMargin, footer_line_y - 12, "Template")
             canvas.restoreState()
 
-        def add_total_pages(pdf_data):
-            try:
-                from pypdf import PdfReader as _PR, PdfWriter as _PW
-                from reportlab.pdfgen import canvas as _rl_c
-                reader = _PR(io.BytesIO(pdf_data))
-                total = len(reader.pages)
-                writer = _PW()
-                for i, page in enumerate(reader.pages):
-                    overlay_buf = io.BytesIO()
-                    pw = float(page.mediabox.width)
-                    ph = float(page.mediabox.height)
-                    c = _rl_c.Canvas(overlay_buf, pagesize=(pw, ph))
-                    c.setFont("Helvetica", 8)
-                    c.setFillColor(GRAY_LIGHT)
+        from reportlab.pdfgen import canvas as _rl_c
+
+        class _NumberedCanvas(_rl_c.Canvas):
+            def __init__(self, *args, **kwargs):
+                kwargs.pop('company_name', None)
+                kwargs.pop('right_label', None)
+                super().__init__(*args, **kwargs)
+                self._saved_page_states = []
+
+            def showPage(self):
+                self._saved_page_states.append(dict(self.__dict__))
+                super().showPage()
+
+            def save(self):
+                num_pages = len(self._saved_page_states)
+                for state in self._saved_page_states:
+                    self.__dict__.update(state)
+                    self.saveState()
+                    width, height = A4
+                    self.setFont("Helvetica", 8)
+                    self.setFillColor(GRAY_LIGHT)
                     fy = 22 * mm - 2 * mm - 12
-                    c.drawCentredString(pw / 2, fy, f"Page {i + 1} of {total}")
-                    c.save()
-                    overlay_buf.seek(0)
-                    op = _PR(overlay_buf).pages[0]
-                    page.merge_page(op)
-                    writer.add_page(page)
-                out = io.BytesIO()
-                writer.write(out)
-                return out.getvalue()
-            except Exception:
-                return pdf_data
+                    self.drawCentredString(width / 2, fy, f"Page {self._pageNumber} out of {num_pages}")
+                    self.restoreState()
+                    super().showPage()
+                super().save()
 
         styles = getSampleStyleSheet()
         title_style = ParagraphStyle('TplTitle', parent=styles['Title'], fontName='Helvetica-Bold', fontSize=16, leading=20, spaceAfter=6, alignment=TA_CENTER, textColor=BLUE_DARK)
@@ -259,10 +259,8 @@ def _generate_template_pdf(template):
         ]))
         story.append(sig_table)
 
-        doc.build(story, onFirstPage=header_footer, onLaterPages=header_footer)
-        pdf_data = buf.getvalue()
-        final_data = add_total_pages(pdf_data)
-        result = io.BytesIO(final_data)
+        doc.build(story, onFirstPage=header_footer, onLaterPages=header_footer, canvasmaker=_NumberedCanvas)
+        result = io.BytesIO(buf.getvalue())
         result.seek(0)
         return result
     except ImportError:

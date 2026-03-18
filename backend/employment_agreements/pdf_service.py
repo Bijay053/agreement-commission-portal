@@ -105,6 +105,35 @@ GRAY_LIGHT = HexColor('#9ca3af') if HAS_REPORTLAB else None
 BORDER_BLUE = HexColor('#1e40af') if HAS_REPORTLAB else None
 
 
+class NumberedCanvas(rl_canvas.Canvas):
+    def __init__(self, *args, **kwargs):
+        self._company_name = kwargs.pop('company_name', 'Study Info Centre Pvt. Ltd.')
+        self._right_label = kwargs.pop('right_label', 'Confidential')
+        super().__init__(*args, **kwargs)
+        self._saved_page_states = []
+
+    def showPage(self):
+        self._saved_page_states.append(dict(self.__dict__))
+        super().showPage()
+
+    def save(self):
+        num_pages = len(self._saved_page_states)
+        for state in self._saved_page_states:
+            self.__dict__.update(state)
+            self._draw_page_number(num_pages)
+            super().showPage()
+        super().save()
+
+    def _draw_page_number(self, total):
+        self.saveState()
+        width, height = A4
+        self.setFont("Helvetica", 8)
+        self.setFillColor(GRAY_LIGHT)
+        footer_y = 22 * mm - 2 * mm - 12
+        self.drawCentredString(width / 2, footer_y, f"Page {self._pageNumber} out of {total}")
+        self.restoreState()
+
+
 def _make_header_footer(company_name='Study Info Centre Pvt. Ltd.', right_label='Confidential'):
     def _header_footer(canvas, doc):
         canvas.saveState()
@@ -144,34 +173,6 @@ def _make_header_footer(company_name='Study Info Centre Pvt. Ltd.', right_label=
 
 def _header_footer(canvas, doc):
     return _make_header_footer()(canvas, doc)
-
-
-def _add_total_pages(pdf_bytes):
-    if not HAS_PYPDF:
-        return pdf_bytes
-    try:
-        reader = PdfReader(io.BytesIO(pdf_bytes))
-        total = len(reader.pages)
-        writer = PdfWriter()
-        for i, page in enumerate(reader.pages):
-            overlay_buf = io.BytesIO()
-            width = float(page.mediabox.width)
-            height = float(page.mediabox.height)
-            c = rl_canvas.Canvas(overlay_buf, pagesize=(width, height))
-            c.setFont("Helvetica", 8)
-            c.setFillColor(GRAY_LIGHT)
-            footer_y = 22 * mm - 2 * mm - 12
-            c.drawCentredString(width / 2, footer_y, f"Page {i + 1} out of {total}")
-            c.save()
-            overlay_buf.seek(0)
-            overlay_page = PdfReader(overlay_buf).pages[0]
-            page.merge_page(overlay_page)
-            writer.add_page(page)
-        out = io.BytesIO()
-        writer.write(out)
-        return out.getvalue()
-    except Exception:
-        return pdf_bytes
 
 
 def _get_styles():
@@ -541,6 +542,8 @@ def generate_agreement_pdf(employee, agreement, clauses,
             elements.append(Paragraph(f'<b>Employee Signature:</b> {_safe_text(employee.full_name or "")}', esig_style))
             if m.get('ip_address'):
                 elements.append(Paragraph(f'IP Address: {_safe_text(m["ip_address"])}', esig_style))
+            if m.get('location'):
+                elements.append(Paragraph(f'Location: {_safe_text(m["location"])}', esig_style))
             if m.get('timestamp'):
                 elements.append(Paragraph(f'Signed At: {_safe_text(m["timestamp"])}', esig_style))
             if m.get('user_agent'):
@@ -556,6 +559,8 @@ def generate_agreement_pdf(employee, agreement, clauses,
             elements.append(Paragraph(f'<b>Company Signature:</b> {_safe_text(signer)}', esig_style))
             if m.get('ip_address'):
                 elements.append(Paragraph(f'IP Address: {_safe_text(m["ip_address"])}', esig_style))
+            if m.get('location'):
+                elements.append(Paragraph(f'Location: {_safe_text(m["location"])}', esig_style))
             if m.get('timestamp'):
                 elements.append(Paragraph(f'Signed At: {_safe_text(m["timestamp"])}', esig_style))
             if m.get('user_agent'):
@@ -571,10 +576,8 @@ def generate_agreement_pdf(employee, agreement, clauses,
         ))
 
     hf = _make_header_footer(company_name=company_name)
-    doc.build(elements, onFirstPage=hf, onLaterPages=hf)
-    pdf_bytes = buf.getvalue()
-    final_bytes = _add_total_pages(pdf_bytes)
-    result = io.BytesIO(final_bytes)
+    doc.build(elements, onFirstPage=hf, onLaterPages=hf, canvasmaker=NumberedCanvas)
+    result = io.BytesIO(buf.getvalue())
     result.seek(0)
     return result
 
