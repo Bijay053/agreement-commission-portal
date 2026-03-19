@@ -322,7 +322,10 @@ export default function SignAgreementPage({ params }: { params: { token: string 
                 data-testid="checkbox-agree"
               />
               <label htmlFor="agree-terms" className="text-sm text-gray-700 leading-snug cursor-pointer">
-                I have read and understood this agreement and agree to all terms and conditions.
+                I have read and understood this agreement and consent to electronically sign it.
+                I agree that my electronic signature is legally binding and that my signing details
+                (IP address, location, device, and timestamp) will be recorded for audit purposes.
+                I also agree to the Digital Signature Certificate and Legal Declaration.
               </label>
             </div>
 
@@ -444,7 +447,7 @@ export default function SignAgreementPage({ params }: { params: { token: string 
               {submitting ? (
                 <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Submitting...</>
               ) : (
-                "Submit Signature"
+                "Agree & Execute Signature"
               )}
             </Button>
           </CardContent>

@@ -574,9 +574,18 @@ def generate_offer_letter_pdf(offer, employee,
         doc_hash = hashlib.sha256(hash_input.encode('utf-8')).hexdigest()
         audit_trail_id = f'AUD-{hashlib.md5(hash_input.encode()).hexdigest()[:10].upper()}'
 
-        emp_sig_id = ''
-        if employee_esignature_metadata and isinstance(employee_esignature_metadata, dict):
-            emp_sig_id = employee_esignature_metadata.get('signature_id', '')
+        emp_meta = employee_esignature_metadata if isinstance(employee_esignature_metadata, dict) else {}
+        co_meta = company_esignature_metadata if isinstance(company_esignature_metadata, dict) else {}
+        emp_sig_id = emp_meta.get('signature_id', '')
+
+        entity_code = getattr(offer, 'company_entity', 'nepal')
+        entity_prefix = 'STUICNPL' if entity_code == 'nepal' else 'STUICAU'
+        doc_name = f'{entity_prefix}_Offer Letter'
+
+        created_date = _safe_date_format(offer.created_at, '%Y-%m-%d') if offer.created_at else ''
+        emp_ts = emp_meta.get('timestamp_utc', emp_meta.get('timestamp', ''))
+        co_ts = co_meta.get('timestamp_utc', co_meta.get('timestamp', ''))
+        completed_date = co_ts[:10] if co_ts else (emp_ts[:10] if emp_ts else created_date)
 
         elements.append(Spacer(1, 20))
         elements.append(HRFlowable(width='100%', thickness=0.5, color=HexColor('#d1d5db')))
@@ -595,7 +604,16 @@ def generate_offer_letter_pdf(offer, employee,
             textColor=HexColor('#374151'), leading=10, spaceBefore=8, spaceAfter=3,
         )
 
-        elements.append(Paragraph('E-SIGNATURE VERIFICATION', esig_heading))
+        elements.append(Paragraph('E-SIGNATURE CERTIFICATE', esig_heading))
+
+        elements.append(Paragraph('<b>1. Document Summary</b>', esig_section))
+        elements.append(Paragraph(f'Document Name: {doc_name}', esig_style))
+        elements.append(Paragraph(f'Document ID: {_safe_text(emp_sig_id or audit_trail_id)}', esig_style))
+        elements.append(Paragraph(f'Transaction ID: {_safe_text(audit_trail_id)}', esig_style))
+        doc_status = 'Completed &amp; Locked' if co_meta else 'Awaiting Company Signature'
+        elements.append(Paragraph(f'Status: {doc_status}', esig_style))
+        elements.append(Paragraph(f'Created Date (UTC): {_safe_text(created_date)}', esig_style))
+        elements.append(Paragraph(f'Completed Date (UTC): {_safe_text(completed_date)}', esig_style))
 
         def _parse_device(ua_str):
             if not ua_str:
@@ -617,12 +635,15 @@ def generate_offer_letter_pdf(offer, employee,
                 parts.append('Edge Browser')
             return ' / '.join(parts) if parts else 'Web Browser'
 
-        def _render_signer(m, name, email, role, sig_label, verification_method):
+        elements.append(Paragraph('<b>2. Signatory Details</b>', esig_section))
+
+        def _render_signer(m, name, email, role, sig_label, typed_name, verification_method):
             elements.append(Paragraph(f'<b>{_safe_text(sig_label)}</b>', esig_section))
             elements.append(Paragraph(f'Full Name: {_safe_text(name)}', esig_style))
             if email:
                 elements.append(Paragraph(f'Email Address: {_safe_text(email)}', esig_style))
             elements.append(Paragraph(f'Role/Position: {_safe_text(role)}', esig_style))
+            elements.append(Paragraph(f'Signature: {_safe_text(typed_name)}', esig_style))
             elements.append(Spacer(1, 3))
             if m.get('ip_address'):
                 elements.append(Paragraph(f'IP Address: {_safe_text(m["ip_address"])}', esig_style))
@@ -640,80 +661,82 @@ def generate_offer_letter_pdf(offer, employee,
                 local_str = _format_signing_date(m['timestamp'], tz_name)
                 if local_str:
                     tz_short = tz_name.replace('_', ' ').split('/')[-1]
-                    elements.append(Paragraph(f'Local Time: {_safe_text(local_str)} ({_safe_text(tz_short)})', esig_style))
+                    elements.append(Paragraph(f'Local Time ({_safe_text(tz_short)}): {_safe_text(local_str)}', esig_style))
             elements.append(Spacer(1, 3))
             ua = m.get('user_agent', '')
+            device_info = _parse_device(ua)
+            if device_info:
+                elements.append(Paragraph(f'Device: {_safe_text(device_info)}', esig_style))
             if ua:
                 ua_display = ua if len(ua) <= 80 else ua[:80] + '...'
                 elements.append(Paragraph(f'User Agent: {_safe_text(ua_display)}', esig_style))
-                device_info = _parse_device(ua)
-                if device_info:
-                    elements.append(Paragraph(f'Device Info: {_safe_text(device_info)}', esig_style))
             elements.append(Spacer(1, 3))
             elements.append(Paragraph(f'Verification Method: {_safe_text(verification_method)}', esig_style))
             elements.append(Paragraph('Authentication Status: Verified', esig_style))
 
-        if employee_esignature_metadata and isinstance(employee_esignature_metadata, dict):
-            m = employee_esignature_metadata
-            _render_signer(m, employee.full_name or '', employee.email or '',
+        if emp_meta:
+            _render_signer(emp_meta, employee.full_name or '', employee.email or '',
                            employee.position or 'Employee',
-                           '1. Employee Signature Details',
-                           m.get('verification_method', 'Email Link Verified'))
+                           'Employee',
+                           employee.full_name or '',
+                           emp_meta.get('verification_method', 'Email Link Verified'))
             elements.append(Spacer(1, 6))
 
-        if company_esignature_metadata and isinstance(company_esignature_metadata, dict):
-            m = company_esignature_metadata
+        if co_meta:
             signer = company_signer_name or 'Authorized Signatory'
             signer_pos = company_signer_position or 'Director'
-            _render_signer(m, signer, '',
-                           f'{signer_pos} / Authorized Signatory',
-                           '2. Company Representative Signature Details',
+            _render_signer(co_meta, signer, '',
+                           'Authorized Signatory',
+                           'Company Representative',
+                           signer,
                            'System Login Verified')
             elements.append(Spacer(1, 6))
 
-        elements.append(Paragraph('<b>3. Document Integrity &amp; Audit Trail</b>', esig_section))
+        elements.append(Paragraph('<b>3. Audit Trail</b>', esig_section))
+        elements.append(Paragraph(f'Document Created \u2013 {_safe_text(created_date)} (UTC)', esig_style))
+        if emp_ts:
+            elements.append(Paragraph(f'Signed by {_safe_text(employee.full_name or "Employee")} \u2013 {_safe_text(emp_ts)} (UTC)', esig_style))
+        if co_ts:
+            elements.append(Paragraph(f'Signed by Company Representative \u2013 {_safe_text(co_ts)} (UTC)', esig_style))
+            elements.append(Paragraph(f'Offer Letter Completed \u2013 {_safe_text(co_ts)} (UTC)', esig_style))
+
+        elements.append(Paragraph('<b>4. Document Integrity &amp; Security</b>', esig_section))
+        elements.append(Paragraph(f'Document Hash (SHA256):', esig_style))
+        elements.append(Paragraph(f'{doc_hash}', esig_style))
         if emp_sig_id:
             elements.append(Paragraph(f'Signature ID: {_safe_text(emp_sig_id)}', esig_style))
         elements.append(Paragraph(f'Audit Trail ID: {_safe_text(audit_trail_id)}', esig_style))
-        elements.append(Paragraph(f'Document Hash (SHA256): {doc_hash}', esig_style))
-        doc_status = 'Completed &amp; Locked' if company_esignature_metadata else 'Awaiting Company Signature'
-        elements.append(Paragraph(f'Document Status: {doc_status}', esig_style))
         elements.append(Paragraph('Tamper Status: No changes detected after signing', esig_style))
+        elements.append(Paragraph('Storage: Secure server-based audit log', esig_style))
 
-        emp_ts = ''
-        co_ts = ''
-        if employee_esignature_metadata and isinstance(employee_esignature_metadata, dict):
-            emp_ts = employee_esignature_metadata.get('timestamp_utc', employee_esignature_metadata.get('timestamp', ''))
-        if company_esignature_metadata and isinstance(company_esignature_metadata, dict):
-            co_ts = company_esignature_metadata.get('timestamp_utc', company_esignature_metadata.get('timestamp', ''))
-
-        if emp_ts or co_ts:
-            elements.append(Spacer(1, 4))
-            elements.append(Paragraph('<b>4. Signing Sequence</b>', esig_section))
-            if emp_ts:
-                elements.append(Paragraph(f'Employee Signed: {_safe_text(emp_ts)} UTC', esig_style))
-            if co_ts:
-                elements.append(Paragraph(f'Company Signed: {_safe_text(co_ts)} UTC', esig_style))
-
-        elements.append(Spacer(1, 4))
-        elements.append(Paragraph('<b>5. System Declaration</b>', esig_section))
+        elements.append(Paragraph('<b>5. Digital Signature Certificate</b>', esig_section))
         elements.append(Paragraph(
-            'This document was generated and signed through the Study Info Centre secure digital system. '
-            'All signature data, timestamps, and audit logs are securely stored and verifiable.',
+            'This document was generated and electronically signed through the Study Info Centre secure digital system.',
             esig_style))
         elements.append(Paragraph(
-            'If both signatures originate from the same device or IP address, this indicates signing through '
-            'an authorized internal system or shared device environment.',
+            'All signature events, timestamps, IP addresses, and authentication records are securely stored '
+            'and can be independently verified.',
+            esig_style))
+        elements.append(Paragraph(
+            'If multiple signatures originate from the same IP address or device, this indicates signing through '
+            'an authorized internal system or shared environment.',
             esig_style))
 
-        elements.append(Spacer(1, 4))
         elements.append(Paragraph('<b>6. Legal Declaration</b>', esig_section))
         elements.append(Paragraph('By signing this document electronically:', esig_style))
-        elements.append(Paragraph('The parties agree that this electronic signature is legally binding.', esig_style))
+        elements.append(Spacer(1, 2))
         elements.append(Paragraph(
-            'This agreement is enforceable under applicable electronic signature laws, including but not limited to: '
-            'Electronic Transactions Act 1999 (Australia), ESIGN Act (USA), UETA (USA), and other applicable international laws.',
+            'All parties agree that this electronic signature is legally binding and valid.',
             esig_style))
+        elements.append(Spacer(1, 2))
+        elements.append(Paragraph(
+            'This agreement is enforceable under applicable electronic signature laws, including but not limited to:',
+            esig_style))
+        elements.append(Paragraph('\u2022 Electronic Transactions Act 1999 (Australia)', esig_style))
+        elements.append(Paragraph('\u2022 ESIGN Act (United States)', esig_style))
+        elements.append(Paragraph('\u2022 UETA (United States)', esig_style))
+        elements.append(Paragraph('\u2022 Other applicable international regulations', esig_style))
+        elements.append(Spacer(1, 2))
         elements.append(Paragraph(
             'This electronic signature carries the same legal effect as a handwritten signature.',
             esig_style))
