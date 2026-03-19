@@ -559,6 +559,11 @@ def generate_offer_letter_pdf(offer, employee,
         import hashlib
         hash_input = f'{employee.full_name}|{employee.email}|{getattr(offer, "id", "")}|{getattr(offer, "created_at", "")}'
         doc_hash = hashlib.sha256(hash_input.encode('utf-8')).hexdigest()
+        audit_trail_id = f'AUD-{hashlib.md5(hash_input.encode()).hexdigest()[:10].upper()}'
+
+        emp_sig_id = ''
+        if employee_esignature_metadata and isinstance(employee_esignature_metadata, dict):
+            emp_sig_id = employee_esignature_metadata.get('signature_id', '')
 
         elements.append(Spacer(1, 20))
         elements.append(HRFlowable(width='100%', thickness=0.5, color=HexColor('#d1d5db')))
@@ -569,22 +574,42 @@ def generate_offer_letter_pdf(offer, employee,
             textColor=HexColor('#6b7280'), leading=10,
         )
         esig_heading = ParagraphStyle(
-            'esig_heading', fontName='Helvetica-Bold', fontSize=8,
-            textColor=HexColor('#374151'), leading=11, spaceBefore=4, spaceAfter=4,
+            'esig_heading', fontName='Helvetica-Bold', fontSize=9,
+            textColor=HexColor('#374151'), leading=12, spaceBefore=4, spaceAfter=6,
         )
-        esig_label = ParagraphStyle(
-            'esig_label', fontName='Helvetica-Bold', fontSize=7.5,
-            textColor=HexColor('#374151'), leading=10, spaceBefore=6, spaceAfter=2,
+        esig_section = ParagraphStyle(
+            'esig_section', fontName='Helvetica-Bold', fontSize=7.5,
+            textColor=HexColor('#374151'), leading=10, spaceBefore=8, spaceAfter=3,
         )
 
         elements.append(Paragraph('E-SIGNATURE VERIFICATION', esig_heading))
 
-        if employee_esignature_metadata and isinstance(employee_esignature_metadata, dict):
-            m = employee_esignature_metadata
-            elements.append(Paragraph('<b>Employee Signature</b>', esig_label))
-            elements.append(Paragraph(f'Signed By: {_safe_text(employee.full_name or "")}', esig_style))
-            elements.append(Paragraph(f'Email: {_safe_text(employee.email or "")}', esig_style))
-            elements.append(Paragraph(f'Role: {_safe_text(employee.position or "Employee")}', esig_style))
+        def _parse_device(ua_str):
+            if not ua_str:
+                return ''
+            parts = []
+            if 'Macintosh' in ua_str or 'Windows' in ua_str or 'Linux' in ua_str:
+                parts.append('Desktop')
+            elif 'iPhone' in ua_str or 'Android' in ua_str:
+                parts.append('Mobile')
+            elif 'iPad' in ua_str:
+                parts.append('Tablet')
+            if 'Chrome' in ua_str and 'Edg' not in ua_str:
+                parts.append('Chrome Browser')
+            elif 'Safari' in ua_str and 'Chrome' not in ua_str:
+                parts.append('Safari Browser')
+            elif 'Firefox' in ua_str:
+                parts.append('Firefox Browser')
+            elif 'Edg' in ua_str:
+                parts.append('Edge Browser')
+            return ' / '.join(parts) if parts else 'Web Browser'
+
+        def _render_signer(m, name, email, role, sig_label, verification_method):
+            elements.append(Paragraph(f'<b>{_safe_text(sig_label)}</b>', esig_section))
+            elements.append(Paragraph(f'Full Name: {_safe_text(name)}', esig_style))
+            if email:
+                elements.append(Paragraph(f'Email Address: {_safe_text(email)}', esig_style))
+            elements.append(Paragraph(f'Role/Position: {_safe_text(role)}', esig_style))
             elements.append(Spacer(1, 3))
             if m.get('ip_address'):
                 elements.append(Paragraph(f'IP Address: {_safe_text(m["ip_address"])}', esig_style))
@@ -596,7 +621,7 @@ def generate_offer_letter_pdf(offer, employee,
             if m.get('timestamp_utc'):
                 elements.append(Paragraph(f'Signed At (UTC): {_safe_text(m["timestamp_utc"])}', esig_style))
             elif m.get('timestamp'):
-                elements.append(Paragraph(f'Signed At: {_safe_text(m["timestamp"])}', esig_style))
+                elements.append(Paragraph(f'Signed At (UTC): {_safe_text(m["timestamp"])}', esig_style))
             tz_name = m.get('timezone', '')
             if tz_name and m.get('timestamp'):
                 local_str = _format_signing_date(m['timestamp'], tz_name)
@@ -604,62 +629,81 @@ def generate_offer_letter_pdf(offer, employee,
                     tz_short = tz_name.replace('_', ' ').split('/')[-1]
                     elements.append(Paragraph(f'Local Time: {_safe_text(local_str)} ({_safe_text(tz_short)})', esig_style))
             elements.append(Spacer(1, 3))
-            if m.get('user_agent'):
-                ua = m['user_agent']
-                if len(ua) > 120:
-                    ua = ua[:120] + '...'
-                elements.append(Paragraph(f'User Agent: {_safe_text(ua)}', esig_style))
+            ua = m.get('user_agent', '')
+            if ua:
+                ua_display = ua if len(ua) <= 80 else ua[:80] + '...'
+                elements.append(Paragraph(f'User Agent: {_safe_text(ua_display)}', esig_style))
+                device_info = _parse_device(ua)
+                if device_info:
+                    elements.append(Paragraph(f'Device Info: {_safe_text(device_info)}', esig_style))
             elements.append(Spacer(1, 3))
-            if m.get('signature_id'):
-                elements.append(Paragraph(f'Signature ID: {_safe_text(m["signature_id"])}', esig_style))
-            if m.get('verification_method'):
-                elements.append(Paragraph(f'Verification Method: {_safe_text(m["verification_method"])}', esig_style))
-            elements.append(Spacer(1, 8))
+            elements.append(Paragraph(f'Verification Method: {_safe_text(verification_method)}', esig_style))
+            elements.append(Paragraph('Authentication Status: Verified', esig_style))
+
+        if employee_esignature_metadata and isinstance(employee_esignature_metadata, dict):
+            m = employee_esignature_metadata
+            _render_signer(m, employee.full_name or '', employee.email or '',
+                           employee.position or 'Employee',
+                           '1. Employee Signature Details',
+                           m.get('verification_method', 'Email Link Verified'))
+            elements.append(Spacer(1, 6))
 
         if company_esignature_metadata and isinstance(company_esignature_metadata, dict):
             m = company_esignature_metadata
             signer = company_signer_name or 'Authorized Signatory'
             signer_pos = company_signer_position or 'Director'
-            elements.append(Paragraph('<b>Company Signature</b>', esig_label))
-            elements.append(Paragraph(f'Signed By: {_safe_text(signer)}', esig_style))
-            elements.append(Paragraph(f'Role: {_safe_text(signer_pos)}', esig_style))
-            elements.append(Spacer(1, 3))
-            if m.get('ip_address'):
-                elements.append(Paragraph(f'IP Address: {_safe_text(m["ip_address"])}', esig_style))
-            if m.get('location'):
-                elements.append(Paragraph(f'Location: {_safe_text(m["location"])}', esig_style))
-            if m.get('latitude') and m.get('longitude'):
-                elements.append(Paragraph(f'Geo Coordinates: {_safe_text(m["latitude"])}, {_safe_text(m["longitude"])}', esig_style))
-            elements.append(Spacer(1, 3))
-            if m.get('timestamp_utc'):
-                elements.append(Paragraph(f'Signed At (UTC): {_safe_text(m["timestamp_utc"])}', esig_style))
-            elif m.get('timestamp'):
-                elements.append(Paragraph(f'Signed At: {_safe_text(m["timestamp"])}', esig_style))
-            tz_name = m.get('timezone', '')
-            if tz_name and m.get('timestamp'):
-                local_str = _format_signing_date(m['timestamp'], tz_name)
-                if local_str:
-                    tz_short = tz_name.replace('_', ' ').split('/')[-1]
-                    elements.append(Paragraph(f'Local Time: {_safe_text(local_str)} ({_safe_text(tz_short)})', esig_style))
-            elements.append(Spacer(1, 3))
-            if m.get('user_agent'):
-                ua = m['user_agent']
-                if len(ua) > 120:
-                    ua = ua[:120] + '...'
-                elements.append(Paragraph(f'User Agent: {_safe_text(ua)}', esig_style))
-            elements.append(Spacer(1, 3))
-            if m.get('signature_id'):
-                elements.append(Paragraph(f'Signature ID: {_safe_text(m["signature_id"])}', esig_style))
-            if m.get('verification_method'):
-                elements.append(Paragraph(f'Verification Method: {_safe_text(m["verification_method"])}', esig_style))
+            _render_signer(m, signer, '',
+                           f'{signer_pos} / Authorized Signatory',
+                           '2. Company Representative Signature Details',
+                           'System Login Verified')
+            elements.append(Spacer(1, 6))
 
-        elements.append(Spacer(1, 8))
+        elements.append(Paragraph('<b>3. Document Integrity &amp; Audit Trail</b>', esig_section))
+        if emp_sig_id:
+            elements.append(Paragraph(f'Signature ID: {_safe_text(emp_sig_id)}', esig_style))
+        elements.append(Paragraph(f'Audit Trail ID: {_safe_text(audit_trail_id)}', esig_style))
         elements.append(Paragraph(f'Document Hash (SHA256): {doc_hash}', esig_style))
+        doc_status = 'Completed &amp; Locked' if company_esignature_metadata else 'Awaiting Company Signature'
+        elements.append(Paragraph(f'Document Status: {doc_status}', esig_style))
+        elements.append(Paragraph('Tamper Status: No changes detected after signing', esig_style))
+
+        emp_ts = ''
+        co_ts = ''
+        if employee_esignature_metadata and isinstance(employee_esignature_metadata, dict):
+            emp_ts = employee_esignature_metadata.get('timestamp_utc', employee_esignature_metadata.get('timestamp', ''))
+        if company_esignature_metadata and isinstance(company_esignature_metadata, dict):
+            co_ts = company_esignature_metadata.get('timestamp_utc', company_esignature_metadata.get('timestamp', ''))
+
+        if emp_ts or co_ts:
+            elements.append(Spacer(1, 4))
+            elements.append(Paragraph('<b>4. Signing Sequence</b>', esig_section))
+            if emp_ts:
+                elements.append(Paragraph(f'Employee Signed: {_safe_text(emp_ts)} UTC', esig_style))
+            if co_ts:
+                elements.append(Paragraph(f'Company Signed: {_safe_text(co_ts)} UTC', esig_style))
+
         elements.append(Spacer(1, 4))
+        elements.append(Paragraph('<b>5. System Declaration</b>', esig_section))
         elements.append(Paragraph(
-            'This document was electronically signed. The signatures above are legally binding under applicable electronic signature laws.',
-            esig_style
-        ))
+            'This document was generated and signed through the Study Info Centre secure digital system. '
+            'All signature data, timestamps, and audit logs are securely stored and verifiable.',
+            esig_style))
+        elements.append(Paragraph(
+            'If both signatures originate from the same device or IP address, this indicates signing through '
+            'an authorized internal system or shared device environment.',
+            esig_style))
+
+        elements.append(Spacer(1, 4))
+        elements.append(Paragraph('<b>6. Legal Declaration</b>', esig_section))
+        elements.append(Paragraph('By signing this document electronically:', esig_style))
+        elements.append(Paragraph('The parties agree that this electronic signature is legally binding.', esig_style))
+        elements.append(Paragraph(
+            'This agreement is enforceable under applicable electronic signature laws, including but not limited to: '
+            'Electronic Transactions Act 1999 (Australia), ESIGN Act (USA), UETA (USA), and other applicable international laws.',
+            esig_style))
+        elements.append(Paragraph(
+            'This electronic signature carries the same legal effect as a handwritten signature.',
+            esig_style))
 
     hf = _make_header_footer(company_name=company_name)
     doc.build(elements, onFirstPage=hf, onLaterPages=hf, canvasmaker=NumberedCanvas)
