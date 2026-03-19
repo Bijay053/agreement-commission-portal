@@ -35,6 +35,16 @@ TIMEZONE_MAP = {
 def _format_signing_date(dt_val, tz_name=None):
     if not dt_val:
         return '____________________'
+    if isinstance(dt_val, str):
+        for parse_fmt in ('%Y-%m-%d %H:%M:%S', '%Y-%m-%dT%H:%M:%S', '%Y-%m-%dT%H:%M:%S.%f',
+                          '%Y-%m-%d %H:%M:%S.%f', '%Y-%m-%d', '%d/%m/%Y'):
+            try:
+                dt_val = datetime.strptime(dt_val, parse_fmt)
+                break
+            except ValueError:
+                continue
+        else:
+            return str(dt_val)
     try:
         if tz_name and tz_name in TIMEZONE_MAP:
             offset, abbrev = TIMEZONE_MAP[tz_name]
@@ -44,7 +54,10 @@ def _format_signing_date(dt_val, tz_name=None):
         nepal_dt = dt_val.astimezone(NEPAL_TZ)
         return nepal_dt.strftime('%d %B %Y, %I:%M %p') + ' NPT'
     except Exception:
-        return dt_val.strftime('%d %B %Y, %I:%M %p') + ' UTC'
+        try:
+            return dt_val.strftime('%d %B %Y, %I:%M %p') + ' UTC'
+        except Exception:
+            return str(dt_val)
 
 
 COMPANY_NAMES = {
