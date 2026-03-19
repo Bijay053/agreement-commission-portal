@@ -662,7 +662,7 @@ def generate_agreement_pdf(employee, agreement, clauses,
             signer = company_signer_name or 'Authorized Signatory'
             signer_pos = company_signer_position or 'Director'
             _render_signer(co_meta, signer, '',
-                           'Authorized Signatory',
+                           signer_pos,
                            'Company Representative',
                            signer,
                            'System Login Verified')
