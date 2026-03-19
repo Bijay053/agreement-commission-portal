@@ -120,7 +120,7 @@ def _generate_template_pdf(template):
 
             def showPage(self):
                 self._saved_page_states.append(dict(self.__dict__))
-                super().showPage()
+                self._startPage()
 
             def save(self):
                 num_pages = len(self._saved_page_states)
@@ -133,8 +133,8 @@ def _generate_template_pdf(template):
                     fy = 22 * mm - 2 * mm - 12
                     self.drawCentredString(width / 2, fy, f"Page {self._pageNumber} out of {num_pages}")
                     self.restoreState()
-                    super().showPage()
-                super().save()
+                    _rl_c.Canvas.showPage(self)
+                _rl_c.Canvas.save(self)
 
         styles = getSampleStyleSheet()
         title_style = ParagraphStyle('TplTitle', parent=styles['Title'], fontName='Helvetica-Bold', fontSize=16, leading=20, spaceAfter=6, alignment=TA_CENTER, textColor=BLUE_DARK)
