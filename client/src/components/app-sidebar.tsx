@@ -48,9 +48,9 @@ export function AppSidebar() {
   ];
 
   const employeeNav = [
-    { title: "Employees", url: "/employees", icon: UserCheck, show: true },
-    { title: "Agreement Templates", url: "/templates?type=agreement", icon: ClipboardList, show: true },
-    { title: "Offer Letter Templates", url: "/templates?type=offer_letter", icon: ClipboardList, show: true },
+    { title: "Employees", url: "/employees", icon: UserCheck, show: hasPermission("employee.view") },
+    { title: "Agreement Templates", url: "/templates?type=agreement", icon: ClipboardList, show: hasPermission("emp_template.view") },
+    { title: "Offer Letter Templates", url: "/templates?type=offer_letter", icon: ClipboardList, show: hasPermission("emp_template.view") },
   ];
 
   const adminNav = [
@@ -182,27 +182,29 @@ export function AppSidebar() {
           </SidebarGroupContent>
         </SidebarGroup>
 
-        <SidebarGroup>
-          <SidebarGroupLabel className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground/70">Employee Management</SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              {employeeNav.filter(i => i.show).map((item) => (
-                <SidebarMenuItem key={item.title}>
-                  <SidebarMenuButton
-                    asChild
-                    data-active={item.url.includes('?') ? location === item.url || location.startsWith(item.url.split('?')[0]) && location.includes(item.url.split('?')[1]) : isActive(item.url)}
-                    data-testid={`nav-${item.title.toLowerCase().replace(/\s/g, "-")}`}
-                  >
-                    <a href={item.url} onClick={(e) => { e.preventDefault(); navigate(item.url); }}>
-                      <item.icon className="w-4 h-4" />
-                      <span>{item.title}</span>
-                    </a>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              ))}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
+        {employeeNav.some(i => i.show) && (
+          <SidebarGroup>
+            <SidebarGroupLabel className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground/70">Employee Management</SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                {employeeNav.filter(i => i.show).map((item) => (
+                  <SidebarMenuItem key={item.title}>
+                    <SidebarMenuButton
+                      asChild
+                      data-active={item.url.includes('?') ? location === item.url || location.startsWith(item.url.split('?')[0]) && location.includes(item.url.split('?')[1]) : isActive(item.url)}
+                      data-testid={`nav-${item.title.toLowerCase().replace(/\s/g, "-")}`}
+                    >
+                      <a href={item.url} onClick={(e) => { e.preventDefault(); navigate(item.url); }}>
+                        <item.icon className="w-4 h-4" />
+                        <span>{item.title}</span>
+                      </a>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                ))}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        )}
 
         {adminNav.some(i => i.show) && (
           <SidebarGroup>
