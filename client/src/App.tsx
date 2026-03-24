@@ -36,6 +36,7 @@ import EmployeesListPage from "@/pages/employees-list";
 import EmployeeDetailPage from "@/pages/employee-detail";
 import SignAgreementPage from "@/pages/sign-agreement";
 import SignOfferPage from "@/pages/sign-offer";
+import ProviderCommissionPage from "@/pages/provider-commission";
 import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 
@@ -108,6 +109,11 @@ function Router() {
           window.location.replace("/sub-agent-commission" + window.location.search);
           return null;
         }}
+      </Route>
+      <Route path="/provider-commission">
+        <AccessGuard permission="provider_commission.view">
+          <ProviderCommissionPage />
+        </AccessGuard>
       </Route>
       <Route path="/templates" component={TemplatesPage} />
       <Route path="/employees" component={EmployeesListPage} />

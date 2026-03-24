@@ -35,6 +35,11 @@ EMPLOYEE_PERMISSIONS = [
     ('emp_template.edit', 'Employee Templates', 'emp_template', 'edit', 'Edit employee templates'),
     ('emp_template.delete', 'Employee Templates', 'emp_template', 'delete', 'Delete employee templates'),
     ('emp_template.download', 'Employee Templates', 'emp_template', 'download', 'Download employee templates'),
+    ('provider_commission.view', 'Sub Agent Commission Distribution', 'provider_commission', 'view', 'View provider commission distribution'),
+    ('provider_commission.add', 'Sub Agent Commission Distribution', 'provider_commission', 'add', 'Add provider commission entries'),
+    ('provider_commission.edit', 'Sub Agent Commission Distribution', 'provider_commission', 'edit', 'Edit provider commission entries'),
+    ('provider_commission.delete', 'Sub Agent Commission Distribution', 'provider_commission', 'delete', 'Delete provider commission entries'),
+    ('provider_commission.manage', 'Sub Agent Commission Distribution', 'provider_commission', 'manage', 'Manage sub-agent percentage config'),
 ]
 
 

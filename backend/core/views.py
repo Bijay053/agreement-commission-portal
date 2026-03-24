@@ -123,6 +123,14 @@ PERMISSION_REGISTRY = [
             {"resource": "document", "label": "Employee Documents", "actions": ["read", "upload", "replace", "delete", "download", "view_confidential"]},
         ],
     },
+    {
+        "module": "provider_commission",
+        "label": "Sub Agent Commission Distribution",
+        "resources": [
+            {"resource": "entry", "label": "Commission Entries", "actions": ["read", "add", "update", "delete"]},
+            {"resource": "config", "label": "Configuration", "actions": ["manage"]},
+        ],
+    },
 ]
 
 

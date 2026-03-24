@@ -1,0 +1,882 @@
+import { useState } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useAuth } from "@/lib/auth";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
+} from "@/components/ui/dialog";
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
+import {
+  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
+} from "@/components/ui/table";
+import {
+  Tooltip, TooltipContent, TooltipTrigger,
+} from "@/components/ui/tooltip";
+import { Textarea } from "@/components/ui/textarea";
+import { useToast } from "@/hooks/use-toast";
+import {
+  Search, Plus, Settings, Copy, Pencil, Trash2, Percent, DollarSign, Check,
+} from "lucide-react";
+
+const DEGREE_LEVELS = [
+  { value: "any", label: "Any" },
+  { value: "undergraduate", label: "Undergraduate" },
+  { value: "postgraduate", label: "Postgraduate" },
+  { value: "vet", label: "VET" },
+  { value: "foundation", label: "Foundation" },
+  { value: "diploma", label: "Diploma" },
+  { value: "phd", label: "PhD" },
+  { value: "english", label: "English Language" },
+];
+
+const COMMISSION_BASIS = [
+  { value: "1_year", label: "1 Year" },
+  { value: "2_semesters", label: "2 Semesters" },
+  { value: "full_course", label: "Full Course" },
+  { value: "per_semester", label: "Per Semester" },
+  { value: "per_year", label: "Per Year" },
+  { value: "per_trimester", label: "Per Trimester" },
+  { value: "one_time", label: "One Time" },
+];
+
+interface CommissionEntry {
+  id: number;
+  providerId: number;
+  providerName: string;
+  degreeLevel: string;
+  territory: string;
+  commissionValue: string;
+  commissionType: string;
+  currency: string;
+  commissionBasis: string;
+  notes: string;
+  isActive: boolean;
+  copiedFromRuleId: number | null;
+  subAgentCommission: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+interface CopyRule {
+  ruleId: number;
+  providerId: number;
+  providerName: string;
+  studyLevel: string;
+  commissionMode: string;
+  percentageValue: string | null;
+  flatAmount: string | null;
+  currency: string;
+  basis: string;
+  agreementCode: string;
+  agreementTitle: string;
+  alreadyCopied: boolean;
+}
+
+interface ProviderOption {
+  id: number;
+  name: string;
+}
+
+const degreeLabelMap: Record<string, string> = Object.fromEntries(DEGREE_LEVELS.map(d => [d.value, d.label]));
+const basisLabelMap: Record<string, string> = Object.fromEntries(COMMISSION_BASIS.map(b => [b.value, b.label]));
+
+export default function ProviderCommissionPage() {
+  const { hasPermission } = useAuth();
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+
+  const canView = hasPermission("provider_commission.view");
+  const canAdd = hasPermission("provider_commission.add");
+  const canEdit = hasPermission("provider_commission.edit");
+  const canDelete = hasPermission("provider_commission.delete");
+  const canManage = hasPermission("provider_commission.manage");
+
+  const [search, setSearch] = useState("");
+  const [filterDegree, setFilterDegree] = useState("all");
+  const [filterBasis, setFilterBasis] = useState("all");
+  const [showInactive, setShowInactive] = useState(false);
+
+  const [addOpen, setAddOpen] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
+  const [configOpen, setConfigOpen] = useState(false);
+  const [copyOpen, setCopyOpen] = useState(false);
+  const [editEntry, setEditEntry] = useState<CommissionEntry | null>(null);
+
+  const [formProvider, setFormProvider] = useState("");
+  const [formDegree, setFormDegree] = useState("any");
+  const [formTerritory, setFormTerritory] = useState("");
+  const [formValue, setFormValue] = useState("");
+  const [formType, setFormType] = useState("percentage");
+  const [formCurrency, setFormCurrency] = useState("AUD");
+  const [formBasis, setFormBasis] = useState("full_course");
+  const [formNotes, setFormNotes] = useState("");
+
+  const [configPct, setConfigPct] = useState("");
+  const [selectedRules, setSelectedRules] = useState<number[]>([]);
+
+  const { data: entries = [], isLoading } = useQuery<CommissionEntry[]>({
+    queryKey: ["/api/provider-commission", { activeOnly: showInactive ? "false" : "true" }],
+    queryFn: async () => {
+      const res = await fetch(`/api/provider-commission?activeOnly=${showInactive ? "false" : "true"}`, { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to load");
+      return res.json();
+    },
+    enabled: canView,
+  });
+
+  const { data: config } = useQuery<{ subAgentPercentage: string }>({
+    queryKey: ["/api/provider-commission/config"],
+    queryFn: async () => {
+      const res = await fetch("/api/provider-commission/config", { credentials: "include" });
+      if (!res.ok) throw new Error("Failed");
+      return res.json();
+    },
+  });
+
+  const { data: providers = [] } = useQuery<ProviderOption[]>({
+    queryKey: ["/api/providers"],
+    queryFn: async () => {
+      const res = await fetch("/api/providers?status=active", { credentials: "include" });
+      if (!res.ok) return [];
+      const data = await res.json();
+      return (data.providers || data || []).map((p: any) => ({ id: p.id, name: p.name }));
+    },
+  });
+
+  const { data: copyRules = [], isLoading: copyLoading } = useQuery<CopyRule[]>({
+    queryKey: ["/api/provider-commission/copy-rules"],
+    queryFn: async () => {
+      const res = await fetch("/api/provider-commission/copy-rules", { credentials: "include" });
+      if (!res.ok) return [];
+      return res.json();
+    },
+    enabled: copyOpen,
+  });
+
+  const addMutation = useMutation({
+    mutationFn: async (data: any) => {
+      const res = await fetch("/api/provider-commission", {
+        method: "POST", credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.message || "Failed to add");
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/provider-commission"] });
+      toast({ title: "Entry added" });
+      setAddOpen(false);
+      resetForm();
+    },
+    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+  });
+
+  const editMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: number; data: any }) => {
+      const res = await fetch(`/api/provider-commission/${id}`, {
+        method: "PATCH", credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.message || "Failed to update");
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/provider-commission"] });
+      toast({ title: "Entry updated" });
+      setEditOpen(false);
+      setEditEntry(null);
+    },
+    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (id: number) => {
+      const res = await fetch(`/api/provider-commission/${id}`, {
+        method: "DELETE", credentials: "include",
+      });
+      if (!res.ok) throw new Error("Failed to delete");
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/provider-commission"] });
+      toast({ title: "Entry deleted" });
+    },
+    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+  });
+
+  const configMutation = useMutation({
+    mutationFn: async (pct: string) => {
+      const res = await fetch("/api/provider-commission/config", {
+        method: "PATCH", credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ subAgentPercentage: pct }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.message || "Failed");
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/provider-commission"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/provider-commission/config"] });
+      toast({ title: "Sub-agent percentage updated" });
+      setConfigOpen(false);
+    },
+    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+  });
+
+  const copyMutation = useMutation({
+    mutationFn: async (ruleIds: number[]) => {
+      const res = await fetch("/api/provider-commission/copy-rules", {
+        method: "POST", credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ruleIds }),
+      });
+      if (!res.ok) throw new Error("Failed");
+      return res.json();
+    },
+    onSuccess: (data: any) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/provider-commission"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/provider-commission/copy-rules"] });
+      toast({ title: `Copied ${data.created} entries (${data.skipped} skipped)` });
+      setCopyOpen(false);
+      setSelectedRules([]);
+    },
+    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+  });
+
+  function resetForm() {
+    setFormProvider("");
+    setFormDegree("any");
+    setFormTerritory("");
+    setFormValue("");
+    setFormType("percentage");
+    setFormCurrency("AUD");
+    setFormBasis("full_course");
+    setFormNotes("");
+  }
+
+  function openEdit(e: CommissionEntry) {
+    setEditEntry(e);
+    setFormDegree(e.degreeLevel);
+    setFormTerritory(e.territory);
+    setFormValue(e.commissionValue);
+    setFormType(e.commissionType);
+    setFormCurrency(e.currency);
+    setFormBasis(e.commissionBasis);
+    setFormNotes(e.notes);
+    setEditOpen(true);
+  }
+
+  const filtered = entries.filter(e => {
+    if (search) {
+      const s = search.toLowerCase();
+      if (!e.providerName.toLowerCase().includes(s) && !e.territory.toLowerCase().includes(s)) return false;
+    }
+    if (filterDegree !== "all" && e.degreeLevel !== filterDegree) return false;
+    if (filterBasis !== "all" && e.commissionBasis !== filterBasis) return false;
+    return true;
+  });
+
+  const subPct = config?.subAgentPercentage || "70.00";
+
+  if (!canView) {
+    return (
+      <div className="p-8 text-center text-muted-foreground" data-testid="no-access">
+        You don't have permission to view this page.
+      </div>
+    );
+  }
+
+  return (
+    <div className="p-4 md:p-6 space-y-4" data-testid="provider-commission-page">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold" data-testid="page-title">Sub Agent Commission Distribution</h1>
+          <p className="text-sm text-muted-foreground mt-1">
+            Manage provider commission rates and auto-calculate sub-agent commission
+          </p>
+        </div>
+        <div className="flex items-center gap-2 flex-wrap">
+          {canManage && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => { setConfigPct(subPct); setConfigOpen(true); }}
+              data-testid="btn-config"
+            >
+              <Settings className="w-4 h-4 mr-1" />
+              Sub-Agent: {subPct}%
+            </Button>
+          )}
+          {canAdd && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setCopyOpen(true)}
+              data-testid="btn-copy"
+            >
+              <Copy className="w-4 h-4 mr-1" />
+              Copy from Agreements
+            </Button>
+          )}
+          {canAdd && (
+            <Button
+              size="sm"
+              onClick={() => { resetForm(); setAddOpen(true); }}
+              data-testid="btn-add"
+            >
+              <Plus className="w-4 h-4 mr-1" />
+              Add Entry
+            </Button>
+          )}
+        </div>
+      </div>
+
+      <Card>
+        <CardContent className="pt-4">
+          <div className="flex flex-col sm:flex-row gap-3 mb-4">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+              <Input
+                placeholder="Search provider or territory..."
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                className="pl-9"
+                data-testid="input-search"
+              />
+            </div>
+            <Select value={filterDegree} onValueChange={setFilterDegree}>
+              <SelectTrigger className="w-[160px]" data-testid="filter-degree">
+                <SelectValue placeholder="Degree Level" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Degrees</SelectItem>
+                {DEGREE_LEVELS.map(d => (
+                  <SelectItem key={d.value} value={d.value}>{d.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select value={filterBasis} onValueChange={setFilterBasis}>
+              <SelectTrigger className="w-[160px]" data-testid="filter-basis">
+                <SelectValue placeholder="Basis" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Basis</SelectItem>
+                {COMMISSION_BASIS.map(b => (
+                  <SelectItem key={b.value} value={b.value}>{b.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <div className="flex items-center gap-2">
+              <Checkbox
+                id="showInactive"
+                checked={showInactive}
+                onCheckedChange={v => setShowInactive(!!v)}
+                data-testid="checkbox-inactive"
+              />
+              <Label htmlFor="showInactive" className="text-sm whitespace-nowrap">Show Inactive</Label>
+            </div>
+          </div>
+
+          {isLoading ? (
+            <div className="space-y-2">
+              {[1, 2, 3].map(i => <Skeleton key={i} className="h-12 w-full" />)}
+            </div>
+          ) : filtered.length === 0 ? (
+            <div className="text-center py-8 text-muted-foreground" data-testid="empty-state">
+              No commission entries found.
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Provider</TableHead>
+                    <TableHead>Degree Level</TableHead>
+                    <TableHead>Territory</TableHead>
+                    <TableHead className="text-right">Commission</TableHead>
+                    <TableHead>Basis</TableHead>
+                    <TableHead className="text-right">Sub-Agent ({subPct}%)</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filtered.map(entry => (
+                    <TableRow key={entry.id} data-testid={`row-entry-${entry.id}`}>
+                      <TableCell className="font-medium" data-testid={`text-provider-${entry.id}`}>
+                        {entry.providerName}
+                      </TableCell>
+                      <TableCell data-testid={`text-degree-${entry.id}`}>
+                        <Badge variant="outline">{degreeLabelMap[entry.degreeLevel] || entry.degreeLevel}</Badge>
+                      </TableCell>
+                      <TableCell data-testid={`text-territory-${entry.id}`}>
+                        {entry.territory || <span className="text-muted-foreground">—</span>}
+                      </TableCell>
+                      <TableCell className="text-right font-mono" data-testid={`text-commission-${entry.id}`}>
+                        {entry.commissionType === "percentage" ? (
+                          <span>{entry.commissionValue}%</span>
+                        ) : (
+                          <span>{entry.currency} {entry.commissionValue}</span>
+                        )}
+                      </TableCell>
+                      <TableCell data-testid={`text-basis-${entry.id}`}>
+                        {basisLabelMap[entry.commissionBasis] || entry.commissionBasis}
+                      </TableCell>
+                      <TableCell className="text-right font-mono" data-testid={`text-subagent-${entry.id}`}>
+                        {entry.subAgentCommission ? (
+                          entry.commissionType === "percentage" ? (
+                            <span className="text-emerald-600 dark:text-emerald-400">{entry.subAgentCommission}%</span>
+                          ) : (
+                            <span className="text-emerald-600 dark:text-emerald-400">{entry.currency} {entry.subAgentCommission}</span>
+                          )
+                        ) : "—"}
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant={entry.isActive ? "default" : "secondary"} data-testid={`badge-active-${entry.id}`}>
+                          {entry.isActive ? "Active" : "Inactive"}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex items-center justify-end gap-1">
+                          {entry.notes && (
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Badge variant="outline" className="cursor-help text-xs">Note</Badge>
+                              </TooltipTrigger>
+                              <TooltipContent className="max-w-[300px]">{entry.notes}</TooltipContent>
+                            </Tooltip>
+                          )}
+                          {canEdit && (
+                            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEdit(entry)} data-testid={`btn-edit-${entry.id}`}>
+                              <Pencil className="w-4 h-4" />
+                            </Button>
+                          )}
+                          {canDelete && (
+                            <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => {
+                              if (confirm("Delete this entry?")) deleteMutation.mutate(entry.id);
+                            }} data-testid={`btn-delete-${entry.id}`}>
+                              <Trash2 className="w-4 h-4" />
+                            </Button>
+                          )}
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+          <div className="text-xs text-muted-foreground mt-3" data-testid="text-count">
+            {filtered.length} {filtered.length === 1 ? "entry" : "entries"}
+          </div>
+        </CardContent>
+      </Card>
+
+      <Dialog open={addOpen} onOpenChange={setAddOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Add Commission Entry</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label>Provider *</Label>
+              <Select value={formProvider} onValueChange={setFormProvider}>
+                <SelectTrigger data-testid="select-provider">
+                  <SelectValue placeholder="Select provider" />
+                </SelectTrigger>
+                <SelectContent>
+                  {providers.map(p => (
+                    <SelectItem key={p.id} value={String(p.id)}>{p.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label>Degree Level</Label>
+                <Select value={formDegree} onValueChange={setFormDegree}>
+                  <SelectTrigger data-testid="select-degree">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {DEGREE_LEVELS.map(d => (
+                      <SelectItem key={d.value} value={d.value}>{d.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label>Territory</Label>
+                <Input
+                  value={formTerritory}
+                  onChange={e => setFormTerritory(e.target.value)}
+                  placeholder="e.g. Australia, Nepal"
+                  data-testid="input-territory"
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-3 gap-3">
+              <div>
+                <Label>Commission Type</Label>
+                <Select value={formType} onValueChange={setFormType}>
+                  <SelectTrigger data-testid="select-type">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="percentage">Percentage</SelectItem>
+                    <SelectItem value="flat">Flat Amount</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label>Value *</Label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  value={formValue}
+                  onChange={e => setFormValue(e.target.value)}
+                  placeholder={formType === "percentage" ? "e.g. 15" : "e.g. 500"}
+                  data-testid="input-value"
+                />
+              </div>
+              {formType === "flat" && (
+                <div>
+                  <Label>Currency</Label>
+                  <Select value={formCurrency} onValueChange={setFormCurrency}>
+                    <SelectTrigger data-testid="select-currency">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="AUD">AUD</SelectItem>
+                      <SelectItem value="USD">USD</SelectItem>
+                      <SelectItem value="NPR">NPR</SelectItem>
+                      <SelectItem value="GBP">GBP</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+            </div>
+            <div>
+              <Label>Commission Basis</Label>
+              <Select value={formBasis} onValueChange={setFormBasis}>
+                <SelectTrigger data-testid="select-basis">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {COMMISSION_BASIS.map(b => (
+                    <SelectItem key={b.value} value={b.value}>{b.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>Notes</Label>
+              <Textarea
+                value={formNotes}
+                onChange={e => setFormNotes(e.target.value)}
+                placeholder="Optional notes..."
+                rows={2}
+                data-testid="input-notes"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAddOpen(false)} data-testid="btn-cancel-add">Cancel</Button>
+            <Button
+              onClick={() => addMutation.mutate({
+                providerId: Number(formProvider),
+                degreeLevel: formDegree,
+                territory: formTerritory,
+                commissionValue: formValue,
+                commissionType: formType,
+                currency: formCurrency,
+                commissionBasis: formBasis,
+                notes: formNotes,
+              })}
+              disabled={!formProvider || !formValue || addMutation.isPending}
+              data-testid="btn-submit-add"
+            >
+              {addMutation.isPending ? "Adding..." : "Add Entry"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={editOpen} onOpenChange={v => { setEditOpen(v); if (!v) setEditEntry(null); }}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Edit Commission Entry — {editEntry?.providerName}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label>Degree Level</Label>
+                <Select value={formDegree} onValueChange={setFormDegree}>
+                  <SelectTrigger data-testid="edit-select-degree">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {DEGREE_LEVELS.map(d => (
+                      <SelectItem key={d.value} value={d.value}>{d.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label>Territory</Label>
+                <Input
+                  value={formTerritory}
+                  onChange={e => setFormTerritory(e.target.value)}
+                  data-testid="edit-input-territory"
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-3 gap-3">
+              <div>
+                <Label>Commission Type</Label>
+                <Select value={formType} onValueChange={setFormType}>
+                  <SelectTrigger data-testid="edit-select-type">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="percentage">Percentage</SelectItem>
+                    <SelectItem value="flat">Flat Amount</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label>Value</Label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  value={formValue}
+                  onChange={e => setFormValue(e.target.value)}
+                  data-testid="edit-input-value"
+                />
+              </div>
+              {formType === "flat" && (
+                <div>
+                  <Label>Currency</Label>
+                  <Select value={formCurrency} onValueChange={setFormCurrency}>
+                    <SelectTrigger data-testid="edit-select-currency">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="AUD">AUD</SelectItem>
+                      <SelectItem value="USD">USD</SelectItem>
+                      <SelectItem value="NPR">NPR</SelectItem>
+                      <SelectItem value="GBP">GBP</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+            </div>
+            <div>
+              <Label>Commission Basis</Label>
+              <Select value={formBasis} onValueChange={setFormBasis}>
+                <SelectTrigger data-testid="edit-select-basis">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {COMMISSION_BASIS.map(b => (
+                    <SelectItem key={b.value} value={b.value}>{b.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>Notes</Label>
+              <Textarea
+                value={formNotes}
+                onChange={e => setFormNotes(e.target.value)}
+                rows={2}
+                data-testid="edit-input-notes"
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              <Checkbox
+                id="editActive"
+                checked={editEntry?.isActive}
+                onCheckedChange={() => {}}
+                data-testid="edit-checkbox-active"
+              />
+              <Label htmlFor="editActive" className="text-sm">Active</Label>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setEditOpen(false); setEditEntry(null); }} data-testid="btn-cancel-edit">Cancel</Button>
+            <Button
+              onClick={() => {
+                if (!editEntry) return;
+                editMutation.mutate({
+                  id: editEntry.id,
+                  data: {
+                    degreeLevel: formDegree,
+                    territory: formTerritory,
+                    commissionValue: formValue,
+                    commissionType: formType,
+                    currency: formCurrency,
+                    commissionBasis: formBasis,
+                    notes: formNotes,
+                  },
+                });
+              }}
+              disabled={editMutation.isPending}
+              data-testid="btn-submit-edit"
+            >
+              {editMutation.isPending ? "Saving..." : "Save Changes"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={configOpen} onOpenChange={setConfigOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Sub-Agent Commission Percentage</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              Set the global percentage of the main commission that sub-agents receive. This applies to all providers.
+            </p>
+            <div>
+              <Label>Percentage (%)</Label>
+              <div className="flex items-center gap-2">
+                <Input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  max="100"
+                  value={configPct}
+                  onChange={e => setConfigPct(e.target.value)}
+                  data-testid="input-config-pct"
+                />
+                <Percent className="w-5 h-5 text-muted-foreground" />
+              </div>
+              <p className="text-xs text-muted-foreground mt-1">
+                Example: If main commission is 15% and sub-agent percentage is {configPct || "70"}%, the sub-agent gets{" "}
+                {((15 * parseFloat(configPct || "70")) / 100).toFixed(2)}%
+              </p>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setConfigOpen(false)} data-testid="btn-cancel-config">Cancel</Button>
+            <Button
+              onClick={() => configMutation.mutate(configPct)}
+              disabled={configMutation.isPending || !configPct}
+              data-testid="btn-submit-config"
+            >
+              {configMutation.isPending ? "Saving..." : "Save"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={copyOpen} onOpenChange={v => { setCopyOpen(v); if (!v) setSelectedRules([]); }}>
+        <DialogContent className="max-w-3xl max-h-[80vh]">
+          <DialogHeader>
+            <DialogTitle>Copy from Existing Agreement Commission Rules</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground mb-3">
+            Select commission rules to copy into the Sub Agent Commission Distribution table.
+          </p>
+          {copyLoading ? (
+            <div className="space-y-2">
+              {[1, 2, 3].map(i => <Skeleton key={i} className="h-10 w-full" />)}
+            </div>
+          ) : copyRules.length === 0 ? (
+            <p className="text-sm text-muted-foreground py-4 text-center">No commission rules found in agreements.</p>
+          ) : (
+            <div className="overflow-y-auto max-h-[50vh] border rounded">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-10">
+                      <Checkbox
+                        checked={selectedRules.length === copyRules.filter(r => !r.alreadyCopied).length && selectedRules.length > 0}
+                        onCheckedChange={v => {
+                          if (v) setSelectedRules(copyRules.filter(r => !r.alreadyCopied).map(r => r.ruleId));
+                          else setSelectedRules([]);
+                        }}
+                        data-testid="checkbox-select-all"
+                      />
+                    </TableHead>
+                    <TableHead>Provider</TableHead>
+                    <TableHead>Agreement</TableHead>
+                    <TableHead>Level</TableHead>
+                    <TableHead>Commission</TableHead>
+                    <TableHead>Basis</TableHead>
+                    <TableHead>Status</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {copyRules.map(rule => (
+                    <TableRow key={rule.ruleId} className={rule.alreadyCopied ? "opacity-50" : ""} data-testid={`copy-row-${rule.ruleId}`}>
+                      <TableCell>
+                        <Checkbox
+                          checked={selectedRules.includes(rule.ruleId)}
+                          disabled={rule.alreadyCopied}
+                          onCheckedChange={v => {
+                            if (v) setSelectedRules(prev => [...prev, rule.ruleId]);
+                            else setSelectedRules(prev => prev.filter(id => id !== rule.ruleId));
+                          }}
+                          data-testid={`checkbox-rule-${rule.ruleId}`}
+                        />
+                      </TableCell>
+                      <TableCell className="font-medium">{rule.providerName}</TableCell>
+                      <TableCell>
+                        <span className="text-xs text-muted-foreground">{rule.agreementCode}</span>
+                      </TableCell>
+                      <TableCell>{rule.studyLevel}</TableCell>
+                      <TableCell className="font-mono">
+                        {rule.commissionMode === "percentage"
+                          ? `${rule.percentageValue}%`
+                          : `${rule.currency} ${rule.flatAmount}`}
+                      </TableCell>
+                      <TableCell>{rule.basis}</TableCell>
+                      <TableCell>
+                        {rule.alreadyCopied ? (
+                          <Badge variant="secondary"><Check className="w-3 h-3 mr-1" />Copied</Badge>
+                        ) : (
+                          <Badge variant="outline">Available</Badge>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setCopyOpen(false); setSelectedRules([]); }} data-testid="btn-cancel-copy">Cancel</Button>
+            <Button
+              onClick={() => copyMutation.mutate(selectedRules)}
+              disabled={selectedRules.length === 0 || copyMutation.isPending}
+              data-testid="btn-submit-copy"
+            >
+              {copyMutation.isPending ? "Copying..." : `Copy ${selectedRules.length} Selected`}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}

@@ -93,6 +93,11 @@ LEGACY_PERMISSION_MAP = {
     "emp_document.delete": "emp_documents.document.delete",
     "emp_document.download": "emp_documents.document.download",
     "emp_document.view_confidential": "emp_documents.document.view_confidential",
+    "provider_commission.view": "provider_commission.entry.read",
+    "provider_commission.add": "provider_commission.entry.add",
+    "provider_commission.edit": "provider_commission.entry.update",
+    "provider_commission.delete": "provider_commission.entry.delete",
+    "provider_commission.manage": "provider_commission.config.manage",
 }
 
 
