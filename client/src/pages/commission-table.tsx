@@ -270,8 +270,8 @@ export default function CommissionTablePage() {
                     <TableRow>
                       <TableHead className="w-[14%]">Provider</TableHead>
                       <TableHead className="w-[16%]">Agreement</TableHead>
-                      <TableHead className="w-[14%]">Label</TableHead>
                       <TableHead className="w-[10%]">Territory</TableHead>
+                      <TableHead className="w-[14%]">Label</TableHead>
                       <TableHead className="w-[8%]">Level</TableHead>
                       <TableHead className="w-[9%]">Type</TableHead>
                       <TableHead className="w-[9%]">Value</TableHead>
