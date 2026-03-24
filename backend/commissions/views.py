@@ -27,7 +27,7 @@ class AllCommissionRulesView(APIView):
     @require_permission("commission.view")
     def get(self, request):
         try:
-            rules = AgreementCommissionRule.objects.all().order_by('-created_at')
+            rules = AgreementCommissionRule.objects.all().order_by('id')
             provider_id = request.query_params.get('providerId')
             provider_country_id = request.query_params.get('providerCountryId')
             agreement_status = request.query_params.get('agreementStatus')

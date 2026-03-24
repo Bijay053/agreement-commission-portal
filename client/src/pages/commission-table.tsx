@@ -282,95 +282,117 @@ export default function CommissionTablePage() {
                   </TableHeader>
                   <TableBody>
                     {(() => {
-                      const grouped: { key: string; rules: any[] }[] = [];
-                      commissionRules.forEach((rule: any) => {
-                        const groupKey = `${rule.providerName}-${rule.agreementId}`;
-                        const last = grouped[grouped.length - 1];
-                        if (last && last.key === groupKey) {
-                          last.rules.push(rule);
-                        } else {
-                          grouped.push({ key: groupKey, rules: [rule] });
+                      const providerGroups: { providerName: string; agreements: { agreementId: number; rules: any[] }[] }[] = [];
+                      const sorted = [...commissionRules].sort((a: any, b: any) => a.providerName.localeCompare(b.providerName));
+                      sorted.forEach((rule: any) => {
+                        let pg = providerGroups[providerGroups.length - 1];
+                        if (!pg || pg.providerName !== rule.providerName) {
+                          pg = { providerName: rule.providerName, agreements: [] };
+                          providerGroups.push(pg);
                         }
+                        let ag = pg.agreements[pg.agreements.length - 1];
+                        if (!ag || ag.agreementId !== rule.agreementId) {
+                          ag = { agreementId: rule.agreementId, rules: [] };
+                          pg.agreements.push(ag);
+                        }
+                        ag.rules.push(rule);
                       });
 
-                      return grouped.map((group) => {
-                        const firstRule = group.rules[0];
-                        const rowCount = group.rules.length;
-                        return group.rules.map((rule: any, idx: number) => (
-                          <TableRow
-                            key={rule.id}
-                            data-testid={`row-commission-${rule.id}`}
-                            className={idx === 0 && rowCount > 1 ? "border-t-2 border-border" : ""}
-                          >
-                            {idx === 0 && (
-                              <>
-                                <TableCell rowSpan={rowCount} className="align-top border-r border-border/50">
-                                  <div className="text-sm font-medium truncate">{firstRule.providerName}</div>
-                                  {firstRule.providerCountryName && (
-                                    <div className="text-xs text-muted-foreground truncate">{firstRule.providerCountryName}</div>
+                      return providerGroups.map((pg) => {
+                        const providerTotalRows = pg.agreements.reduce((sum, ag) => sum + ag.rules.length, 0);
+                        const firstProviderRule = pg.agreements[0].rules[0];
+                        let providerRowRendered = false;
+
+                        return pg.agreements.map((ag) => {
+                          const agRowCount = ag.rules.length;
+                          const firstAgRule = ag.rules[0];
+                          let agRowRendered = false;
+
+                          return ag.rules.map((rule: any) => {
+                            const showProvider = !providerRowRendered;
+                            const showAgreement = !agRowRendered;
+                            if (showProvider) providerRowRendered = true;
+                            if (showAgreement) agRowRendered = true;
+
+                            return (
+                              <TableRow
+                                key={rule.id}
+                                data-testid={`row-commission-${rule.id}`}
+                                className={showProvider ? "border-t-2 border-border" : ""}
+                              >
+                                {showProvider && (
+                                  <TableCell rowSpan={providerTotalRows} className="align-top border-r border-border/50">
+                                    <div className="text-sm font-medium truncate">{firstProviderRule.providerName}</div>
+                                    {firstProviderRule.providerCountryName && (
+                                      <div className="text-xs text-muted-foreground truncate">{firstProviderRule.providerCountryName}</div>
+                                    )}
+                                  </TableCell>
+                                )}
+                                {showAgreement && (
+                                  <>
+                                    <TableCell rowSpan={agRowCount} className="align-top border-r border-border/50">
+                                      <button
+                                        className="text-left hover:underline text-primary text-sm w-full"
+                                        onClick={() => navigate(`/agreements/${firstAgRule.agreementId}`)}
+                                        data-testid={`link-agreement-${firstAgRule.agreementId}`}
+                                      >
+                                        <div className="font-medium truncate">{firstAgRule.agreementCode}</div>
+                                        <div className="text-xs text-muted-foreground truncate">{firstAgRule.agreementTitle}</div>
+                                      </button>
+                                    </TableCell>
+                                    <TableCell rowSpan={agRowCount} className="align-top border-r border-border/50">
+                                      <div className="text-xs truncate">
+                                        {firstAgRule.territoryCountries?.length > 0
+                                          ? firstAgRule.territoryCountries.length > 2
+                                            ? <Tooltip>
+                                                <TooltipTrigger className="underline decoration-dotted cursor-help">
+                                                  {firstAgRule.territoryCountries.slice(0, 2).join(", ")} +{firstAgRule.territoryCountries.length - 2}
+                                                </TooltipTrigger>
+                                                <TooltipContent>{firstAgRule.territoryCountries.join(", ")}</TooltipContent>
+                                              </Tooltip>
+                                            : firstAgRule.territoryCountries.join(", ")
+                                          : "—"
+                                        }
+                                      </div>
+                                    </TableCell>
+                                  </>
+                                )}
+                                <TableCell>
+                                  <span className="text-sm truncate block">{rule.label || "—"}</span>
+                                </TableCell>
+                                <TableCell>
+                                  <span className="text-sm">{rule.studyLevel || "Any"}</span>
+                                </TableCell>
+                                <TableCell>
+                                  <Badge variant="outline" className="text-xs">{commissionModeLabels[rule.commissionMode] || rule.commissionMode}</Badge>
+                                </TableCell>
+                                <TableCell>
+                                  <span className="text-sm font-medium">{formatCommissionValue(rule)}</span>
+                                </TableCell>
+                                <TableCell>
+                                  <span className="text-xs">{basisLabels[rule.basis] || rule.basis}</span>
+                                </TableCell>
+                                <TableCell>
+                                  <Badge variant={rule.isActive ? "default" : "secondary"} className="text-xs">
+                                    {rule.isActive ? "Active" : "Inactive"}
+                                  </Badge>
+                                </TableCell>
+                                <TableCell>
+                                  {showAgreement && (
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      onClick={() => navigate(`/agreements/${rule.agreementId}`)}
+                                      data-testid={`button-view-agreement-${rule.agreementId}`}
+                                    >
+                                      <ExternalLink className="w-4 h-4" />
+                                    </Button>
                                   )}
                                 </TableCell>
-                                <TableCell rowSpan={rowCount} className="align-top border-r border-border/50">
-                                  <button
-                                    className="text-left hover:underline text-primary text-sm w-full"
-                                    onClick={() => navigate(`/agreements/${firstRule.agreementId}`)}
-                                    data-testid={`link-agreement-${firstRule.agreementId}`}
-                                  >
-                                    <div className="font-medium truncate">{firstRule.agreementCode}</div>
-                                    <div className="text-xs text-muted-foreground truncate">{firstRule.agreementTitle}</div>
-                                  </button>
-                                </TableCell>
-                                <TableCell rowSpan={rowCount} className="align-top border-r border-border/50">
-                                  <div className="text-xs truncate">
-                                    {firstRule.territoryCountries?.length > 0
-                                      ? firstRule.territoryCountries.length > 2
-                                        ? <Tooltip>
-                                            <TooltipTrigger className="underline decoration-dotted cursor-help">
-                                              {firstRule.territoryCountries.slice(0, 2).join(", ")} +{firstRule.territoryCountries.length - 2}
-                                            </TooltipTrigger>
-                                            <TooltipContent>{firstRule.territoryCountries.join(", ")}</TooltipContent>
-                                          </Tooltip>
-                                        : firstRule.territoryCountries.join(", ")
-                                      : "—"
-                                    }
-                                  </div>
-                                </TableCell>
-                              </>
-                            )}
-                            <TableCell>
-                              <span className="text-sm truncate block">{rule.label || "—"}</span>
-                            </TableCell>
-                            <TableCell>
-                              <span className="text-sm">{rule.studyLevel || "Any"}</span>
-                            </TableCell>
-                            <TableCell>
-                              <Badge variant="outline" className="text-xs">{commissionModeLabels[rule.commissionMode] || rule.commissionMode}</Badge>
-                            </TableCell>
-                            <TableCell>
-                              <span className="text-sm font-medium">{formatCommissionValue(rule)}</span>
-                            </TableCell>
-                            <TableCell>
-                              <span className="text-xs">{basisLabels[rule.basis] || rule.basis}</span>
-                            </TableCell>
-                            <TableCell>
-                              <Badge variant={rule.isActive ? "default" : "secondary"} className="text-xs">
-                                {rule.isActive ? "Active" : "Inactive"}
-                              </Badge>
-                            </TableCell>
-                            <TableCell>
-                              {idx === 0 && (
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  onClick={() => navigate(`/agreements/${rule.agreementId}`)}
-                                  data-testid={`button-view-agreement-${rule.agreementId}`}
-                                >
-                                  <ExternalLink className="w-4 h-4" />
-                                </Button>
-                              )}
-                            </TableCell>
-                          </TableRow>
-                        ));
+                              </TableRow>
+                            );
+                          });
+                        });
                       });
                     })()}
                   </TableBody>
