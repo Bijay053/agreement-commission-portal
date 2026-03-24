@@ -98,7 +98,13 @@ export function SearchableSelect({
       >
         <Command>
           <CommandInput placeholder={searchPlaceholder} />
-          <CommandList>
+          <CommandList
+            onWheel={(e) => {
+              e.stopPropagation();
+              const el = e.currentTarget;
+              el.scrollTop += e.deltaY;
+            }}
+          >
             <CommandEmpty>No results found</CommandEmpty>
             <CommandGroup>
               {options.map((option) => (
