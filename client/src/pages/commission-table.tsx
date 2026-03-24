@@ -282,131 +282,132 @@ export default function CommissionTablePage() {
                   </TableHeader>
                   <TableBody>
                     {(() => {
-                      const providerGroups: { providerName: string; agreements: { agreementId: number; labelGroups: { label: string; rules: any[] }[] }[] }[] = [];
-                      const sorted = [...commissionRules].sort((a: any, b: any) => a.providerName.localeCompare(b.providerName));
+                      const sorted = [...commissionRules].sort((a: any, b: any) => {
+                        const pCmp = a.providerName.localeCompare(b.providerName);
+                        if (pCmp !== 0) return pCmp;
+                        const lA = (a.label || "—").toLowerCase();
+                        const lB = (b.label || "—").toLowerCase();
+                        const lCmp = lA.localeCompare(lB);
+                        if (lCmp !== 0) return lCmp;
+                        return (a.agreementId || 0) - (b.agreementId || 0);
+                      });
+
+                      const providerGroups: { providerName: string; rules: any[] }[] = [];
                       sorted.forEach((rule: any) => {
                         let pg = providerGroups[providerGroups.length - 1];
                         if (!pg || pg.providerName !== rule.providerName) {
-                          pg = { providerName: rule.providerName, agreements: [] };
+                          pg = { providerName: rule.providerName, rules: [] };
                           providerGroups.push(pg);
                         }
-                        let ag = pg.agreements[pg.agreements.length - 1];
-                        if (!ag || ag.agreementId !== rule.agreementId) {
-                          ag = { agreementId: rule.agreementId, labelGroups: [] };
-                          pg.agreements.push(ag);
-                        }
-                        const ruleLabel = rule.label || "—";
-                        let lg = ag.labelGroups[ag.labelGroups.length - 1];
-                        if (!lg || lg.label !== ruleLabel) {
-                          lg = { label: ruleLabel, rules: [] };
-                          ag.labelGroups.push(lg);
-                        }
-                        lg.rules.push(rule);
+                        pg.rules.push(rule);
                       });
 
                       return providerGroups.map((pg) => {
-                        const providerTotalRows = pg.agreements.reduce((sum, ag) => sum + ag.labelGroups.reduce((s, lg) => s + lg.rules.length, 0), 0);
-                        const firstProviderRule = pg.agreements[0].labelGroups[0].rules[0];
+                        const providerTotalRows = pg.rules.length;
+                        const firstProviderRule = pg.rules[0];
                         let providerRowRendered = false;
 
-                        return pg.agreements.map((ag) => {
-                          const agRowCount = ag.labelGroups.reduce((s, lg) => s + lg.rules.length, 0);
-                          const firstAgRule = ag.labelGroups[0].rules[0];
-                          let agRowRendered = false;
+                        const labelCounts: Record<string, number> = {};
+                        pg.rules.forEach((r: any) => {
+                          const l = r.label || "—";
+                          labelCounts[l] = (labelCounts[l] || 0) + 1;
+                        });
+                        const labelRendered: Record<string, boolean> = {};
 
-                          return ag.labelGroups.map((lg) => {
-                            const labelRowCount = lg.rules.length;
-                            let labelRowRendered = false;
+                        const agCounts: Record<number, number> = {};
+                        pg.rules.forEach((r: any) => {
+                          agCounts[r.agreementId] = (agCounts[r.agreementId] || 0) + 1;
+                        });
+                        const agRendered: Record<number, boolean> = {};
 
-                            return lg.rules.map((rule: any) => {
-                              const showProvider = !providerRowRendered;
-                              const showAgreement = !agRowRendered;
-                              const showLabel = !labelRowRendered;
-                              if (showProvider) providerRowRendered = true;
-                              if (showAgreement) agRowRendered = true;
-                              if (showLabel) labelRowRendered = true;
+                        return pg.rules.map((rule: any) => {
+                          const showProvider = !providerRowRendered;
+                          if (showProvider) providerRowRendered = true;
 
-                              return (
-                                <TableRow
-                                  key={rule.id}
-                                  data-testid={`row-commission-${rule.id}`}
-                                  className={showProvider ? "border-t-2 border-border" : ""}
-                                >
-                                  {showProvider && (
-                                    <TableCell rowSpan={providerTotalRows} className="align-top border-r border-border/50">
-                                      <div className="text-sm font-medium truncate">{firstProviderRule.providerName}</div>
-                                      {firstProviderRule.providerCountryName && (
-                                        <div className="text-xs text-muted-foreground truncate">{firstProviderRule.providerCountryName}</div>
-                                      )}
-                                    </TableCell>
+                          const ruleLabel = rule.label || "—";
+                          const showLabel = !labelRendered[ruleLabel];
+                          if (showLabel) labelRendered[ruleLabel] = true;
+
+                          const showAgreement = !agRendered[rule.agreementId];
+                          if (showAgreement) agRendered[rule.agreementId] = true;
+
+                          return (
+                            <TableRow
+                              key={rule.id}
+                              data-testid={`row-commission-${rule.id}`}
+                              className={showProvider ? "border-t-2 border-border" : ""}
+                            >
+                              {showProvider && (
+                                <TableCell rowSpan={providerTotalRows} className="align-top border-r border-border/50">
+                                  <div className="text-sm font-medium truncate">{firstProviderRule.providerName}</div>
+                                  {firstProviderRule.providerCountryName && (
+                                    <div className="text-xs text-muted-foreground truncate">{firstProviderRule.providerCountryName}</div>
                                   )}
-                                  {showAgreement && (
-                                    <>
-                                      <TableCell rowSpan={agRowCount} className="align-top border-r border-border/50">
-                                        <button
-                                          className="text-left hover:underline text-primary text-sm w-full"
-                                          onClick={() => navigate(`/agreements/${firstAgRule.agreementId}`)}
-                                          data-testid={`link-agreement-${firstAgRule.agreementId}`}
-                                        >
-                                          <div className="font-medium truncate">{firstAgRule.agreementCode}</div>
-                                          <div className="text-xs text-muted-foreground truncate">{firstAgRule.agreementTitle}</div>
-                                        </button>
-                                      </TableCell>
-                                      <TableCell rowSpan={agRowCount} className="align-top border-r border-border/50">
-                                        <div className="text-xs truncate">
-                                          {firstAgRule.territoryCountries?.length > 0
-                                            ? firstAgRule.territoryCountries.length > 2
-                                              ? <Tooltip>
-                                                  <TooltipTrigger className="underline decoration-dotted cursor-help">
-                                                    {firstAgRule.territoryCountries.slice(0, 2).join(", ")} +{firstAgRule.territoryCountries.length - 2}
-                                                  </TooltipTrigger>
-                                                  <TooltipContent>{firstAgRule.territoryCountries.join(", ")}</TooltipContent>
-                                                </Tooltip>
-                                              : firstAgRule.territoryCountries.join(", ")
-                                            : "—"
-                                          }
-                                        </div>
-                                      </TableCell>
-                                    </>
-                                  )}
-                                  {showLabel && (
-                                    <TableCell rowSpan={labelRowCount} className="align-top border-r border-border/50">
-                                      <span className="text-sm break-words">{lg.label}</span>
-                                    </TableCell>
-                                  )}
-                                <TableCell>
-                                  <span className="text-sm">{rule.studyLevel || "Any"}</span>
                                 </TableCell>
-                                <TableCell>
-                                  <Badge variant="outline" className="text-xs">{commissionModeLabels[rule.commissionMode] || rule.commissionMode}</Badge>
-                                </TableCell>
-                                <TableCell>
-                                  <span className="text-sm font-medium">{formatCommissionValue(rule)}</span>
-                                </TableCell>
-                                <TableCell>
-                                  <span className="text-xs">{basisLabels[rule.basis] || rule.basis}</span>
-                                </TableCell>
-                                <TableCell>
-                                  <Badge variant={rule.isActive ? "default" : "secondary"} className="text-xs">
-                                    {rule.isActive ? "Active" : "Inactive"}
-                                  </Badge>
-                                </TableCell>
-                                <TableCell>
-                                  {showAgreement && (
-                                    <Button
-                                      variant="ghost"
-                                      size="icon"
+                              )}
+                              {showAgreement && (
+                                <>
+                                  <TableCell rowSpan={agCounts[rule.agreementId]} className="align-top border-r border-border/50">
+                                    <button
+                                      className="text-left hover:underline text-primary text-sm w-full"
                                       onClick={() => navigate(`/agreements/${rule.agreementId}`)}
-                                      data-testid={`button-view-agreement-${rule.agreementId}`}
+                                      data-testid={`link-agreement-${rule.agreementId}`}
                                     >
-                                      <ExternalLink className="w-4 h-4" />
-                                    </Button>
-                                  )}
+                                      <div className="font-medium truncate">{rule.agreementCode}</div>
+                                      <div className="text-xs text-muted-foreground truncate">{rule.agreementTitle}</div>
+                                    </button>
+                                  </TableCell>
+                                  <TableCell rowSpan={agCounts[rule.agreementId]} className="align-top border-r border-border/50">
+                                    <div className="text-xs truncate">
+                                      {rule.territoryCountries?.length > 0
+                                        ? rule.territoryCountries.length > 2
+                                          ? <Tooltip>
+                                              <TooltipTrigger className="underline decoration-dotted cursor-help">
+                                                {rule.territoryCountries.slice(0, 2).join(", ")} +{rule.territoryCountries.length - 2}
+                                              </TooltipTrigger>
+                                              <TooltipContent>{rule.territoryCountries.join(", ")}</TooltipContent>
+                                            </Tooltip>
+                                          : rule.territoryCountries.join(", ")
+                                        : "—"
+                                      }
+                                    </div>
+                                  </TableCell>
+                                </>
+                              )}
+                              {showLabel && (
+                                <TableCell rowSpan={labelCounts[ruleLabel]} className="align-top border-r border-border/50">
+                                  <span className="text-sm break-words">{ruleLabel}</span>
                                 </TableCell>
-                              </TableRow>
-                              );
-                            });
-                          });
+                              )}
+                              <TableCell>
+                                <span className="text-sm">{rule.studyLevel || "Any"}</span>
+                              </TableCell>
+                              <TableCell>
+                                <Badge variant="outline" className="text-xs">{commissionModeLabels[rule.commissionMode] || rule.commissionMode}</Badge>
+                              </TableCell>
+                              <TableCell>
+                                <span className="text-sm font-medium">{formatCommissionValue(rule)}</span>
+                              </TableCell>
+                              <TableCell>
+                                <span className="text-xs">{basisLabels[rule.basis] || rule.basis}</span>
+                              </TableCell>
+                              <TableCell>
+                                <Badge variant={rule.isActive ? "default" : "secondary"} className="text-xs">
+                                  {rule.isActive ? "Active" : "Inactive"}
+                                </Badge>
+                              </TableCell>
+                              <TableCell>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => navigate(`/agreements/${rule.agreementId}`)}
+                                  data-testid={`button-view-agreement-${rule.agreementId}`}
+                                >
+                                  <ExternalLink className="w-4 h-4" />
+                                </Button>
+                              </TableCell>
+                            </TableRow>
+                          );
                         });
                       });
                     })()}
