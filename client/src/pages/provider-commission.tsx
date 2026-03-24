@@ -23,7 +23,7 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import {
-  Search, Plus, Settings, Copy, Pencil, Trash2, Percent, X, ChevronDown,
+  Search, Plus, Settings, Copy, Pencil, Trash2, Percent, X, ChevronDown, Upload, Download, FileSpreadsheet, AlertCircle, CheckCircle2,
 } from "lucide-react";
 
 const DEGREE_LEVELS = [
@@ -349,6 +349,10 @@ export default function ProviderCommissionPage() {
 
   const [configPct, setConfigPct] = useState("");
   const [selectedRules, setSelectedRules] = useState<number[]>([]);
+  const [bulkOpen, setBulkOpen] = useState(false);
+  const [bulkFile, setBulkFile] = useState<File | null>(null);
+  const [bulkResult, setBulkResult] = useState<{ created: number; errors: string[]; totalRows: number } | null>(null);
+  const [bulkUploading, setBulkUploading] = useState(false);
 
   const { data: entries = [], isLoading } = useQuery<CommissionEntry[]>({
     queryKey: ["/api/provider-commission", { activeOnly: showInactive ? "false" : "true" }],
@@ -482,6 +486,35 @@ export default function ProviderCommissionPage() {
     onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
   });
 
+  async function handleBulkUpload() {
+    if (!bulkFile) return;
+    setBulkUploading(true);
+    setBulkResult(null);
+    try {
+      const formData = new FormData();
+      formData.append("file", bulkFile);
+      const res = await fetch("/api/provider-commission/bulk-upload", {
+        method: "POST",
+        credentials: "include",
+        body: formData,
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || "Upload failed");
+      setBulkResult(data);
+      if (data.created > 0) {
+        queryClient.invalidateQueries({ queryKey: ["/api/provider-commission"] });
+      }
+    } catch (e: any) {
+      toast({ title: "Error", description: e.message, variant: "destructive" });
+    } finally {
+      setBulkUploading(false);
+    }
+  }
+
+  function handleDownloadSample() {
+    window.open("/api/provider-commission/sample", "_blank");
+  }
+
   function resetForm() {
     setFormProvider("");
     setFormDegree("any");
@@ -571,6 +604,17 @@ export default function ProviderCommissionPage() {
             >
               <Copy className="w-4 h-4 mr-1" />
               Copy from Agreements
+            </Button>
+          )}
+          {canAdd && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => { setBulkFile(null); setBulkResult(null); setBulkOpen(true); }}
+              data-testid="btn-bulk-upload"
+            >
+              <Upload className="w-4 h-4 mr-1" />
+              Bulk Upload
             </Button>
           )}
           {canAdd && (
@@ -1124,6 +1168,110 @@ export default function ProviderCommissionPage() {
             >
               {copyMutation.isPending ? "Copying..." : `Copy ${selectedRules.length} Selected`}
             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Bulk Upload Dialog */}
+      <Dialog open={bulkOpen} onOpenChange={v => { setBulkOpen(v); if (!v) { setBulkFile(null); setBulkResult(null); } }}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Bulk Upload Commission Entries</DialogTitle>
+            <p className="text-sm text-muted-foreground">
+              Upload an Excel file (.xlsx) to add multiple commission entries at once.
+            </p>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleDownloadSample}
+                data-testid="btn-download-sample"
+              >
+                <Download className="w-4 h-4 mr-1" />
+                Download Sample Sheet
+              </Button>
+              <span className="text-xs text-muted-foreground">Use this as a template</span>
+            </div>
+
+            <div className="border-2 border-dashed border-border rounded-lg p-6 text-center">
+              <input
+                type="file"
+                accept=".xlsx,.xls"
+                id="bulk-file-input"
+                className="hidden"
+                onChange={e => {
+                  const file = e.target.files?.[0];
+                  if (file) {
+                    setBulkFile(file);
+                    setBulkResult(null);
+                  }
+                }}
+                data-testid="input-bulk-file"
+              />
+              {bulkFile ? (
+                <div className="flex items-center justify-center gap-2">
+                  <FileSpreadsheet className="w-8 h-8 text-emerald-600" />
+                  <div className="text-left">
+                    <p className="font-medium text-sm">{bulkFile.name}</p>
+                    <p className="text-xs text-muted-foreground">{(bulkFile.size / 1024).toFixed(1)} KB</p>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8"
+                    onClick={() => { setBulkFile(null); setBulkResult(null); }}
+                  >
+                    <X className="w-4 h-4" />
+                  </Button>
+                </div>
+              ) : (
+                <label htmlFor="bulk-file-input" className="cursor-pointer">
+                  <Upload className="w-10 h-10 mx-auto text-muted-foreground mb-2" />
+                  <p className="text-sm font-medium">Click to select Excel file</p>
+                  <p className="text-xs text-muted-foreground mt-1">Supports .xlsx files</p>
+                </label>
+              )}
+            </div>
+
+            {bulkResult && (
+              <div className="space-y-2">
+                <div className="flex items-center gap-2 p-3 rounded-md bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400">
+                  <CheckCircle2 className="w-5 h-5 shrink-0" />
+                  <span className="text-sm font-medium">
+                    {bulkResult.created} of {bulkResult.totalRows} entries created successfully
+                  </span>
+                </div>
+                {bulkResult.errors.length > 0 && (
+                  <div className="p-3 rounded-md bg-red-50 dark:bg-red-950/30 text-red-700 dark:text-red-400">
+                    <div className="flex items-center gap-2 mb-2">
+                      <AlertCircle className="w-5 h-5 shrink-0" />
+                      <span className="text-sm font-medium">{bulkResult.errors.length} errors:</span>
+                    </div>
+                    <ul className="text-xs space-y-1 max-h-[150px] overflow-y-auto">
+                      {bulkResult.errors.map((err, i) => (
+                        <li key={i}>• {err}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setBulkOpen(false); setBulkFile(null); setBulkResult(null); }} data-testid="btn-cancel-bulk">
+              {bulkResult ? "Close" : "Cancel"}
+            </Button>
+            {!bulkResult && (
+              <Button
+                onClick={handleBulkUpload}
+                disabled={!bulkFile || bulkUploading}
+                data-testid="btn-submit-bulk"
+              >
+                {bulkUploading ? "Uploading..." : "Upload & Import"}
+              </Button>
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>
