@@ -281,69 +281,98 @@ export default function CommissionTablePage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {commissionRules.map((rule: any) => (
-                      <TableRow key={rule.id} data-testid={`row-commission-${rule.id}`}>
-                        <TableCell>
-                          <div className="text-sm font-medium truncate">{rule.providerName}</div>
-                          {rule.providerCountryName && (
-                            <div className="text-xs text-muted-foreground truncate">{rule.providerCountryName}</div>
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          <button
-                            className="text-left hover:underline text-primary text-sm w-full"
-                            onClick={() => navigate(`/agreements/${rule.agreementId}`)}
-                            data-testid={`link-agreement-${rule.agreementId}`}
+                    {(() => {
+                      const grouped: { key: string; rules: any[] }[] = [];
+                      commissionRules.forEach((rule: any) => {
+                        const groupKey = `${rule.providerName}-${rule.agreementId}`;
+                        const last = grouped[grouped.length - 1];
+                        if (last && last.key === groupKey) {
+                          last.rules.push(rule);
+                        } else {
+                          grouped.push({ key: groupKey, rules: [rule] });
+                        }
+                      });
+
+                      return grouped.map((group) => {
+                        const firstRule = group.rules[0];
+                        const rowCount = group.rules.length;
+                        return group.rules.map((rule: any, idx: number) => (
+                          <TableRow
+                            key={rule.id}
+                            data-testid={`row-commission-${rule.id}`}
+                            className={idx === 0 && rowCount > 1 ? "border-t-2 border-border" : ""}
                           >
-                            <div className="font-medium truncate">{rule.agreementCode}</div>
-                            <div className="text-xs text-muted-foreground truncate">{rule.agreementTitle}</div>
-                          </button>
-                        </TableCell>
-                        <TableCell>{statusBadge(rule.agreementStatus)}</TableCell>
-                        <TableCell>
-                          <div className="text-xs truncate">
-                            {rule.territoryCountries?.length > 0
-                              ? rule.territoryCountries.length > 2
-                                ? <Tooltip>
-                                    <TooltipTrigger className="underline decoration-dotted cursor-help">
-                                      {rule.territoryCountries.slice(0, 2).join(", ")} +{rule.territoryCountries.length - 2}
-                                    </TooltipTrigger>
-                                    <TooltipContent>{rule.territoryCountries.join(", ")}</TooltipContent>
-                                  </Tooltip>
-                                : rule.territoryCountries.join(", ")
-                              : "—"
-                            }
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <span className="text-sm">{rule.studyLevel || "Any"}</span>
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant="outline" className="text-xs">{commissionModeLabels[rule.commissionMode] || rule.commissionMode}</Badge>
-                        </TableCell>
-                        <TableCell>
-                          <span className="text-sm font-medium">{formatCommissionValue(rule)}</span>
-                        </TableCell>
-                        <TableCell>
-                          <span className="text-xs">{basisLabels[rule.basis] || rule.basis}</span>
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant={rule.isActive ? "default" : "secondary"} className="text-xs">
-                            {rule.isActive ? "Active" : "Inactive"}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => navigate(`/agreements/${rule.agreementId}`)}
-                            data-testid={`button-view-agreement-${rule.agreementId}`}
-                          >
-                            <ExternalLink className="w-4 h-4" />
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    ))}
+                            {idx === 0 && (
+                              <>
+                                <TableCell rowSpan={rowCount} className="align-top border-r border-border/50">
+                                  <div className="text-sm font-medium truncate">{firstRule.providerName}</div>
+                                  {firstRule.providerCountryName && (
+                                    <div className="text-xs text-muted-foreground truncate">{firstRule.providerCountryName}</div>
+                                  )}
+                                </TableCell>
+                                <TableCell rowSpan={rowCount} className="align-top border-r border-border/50">
+                                  <button
+                                    className="text-left hover:underline text-primary text-sm w-full"
+                                    onClick={() => navigate(`/agreements/${firstRule.agreementId}`)}
+                                    data-testid={`link-agreement-${firstRule.agreementId}`}
+                                  >
+                                    <div className="font-medium truncate">{firstRule.agreementCode}</div>
+                                    <div className="text-xs text-muted-foreground truncate">{firstRule.agreementTitle}</div>
+                                  </button>
+                                </TableCell>
+                                <TableCell rowSpan={rowCount} className="align-top border-r border-border/50">
+                                  {statusBadge(firstRule.agreementStatus)}
+                                </TableCell>
+                              </>
+                            )}
+                            <TableCell>
+                              <div className="text-xs truncate">
+                                {rule.territoryCountries?.length > 0
+                                  ? rule.territoryCountries.length > 2
+                                    ? <Tooltip>
+                                        <TooltipTrigger className="underline decoration-dotted cursor-help">
+                                          {rule.territoryCountries.slice(0, 2).join(", ")} +{rule.territoryCountries.length - 2}
+                                        </TooltipTrigger>
+                                        <TooltipContent>{rule.territoryCountries.join(", ")}</TooltipContent>
+                                      </Tooltip>
+                                    : rule.territoryCountries.join(", ")
+                                  : "—"
+                                }
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              <span className="text-sm">{rule.studyLevel || "Any"}</span>
+                            </TableCell>
+                            <TableCell>
+                              <Badge variant="outline" className="text-xs">{commissionModeLabels[rule.commissionMode] || rule.commissionMode}</Badge>
+                            </TableCell>
+                            <TableCell>
+                              <span className="text-sm font-medium">{formatCommissionValue(rule)}</span>
+                            </TableCell>
+                            <TableCell>
+                              <span className="text-xs">{basisLabels[rule.basis] || rule.basis}</span>
+                            </TableCell>
+                            <TableCell>
+                              <Badge variant={rule.isActive ? "default" : "secondary"} className="text-xs">
+                                {rule.isActive ? "Active" : "Inactive"}
+                              </Badge>
+                            </TableCell>
+                            <TableCell>
+                              {idx === 0 && (
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => navigate(`/agreements/${rule.agreementId}`)}
+                                  data-testid={`button-view-agreement-${rule.agreementId}`}
+                                >
+                                  <ExternalLink className="w-4 h-4" />
+                                </Button>
+                              )}
+                            </TableCell>
+                          </TableRow>
+                        ));
+                      });
+                    })()}
                   </TableBody>
                 </Table>
               </div>
@@ -445,25 +474,50 @@ export default function CommissionTablePage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {bonusRules.map((rule: any) => (
-                      <TableRow key={rule.id} data-testid={`row-bonus-${rule.id}`}>
-                        <TableCell>
-                          <div className="text-sm font-medium truncate">{rule.providerName}</div>
-                          {rule.providerCountryName && (
-                            <div className="text-xs text-muted-foreground truncate">{rule.providerCountryName}</div>
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          <button
-                            className="text-left hover:underline text-primary text-sm w-full"
-                            onClick={() => navigate(`/agreements/${rule.agreementId}`)}
-                            data-testid={`link-bonus-agreement-${rule.agreementId}`}
-                          >
-                            <div className="font-medium truncate">{rule.agreementCode}</div>
-                            <div className="text-xs text-muted-foreground truncate">{rule.agreementTitle}</div>
-                          </button>
-                        </TableCell>
-                        <TableCell>{statusBadge(rule.agreementStatus)}</TableCell>
+                    {(() => {
+                      const grouped: { key: string; rules: any[] }[] = [];
+                      bonusRules.forEach((rule: any) => {
+                        const groupKey = `${rule.providerName}-${rule.agreementId}`;
+                        const last = grouped[grouped.length - 1];
+                        if (last && last.key === groupKey) {
+                          last.rules.push(rule);
+                        } else {
+                          grouped.push({ key: groupKey, rules: [rule] });
+                        }
+                      });
+
+                      return grouped.map((group) => {
+                        const firstRule = group.rules[0];
+                        const rowCount = group.rules.length;
+                        return group.rules.map((rule: any, idx: number) => (
+                      <TableRow
+                        key={rule.id}
+                        data-testid={`row-bonus-${rule.id}`}
+                        className={idx === 0 && rowCount > 1 ? "border-t-2 border-border" : ""}
+                      >
+                        {idx === 0 && (
+                          <>
+                            <TableCell rowSpan={rowCount} className="align-top border-r border-border/50">
+                              <div className="text-sm font-medium truncate">{firstRule.providerName}</div>
+                              {firstRule.providerCountryName && (
+                                <div className="text-xs text-muted-foreground truncate">{firstRule.providerCountryName}</div>
+                              )}
+                            </TableCell>
+                            <TableCell rowSpan={rowCount} className="align-top border-r border-border/50">
+                              <button
+                                className="text-left hover:underline text-primary text-sm w-full"
+                                onClick={() => navigate(`/agreements/${firstRule.agreementId}`)}
+                                data-testid={`link-bonus-agreement-${firstRule.agreementId}`}
+                              >
+                                <div className="font-medium truncate">{firstRule.agreementCode}</div>
+                                <div className="text-xs text-muted-foreground truncate">{firstRule.agreementTitle}</div>
+                              </button>
+                            </TableCell>
+                            <TableCell rowSpan={rowCount} className="align-top border-r border-border/50">
+                              {statusBadge(firstRule.agreementStatus)}
+                            </TableCell>
+                          </>
+                        )}
                         <TableCell>
                           <div className="text-sm truncate">
                             <span className="capitalize">{rule.targetType}</span>
@@ -493,17 +547,21 @@ export default function CommissionTablePage() {
                           </div>
                         </TableCell>
                         <TableCell>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => navigate(`/agreements/${rule.agreementId}`)}
-                            data-testid={`button-view-bonus-agreement-${rule.agreementId}`}
-                          >
-                            <ExternalLink className="w-4 h-4" />
-                          </Button>
+                          {idx === 0 && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => navigate(`/agreements/${rule.agreementId}`)}
+                              data-testid={`button-view-bonus-agreement-${rule.agreementId}`}
+                            >
+                              <ExternalLink className="w-4 h-4" />
+                            </Button>
+                          )}
                         </TableCell>
                       </TableRow>
-                    ))}
+                        ));
+                      });
+                    })()}
                   </TableBody>
                 </Table>
               </div>
