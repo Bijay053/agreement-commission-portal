@@ -392,10 +392,10 @@ export default function CommissionTablePage() {
                               <TableCell>
                                 {rule.followupStudyLevel ? (
                                   <div className="flex items-start gap-1">
-                                    <ArrowRight className="w-3 h-3 text-blue-500 mt-0.5 shrink-0" />
+                                    <ArrowRight className="w-3.5 h-3.5 text-blue-500 mt-0.5 shrink-0" />
                                     <div>
-                                      <div className="text-xs font-medium">{rule.followupStudyLevel}</div>
-                                      <div className="text-[11px] text-muted-foreground">
+                                      <div className="text-sm font-medium">{rule.followupStudyLevel}</div>
+                                      <div className="text-sm text-muted-foreground">
                                         {rule.followupCommissionMode === "percentage"
                                           ? `${parseFloat(rule.followupPercentageValue || 0)}%`
                                           : `${rule.followupCurrency || "AUD"} ${parseFloat(rule.followupFlatAmount || 0).toLocaleString()}`
@@ -404,7 +404,7 @@ export default function CommissionTablePage() {
                                     </div>
                                   </div>
                                 ) : (
-                                  <span className="text-xs text-muted-foreground">—</span>
+                                  <span className="text-sm text-muted-foreground">—</span>
                                 )}
                               </TableCell>
                               <TableCell>
