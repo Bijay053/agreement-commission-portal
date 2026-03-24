@@ -23,7 +23,7 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import {
-  Search, Plus, Settings, Copy, Pencil, Trash2, Percent, X, ChevronDown, Upload, Download, FileSpreadsheet, AlertCircle, CheckCircle2,
+  Search, Plus, Settings, Copy, Pencil, Trash2, Percent, X, ChevronDown, Upload, Download, FileSpreadsheet, AlertCircle, CheckCircle2, RotateCcw,
 } from "lucide-react";
 
 const DEGREE_LEVELS = [
@@ -359,7 +359,7 @@ export default function ProviderCommissionPage() {
   const [providerPctValue, setProviderPctValue] = useState("");
 
   const { data: entries = [], isLoading } = useQuery<CommissionEntry[]>({
-    queryKey: ["/api/provider-commission", { activeOnly: showInactive ? "false" : "true" }],
+    queryKey: ["/api/provider-commission", showInactive ? "all" : "active"],
     queryFn: async () => {
       const res = await fetch(`/api/provider-commission?activeOnly=${showInactive ? "false" : "true"}`, { credentials: "include" });
       if (!res.ok) throw new Error("Failed to load");
@@ -699,6 +699,20 @@ export default function ProviderCommissionPage() {
               />
               <Label htmlFor="showInactive" className="text-sm whitespace-nowrap">Show Inactive</Label>
             </div>
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={() => {
+                setSearch("");
+                setFilterDegree("all");
+                setFilterBasis("all");
+                setShowInactive(false);
+              }}
+              disabled={search === "" && filterDegree === "all" && filterBasis === "all" && !showInactive}
+              data-testid="btn-reset-filters"
+            >
+              <RotateCcw className="w-4 h-4" />
+            </Button>
           </div>
 
           {isLoading ? (
