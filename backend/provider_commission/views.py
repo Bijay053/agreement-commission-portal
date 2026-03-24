@@ -18,9 +18,15 @@ def get_user_name(user_id):
     if not user_id:
         return 'System'
     try:
-        emp = Employee.objects.get(id=user_id)
+        emp = Employee.objects.get(id=str(user_id))
         return emp.full_name
-    except Employee.DoesNotExist:
+    except (Employee.DoesNotExist, Exception):
+        try:
+            emp = Employee.objects.filter(id__icontains=str(user_id)).first()
+            if emp:
+                return emp.full_name
+        except Exception:
+            pass
         return f'User #{user_id}'
 
 

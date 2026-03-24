@@ -60,7 +60,7 @@ class ProviderCommissionAuditLog(models.Model):
     action = models.CharField(max_length=64)
     old_value = models.CharField(max_length=255, blank=True, default='')
     new_value = models.CharField(max_length=255, blank=True, default='')
-    changed_by = models.IntegerField(null=True, blank=True)
+    changed_by = models.CharField(max_length=255, null=True, blank=True)
     changed_by_name = models.CharField(max_length=255, blank=True, default='')
     created_at = models.DateTimeField(auto_now_add=True)
 
