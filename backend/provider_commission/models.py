@@ -43,6 +43,7 @@ class ProviderCommissionEntry(models.Model):
     commission_basis = models.CharField(max_length=32, choices=COMMISSION_BASIS_CHOICES, default='full_course')
     notes = models.TextField(blank=True, default='')
     is_active = models.BooleanField(default=True)
+    sub_agent_percentage = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
     copied_from_rule_id = models.IntegerField(null=True, blank=True)
     created_by = models.IntegerField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)

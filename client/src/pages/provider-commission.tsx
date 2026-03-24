@@ -199,6 +199,8 @@ interface CommissionEntry {
   isActive: boolean;
   copiedFromRuleId: number | null;
   subAgentCommission: string | null;
+  subAgentPercentage: string | null;
+  effectiveSubAgentPercentage: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -353,6 +355,8 @@ export default function ProviderCommissionPage() {
   const [bulkFile, setBulkFile] = useState<File | null>(null);
   const [bulkResult, setBulkResult] = useState<{ created: number; errors: string[]; totalRows: number } | null>(null);
   const [bulkUploading, setBulkUploading] = useState(false);
+  const [editingProviderPct, setEditingProviderPct] = useState<string | null>(null);
+  const [providerPctValue, setProviderPctValue] = useState("");
 
   const { data: entries = [], isLoading } = useQuery<CommissionEntry[]>({
     queryKey: ["/api/provider-commission", { activeOnly: showInactive ? "false" : "true" }],
@@ -482,6 +486,27 @@ export default function ProviderCommissionPage() {
       toast({ title: `Copied ${data.created} entries (${data.skipped} skipped)` });
       setCopyOpen(false);
       setSelectedRules([]);
+    },
+    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+  });
+
+  const providerPctMutation = useMutation({
+    mutationFn: async ({ providerName, subAgentPercentage }: { providerName: string; subAgentPercentage: string | null }) => {
+      const res = await fetch("/api/provider-commission/provider-percentage", {
+        method: "PATCH", credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ providerName, subAgentPercentage }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.message || "Failed to update");
+      }
+      return res.json();
+    },
+    onSuccess: (data: any) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/provider-commission"] });
+      toast({ title: `Updated sub-agent % for ${data.providerName}` });
+      setEditingProviderPct(null);
     },
     onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
   });
@@ -694,7 +719,7 @@ export default function ProviderCommissionPage() {
                     <TableHead>Territory</TableHead>
                     <TableHead className="text-right">Commission</TableHead>
                     <TableHead>Basis</TableHead>
-                    <TableHead className="text-right">Sub-Agent ({subPct}%)</TableHead>
+                    <TableHead className="text-right">Sub-Agent %</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
@@ -722,7 +747,76 @@ export default function ProviderCommissionPage() {
                         >
                           {idx === 0 && (
                             <TableCell rowSpan={rowCount} className="font-medium align-top border-r border-border/50" data-testid={`text-provider-${firstEntry.id}`}>
-                              {firstEntry.providerName}
+                              <div className="text-sm font-medium">{firstEntry.providerName}</div>
+                              {canEdit && editingProviderPct === firstEntry.providerName ? (
+                                <div className="flex items-center gap-1 mt-1.5">
+                                  <Input
+                                    type="number"
+                                    step="0.01"
+                                    min="0"
+                                    max="100"
+                                    value={providerPctValue}
+                                    onChange={e => setProviderPctValue(e.target.value)}
+                                    className="h-7 w-20 text-xs"
+                                    autoFocus
+                                    onKeyDown={e => {
+                                      if (e.key === "Enter") {
+                                        providerPctMutation.mutate({
+                                          providerName: firstEntry.providerName,
+                                          subAgentPercentage: providerPctValue.trim() || null,
+                                        });
+                                      } else if (e.key === "Escape") {
+                                        setEditingProviderPct(null);
+                                      }
+                                    }}
+                                    data-testid={`input-provider-pct-${firstEntry.id}`}
+                                  />
+                                  <span className="text-xs text-muted-foreground">%</span>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-6 w-6"
+                                    onClick={() => {
+                                      providerPctMutation.mutate({
+                                        providerName: firstEntry.providerName,
+                                        subAgentPercentage: providerPctValue.trim() || null,
+                                      });
+                                    }}
+                                    disabled={providerPctMutation.isPending}
+                                    data-testid={`btn-save-provider-pct-${firstEntry.id}`}
+                                  >
+                                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-6 w-6"
+                                    onClick={() => setEditingProviderPct(null)}
+                                    data-testid={`btn-cancel-provider-pct-${firstEntry.id}`}
+                                  >
+                                    <X className="w-3.5 h-3.5" />
+                                  </Button>
+                                </div>
+                              ) : (
+                                <button
+                                  className="flex items-center gap-1 mt-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                                  onClick={() => {
+                                    if (canEdit) {
+                                      setEditingProviderPct(firstEntry.providerName);
+                                      setProviderPctValue(firstEntry.subAgentPercentage || subPct);
+                                    }
+                                  }}
+                                  data-testid={`btn-edit-provider-pct-${firstEntry.id}`}
+                                >
+                                  <Percent className="w-3 h-3" />
+                                  <span>
+                                    Sub-Agent: {firstEntry.effectiveSubAgentPercentage || subPct}%
+                                    {firstEntry.subAgentPercentage && (
+                                      <span className="ml-1 text-emerald-600 dark:text-emerald-400">(custom)</span>
+                                    )}
+                                  </span>
+                                </button>
+                              )}
                             </TableCell>
                           )}
                           <TableCell data-testid={`text-degree-${entry.id}`}>
@@ -743,11 +837,16 @@ export default function ProviderCommissionPage() {
                           </TableCell>
                           <TableCell className="text-right font-mono" data-testid={`text-subagent-${entry.id}`}>
                             {entry.subAgentCommission ? (
-                              entry.commissionType === "percentage" ? (
-                                <span className="text-emerald-600 dark:text-emerald-400">{entry.subAgentCommission}%</span>
-                              ) : (
-                                <span className="text-emerald-600 dark:text-emerald-400">{entry.currency} {entry.subAgentCommission}</span>
-                              )
+                              <div>
+                                {entry.commissionType === "percentage" ? (
+                                  <span className="text-emerald-600 dark:text-emerald-400">{entry.subAgentCommission}%</span>
+                                ) : (
+                                  <span className="text-emerald-600 dark:text-emerald-400">{entry.currency} {entry.subAgentCommission}</span>
+                                )}
+                                <div className="text-[10px] text-muted-foreground">
+                                  ({entry.effectiveSubAgentPercentage}%)
+                                </div>
+                              </div>
                             ) : "—"}
                           </TableCell>
                           <TableCell>

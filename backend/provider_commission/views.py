@@ -13,7 +13,8 @@ import openpyxl
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 
 
-def entry_to_dict(e, sub_agent_pct=None):
+def entry_to_dict(e, global_sub_pct=None):
+    pct = e.sub_agent_percentage if e.sub_agent_percentage is not None else global_sub_pct
     d = {
         'id': e.id,
         'providerName': e.provider_name,
@@ -25,14 +26,16 @@ def entry_to_dict(e, sub_agent_pct=None):
         'commissionBasis': e.commission_basis,
         'notes': e.notes,
         'isActive': e.is_active,
+        'subAgentPercentage': str(e.sub_agent_percentage) if e.sub_agent_percentage is not None else None,
         'copiedFromRuleId': e.copied_from_rule_id,
         'createdAt': e.created_at.isoformat() if e.created_at else None,
         'updatedAt': e.updated_at.isoformat() if e.updated_at else None,
     }
-    if sub_agent_pct is not None:
-        d['subAgentCommission'] = str(round(e.commission_value * sub_agent_pct / Decimal('100'), 2))
+    if pct is not None:
+        d['subAgentCommission'] = str(round(e.commission_value * pct / Decimal('100'), 2))
     else:
         d['subAgentCommission'] = None
+    d['effectiveSubAgentPercentage'] = str(pct) if pct is not None else None
     return d
 
 
@@ -114,6 +117,13 @@ class ProviderCommissionListView(APIView):
             if isinstance(territory, list):
                 territory = ','.join(territory)
 
+            sub_pct_raw = data.get('subAgentPercentage')
+            sub_pct_val = None
+            if sub_pct_raw is not None and str(sub_pct_raw).strip() != '':
+                sub_pct_val = Decimal(str(sub_pct_raw))
+                if sub_pct_val < 0 or sub_pct_val > 100:
+                    return Response({'message': 'Sub-agent percentage must be between 0 and 100'}, status=400)
+
             entry = ProviderCommissionEntry.objects.create(
                 provider_name=provider_name,
                 degree_level=data.get('degreeLevel', 'any'),
@@ -124,6 +134,7 @@ class ProviderCommissionListView(APIView):
                 commission_basis=data.get('commissionBasis', 'full_course'),
                 notes=data.get('notes', ''),
                 is_active=True,
+                sub_agent_percentage=sub_pct_val,
                 created_by=request.session.get('userId'),
             )
             config = ProviderCommissionConfig.objects.first()
@@ -165,6 +176,15 @@ class ProviderCommissionDetailView(APIView):
             entry.notes = data['notes']
         if 'isActive' in data:
             entry.is_active = data['isActive']
+        if 'subAgentPercentage' in data:
+            sub_pct_raw = data['subAgentPercentage']
+            if sub_pct_raw is None or str(sub_pct_raw).strip() == '':
+                entry.sub_agent_percentage = None
+            else:
+                pct_val = Decimal(str(sub_pct_raw))
+                if pct_val < 0 or pct_val > 100:
+                    return Response({'message': 'Sub-agent percentage must be between 0 and 100'}, status=400)
+                entry.sub_agent_percentage = pct_val
         entry.save()
 
         config = ProviderCommissionConfig.objects.first()
@@ -179,6 +199,27 @@ class ProviderCommissionDetailView(APIView):
             return Response({'message': 'Deleted'})
         except ProviderCommissionEntry.DoesNotExist:
             return Response({'message': 'Entry not found'}, status=404)
+
+
+class ProviderSubAgentPercentageView(APIView):
+    @require_permission("provider_commission.edit")
+    def patch(self, request):
+        provider_name = (request.data.get('providerName') or '').strip()
+        if not provider_name:
+            return Response({'message': 'Provider name is required'}, status=400)
+        sub_pct_raw = request.data.get('subAgentPercentage')
+        sub_pct_val = None
+        if sub_pct_raw is not None and str(sub_pct_raw).strip() != '':
+            try:
+                sub_pct_val = Decimal(str(sub_pct_raw))
+                if sub_pct_val < 0 or sub_pct_val > 100:
+                    return Response({'message': 'Percentage must be between 0 and 100'}, status=400)
+            except (InvalidOperation, ValueError):
+                return Response({'message': 'Invalid percentage value'}, status=400)
+        updated = ProviderCommissionEntry.objects.filter(provider_name=provider_name).update(
+            sub_agent_percentage=sub_pct_val
+        )
+        return Response({'updated': updated, 'providerName': provider_name, 'subAgentPercentage': str(sub_pct_val) if sub_pct_val is not None else None})
 
 
 class CopyFromCommissionRulesView(APIView):
