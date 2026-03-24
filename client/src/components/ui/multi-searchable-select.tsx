@@ -114,7 +114,9 @@ export function MultiSearchableSelect({
       >
         <Command>
           <CommandInput placeholder={searchPlaceholder} />
-          <CommandList className="max-h-[200px] overflow-y-auto">
+          <CommandList className="!max-h-[240px] !overflow-y-auto [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-thumb]:bg-muted-foreground/20 [&::-webkit-scrollbar-thumb]:rounded-full"
+            onWheel={(e) => { e.currentTarget.scrollTop += e.deltaY; }}
+          >
             <CommandEmpty>No results found</CommandEmpty>
             <CommandGroup>
               <CommandItem
