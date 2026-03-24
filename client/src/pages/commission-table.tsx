@@ -265,20 +265,20 @@ export default function CommissionTablePage() {
           ) : commissionRules && commissionRules.length > 0 ? (
             <Card>
               <div className="overflow-x-auto">
-                <Table className="table-fixed w-full">
+                <Table className="table-fixed w-full" style={{minWidth:"1100px"}}>
                   <TableHeader>
                     <TableRow>
-                      <TableHead className="w-[13%]">Provider</TableHead>
-                      <TableHead className="w-[14%]">Agreement</TableHead>
-                      <TableHead className="w-[9%]">Territory</TableHead>
-                      <TableHead className="w-[12%]">Label</TableHead>
-                      <TableHead className="w-[7%]">Level</TableHead>
-                      <TableHead className="w-[7%]">Type</TableHead>
-                      <TableHead className="w-[7%]">Value</TableHead>
-                      <TableHead className="w-[12%]">Follow-up</TableHead>
-                      <TableHead className="w-[8%]">Basis</TableHead>
-                      <TableHead className="w-[7%]">Active</TableHead>
-                      <TableHead className="w-[4%]"></TableHead>
+                      <TableHead style={{width:"12%"}}>Provider</TableHead>
+                      <TableHead style={{width:"13%"}}>Agreement</TableHead>
+                      <TableHead style={{width:"8%"}}>Territory</TableHead>
+                      <TableHead style={{width:"11%"}}>Label</TableHead>
+                      <TableHead style={{width:"6%"}}>Level</TableHead>
+                      <TableHead style={{width:"9%"}}>Type</TableHead>
+                      <TableHead style={{width:"8%"}}>Value</TableHead>
+                      <TableHead style={{width:"12%"}}>Follow-up</TableHead>
+                      <TableHead style={{width:"8%"}}>Basis</TableHead>
+                      <TableHead style={{width:"6%"}}>Active</TableHead>
+                      <TableHead style={{width:"3%"}}></TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -384,10 +384,10 @@ export default function CommissionTablePage() {
                                 <span className="text-sm">{rule.studyLevel || "Any"}</span>
                               </TableCell>
                               <TableCell>
-                                <Badge variant="outline" className="text-xs">{commissionModeLabels[rule.commissionMode] || rule.commissionMode}</Badge>
+                                <Badge variant="outline" className="text-[11px] px-1.5 py-0 whitespace-nowrap">{commissionModeLabels[rule.commissionMode] || rule.commissionMode}</Badge>
                               </TableCell>
                               <TableCell>
-                                <span className="text-sm font-medium">{formatCommissionValue(rule)}</span>
+                                <span className="text-sm font-medium whitespace-nowrap">{formatCommissionValue(rule)}</span>
                               </TableCell>
                               <TableCell>
                                 {rule.followupStudyLevel ? (
