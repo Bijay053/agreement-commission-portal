@@ -114,7 +114,7 @@ export function MultiSearchableSelect({
       >
         <Command>
           <CommandInput placeholder={searchPlaceholder} />
-          <CommandList>
+          <CommandList className="max-h-[200px] overflow-y-auto">
             <CommandEmpty>No results found</CommandEmpty>
             <CommandGroup>
               <CommandItem

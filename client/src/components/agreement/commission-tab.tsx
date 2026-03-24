@@ -83,7 +83,7 @@ export default function CommissionTab({ agreementId }: { agreementId: number }) 
     onError: (err: any) => toast({ title: "Error", description: err.message, variant: "destructive" }),
   });
 
-  const studyLevelOptions = STUDY_LEVELS.filter(l => l !== "Any").map(l => ({ value: l, label: l }));
+  const baseStudyLevelOptions = STUDY_LEVELS.filter(l => l !== "Any").map(l => ({ value: l, label: l }));
 
   const defaultForm = {
     label: "",
@@ -137,7 +137,7 @@ export default function CommissionTab({ agreementId }: { agreementId: number }) 
                     <MultiSearchableSelect
                       values={form.studyLevel}
                       onValuesChange={v => setForm({...form, studyLevel: v})}
-                      options={studyLevelOptions}
+                      options={baseStudyLevelOptions}
                       placeholder="Any"
                       searchPlaceholder="Search levels..."
                     />
@@ -321,7 +321,15 @@ export default function CommissionTab({ agreementId }: { agreementId: number }) 
                   <MultiSearchableSelect
                     values={editingRule.studyLevel}
                     onValuesChange={v => setEditingRule({...editingRule, studyLevel: v})}
-                    options={studyLevelOptions}
+                    options={(() => {
+                      const opts = [...baseStudyLevelOptions];
+                      (editingRule.studyLevel || []).forEach((v: string) => {
+                        if (!opts.find(o => o.value === v)) {
+                          opts.push({ value: v, label: v });
+                        }
+                      });
+                      return opts;
+                    })()}
                     placeholder="Any"
                     searchPlaceholder="Search levels..."
                   />
