@@ -282,7 +282,7 @@ export default function CommissionTablePage() {
                   </TableHeader>
                   <TableBody>
                     {(() => {
-                      const providerGroups: { providerName: string; agreements: { agreementId: number; rules: any[] }[] }[] = [];
+                      const providerGroups: { providerName: string; agreements: { agreementId: number; labelGroups: { label: string; rules: any[] }[] }[] }[] = [];
                       const sorted = [...commissionRules].sort((a: any, b: any) => a.providerName.localeCompare(b.providerName));
                       sorted.forEach((rule: any) => {
                         let pg = providerGroups[providerGroups.length - 1];
@@ -292,74 +292,88 @@ export default function CommissionTablePage() {
                         }
                         let ag = pg.agreements[pg.agreements.length - 1];
                         if (!ag || ag.agreementId !== rule.agreementId) {
-                          ag = { agreementId: rule.agreementId, rules: [] };
+                          ag = { agreementId: rule.agreementId, labelGroups: [] };
                           pg.agreements.push(ag);
                         }
-                        ag.rules.push(rule);
+                        const ruleLabel = rule.label || "—";
+                        let lg = ag.labelGroups[ag.labelGroups.length - 1];
+                        if (!lg || lg.label !== ruleLabel) {
+                          lg = { label: ruleLabel, rules: [] };
+                          ag.labelGroups.push(lg);
+                        }
+                        lg.rules.push(rule);
                       });
 
                       return providerGroups.map((pg) => {
-                        const providerTotalRows = pg.agreements.reduce((sum, ag) => sum + ag.rules.length, 0);
-                        const firstProviderRule = pg.agreements[0].rules[0];
+                        const providerTotalRows = pg.agreements.reduce((sum, ag) => sum + ag.labelGroups.reduce((s, lg) => s + lg.rules.length, 0), 0);
+                        const firstProviderRule = pg.agreements[0].labelGroups[0].rules[0];
                         let providerRowRendered = false;
 
                         return pg.agreements.map((ag) => {
-                          const agRowCount = ag.rules.length;
-                          const firstAgRule = ag.rules[0];
+                          const agRowCount = ag.labelGroups.reduce((s, lg) => s + lg.rules.length, 0);
+                          const firstAgRule = ag.labelGroups[0].rules[0];
                           let agRowRendered = false;
 
-                          return ag.rules.map((rule: any) => {
-                            const showProvider = !providerRowRendered;
-                            const showAgreement = !agRowRendered;
-                            if (showProvider) providerRowRendered = true;
-                            if (showAgreement) agRowRendered = true;
+                          return ag.labelGroups.map((lg) => {
+                            const labelRowCount = lg.rules.length;
+                            let labelRowRendered = false;
 
-                            return (
-                              <TableRow
-                                key={rule.id}
-                                data-testid={`row-commission-${rule.id}`}
-                                className={showProvider ? "border-t-2 border-border" : ""}
-                              >
-                                {showProvider && (
-                                  <TableCell rowSpan={providerTotalRows} className="align-top border-r border-border/50">
-                                    <div className="text-sm font-medium truncate">{firstProviderRule.providerName}</div>
-                                    {firstProviderRule.providerCountryName && (
-                                      <div className="text-xs text-muted-foreground truncate">{firstProviderRule.providerCountryName}</div>
-                                    )}
-                                  </TableCell>
-                                )}
-                                {showAgreement && (
-                                  <>
-                                    <TableCell rowSpan={agRowCount} className="align-top border-r border-border/50">
-                                      <button
-                                        className="text-left hover:underline text-primary text-sm w-full"
-                                        onClick={() => navigate(`/agreements/${firstAgRule.agreementId}`)}
-                                        data-testid={`link-agreement-${firstAgRule.agreementId}`}
-                                      >
-                                        <div className="font-medium truncate">{firstAgRule.agreementCode}</div>
-                                        <div className="text-xs text-muted-foreground truncate">{firstAgRule.agreementTitle}</div>
-                                      </button>
+                            return lg.rules.map((rule: any) => {
+                              const showProvider = !providerRowRendered;
+                              const showAgreement = !agRowRendered;
+                              const showLabel = !labelRowRendered;
+                              if (showProvider) providerRowRendered = true;
+                              if (showAgreement) agRowRendered = true;
+                              if (showLabel) labelRowRendered = true;
+
+                              return (
+                                <TableRow
+                                  key={rule.id}
+                                  data-testid={`row-commission-${rule.id}`}
+                                  className={showProvider ? "border-t-2 border-border" : ""}
+                                >
+                                  {showProvider && (
+                                    <TableCell rowSpan={providerTotalRows} className="align-top border-r border-border/50">
+                                      <div className="text-sm font-medium truncate">{firstProviderRule.providerName}</div>
+                                      {firstProviderRule.providerCountryName && (
+                                        <div className="text-xs text-muted-foreground truncate">{firstProviderRule.providerCountryName}</div>
+                                      )}
                                     </TableCell>
-                                    <TableCell rowSpan={agRowCount} className="align-top border-r border-border/50">
-                                      <div className="text-xs truncate">
-                                        {firstAgRule.territoryCountries?.length > 0
-                                          ? firstAgRule.territoryCountries.length > 2
-                                            ? <Tooltip>
-                                                <TooltipTrigger className="underline decoration-dotted cursor-help">
-                                                  {firstAgRule.territoryCountries.slice(0, 2).join(", ")} +{firstAgRule.territoryCountries.length - 2}
-                                                </TooltipTrigger>
-                                                <TooltipContent>{firstAgRule.territoryCountries.join(", ")}</TooltipContent>
-                                              </Tooltip>
-                                            : firstAgRule.territoryCountries.join(", ")
-                                          : "—"
-                                        }
-                                      </div>
+                                  )}
+                                  {showAgreement && (
+                                    <>
+                                      <TableCell rowSpan={agRowCount} className="align-top border-r border-border/50">
+                                        <button
+                                          className="text-left hover:underline text-primary text-sm w-full"
+                                          onClick={() => navigate(`/agreements/${firstAgRule.agreementId}`)}
+                                          data-testid={`link-agreement-${firstAgRule.agreementId}`}
+                                        >
+                                          <div className="font-medium truncate">{firstAgRule.agreementCode}</div>
+                                          <div className="text-xs text-muted-foreground truncate">{firstAgRule.agreementTitle}</div>
+                                        </button>
+                                      </TableCell>
+                                      <TableCell rowSpan={agRowCount} className="align-top border-r border-border/50">
+                                        <div className="text-xs truncate">
+                                          {firstAgRule.territoryCountries?.length > 0
+                                            ? firstAgRule.territoryCountries.length > 2
+                                              ? <Tooltip>
+                                                  <TooltipTrigger className="underline decoration-dotted cursor-help">
+                                                    {firstAgRule.territoryCountries.slice(0, 2).join(", ")} +{firstAgRule.territoryCountries.length - 2}
+                                                  </TooltipTrigger>
+                                                  <TooltipContent>{firstAgRule.territoryCountries.join(", ")}</TooltipContent>
+                                                </Tooltip>
+                                              : firstAgRule.territoryCountries.join(", ")
+                                            : "—"
+                                          }
+                                        </div>
+                                      </TableCell>
+                                    </>
+                                  )}
+                                  {showLabel && (
+                                    <TableCell rowSpan={labelRowCount} className="align-top border-r border-border/50">
+                                      <span className="text-sm break-words">{lg.label}</span>
                                     </TableCell>
-                                  </>
-                                )}
-                                <TableCell>
-                                  <span className="text-sm break-words">{rule.label || "—"}</span>
-                                </TableCell>
+                                  )}
                                 <TableCell>
                                   <span className="text-sm">{rule.studyLevel || "Any"}</span>
                                 </TableCell>
@@ -390,7 +404,8 @@ export default function CommissionTablePage() {
                                   )}
                                 </TableCell>
                               </TableRow>
-                            );
+                              );
+                            });
                           });
                         });
                       });
