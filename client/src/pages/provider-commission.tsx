@@ -23,7 +23,7 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import {
-  Search, Plus, Settings, Copy, Pencil, Trash2, Percent, X, ChevronDown, Upload, Download, FileSpreadsheet, AlertCircle, CheckCircle2, RotateCcw,
+  Search, Plus, Settings, Copy, Pencil, Trash2, Percent, X, ChevronDown, Upload, Download, FileSpreadsheet, AlertCircle, CheckCircle2, RotateCcw, History,
 } from "lucide-react";
 
 const DEGREE_LEVELS = [
@@ -356,6 +356,7 @@ export default function ProviderCommissionPage() {
   const [bulkResult, setBulkResult] = useState<{ created: number; errors: string[]; totalRows: number } | null>(null);
   const [bulkUploading, setBulkUploading] = useState(false);
   const [editingProviderPct, setEditingProviderPct] = useState<string | null>(null);
+  const [showAuditLog, setShowAuditLog] = useState(false);
   const [providerPctValue, setProviderPctValue] = useState("");
 
   const { data: entries = [], isLoading } = useQuery<CommissionEntry[]>({
@@ -505,10 +506,21 @@ export default function ProviderCommissionPage() {
     },
     onSuccess: (data: any) => {
       queryClient.invalidateQueries({ queryKey: ["/api/provider-commission"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/provider-commission/audit-log"] });
       toast({ title: `Updated sub-agent % for ${data.providerName}` });
       setEditingProviderPct(null);
     },
     onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+  });
+
+  const { data: auditLogs = [] } = useQuery<any[]>({
+    queryKey: ["/api/provider-commission/audit-log"],
+    queryFn: async () => {
+      const res = await fetch("/api/provider-commission/audit-log", { credentials: "include" });
+      if (!res.ok) return [];
+      return res.json();
+    },
+    enabled: showAuditLog,
   });
 
   async function handleBulkUpload() {
@@ -609,6 +621,15 @@ export default function ProviderCommissionPage() {
           </p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setShowAuditLog(true)}
+            data-testid="btn-audit-log"
+          >
+            <History className="w-4 h-4 mr-1" />
+            Audit Log
+          </Button>
           {canManage && (
             <Button
               variant="outline"
@@ -763,36 +784,52 @@ export default function ProviderCommissionPage() {
                             <TableCell rowSpan={rowCount} className="font-medium align-top border-r border-border/50" data-testid={`text-provider-${firstEntry.id}`}>
                               <div className="text-sm font-medium">{firstEntry.providerName}</div>
                               {editingProviderPct === firstEntry.providerName ? (
-                                <div className="flex items-center gap-1 mt-1.5">
-                                  <Percent className="w-3 h-3 text-muted-foreground shrink-0" />
-                                  <Input
-                                    type="number"
-                                    step="0.01"
-                                    min="0"
-                                    max="100"
-                                    value={providerPctValue}
-                                    onChange={e => setProviderPctValue(e.target.value)}
-                                    className="h-6 w-16 text-xs px-1 text-center"
-                                    autoFocus
-                                    onBlur={() => {
-                                      const newVal = providerPctValue.trim();
-                                      const currentVal = firstEntry.subAgentPercentage || subPct;
-                                      if (newVal && newVal !== currentVal) {
+                                <div className="mt-1.5 space-y-1">
+                                  <div className="flex items-center gap-1">
+                                    <Percent className="w-3 h-3 text-muted-foreground shrink-0" />
+                                    <Input
+                                      type="number"
+                                      step="0.01"
+                                      min="0"
+                                      max="100"
+                                      value={providerPctValue}
+                                      onChange={e => setProviderPctValue(e.target.value)}
+                                      className="h-6 w-16 text-xs px-1 text-center"
+                                      autoFocus
+                                      onKeyDown={e => {
+                                        if (e.key === "Escape") setEditingProviderPct(null);
+                                      }}
+                                      data-testid={`input-provider-pct-${firstEntry.id}`}
+                                    />
+                                    <span className="text-xs text-muted-foreground">%</span>
+                                  </div>
+                                  <div className="flex items-center gap-1">
+                                    <Button
+                                      variant="default"
+                                      size="sm"
+                                      className="h-6 text-xs px-2"
+                                      onClick={() => {
+                                        const newVal = providerPctValue.trim();
                                         providerPctMutation.mutate({
                                           providerName: firstEntry.providerName,
-                                          subAgentPercentage: newVal === subPct ? null : newVal,
+                                          subAgentPercentage: newVal === subPct ? null : (newVal || null),
                                         });
-                                      } else {
-                                        setEditingProviderPct(null);
-                                      }
-                                    }}
-                                    onKeyDown={e => {
-                                      if (e.key === "Enter") (e.target as HTMLInputElement).blur();
-                                      if (e.key === "Escape") setEditingProviderPct(null);
-                                    }}
-                                    data-testid={`input-provider-pct-${firstEntry.id}`}
-                                  />
-                                  <span className="text-xs text-muted-foreground">%</span>
+                                      }}
+                                      disabled={providerPctMutation.isPending}
+                                      data-testid={`btn-save-provider-pct-${firstEntry.id}`}
+                                    >
+                                      Save
+                                    </Button>
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      className="h-6 text-xs px-2"
+                                      onClick={() => setEditingProviderPct(null)}
+                                      data-testid={`btn-cancel-provider-pct-${firstEntry.id}`}
+                                    >
+                                      Cancel
+                                    </Button>
+                                  </div>
                                 </div>
                               ) : (
                                 <div
@@ -810,7 +847,6 @@ export default function ProviderCommissionPage() {
                                   {firstEntry.subAgentPercentage && (
                                     <span className="text-[10px] text-emerald-600 dark:text-emerald-400">(custom)</span>
                                   )}
-                                  {canEdit && <Pencil className="w-3 h-3 ml-0.5 opacity-0 group-hover:opacity-100" />}
                                 </div>
                               )}
                             </TableCell>
@@ -1390,6 +1426,44 @@ export default function ProviderCommissionPage() {
               </Button>
             )}
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showAuditLog} onOpenChange={setShowAuditLog}>
+        <DialogContent className="max-w-2xl max-h-[80vh] overflow-hidden flex flex-col">
+          <DialogHeader>
+            <DialogTitle data-testid="audit-log-title">Sub-Agent % Change History</DialogTitle>
+          </DialogHeader>
+          <div className="overflow-auto flex-1">
+            {auditLogs.length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-8" data-testid="audit-log-empty">No changes recorded yet.</p>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Date</TableHead>
+                    <TableHead>Provider</TableHead>
+                    <TableHead>Changed By</TableHead>
+                    <TableHead>Old Value</TableHead>
+                    <TableHead>New Value</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {auditLogs.map((log: any) => (
+                    <TableRow key={log.id} data-testid={`audit-row-${log.id}`}>
+                      <TableCell className="text-xs whitespace-nowrap">
+                        {log.createdAt ? new Date(log.createdAt).toLocaleString() : "-"}
+                      </TableCell>
+                      <TableCell className="text-sm font-medium">{log.providerName}</TableCell>
+                      <TableCell className="text-sm">{log.changedByName || "Unknown"}</TableCell>
+                      <TableCell className="text-sm">{log.oldValue || "-"}</TableCell>
+                      <TableCell className="text-sm">{log.newValue || "-"}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
+          </div>
         </DialogContent>
       </Dialog>
     </div>

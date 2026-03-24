@@ -52,3 +52,18 @@ class ProviderCommissionEntry(models.Model):
     class Meta:
         db_table = 'provider_commission_entries'
         ordering = ['provider_name', 'degree_level']
+
+
+class ProviderCommissionAuditLog(models.Model):
+    id = models.AutoField(primary_key=True)
+    provider_name = models.CharField(max_length=255)
+    action = models.CharField(max_length=64)
+    old_value = models.CharField(max_length=255, blank=True, default='')
+    new_value = models.CharField(max_length=255, blank=True, default='')
+    changed_by = models.IntegerField(null=True, blank=True)
+    changed_by_name = models.CharField(max_length=255, blank=True, default='')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'provider_commission_audit_log'
+        ordering = ['-created_at']

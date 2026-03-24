@@ -8,9 +8,20 @@ from core.permissions import require_auth, require_permission
 from providers.models import Provider
 from commissions.models import AgreementCommissionRule
 from agreements.models import Agreement
-from .models import ProviderCommissionEntry, ProviderCommissionConfig
+from .models import ProviderCommissionEntry, ProviderCommissionConfig, ProviderCommissionAuditLog
+from employees.models import Employee
 import openpyxl
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+
+
+def get_user_name(user_id):
+    if not user_id:
+        return 'System'
+    try:
+        emp = Employee.objects.get(id=user_id)
+        return emp.full_name
+    except Employee.DoesNotExist:
+        return f'User #{user_id}'
 
 
 def entry_to_dict(e, global_sub_pct=None):
@@ -216,10 +227,47 @@ class ProviderSubAgentPercentageView(APIView):
                     return Response({'message': 'Percentage must be between 0 and 100'}, status=400)
             except (InvalidOperation, ValueError):
                 return Response({'message': 'Invalid percentage value'}, status=400)
+
+        existing = ProviderCommissionEntry.objects.filter(provider_name=provider_name).first()
+        old_val = str(existing.sub_agent_percentage) if existing and existing.sub_agent_percentage is not None else 'default'
+
         updated = ProviderCommissionEntry.objects.filter(provider_name=provider_name).update(
             sub_agent_percentage=sub_pct_val
         )
+
+        user_id = request.session.get('userId')
+        user_name = get_user_name(user_id)
+        new_val = str(sub_pct_val) + '%' if sub_pct_val is not None else 'default'
+        old_display = old_val + '%' if old_val != 'default' else 'default'
+        ProviderCommissionAuditLog.objects.create(
+            provider_name=provider_name,
+            action='sub_agent_percentage_changed',
+            old_value=old_display,
+            new_value=new_val,
+            changed_by=user_id,
+            changed_by_name=user_name,
+        )
+
         return Response({'updated': updated, 'providerName': provider_name, 'subAgentPercentage': str(sub_pct_val) if sub_pct_val is not None else None})
+
+
+class ProviderCommissionAuditLogView(APIView):
+    @require_permission("provider_commission.view")
+    def get(self, request):
+        provider_name = request.query_params.get('providerName', '').strip()
+        logs = ProviderCommissionAuditLog.objects.all()
+        if provider_name:
+            logs = logs.filter(provider_name=provider_name)
+        logs = logs[:50]
+        return Response([{
+            'id': log.id,
+            'providerName': log.provider_name,
+            'action': log.action,
+            'oldValue': log.old_value,
+            'newValue': log.new_value,
+            'changedByName': log.changed_by_name,
+            'createdAt': log.created_at.isoformat() if log.created_at else None,
+        } for log in logs])
 
 
 class CopyFromCommissionRulesView(APIView):
