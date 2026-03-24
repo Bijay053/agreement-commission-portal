@@ -8,11 +8,10 @@ from agreements.models import Agreement
 from .models import ProviderCommissionEntry, ProviderCommissionConfig
 
 
-def entry_to_dict(e, provider_name=None, sub_agent_pct=None):
+def entry_to_dict(e, sub_agent_pct=None):
     d = {
         'id': e.id,
-        'providerId': e.provider_id,
-        'providerName': provider_name or '',
+        'providerName': e.provider_name,
         'degreeLevel': e.degree_level,
         'territory': e.territory,
         'commissionValue': str(e.commission_value),
@@ -25,9 +24,7 @@ def entry_to_dict(e, provider_name=None, sub_agent_pct=None):
         'createdAt': e.created_at.isoformat() if e.created_at else None,
         'updatedAt': e.updated_at.isoformat() if e.updated_at else None,
     }
-    if sub_agent_pct is not None and e.commission_type == 'percentage':
-        d['subAgentCommission'] = str(round(e.commission_value * sub_agent_pct / Decimal('100'), 2))
-    elif sub_agent_pct is not None and e.commission_type == 'flat':
+    if sub_agent_pct is not None:
         d['subAgentCommission'] = str(round(e.commission_value * sub_agent_pct / Decimal('100'), 2))
     else:
         d['subAgentCommission'] = None
@@ -73,17 +70,14 @@ class ProviderCommissionConfigView(APIView):
 class ProviderCommissionListView(APIView):
     @require_permission("provider_commission.view")
     def get(self, request):
-        entries = ProviderCommissionEntry.objects.all().order_by('provider_id', 'degree_level')
+        entries = ProviderCommissionEntry.objects.all().order_by('provider_name', 'degree_level')
         search = request.query_params.get('search', '').strip()
-        provider_id = request.query_params.get('providerId')
         degree_level = request.query_params.get('degreeLevel')
         basis = request.query_params.get('basis')
         active_only = request.query_params.get('activeOnly', 'true')
 
         if active_only == 'true':
             entries = entries.filter(is_active=True)
-        if provider_id:
-            entries = entries.filter(provider_id=int(provider_id))
         if degree_level:
             entries = entries.filter(degree_level=degree_level)
         if basis:
@@ -92,40 +86,33 @@ class ProviderCommissionListView(APIView):
         config = ProviderCommissionConfig.objects.first()
         sub_pct = config.sub_agent_percentage if config else Decimal('70.00')
 
-        provider_cache = {}
         result = []
         for e in entries:
-            if e.provider_id not in provider_cache:
-                try:
-                    provider_cache[e.provider_id] = Provider.objects.get(id=e.provider_id).name
-                except Provider.DoesNotExist:
-                    provider_cache[e.provider_id] = f'Unknown ({e.provider_id})'
-            pname = provider_cache[e.provider_id]
-            if search and search.lower() not in pname.lower() and search.lower() not in e.territory.lower():
+            if search and search.lower() not in e.provider_name.lower() and search.lower() not in e.territory.lower():
                 continue
-            result.append(entry_to_dict(e, pname, sub_pct))
+            result.append(entry_to_dict(e, sub_pct))
         return Response(result)
 
     @require_permission("provider_commission.add")
     def post(self, request):
         try:
             data = request.data
-            provider_id = data.get('providerId')
-            if not provider_id:
-                return Response({'message': 'Provider is required'}, status=400)
-            try:
-                Provider.objects.get(id=int(provider_id))
-            except Provider.DoesNotExist:
-                return Response({'message': 'Provider not found'}, status=404)
+            provider_name = (data.get('providerName') or '').strip()
+            if not provider_name:
+                return Response({'message': 'Provider name is required'}, status=400)
 
             commission_value = data.get('commissionValue')
             if commission_value is None:
                 return Response({'message': 'Commission value is required'}, status=400)
 
+            territory = data.get('territory', '')
+            if isinstance(territory, list):
+                territory = ','.join(territory)
+
             entry = ProviderCommissionEntry.objects.create(
-                provider_id=int(provider_id),
+                provider_name=provider_name,
                 degree_level=data.get('degreeLevel', 'any'),
-                territory=data.get('territory', ''),
+                territory=territory,
                 commission_value=Decimal(str(commission_value)),
                 commission_type=data.get('commissionType', 'percentage'),
                 currency=data.get('currency', 'AUD'),
@@ -136,8 +123,7 @@ class ProviderCommissionListView(APIView):
             )
             config = ProviderCommissionConfig.objects.first()
             sub_pct = config.sub_agent_percentage if config else Decimal('70.00')
-            pname = Provider.objects.get(id=entry.provider_id).name
-            return Response(entry_to_dict(entry, pname, sub_pct), status=201)
+            return Response(entry_to_dict(entry, sub_pct), status=201)
         except (InvalidOperation, ValueError) as e:
             return Response({'message': f'Invalid value: {e}'}, status=400)
         except Exception as e:
@@ -153,10 +139,15 @@ class ProviderCommissionDetailView(APIView):
             return Response({'message': 'Entry not found'}, status=404)
 
         data = request.data
+        if 'providerName' in data:
+            entry.provider_name = data['providerName']
         if 'degreeLevel' in data:
             entry.degree_level = data['degreeLevel']
         if 'territory' in data:
-            entry.territory = data['territory']
+            territory = data['territory']
+            if isinstance(territory, list):
+                territory = ','.join(territory)
+            entry.territory = territory
         if 'commissionValue' in data:
             entry.commission_value = Decimal(str(data['commissionValue']))
         if 'commissionType' in data:
@@ -173,11 +164,7 @@ class ProviderCommissionDetailView(APIView):
 
         config = ProviderCommissionConfig.objects.first()
         sub_pct = config.sub_agent_percentage if config else Decimal('70.00')
-        try:
-            pname = Provider.objects.get(id=entry.provider_id).name
-        except Provider.DoesNotExist:
-            pname = ''
-        return Response(entry_to_dict(entry, pname, sub_pct))
+        return Response(entry_to_dict(entry, sub_pct))
 
     @require_permission("provider_commission.delete")
     def delete(self, request, entry_id):
@@ -204,7 +191,6 @@ class CopyFromCommissionRulesView(APIView):
             already_copied = ProviderCommissionEntry.objects.filter(copied_from_rule_id=r.id).exists()
             result.append({
                 'ruleId': r.id,
-                'providerId': prov.id,
                 'providerName': prov.name,
                 'studyLevel': r.study_level or 'Any',
                 'commissionMode': r.commission_mode,
@@ -233,7 +219,9 @@ class CopyFromCommissionRulesView(APIView):
             try:
                 rule = AgreementCommissionRule.objects.get(id=rule_id)
                 agr = Agreement.objects.get(id=rule.agreement_id)
-            except (AgreementCommissionRule.DoesNotExist, Agreement.DoesNotExist):
+                prov = Provider.objects.get(id=agr.university_id)
+                prov_name = prov.name
+            except (AgreementCommissionRule.DoesNotExist, Agreement.DoesNotExist, Provider.DoesNotExist):
                 skipped += 1
                 continue
 
@@ -270,7 +258,7 @@ class CopyFromCommissionRulesView(APIView):
             basis = basis_map.get(rule.basis, 'full_course')
 
             ProviderCommissionEntry.objects.create(
-                provider_id=agr.university_id,
+                provider_name=prov_name,
                 degree_level=degree,
                 territory='',
                 commission_value=cval,

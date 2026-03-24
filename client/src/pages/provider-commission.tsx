@@ -1,7 +1,7 @@
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/lib/auth";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -23,7 +23,7 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import {
-  Search, Plus, Settings, Copy, Pencil, Trash2, Percent, DollarSign, Check,
+  Search, Plus, Settings, Copy, Pencil, Trash2, Percent, X, ChevronDown,
 } from "lucide-react";
 
 const DEGREE_LEVELS = [
@@ -47,9 +47,147 @@ const COMMISSION_BASIS = [
   { value: "one_time", label: "One Time" },
 ];
 
+const TERRITORY_OPTIONS = [
+  "Global",
+  "South Asia",
+  "Afghanistan",
+  "Albania",
+  "Algeria",
+  "Argentina",
+  "Armenia",
+  "Australia",
+  "Austria",
+  "Azerbaijan",
+  "Bahrain",
+  "Bangladesh",
+  "Belgium",
+  "Bhutan",
+  "Bolivia",
+  "Bosnia and Herzegovina",
+  "Brazil",
+  "Brunei",
+  "Bulgaria",
+  "Cambodia",
+  "Cameroon",
+  "Canada",
+  "Chile",
+  "China",
+  "Colombia",
+  "Costa Rica",
+  "Croatia",
+  "Cyprus",
+  "Czech Republic",
+  "Denmark",
+  "Dominican Republic",
+  "Ecuador",
+  "Egypt",
+  "El Salvador",
+  "Estonia",
+  "Ethiopia",
+  "Fiji",
+  "Finland",
+  "France",
+  "Georgia",
+  "Germany",
+  "Ghana",
+  "Greece",
+  "Guatemala",
+  "Honduras",
+  "Hong Kong",
+  "Hungary",
+  "Iceland",
+  "India",
+  "Indonesia",
+  "Iran",
+  "Iraq",
+  "Ireland",
+  "Israel",
+  "Italy",
+  "Jamaica",
+  "Japan",
+  "Jordan",
+  "Kazakhstan",
+  "Kenya",
+  "Kuwait",
+  "Kyrgyzstan",
+  "Laos",
+  "Latvia",
+  "Lebanon",
+  "Libya",
+  "Lithuania",
+  "Luxembourg",
+  "Macau",
+  "Malaysia",
+  "Maldives",
+  "Malta",
+  "Mauritius",
+  "Mexico",
+  "Moldova",
+  "Mongolia",
+  "Montenegro",
+  "Morocco",
+  "Myanmar",
+  "Nepal",
+  "Netherlands",
+  "New Zealand",
+  "Nicaragua",
+  "Nigeria",
+  "North Macedonia",
+  "Norway",
+  "Oman",
+  "Pakistan",
+  "Palestine",
+  "Panama",
+  "Papua New Guinea",
+  "Paraguay",
+  "Peru",
+  "Philippines",
+  "Poland",
+  "Portugal",
+  "Qatar",
+  "Romania",
+  "Russia",
+  "Rwanda",
+  "Saudi Arabia",
+  "Serbia",
+  "Singapore",
+  "Slovakia",
+  "Slovenia",
+  "Somalia",
+  "South Africa",
+  "South Korea",
+  "Spain",
+  "Sri Lanka",
+  "Sudan",
+  "Sweden",
+  "Switzerland",
+  "Syria",
+  "Taiwan",
+  "Tajikistan",
+  "Tanzania",
+  "Thailand",
+  "Tonga",
+  "Trinidad and Tobago",
+  "Tunisia",
+  "Turkey",
+  "Turkmenistan",
+  "Uganda",
+  "Ukraine",
+  "United Arab Emirates",
+  "United Kingdom",
+  "United States",
+  "Uruguay",
+  "Uzbekistan",
+  "Vanuatu",
+  "Venezuela",
+  "Vietnam",
+  "Yemen",
+  "Zambia",
+  "Zimbabwe",
+];
+
 interface CommissionEntry {
   id: number;
-  providerId: number;
   providerName: string;
   degreeLevel: string;
   territory: string;
@@ -67,7 +205,6 @@ interface CommissionEntry {
 
 interface CopyRule {
   ruleId: number;
-  providerId: number;
   providerName: string;
   studyLevel: string;
   commissionMode: string;
@@ -80,13 +217,104 @@ interface CopyRule {
   alreadyCopied: boolean;
 }
 
-interface ProviderOption {
-  id: number;
-  name: string;
-}
-
 const degreeLabelMap: Record<string, string> = Object.fromEntries(DEGREE_LEVELS.map(d => [d.value, d.label]));
 const basisLabelMap: Record<string, string> = Object.fromEntries(COMMISSION_BASIS.map(b => [b.value, b.label]));
+
+function MultiTerritorySelect({
+  value,
+  onChange,
+  testIdPrefix = "",
+}: {
+  value: string[];
+  onChange: (v: string[]) => void;
+  testIdPrefix?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const [searchTerm, setSearchTerm] = useState("");
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    }
+    if (open) document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [open]);
+
+  const filtered = TERRITORY_OPTIONS.filter(t =>
+    t.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  function toggle(territory: string) {
+    if (value.includes(territory)) {
+      onChange(value.filter(v => v !== territory));
+    } else {
+      onChange([...value, territory]);
+    }
+  }
+
+  function remove(territory: string) {
+    onChange(value.filter(v => v !== territory));
+  }
+
+  return (
+    <div ref={containerRef} className="relative">
+      <div
+        className="flex flex-wrap items-center gap-1 min-h-[38px] w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm cursor-pointer"
+        onClick={() => setOpen(!open)}
+        data-testid={`${testIdPrefix}territory-select`}
+      >
+        {value.length === 0 && (
+          <span className="text-muted-foreground">Select territories...</span>
+        )}
+        {value.map(t => (
+          <Badge key={t} variant="secondary" className="text-xs gap-1">
+            {t}
+            <X
+              className="w-3 h-3 cursor-pointer"
+              onClick={(e) => { e.stopPropagation(); remove(t); }}
+            />
+          </Badge>
+        ))}
+        <ChevronDown className="w-4 h-4 ml-auto text-muted-foreground shrink-0" />
+      </div>
+      {open && (
+        <div className="absolute z-50 mt-1 w-full bg-popover border border-border rounded-md shadow-md max-h-[250px] overflow-hidden">
+          <div className="p-2 border-b">
+            <Input
+              placeholder="Search countries..."
+              value={searchTerm}
+              onChange={e => setSearchTerm(e.target.value)}
+              className="h-8"
+              autoFocus
+              data-testid={`${testIdPrefix}territory-search`}
+            />
+          </div>
+          <div className="overflow-y-auto max-h-[200px]">
+            {filtered.map(t => (
+              <div
+                key={t}
+                className={`flex items-center gap-2 px-3 py-1.5 cursor-pointer hover:bg-accent text-sm ${
+                  (t === "Global" || t === "South Asia") ? "font-semibold bg-muted/50" : ""
+                }`}
+                onClick={() => toggle(t)}
+                data-testid={`${testIdPrefix}territory-option-${t.toLowerCase().replace(/\s/g, "-")}`}
+              >
+                <Checkbox checked={value.includes(t)} className="pointer-events-none" />
+                <span>{t}</span>
+              </div>
+            ))}
+            {filtered.length === 0 && (
+              <div className="px-3 py-2 text-sm text-muted-foreground">No matches</div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function ProviderCommissionPage() {
   const { hasPermission } = useAuth();
@@ -112,7 +340,7 @@ export default function ProviderCommissionPage() {
 
   const [formProvider, setFormProvider] = useState("");
   const [formDegree, setFormDegree] = useState("any");
-  const [formTerritory, setFormTerritory] = useState("");
+  const [formTerritories, setFormTerritories] = useState<string[]>([]);
   const [formValue, setFormValue] = useState("");
   const [formType, setFormType] = useState("percentage");
   const [formCurrency, setFormCurrency] = useState("AUD");
@@ -138,16 +366,6 @@ export default function ProviderCommissionPage() {
       const res = await fetch("/api/provider-commission/config", { credentials: "include" });
       if (!res.ok) throw new Error("Failed");
       return res.json();
-    },
-  });
-
-  const { data: providers = [] } = useQuery<ProviderOption[]>({
-    queryKey: ["/api/providers"],
-    queryFn: async () => {
-      const res = await fetch("/api/providers?status=active", { credentials: "include" });
-      if (!res.ok) return [];
-      const data = await res.json();
-      return (data.providers || data || []).map((p: any) => ({ id: p.id, name: p.name }));
     },
   });
 
@@ -248,7 +466,10 @@ export default function ProviderCommissionPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ruleIds }),
       });
-      if (!res.ok) throw new Error("Failed");
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.message || "Failed to copy");
+      }
       return res.json();
     },
     onSuccess: (data: any) => {
@@ -264,7 +485,7 @@ export default function ProviderCommissionPage() {
   function resetForm() {
     setFormProvider("");
     setFormDegree("any");
-    setFormTerritory("");
+    setFormTerritories([]);
     setFormValue("");
     setFormType("percentage");
     setFormCurrency("AUD");
@@ -274,14 +495,30 @@ export default function ProviderCommissionPage() {
 
   function openEdit(e: CommissionEntry) {
     setEditEntry(e);
+    setFormProvider(e.providerName);
     setFormDegree(e.degreeLevel);
-    setFormTerritory(e.territory);
+    setFormTerritories(e.territory ? e.territory.split(",").map(t => t.trim()).filter(Boolean) : []);
     setFormValue(e.commissionValue);
     setFormType(e.commissionType);
     setFormCurrency(e.currency);
     setFormBasis(e.commissionBasis);
     setFormNotes(e.notes);
     setEditOpen(true);
+  }
+
+  function formatTerritoryDisplay(territory: string) {
+    if (!territory) return null;
+    const parts = territory.split(",").map(t => t.trim()).filter(Boolean);
+    if (parts.length === 0) return null;
+    if (parts.length <= 2) return parts.join(", ");
+    return (
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <span className="cursor-help">{parts[0]}, {parts[1]} +{parts.length - 2}</span>
+        </TooltipTrigger>
+        <TooltipContent className="max-w-[300px]">{parts.join(", ")}</TooltipContent>
+      </Tooltip>
+    );
   }
 
   const filtered = entries.filter(e => {
@@ -428,7 +665,7 @@ export default function ProviderCommissionPage() {
                         <Badge variant="outline">{degreeLabelMap[entry.degreeLevel] || entry.degreeLevel}</Badge>
                       </TableCell>
                       <TableCell data-testid={`text-territory-${entry.id}`}>
-                        {entry.territory || <span className="text-muted-foreground">—</span>}
+                        {formatTerritoryDisplay(entry.territory) || <span className="text-muted-foreground">—</span>}
                       </TableCell>
                       <TableCell className="text-right font-mono" data-testid={`text-commission-${entry.id}`}>
                         {entry.commissionType === "percentage" ? (
@@ -490,6 +727,7 @@ export default function ProviderCommissionPage() {
         </CardContent>
       </Card>
 
+      {/* Add Dialog */}
       <Dialog open={addOpen} onOpenChange={setAddOpen}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
@@ -497,17 +735,13 @@ export default function ProviderCommissionPage() {
           </DialogHeader>
           <div className="space-y-4">
             <div>
-              <Label>Provider *</Label>
-              <Select value={formProvider} onValueChange={setFormProvider}>
-                <SelectTrigger data-testid="select-provider">
-                  <SelectValue placeholder="Select provider" />
-                </SelectTrigger>
-                <SelectContent>
-                  {providers.map(p => (
-                    <SelectItem key={p.id} value={String(p.id)}>{p.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Label>Provider Name *</Label>
+              <Input
+                value={formProvider}
+                onChange={e => setFormProvider(e.target.value)}
+                placeholder="Type provider name..."
+                data-testid="input-provider"
+              />
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
@@ -525,11 +759,10 @@ export default function ProviderCommissionPage() {
               </div>
               <div>
                 <Label>Territory</Label>
-                <Input
-                  value={formTerritory}
-                  onChange={e => setFormTerritory(e.target.value)}
-                  placeholder="e.g. Australia, Nepal"
-                  data-testid="input-territory"
+                <MultiTerritorySelect
+                  value={formTerritories}
+                  onChange={setFormTerritories}
+                  testIdPrefix="add-"
                 />
               </div>
             </div>
@@ -602,16 +835,16 @@ export default function ProviderCommissionPage() {
             <Button variant="outline" onClick={() => setAddOpen(false)} data-testid="btn-cancel-add">Cancel</Button>
             <Button
               onClick={() => addMutation.mutate({
-                providerId: Number(formProvider),
+                providerName: formProvider.trim(),
                 degreeLevel: formDegree,
-                territory: formTerritory,
+                territory: formTerritories,
                 commissionValue: formValue,
                 commissionType: formType,
                 currency: formCurrency,
                 commissionBasis: formBasis,
                 notes: formNotes,
               })}
-              disabled={!formProvider || !formValue || addMutation.isPending}
+              disabled={!formProvider.trim() || !formValue || addMutation.isPending}
               data-testid="btn-submit-add"
             >
               {addMutation.isPending ? "Adding..." : "Add Entry"}
@@ -620,12 +853,22 @@ export default function ProviderCommissionPage() {
         </DialogContent>
       </Dialog>
 
+      {/* Edit Dialog */}
       <Dialog open={editOpen} onOpenChange={v => { setEditOpen(v); if (!v) setEditEntry(null); }}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
-            <DialogTitle>Edit Commission Entry — {editEntry?.providerName}</DialogTitle>
+            <DialogTitle>Edit Commission Entry</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
+            <div>
+              <Label>Provider Name *</Label>
+              <Input
+                value={formProvider}
+                onChange={e => setFormProvider(e.target.value)}
+                placeholder="Type provider name..."
+                data-testid="edit-input-provider"
+              />
+            </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <Label>Degree Level</Label>
@@ -642,10 +885,10 @@ export default function ProviderCommissionPage() {
               </div>
               <div>
                 <Label>Territory</Label>
-                <Input
-                  value={formTerritory}
-                  onChange={e => setFormTerritory(e.target.value)}
-                  data-testid="edit-input-territory"
+                <MultiTerritorySelect
+                  value={formTerritories}
+                  onChange={setFormTerritories}
+                  testIdPrefix="edit-"
                 />
               </div>
             </div>
@@ -663,7 +906,7 @@ export default function ProviderCommissionPage() {
                 </Select>
               </div>
               <div>
-                <Label>Value</Label>
+                <Label>Value *</Label>
                 <Input
                   type="number"
                   step="0.01"
@@ -715,7 +958,9 @@ export default function ProviderCommissionPage() {
               <Checkbox
                 id="editActive"
                 checked={editEntry?.isActive}
-                onCheckedChange={() => {}}
+                onCheckedChange={() => {
+                  if (editEntry) setEditEntry({ ...editEntry, isActive: !editEntry.isActive });
+                }}
                 data-testid="edit-checkbox-active"
               />
               <Label htmlFor="editActive" className="text-sm">Active</Label>
@@ -729,17 +974,19 @@ export default function ProviderCommissionPage() {
                 editMutation.mutate({
                   id: editEntry.id,
                   data: {
+                    providerName: formProvider.trim(),
                     degreeLevel: formDegree,
-                    territory: formTerritory,
+                    territory: formTerritories,
                     commissionValue: formValue,
                     commissionType: formType,
                     currency: formCurrency,
                     commissionBasis: formBasis,
                     notes: formNotes,
+                    isActive: editEntry.isActive,
                   },
                 });
               }}
-              disabled={editMutation.isPending}
+              disabled={!formProvider.trim() || editMutation.isPending}
               data-testid="btn-submit-edit"
             >
               {editMutation.isPending ? "Saving..." : "Save Changes"}
@@ -748,6 +995,7 @@ export default function ProviderCommissionPage() {
         </DialogContent>
       </Dialog>
 
+      {/* Config Dialog */}
       <Dialog open={configOpen} onOpenChange={setConfigOpen}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
@@ -755,7 +1003,7 @@ export default function ProviderCommissionPage() {
           </DialogHeader>
           <div className="space-y-4">
             <p className="text-sm text-muted-foreground">
-              Set the global percentage of the main commission that sub-agents receive. This applies to all providers.
+              Set the global percentage of the main commission that sub-agents receive.
             </p>
             <div>
               <Label>Percentage (%)</Label>
@@ -781,7 +1029,7 @@ export default function ProviderCommissionPage() {
             <Button variant="outline" onClick={() => setConfigOpen(false)} data-testid="btn-cancel-config">Cancel</Button>
             <Button
               onClick={() => configMutation.mutate(configPct)}
-              disabled={configMutation.isPending || !configPct}
+              disabled={configMutation.isPending}
               data-testid="btn-submit-config"
             >
               {configMutation.isPending ? "Saving..." : "Save"}
@@ -790,31 +1038,35 @@ export default function ProviderCommissionPage() {
         </DialogContent>
       </Dialog>
 
+      {/* Copy from Agreements Dialog */}
       <Dialog open={copyOpen} onOpenChange={v => { setCopyOpen(v); if (!v) setSelectedRules([]); }}>
         <DialogContent className="max-w-3xl max-h-[80vh]">
           <DialogHeader>
             <DialogTitle>Copy from Existing Agreement Commission Rules</DialogTitle>
+            <p className="text-sm text-muted-foreground">
+              Select commission rules to copy into the Sub Agent Commission Distribution table.
+            </p>
           </DialogHeader>
-          <p className="text-sm text-muted-foreground mb-3">
-            Select commission rules to copy into the Sub Agent Commission Distribution table.
-          </p>
           {copyLoading ? (
-            <div className="space-y-2">
+            <div className="space-y-2 py-4">
               {[1, 2, 3].map(i => <Skeleton key={i} className="h-10 w-full" />)}
             </div>
           ) : copyRules.length === 0 ? (
-            <p className="text-sm text-muted-foreground py-4 text-center">No commission rules found in agreements.</p>
+            <div className="text-center py-8 text-muted-foreground">No commission rules found.</div>
           ) : (
-            <div className="overflow-y-auto max-h-[50vh] border rounded">
+            <div className="overflow-y-auto max-h-[50vh] border rounded-md">
               <Table>
                 <TableHeader>
                   <TableRow>
                     <TableHead className="w-10">
                       <Checkbox
-                        checked={selectedRules.length === copyRules.filter(r => !r.alreadyCopied).length && selectedRules.length > 0}
-                        onCheckedChange={v => {
-                          if (v) setSelectedRules(copyRules.filter(r => !r.alreadyCopied).map(r => r.ruleId));
-                          else setSelectedRules([]);
+                        checked={selectedRules.length === copyRules.filter(r => !r.alreadyCopied).length && copyRules.filter(r => !r.alreadyCopied).length > 0}
+                        onCheckedChange={(v) => {
+                          if (v) {
+                            setSelectedRules(copyRules.filter(r => !r.alreadyCopied).map(r => r.ruleId));
+                          } else {
+                            setSelectedRules([]);
+                          }
                         }}
                         data-testid="checkbox-select-all"
                       />
@@ -834,30 +1086,28 @@ export default function ProviderCommissionPage() {
                         <Checkbox
                           checked={selectedRules.includes(rule.ruleId)}
                           disabled={rule.alreadyCopied}
-                          onCheckedChange={v => {
-                            if (v) setSelectedRules(prev => [...prev, rule.ruleId]);
-                            else setSelectedRules(prev => prev.filter(id => id !== rule.ruleId));
+                          onCheckedChange={(v) => {
+                            if (v) {
+                              setSelectedRules([...selectedRules, rule.ruleId]);
+                            } else {
+                              setSelectedRules(selectedRules.filter(id => id !== rule.ruleId));
+                            }
                           }}
-                          data-testid={`checkbox-rule-${rule.ruleId}`}
                         />
                       </TableCell>
                       <TableCell className="font-medium">{rule.providerName}</TableCell>
-                      <TableCell>
-                        <span className="text-xs text-muted-foreground">{rule.agreementCode}</span>
-                      </TableCell>
+                      <TableCell className="text-xs text-muted-foreground">{rule.agreementCode}</TableCell>
                       <TableCell>{rule.studyLevel}</TableCell>
-                      <TableCell className="font-mono">
-                        {rule.commissionMode === "percentage"
+                      <TableCell className="font-mono text-sm">
+                        {rule.commissionMode === "percentage" && rule.percentageValue
                           ? `${rule.percentageValue}%`
                           : `${rule.currency} ${rule.flatAmount}`}
                       </TableCell>
                       <TableCell>{rule.basis}</TableCell>
                       <TableCell>
-                        {rule.alreadyCopied ? (
-                          <Badge variant="secondary"><Check className="w-3 h-3 mr-1" />Copied</Badge>
-                        ) : (
-                          <Badge variant="outline">Available</Badge>
-                        )}
+                        <Badge variant={rule.alreadyCopied ? "secondary" : "outline"}>
+                          {rule.alreadyCopied ? "Copied" : "Available"}
+                        </Badge>
                       </TableCell>
                     </TableRow>
                   ))}

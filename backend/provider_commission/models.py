@@ -34,9 +34,9 @@ class ProviderCommissionEntry(models.Model):
     ]
 
     id = models.AutoField(primary_key=True)
-    provider_id = models.IntegerField()
+    provider_name = models.CharField(max_length=255, default='')
     degree_level = models.CharField(max_length=32, choices=DEGREE_LEVEL_CHOICES, default='any')
-    territory = models.CharField(max_length=255, blank=True, default='')
+    territory = models.TextField(blank=True, default='')
     commission_value = models.DecimalField(max_digits=10, decimal_places=2)
     commission_type = models.CharField(max_length=16, default='percentage')
     currency = models.CharField(max_length=3, default='AUD')
@@ -50,4 +50,4 @@ class ProviderCommissionEntry(models.Model):
 
     class Meta:
         db_table = 'provider_commission_entries'
-        ordering = ['provider_id', 'degree_level']
+        ordering = ['provider_name', 'degree_level']
