@@ -323,23 +323,23 @@ export default function CommissionTablePage() {
                                 <TableCell rowSpan={rowCount} className="align-top border-r border-border/50">
                                   {statusBadge(firstRule.agreementStatus)}
                                 </TableCell>
+                                <TableCell rowSpan={rowCount} className="align-top border-r border-border/50">
+                                  <div className="text-xs truncate">
+                                    {firstRule.territoryCountries?.length > 0
+                                      ? firstRule.territoryCountries.length > 2
+                                        ? <Tooltip>
+                                            <TooltipTrigger className="underline decoration-dotted cursor-help">
+                                              {firstRule.territoryCountries.slice(0, 2).join(", ")} +{firstRule.territoryCountries.length - 2}
+                                            </TooltipTrigger>
+                                            <TooltipContent>{firstRule.territoryCountries.join(", ")}</TooltipContent>
+                                          </Tooltip>
+                                        : firstRule.territoryCountries.join(", ")
+                                      : "—"
+                                    }
+                                  </div>
+                                </TableCell>
                               </>
                             )}
-                            <TableCell>
-                              <div className="text-xs truncate">
-                                {rule.territoryCountries?.length > 0
-                                  ? rule.territoryCountries.length > 2
-                                    ? <Tooltip>
-                                        <TooltipTrigger className="underline decoration-dotted cursor-help">
-                                          {rule.territoryCountries.slice(0, 2).join(", ")} +{rule.territoryCountries.length - 2}
-                                        </TooltipTrigger>
-                                        <TooltipContent>{rule.territoryCountries.join(", ")}</TooltipContent>
-                                      </Tooltip>
-                                    : rule.territoryCountries.join(", ")
-                                  : "—"
-                                }
-                              </div>
-                            </TableCell>
                             <TableCell>
                               <span className="text-sm">{rule.studyLevel || "Any"}</span>
                             </TableCell>

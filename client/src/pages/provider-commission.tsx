@@ -700,67 +700,89 @@ export default function ProviderCommissionPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filtered.map(entry => (
-                    <TableRow key={entry.id} data-testid={`row-entry-${entry.id}`}>
-                      <TableCell className="font-medium" data-testid={`text-provider-${entry.id}`}>
-                        {entry.providerName}
-                      </TableCell>
-                      <TableCell data-testid={`text-degree-${entry.id}`}>
-                        <Badge variant="outline">{degreeLabelMap[entry.degreeLevel] || entry.degreeLevel}</Badge>
-                      </TableCell>
-                      <TableCell data-testid={`text-territory-${entry.id}`}>
-                        {formatTerritoryDisplay(entry.territory) || <span className="text-muted-foreground">—</span>}
-                      </TableCell>
-                      <TableCell className="text-right font-mono" data-testid={`text-commission-${entry.id}`}>
-                        {entry.commissionType === "percentage" ? (
-                          <span>{entry.commissionValue}%</span>
-                        ) : (
-                          <span>{entry.currency} {entry.commissionValue}</span>
-                        )}
-                      </TableCell>
-                      <TableCell data-testid={`text-basis-${entry.id}`}>
-                        {basisLabelMap[entry.commissionBasis] || entry.commissionBasis}
-                      </TableCell>
-                      <TableCell className="text-right font-mono" data-testid={`text-subagent-${entry.id}`}>
-                        {entry.subAgentCommission ? (
-                          entry.commissionType === "percentage" ? (
-                            <span className="text-emerald-600 dark:text-emerald-400">{entry.subAgentCommission}%</span>
-                          ) : (
-                            <span className="text-emerald-600 dark:text-emerald-400">{entry.currency} {entry.subAgentCommission}</span>
-                          )
-                        ) : "—"}
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant={entry.isActive ? "default" : "secondary"} data-testid={`badge-active-${entry.id}`}>
-                          {entry.isActive ? "Active" : "Inactive"}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex items-center justify-end gap-1">
-                          {entry.notes && (
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <Badge variant="outline" className="cursor-help text-xs">Note</Badge>
-                              </TooltipTrigger>
-                              <TooltipContent className="max-w-[300px]">{entry.notes}</TooltipContent>
-                            </Tooltip>
+                  {(() => {
+                    const grouped: { key: string; entries: CommissionEntry[] }[] = [];
+                    filtered.forEach((entry) => {
+                      const last = grouped[grouped.length - 1];
+                      if (last && last.key === entry.providerName) {
+                        last.entries.push(entry);
+                      } else {
+                        grouped.push({ key: entry.providerName, entries: [entry] });
+                      }
+                    });
+
+                    return grouped.map((group) => {
+                      const firstEntry = group.entries[0];
+                      const rowCount = group.entries.length;
+                      return group.entries.map((entry, idx) => (
+                        <TableRow
+                          key={entry.id}
+                          data-testid={`row-entry-${entry.id}`}
+                          className={idx === 0 && rowCount > 1 ? "border-t-2 border-border" : ""}
+                        >
+                          {idx === 0 && (
+                            <TableCell rowSpan={rowCount} className="font-medium align-top border-r border-border/50" data-testid={`text-provider-${firstEntry.id}`}>
+                              {firstEntry.providerName}
+                            </TableCell>
                           )}
-                          {canEdit && (
-                            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEdit(entry)} data-testid={`btn-edit-${entry.id}`}>
-                              <Pencil className="w-4 h-4" />
-                            </Button>
-                          )}
-                          {canDelete && (
-                            <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => {
-                              if (confirm("Delete this entry?")) deleteMutation.mutate(entry.id);
-                            }} data-testid={`btn-delete-${entry.id}`}>
-                              <Trash2 className="w-4 h-4" />
-                            </Button>
-                          )}
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
+                          <TableCell data-testid={`text-degree-${entry.id}`}>
+                            <Badge variant="outline">{degreeLabelMap[entry.degreeLevel] || entry.degreeLevel}</Badge>
+                          </TableCell>
+                          <TableCell data-testid={`text-territory-${entry.id}`}>
+                            {formatTerritoryDisplay(entry.territory) || <span className="text-muted-foreground">—</span>}
+                          </TableCell>
+                          <TableCell className="text-right font-mono" data-testid={`text-commission-${entry.id}`}>
+                            {entry.commissionType === "percentage" ? (
+                              <span>{entry.commissionValue}%</span>
+                            ) : (
+                              <span>{entry.currency} {entry.commissionValue}</span>
+                            )}
+                          </TableCell>
+                          <TableCell data-testid={`text-basis-${entry.id}`}>
+                            {basisLabelMap[entry.commissionBasis] || entry.commissionBasis}
+                          </TableCell>
+                          <TableCell className="text-right font-mono" data-testid={`text-subagent-${entry.id}`}>
+                            {entry.subAgentCommission ? (
+                              entry.commissionType === "percentage" ? (
+                                <span className="text-emerald-600 dark:text-emerald-400">{entry.subAgentCommission}%</span>
+                              ) : (
+                                <span className="text-emerald-600 dark:text-emerald-400">{entry.currency} {entry.subAgentCommission}</span>
+                              )
+                            ) : "—"}
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant={entry.isActive ? "default" : "secondary"} data-testid={`badge-active-${entry.id}`}>
+                              {entry.isActive ? "Active" : "Inactive"}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <div className="flex items-center justify-end gap-1">
+                              {entry.notes && (
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Badge variant="outline" className="cursor-help text-xs">Note</Badge>
+                                  </TooltipTrigger>
+                                  <TooltipContent className="max-w-[300px]">{entry.notes}</TooltipContent>
+                                </Tooltip>
+                              )}
+                              {canEdit && (
+                                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEdit(entry)} data-testid={`btn-edit-${entry.id}`}>
+                                  <Pencil className="w-4 h-4" />
+                                </Button>
+                              )}
+                              {canDelete && (
+                                <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => {
+                                  if (confirm("Delete this entry?")) deleteMutation.mutate(entry.id);
+                                }} data-testid={`btn-delete-${entry.id}`}>
+                                  <Trash2 className="w-4 h-4" />
+                                </Button>
+                              )}
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ));
+                    });
+                  })()}
                 </TableBody>
               </Table>
             </div>
