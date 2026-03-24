@@ -53,11 +53,11 @@ class ProviderCommissionConfigView(APIView):
                 return Response({'message': 'Percentage must be between 0 and 100'}, status=400)
             config = ProviderCommissionConfig.objects.first()
             if not config:
-                config = ProviderCommissionConfig(sub_agent_percentage=pct_val, updated_by=request.user.id)
+                config = ProviderCommissionConfig(sub_agent_percentage=pct_val, updated_by=request.session.get('userId'))
                 config.save()
             else:
                 config.sub_agent_percentage = pct_val
-                config.updated_by = request.user.id
+                config.updated_by = request.session.get('userId')
                 config.save()
             return Response({
                 'subAgentPercentage': str(config.sub_agent_percentage),
@@ -119,7 +119,7 @@ class ProviderCommissionListView(APIView):
                 commission_basis=data.get('commissionBasis', 'full_course'),
                 notes=data.get('notes', ''),
                 is_active=True,
-                created_by=request.user.id,
+                created_by=request.session.get('userId'),
             )
             config = ProviderCommissionConfig.objects.first()
             sub_pct = config.sub_agent_percentage if config else Decimal('70.00')
@@ -268,7 +268,7 @@ class CopyFromCommissionRulesView(APIView):
                 notes=f'Copied from agreement {agr.agreement_code} rule #{rule.id}',
                 is_active=True,
                 copied_from_rule_id=rule.id,
-                created_by=request.user.id,
+                created_by=request.session.get('userId'),
             )
             created += 1
 
