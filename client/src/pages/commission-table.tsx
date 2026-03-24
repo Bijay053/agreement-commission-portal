@@ -358,7 +358,7 @@ export default function CommissionTablePage() {
                                   </>
                                 )}
                                 <TableCell>
-                                  <span className="text-sm truncate block">{rule.label || "—"}</span>
+                                  <span className="text-sm break-words">{rule.label || "—"}</span>
                                 </TableCell>
                                 <TableCell>
                                   <span className="text-sm">{rule.studyLevel || "Any"}</span>
