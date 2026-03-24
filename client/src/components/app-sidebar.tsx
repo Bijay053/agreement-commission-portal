@@ -45,7 +45,6 @@ export function AppSidebar() {
     { title: "Commission Table", url: "/commission", icon: DollarSign, show: hasPermission("commission.view") || hasPermission("bonus.view") },
     { title: "Commission Tracker", url: "/commission-tracker", icon: Calculator, show: hasPermission("commission_tracker.student.read") },
     { title: "Sub-Agent Commission", url: "/sub-agent-commission", icon: ArrowDownUp, show: hasPermission("sub_agent_commission.view") },
-    { title: "Sub Agent Commission Distribution", url: "/provider-commission", icon: Share2, show: hasPermission("provider_commission.view") },
   ];
 
   const employeeNav = [
@@ -202,6 +201,28 @@ export function AppSidebar() {
                     </SidebarMenuButton>
                   </SidebarMenuItem>
                 ))}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        )}
+
+        {hasPermission("provider_commission.view") && (
+          <SidebarGroup>
+            <SidebarGroupLabel className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground/70">Sub Agent Commission Distribution</SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    asChild
+                    data-active={isActive("/provider-commission")}
+                    data-testid="nav-sub-agent-commission-distribution"
+                  >
+                    <a href="/provider-commission" onClick={(e) => { e.preventDefault(); navigate("/provider-commission"); }}>
+                      <Share2 className="w-4 h-4" />
+                      <span>Commission Distribution</span>
+                    </a>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
               </SidebarMenu>
             </SidebarGroupContent>
           </SidebarGroup>
