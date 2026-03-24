@@ -355,8 +355,6 @@ export default function ProviderCommissionPage() {
   const [bulkFile, setBulkFile] = useState<File | null>(null);
   const [bulkResult, setBulkResult] = useState<{ created: number; errors: string[]; totalRows: number } | null>(null);
   const [bulkUploading, setBulkUploading] = useState(false);
-  const [editingProviderPct, setEditingProviderPct] = useState<string | null>(null);
-  const [providerPctValue, setProviderPctValue] = useState("");
 
   const { data: entries = [], isLoading } = useQuery<CommissionEntry[]>({
     queryKey: ["/api/provider-commission", { activeOnly: showInactive ? "false" : "true" }],
@@ -506,7 +504,6 @@ export default function ProviderCommissionPage() {
     onSuccess: (data: any) => {
       queryClient.invalidateQueries({ queryKey: ["/api/provider-commission"] });
       toast({ title: `Updated sub-agent % for ${data.providerName}` });
-      setEditingProviderPct(null);
     },
     onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
   });
@@ -748,75 +745,41 @@ export default function ProviderCommissionPage() {
                           {idx === 0 && (
                             <TableCell rowSpan={rowCount} className="font-medium align-top border-r border-border/50" data-testid={`text-provider-${firstEntry.id}`}>
                               <div className="text-sm font-medium">{firstEntry.providerName}</div>
-                              {canEdit && editingProviderPct === firstEntry.providerName ? (
-                                <div className="flex items-center gap-1 mt-1.5">
-                                  <Input
+                              <div className="flex items-center gap-1 mt-1.5">
+                                <Percent className="w-3 h-3 text-muted-foreground shrink-0" />
+                                {canEdit ? (
+                                  <input
                                     type="number"
                                     step="0.01"
                                     min="0"
                                     max="100"
-                                    value={providerPctValue}
-                                    onChange={e => setProviderPctValue(e.target.value)}
-                                    className="h-7 w-20 text-xs"
-                                    autoFocus
-                                    onKeyDown={e => {
-                                      if (e.key === "Enter") {
+                                    defaultValue={firstEntry.subAgentPercentage || subPct}
+                                    className="w-16 h-6 text-xs bg-transparent border-b border-dashed border-muted-foreground/40 focus:border-primary focus:outline-none text-center"
+                                    onBlur={e => {
+                                      const newVal = e.target.value.trim();
+                                      const currentVal = firstEntry.subAgentPercentage || subPct;
+                                      if (newVal !== currentVal) {
                                         providerPctMutation.mutate({
                                           providerName: firstEntry.providerName,
-                                          subAgentPercentage: providerPctValue.trim() || null,
+                                          subAgentPercentage: newVal === subPct ? null : (newVal || null),
                                         });
-                                      } else if (e.key === "Escape") {
-                                        setEditingProviderPct(null);
                                       }
+                                    }}
+                                    onKeyDown={e => {
+                                      if (e.key === "Enter") (e.target as HTMLInputElement).blur();
                                     }}
                                     data-testid={`input-provider-pct-${firstEntry.id}`}
                                   />
-                                  <span className="text-xs text-muted-foreground">%</span>
-                                  <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    className="h-6 w-6"
-                                    onClick={() => {
-                                      providerPctMutation.mutate({
-                                        providerName: firstEntry.providerName,
-                                        subAgentPercentage: providerPctValue.trim() || null,
-                                      });
-                                    }}
-                                    disabled={providerPctMutation.isPending}
-                                    data-testid={`btn-save-provider-pct-${firstEntry.id}`}
-                                  >
-                                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-                                  </Button>
-                                  <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    className="h-6 w-6"
-                                    onClick={() => setEditingProviderPct(null)}
-                                    data-testid={`btn-cancel-provider-pct-${firstEntry.id}`}
-                                  >
-                                    <X className="w-3.5 h-3.5" />
-                                  </Button>
-                                </div>
-                              ) : (
-                                <button
-                                  className="flex items-center gap-1 mt-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
-                                  onClick={() => {
-                                    if (canEdit) {
-                                      setEditingProviderPct(firstEntry.providerName);
-                                      setProviderPctValue(firstEntry.subAgentPercentage || subPct);
-                                    }
-                                  }}
-                                  data-testid={`btn-edit-provider-pct-${firstEntry.id}`}
-                                >
-                                  <Percent className="w-3 h-3" />
-                                  <span>
-                                    Sub-Agent: {firstEntry.effectiveSubAgentPercentage || subPct}%
-                                    {firstEntry.subAgentPercentage && (
-                                      <span className="ml-1 text-emerald-600 dark:text-emerald-400">(custom)</span>
-                                    )}
+                                ) : (
+                                  <span className="text-xs text-muted-foreground">
+                                    {firstEntry.effectiveSubAgentPercentage || subPct}
                                   </span>
-                                </button>
-                              )}
+                                )}
+                                <span className="text-xs text-muted-foreground">%</span>
+                                {firstEntry.subAgentPercentage && (
+                                  <span className="text-[10px] text-emerald-600 dark:text-emerald-400">(custom)</span>
+                                )}
+                              </div>
                             </TableCell>
                           )}
                           <TableCell data-testid={`text-degree-${entry.id}`}>
