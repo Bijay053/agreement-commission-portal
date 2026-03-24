@@ -1,8 +1,9 @@
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from core.permissions import require_auth, require_permission
-from agreements.models import Agreement
+from agreements.models import Agreement, AgreementTerritory
 from providers.models import Provider
+from core.models import Country
 from .models import AgreementCommissionRule
 
 
@@ -32,12 +33,26 @@ class AllCommissionRulesView(APIView):
             agreement_status = request.query_params.get('agreementStatus')
             search = request.query_params.get('search')
 
+            agreement_ids = set(r.agreement_id for r in rules)
+            agreements_map = {a.id: a for a in Agreement.objects.filter(id__in=agreement_ids)}
+            provider_ids = set(a.university_id for a in agreements_map.values())
+            providers_map = {p.id: p for p in Provider.objects.filter(id__in=provider_ids)}
+
+            territory_raw = {}
+            for t in AgreementTerritory.objects.filter(agreement_id__in=agreement_ids):
+                territory_raw.setdefault(t.agreement_id, []).append(t.country_id)
+            all_country_ids = set()
+            for cids in territory_raw.values():
+                all_country_ids.update(cids)
+            country_names = {c.id: c.name for c in Country.objects.filter(id__in=all_country_ids)} if all_country_ids else {}
+
             result = []
             for r in rules:
-                try:
-                    agr = Agreement.objects.get(id=r.agreement_id)
-                    prov = Provider.objects.get(id=agr.university_id)
-                except (Agreement.DoesNotExist, Provider.DoesNotExist):
+                agr = agreements_map.get(r.agreement_id)
+                if not agr:
+                    continue
+                prov = providers_map.get(agr.university_id)
+                if not prov:
                     continue
                 if provider_id and prov.id != int(provider_id):
                     continue
@@ -52,6 +67,8 @@ class AllCommissionRulesView(APIView):
                 d['agreementTitle'] = agr.title
                 d['agreementStatus'] = agr.status
                 d['providerName'] = prov.name
+                terr_cids = territory_raw.get(agr.id, [])
+                d['territoryCountries'] = [country_names.get(cid, '') for cid in terr_cids if country_names.get(cid)]
                 result.append(d)
             return Response(result)
         except Exception as e:
