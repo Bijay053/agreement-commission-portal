@@ -355,6 +355,8 @@ export default function ProviderCommissionPage() {
   const [bulkFile, setBulkFile] = useState<File | null>(null);
   const [bulkResult, setBulkResult] = useState<{ created: number; errors: string[]; totalRows: number } | null>(null);
   const [bulkUploading, setBulkUploading] = useState(false);
+  const [editingProviderPct, setEditingProviderPct] = useState<string | null>(null);
+  const [providerPctValue, setProviderPctValue] = useState("");
 
   const { data: entries = [], isLoading } = useQuery<CommissionEntry[]>({
     queryKey: ["/api/provider-commission", { activeOnly: showInactive ? "false" : "true" }],
@@ -504,6 +506,7 @@ export default function ProviderCommissionPage() {
     onSuccess: (data: any) => {
       queryClient.invalidateQueries({ queryKey: ["/api/provider-commission"] });
       toast({ title: `Updated sub-agent % for ${data.providerName}` });
+      setEditingProviderPct(null);
     },
     onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
   });
@@ -745,41 +748,57 @@ export default function ProviderCommissionPage() {
                           {idx === 0 && (
                             <TableCell rowSpan={rowCount} className="font-medium align-top border-r border-border/50" data-testid={`text-provider-${firstEntry.id}`}>
                               <div className="text-sm font-medium">{firstEntry.providerName}</div>
-                              <div className="flex items-center gap-1 mt-1.5">
-                                <Percent className="w-3 h-3 text-muted-foreground shrink-0" />
-                                {canEdit ? (
-                                  <input
+                              {editingProviderPct === firstEntry.providerName ? (
+                                <div className="flex items-center gap-1 mt-1.5">
+                                  <Percent className="w-3 h-3 text-muted-foreground shrink-0" />
+                                  <Input
                                     type="number"
                                     step="0.01"
                                     min="0"
                                     max="100"
-                                    defaultValue={firstEntry.subAgentPercentage || subPct}
-                                    className="w-16 h-6 text-xs bg-transparent border-b border-dashed border-muted-foreground/40 focus:border-primary focus:outline-none text-center"
-                                    onBlur={e => {
-                                      const newVal = e.target.value.trim();
+                                    value={providerPctValue}
+                                    onChange={e => setProviderPctValue(e.target.value)}
+                                    className="h-6 w-16 text-xs px-1 text-center"
+                                    autoFocus
+                                    onBlur={() => {
+                                      const newVal = providerPctValue.trim();
                                       const currentVal = firstEntry.subAgentPercentage || subPct;
-                                      if (newVal !== currentVal) {
+                                      if (newVal && newVal !== currentVal) {
                                         providerPctMutation.mutate({
                                           providerName: firstEntry.providerName,
-                                          subAgentPercentage: newVal === subPct ? null : (newVal || null),
+                                          subAgentPercentage: newVal === subPct ? null : newVal,
                                         });
+                                      } else {
+                                        setEditingProviderPct(null);
                                       }
                                     }}
                                     onKeyDown={e => {
                                       if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+                                      if (e.key === "Escape") setEditingProviderPct(null);
                                     }}
                                     data-testid={`input-provider-pct-${firstEntry.id}`}
                                   />
-                                ) : (
-                                  <span className="text-xs text-muted-foreground">
-                                    {firstEntry.effectiveSubAgentPercentage || subPct}
-                                  </span>
-                                )}
-                                <span className="text-xs text-muted-foreground">%</span>
-                                {firstEntry.subAgentPercentage && (
-                                  <span className="text-[10px] text-emerald-600 dark:text-emerald-400">(custom)</span>
-                                )}
-                              </div>
+                                  <span className="text-xs text-muted-foreground">%</span>
+                                </div>
+                              ) : (
+                                <div
+                                  className={`flex items-center gap-1 mt-1 text-xs text-muted-foreground ${canEdit ? "cursor-pointer hover:text-foreground" : ""}`}
+                                  onClick={() => {
+                                    if (canEdit) {
+                                      setEditingProviderPct(firstEntry.providerName);
+                                      setProviderPctValue(firstEntry.subAgentPercentage || subPct);
+                                    }
+                                  }}
+                                  data-testid={`btn-edit-provider-pct-${firstEntry.id}`}
+                                >
+                                  <Percent className="w-3 h-3 shrink-0" />
+                                  <span>Sub-Agent: {firstEntry.effectiveSubAgentPercentage || subPct}%</span>
+                                  {firstEntry.subAgentPercentage && (
+                                    <span className="text-[10px] text-emerald-600 dark:text-emerald-400">(custom)</span>
+                                  )}
+                                  {canEdit && <Pencil className="w-3 h-3 ml-0.5 opacity-0 group-hover:opacity-100" />}
+                                </div>
+                              )}
                             </TableCell>
                           )}
                           <TableCell data-testid={`text-degree-${entry.id}`}>
