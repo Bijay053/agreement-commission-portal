@@ -37,6 +37,7 @@ import EmployeeDetailPage from "@/pages/employee-detail";
 import SignAgreementPage from "@/pages/sign-agreement";
 import SignOfferPage from "@/pages/sign-offer";
 import ProviderCommissionPage from "@/pages/provider-commission";
+import DropdownSettingsPage from "@/pages/dropdown-settings";
 import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 
@@ -123,6 +124,11 @@ function Router() {
       <Route path="/audit-logs">
         <AccessGuard permission="audit.view">
           <AuditLogsPage />
+        </AccessGuard>
+      </Route>
+      <Route path="/dropdown-settings">
+        <AccessGuard permission="security.role.manage">
+          <DropdownSettingsPage />
         </AccessGuard>
       </Route>
       <Route path="/account-security" component={AccountSecurityPage} />

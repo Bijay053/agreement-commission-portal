@@ -17,7 +17,7 @@ import {
 } from "@/components/ui/dialog";
 import { Switch } from "@/components/ui/switch";
 import { Plus, DollarSign, Percent, Trash2, Pencil } from "lucide-react";
-import { COMMISSION_MODES, COMMISSION_BASIS, PAY_EVENTS, STUDY_LEVELS } from "@shared/schema";
+import { useDropdownOptions } from "@/hooks/use-dropdown-options";
 
 const basisLabels: Record<string, string> = {
   per_subject: "Per Subject",
@@ -83,7 +83,11 @@ export default function CommissionTab({ agreementId }: { agreementId: number }) 
     onError: (err: any) => toast({ title: "Error", description: err.message, variant: "destructive" }),
   });
 
-  const baseStudyLevelOptions = STUDY_LEVELS.filter(l => l !== "Any").map(l => ({ value: l, label: l }));
+  const { options: dropdownOpts } = useDropdownOptions();
+  const baseStudyLevelOptions = (dropdownOpts.study_level || []).map((o: any) => ({ value: o.value, label: o.label }));
+  const basisOptions = (dropdownOpts.commission_basis || []).map((o: any) => ({ value: o.value, label: o.label }));
+  const payEventOptions = (dropdownOpts.pay_event || []).map((o: any) => ({ value: o.value, label: o.label }));
+  const modeOptions = (dropdownOpts.commission_mode || []).map((o: any) => ({ value: o.value, label: o.label }));
 
   const defaultForm = {
     label: "",
@@ -147,10 +151,7 @@ export default function CommissionTab({ agreementId }: { agreementId: number }) 
                     <SearchableSelect
                       value={form.commissionMode}
                       onValueChange={v => setForm({...form, commissionMode: v})}
-                      options={[
-                        { value: "percentage", label: "Percentage" },
-                        { value: "flat", label: "Flat Amount" },
-                      ]}
+                      options={modeOptions.length > 0 ? modeOptions : [{ value: "percentage", label: "Percentage" }, { value: "flat", label: "Flat Amount" }]}
                       placeholder="Select mode"
                       searchPlaceholder="Search..."
                     />
@@ -179,7 +180,7 @@ export default function CommissionTab({ agreementId }: { agreementId: number }) 
                     <SearchableSelect
                       value={form.basis}
                       onValueChange={v => setForm({...form, basis: v})}
-                      options={COMMISSION_BASIS.map(b => ({ value: b, label: basisLabels[b] }))}
+                      options={basisOptions.length > 0 ? basisOptions : [{ value: "per_subject", label: "Per Subject" }]}
                       placeholder="Select basis"
                       searchPlaceholder="Search..."
                     />
@@ -189,7 +190,7 @@ export default function CommissionTab({ agreementId }: { agreementId: number }) 
                     <SearchableSelect
                       value={form.payEvent}
                       onValueChange={v => setForm({...form, payEvent: v})}
-                      options={PAY_EVENTS.map(p => ({ value: p, label: p.charAt(0).toUpperCase() + p.slice(1) }))}
+                      options={payEventOptions.length > 0 ? payEventOptions : [{ value: "enrolment", label: "Enrolment" }]}
                       placeholder="Select pay event"
                       searchPlaceholder="Search..."
                     />
@@ -339,10 +340,7 @@ export default function CommissionTab({ agreementId }: { agreementId: number }) 
                   <SearchableSelect
                     value={editingRule.commissionMode}
                     onValueChange={v => setEditingRule({...editingRule, commissionMode: v})}
-                    options={[
-                      { value: "percentage", label: "Percentage" },
-                      { value: "flat", label: "Flat Amount" },
-                    ]}
+                    options={modeOptions.length > 0 ? modeOptions : [{ value: "percentage", label: "Percentage" }, { value: "flat", label: "Flat Amount" }]}
                     placeholder="Select mode"
                     searchPlaceholder="Search..."
                   />
@@ -371,7 +369,7 @@ export default function CommissionTab({ agreementId }: { agreementId: number }) 
                   <SearchableSelect
                     value={editingRule.basis}
                     onValueChange={v => setEditingRule({...editingRule, basis: v})}
-                    options={COMMISSION_BASIS.map(b => ({ value: b, label: basisLabels[b] }))}
+                    options={basisOptions.length > 0 ? basisOptions : [{ value: "per_subject", label: "Per Subject" }]}
                     placeholder="Select basis"
                     searchPlaceholder="Search..."
                   />
@@ -381,7 +379,7 @@ export default function CommissionTab({ agreementId }: { agreementId: number }) 
                   <SearchableSelect
                     value={editingRule.payEvent}
                     onValueChange={v => setEditingRule({...editingRule, payEvent: v})}
-                    options={PAY_EVENTS.map(p => ({ value: p, label: p.charAt(0).toUpperCase() + p.slice(1) }))}
+                    options={payEventOptions.length > 0 ? payEventOptions : [{ value: "enrolment", label: "Enrolment" }]}
                     placeholder="Select pay event"
                     searchPlaceholder="Search..."
                   />

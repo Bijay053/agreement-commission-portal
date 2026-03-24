@@ -11,7 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
   LayoutDashboard, FileText, Users, Shield, LogOut, User, Building2,
-  ChevronDown, ChevronRight, Circle, KeyRound, Contact, DollarSign, Calculator, ShieldCheck, ArrowDownUp, ClipboardList, UserCheck, Share2,
+  ChevronDown, ChevronRight, Circle, KeyRound, Contact, DollarSign, Calculator, ShieldCheck, ArrowDownUp, ClipboardList, UserCheck, Share2, SlidersHorizontal,
 } from "lucide-react";
 
 const STATUS_ITEMS = [
@@ -56,6 +56,7 @@ export function AppSidebar() {
   const adminNav = [
     { title: "Users", url: "/users", icon: Users, show: hasPermission("security.user.manage") },
     { title: "Roles", url: "/roles", icon: KeyRound, show: hasPermission("security.role.manage") },
+    { title: "Dropdown Settings", url: "/dropdown-settings", icon: SlidersHorizontal, show: hasPermission("security.role.manage") },
     { title: "Audit Logs", url: "/audit-logs", icon: Shield, show: hasPermission("audit.view") },
   ];
 
