@@ -86,13 +86,13 @@ export function AppSidebar() {
     : "U";
 
   return (
-    <Sidebar>
+    <Sidebar collapsible="icon">
       <SidebarHeader className="p-4 border-b border-sidebar-border">
         <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-lg bg-primary flex items-center justify-center shadow-sm">
+          <div className="w-9 h-9 rounded-lg bg-primary flex items-center justify-center shadow-sm shrink-0">
             <span className="text-sm font-bold text-primary-foreground">SIC</span>
           </div>
-          <div>
+          <div className="group-data-[collapsible=icon]:hidden">
             <p className="text-sm font-semibold text-sidebar-foreground leading-tight">Agreement Portal</p>
             <p className="text-[10px] text-muted-foreground leading-tight">Study Info Centre</p>
           </div>
@@ -267,8 +267,17 @@ export function AppSidebar() {
               </a>
             </SidebarMenuButton>
           </SidebarMenuItem>
+          <SidebarMenuItem>
+            <SidebarMenuButton
+              data-testid="button-logout"
+              onClick={logout}
+            >
+              <LogOut className="w-4 h-4" />
+              <span>Sign Out</span>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
         </SidebarMenu>
-        <div className="flex items-center gap-2.5 px-1">
+        <div className="flex items-center gap-2.5 px-1 group-data-[collapsible=icon]:hidden">
           <div className="w-8 h-8 rounded-full bg-primary/15 flex items-center justify-center shrink-0 ring-1 ring-primary/20">
             <span className="text-[10px] font-bold text-primary">{userInitials}</span>
           </div>
@@ -276,16 +285,6 @@ export function AppSidebar() {
             <p className="text-xs font-medium truncate">{user?.user?.fullName}</p>
             <p className="text-[10px] text-muted-foreground truncate">{user?.roles?.[0]?.name || "User"}</p>
           </div>
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={logout}
-            className="h-8 w-8 hover:text-red-500 transition-colors"
-            data-testid="button-logout"
-            aria-label="Sign out"
-          >
-            <LogOut className="w-4 h-4" />
-          </Button>
         </div>
       </SidebarFooter>
     </Sidebar>
