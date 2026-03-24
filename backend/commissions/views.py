@@ -67,8 +67,11 @@ class AllCommissionRulesView(APIView):
                 d['agreementTitle'] = agr.title
                 d['agreementStatus'] = agr.status
                 d['providerName'] = prov.name
-                terr_cids = territory_raw.get(agr.id, [])
-                d['territoryCountries'] = [country_names.get(cid, '') for cid in terr_cids if country_names.get(cid)]
+                if agr.territory_type == 'global':
+                    d['territoryCountries'] = ['Global']
+                else:
+                    terr_cids = territory_raw.get(agr.id, [])
+                    d['territoryCountries'] = [country_names.get(cid, '') for cid in terr_cids if country_names.get(cid)]
                 result.append(d)
             return Response(result)
         except Exception as e:
