@@ -2,8 +2,8 @@ from datetime import date, timedelta
 
 from celery import shared_task
 from django.conf import settings
-from django.core.mail import send_mail
 from django.utils import timezone
+from core.email_utils import send_mail_with_bcc
 
 from agreements.models import Agreement
 from notifications.models import AgreementNotification
@@ -15,13 +15,12 @@ from providers.models import Provider
 def send_notification_email_task(self, subject, plain_text, html, recipients):
     try:
         from_email = f'"{settings.FROM_NAME}" <{settings.DEFAULT_FROM_EMAIL}>'
-        send_mail(
+        send_mail_with_bcc(
             subject,
             plain_text,
             from_email,
             recipients,
             html_message=html,
-            fail_silently=False,
         )
     except Exception as exc:
         raise self.retry(exc=exc)

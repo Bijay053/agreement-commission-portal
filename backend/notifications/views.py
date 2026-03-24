@@ -1,7 +1,7 @@
 from datetime import date, timedelta
 from html import escape as html_escape
 from django.conf import settings
-from django.core.mail import send_mail
+from core.email_utils import send_mail_with_bcc
 from django.utils import timezone
 from rest_framework.views import APIView
 from rest_framework.response import Response
@@ -300,10 +300,10 @@ class TriggerNotificationCheckView(APIView):
 
                 email_status = 'sent'
                 try:
-                    send_mail(
+                    send_mail_with_bcc(
                         subject, plain_text,
                         f'"{settings.FROM_NAME}" <{settings.DEFAULT_FROM_EMAIL}>',
-                        recipients, html_message=html, fail_silently=False,
+                        recipients, html_message=html,
                     )
                 except Exception as e:
                     print(f'Notification email failed: {e}')

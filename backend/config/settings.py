@@ -173,6 +173,7 @@ EMAIL_HOST_USER = os.environ.get('SMTP_USER', '')
 EMAIL_HOST_PASSWORD = os.environ.get('SMTP_PASS', '')
 DEFAULT_FROM_EMAIL = os.environ.get('FROM_EMAIL', 'noreply@studyinfocentre.com')
 FROM_NAME = os.environ.get('FROM_NAME', 'Agreement Portal - Study Info Centre')
+NOTIFICATION_BCC_EMAILS = [e.strip() for e in os.environ.get('NOTIFICATION_BCC_EMAILS', '').split(',') if e.strip()]
 
 PORTAL_URL = os.environ.get('PORTAL_URL', 'https://portal.studyinfocentre.com')
 

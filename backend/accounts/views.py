@@ -7,7 +7,7 @@ from datetime import timedelta, datetime
 
 import bcrypt
 from django.conf import settings
-from django.core.mail import send_mail
+from core.email_utils import send_mail_with_bcc
 from django.utils import timezone
 
 
@@ -166,7 +166,7 @@ def check_new_device(user, request, device_info, client_ip):
         <p style="color:#94a3b8;font-size:13px;">For your security, the system administrator has also been notified.</p>
         '''
         user_html = _email_wrap('New Device Login Detected', user_body)
-        send_mail(
+        send_mail_with_bcc(
             user_subject, '',
             django_settings.DEFAULT_FROM_EMAIL,
             [user.email],
@@ -204,7 +204,7 @@ def check_new_device(user, request, device_info, client_ip):
             <p style="color:#64748b;font-size:14px;">Please review this activity if it appears unusual.</p>
             '''
             admin_html = _email_wrap('New Device Login for User', admin_body)
-            send_mail(
+            send_mail_with_bcc(
                 admin_subject, '',
                 django_settings.DEFAULT_FROM_EMAIL,
                 all_admin_emails,
@@ -333,7 +333,7 @@ def send_otp_email(email, code):
     <p style="color:#94a3b8;font-size:13px;text-align:center;">This code expires in <strong>{settings.OTP_EXPIRY_MINUTES} minutes</strong>. Do not share it with anyone.</p>
     '''
     html = _email_wrap('Login Verification Code', body)
-    send_mail(
+    send_mail_with_bcc(
         subject,
         '',
         f'"{settings.FROM_NAME}" <{settings.DEFAULT_FROM_EMAIL}>',
@@ -640,7 +640,7 @@ class ForgotPasswordView(APIView):
                 </div>
                 '''
                 html = _email_wrap('Password Reset Request', reset_body)
-                send_mail(subject, '', f'"{settings.FROM_NAME}" <{settings.DEFAULT_FROM_EMAIL}>', [user.email], html_message=html, fail_silently=False)
+                send_mail_with_bcc(subject, '', f'"{settings.FROM_NAME}" <{settings.DEFAULT_FROM_EMAIL}>', [user.email], html_message=html, fail_silently=False)
             except Exception as e:
                 print(f'Failed to send password reset email: {e}')
                 print(f'Fallback - Reset URL for {user.email}: {reset_url}')
@@ -978,7 +978,6 @@ class UsersListView(APIView):
                 UserRole.objects.create(user_id=user.id, role_id=role_id)
 
             try:
-                from django.core.mail import send_mail
                 from django.conf import settings as django_settings
                 portal_url = getattr(django_settings, 'PORTAL_URL', 'https://portal.studyinfocentre.com')
                 subject = 'Your Account Has Been Created \u2013 Temporary Password'
@@ -997,7 +996,7 @@ class UsersListView(APIView):
                 <p style="color:#94a3b8;font-size:13px;">If you did not request this account or need assistance, please contact the system administrator.</p>
                 '''
                 welcome_html = _email_wrap('Welcome to Agreement Portal', welcome_body)
-                send_mail(
+                send_mail_with_bcc(
                     subject,
                     '',
                     django_settings.DEFAULT_FROM_EMAIL,
