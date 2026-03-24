@@ -18,6 +18,12 @@ def rule_to_dict(r):
         'effectiveFrom': str(r.effective_from) if r.effective_from else None,
         'effectiveTo': str(r.effective_to) if r.effective_to else None,
         'priority': r.priority, 'isActive': r.is_active,
+        'followupStudyLevel': r.followup_study_level,
+        'followupCommissionMode': r.followup_commission_mode,
+        'followupPercentageValue': str(r.followup_percentage_value) if r.followup_percentage_value is not None else None,
+        'followupFlatAmount': str(r.followup_flat_amount) if r.followup_flat_amount is not None else None,
+        'followupCurrency': r.followup_currency,
+        'followupConditionsText': r.followup_conditions_text,
         'createdAt': r.created_at.isoformat() if r.created_at else None,
         'updatedAt': r.updated_at.isoformat() if r.updated_at else None,
     }
@@ -107,6 +113,12 @@ class AgreementCommissionRulesView(APIView):
                 effective_to=request.data.get('effectiveTo') or None,
                 priority=request.data.get('priority', 100),
                 is_active=request.data.get('isActive', True),
+                followup_study_level=request.data.get('followupStudyLevel') or None,
+                followup_commission_mode=request.data.get('followupCommissionMode') or None,
+                followup_percentage_value=request.data.get('followupPercentageValue') or None,
+                followup_flat_amount=request.data.get('followupFlatAmount') or None,
+                followup_currency=request.data.get('followupCurrency') or None,
+                followup_conditions_text=request.data.get('followupConditionsText') or None,
             )
             return Response(rule_to_dict(r))
         except Exception as e:
@@ -127,6 +139,9 @@ class CommissionRuleDetailView(APIView):
                 'basis': 'basis', 'payEvent': 'pay_event', 'subjectRules': 'subject_rules',
                 'conditionsText': 'conditions_text', 'effectiveFrom': 'effective_from',
                 'effectiveTo': 'effective_to', 'priority': 'priority', 'isActive': 'is_active',
+                'followupStudyLevel': 'followup_study_level', 'followupCommissionMode': 'followup_commission_mode',
+                'followupPercentageValue': 'followup_percentage_value', 'followupFlatAmount': 'followup_flat_amount',
+                'followupCurrency': 'followup_currency', 'followupConditionsText': 'followup_conditions_text',
             }
             for js_field, db_field in field_map.items():
                 if js_field in request.data:

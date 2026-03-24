@@ -16,7 +16,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger,
 } from "@/components/ui/dialog";
 import { Switch } from "@/components/ui/switch";
-import { Plus, DollarSign, Percent, Trash2, Pencil } from "lucide-react";
+import { Plus, DollarSign, Percent, Trash2, Pencil, ChevronDown, ChevronRight, ArrowRight } from "lucide-react";
 import { useDropdownOptions } from "@/hooks/use-dropdown-options";
 
 const basisLabels: Record<string, string> = {
@@ -26,6 +26,126 @@ const basisLabels: Record<string, string> = {
   full_course: "Full Course",
   per_intake: "Per Intake",
 };
+
+function FollowUpSection({ prefix, state, setState, studyLevelOptions, modeOptions }: {
+  prefix: string;
+  state: any;
+  setState: (s: any) => void;
+  studyLevelOptions: { value: string; label: string }[];
+  modeOptions: { value: string; label: string }[];
+}) {
+  const hasFollowup = state[`${prefix}followupStudyLevel`] || state[`${prefix}followupCommissionMode`];
+  const [expanded, setExpanded] = useState(!!hasFollowup);
+
+  return (
+    <div className="border rounded-lg">
+      <button
+        type="button"
+        className="w-full flex items-center gap-2 px-3 py-2.5 text-sm font-medium text-left hover:bg-muted/50 transition-colors"
+        onClick={() => setExpanded(!expanded)}
+        data-testid={`button-toggle-followup${prefix ? `-${prefix}` : ""}`}
+      >
+        {expanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+        <ArrowRight className="w-3.5 h-3.5 text-muted-foreground" />
+        Follow-up Commission
+        {hasFollowup && <Badge variant="secondary" className="ml-auto text-[10px]">Configured</Badge>}
+      </button>
+      {expanded && (
+        <div className="px-3 pb-3 space-y-3 border-t pt-3">
+          <p className="text-xs text-muted-foreground">If the student progresses to a new course (e.g., Diploma → Bachelor), specify the follow-up commission.</p>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label className="text-xs">Follow-up Study Level</Label>
+              <SearchableSelect
+                value={state[`${prefix}followupStudyLevel`] || ""}
+                onValueChange={v => setState({ ...state, [`${prefix}followupStudyLevel`]: v })}
+                options={studyLevelOptions}
+                placeholder="Select level"
+                searchPlaceholder="Search..."
+              />
+            </div>
+            <div>
+              <Label className="text-xs">Follow-up Mode</Label>
+              <SearchableSelect
+                value={state[`${prefix}followupCommissionMode`] || "percentage"}
+                onValueChange={v => setState({ ...state, [`${prefix}followupCommissionMode`]: v })}
+                options={modeOptions.length > 0 ? modeOptions : [{ value: "percentage", label: "Percentage" }, { value: "flat", label: "Flat Amount" }]}
+                placeholder="Select mode"
+                searchPlaceholder="Search..."
+              />
+            </div>
+          </div>
+          {(state[`${prefix}followupCommissionMode`] || "percentage") === "percentage" ? (
+            <div>
+              <Label className="text-xs">Follow-up Percentage (%)</Label>
+              <Input
+                type="number"
+                step="0.001"
+                value={state[`${prefix}followupPercentageValue`] || ""}
+                onChange={e => setState({ ...state, [`${prefix}followupPercentageValue`]: e.target.value })}
+                placeholder="10.000"
+                data-testid="input-followup-percentage"
+              />
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label className="text-xs">Follow-up Amount</Label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  value={state[`${prefix}followupFlatAmount`] || ""}
+                  onChange={e => setState({ ...state, [`${prefix}followupFlatAmount`]: e.target.value })}
+                  placeholder="2500.00"
+                  data-testid="input-followup-flat-amount"
+                />
+              </div>
+              <div>
+                <Label className="text-xs">Follow-up Currency</Label>
+                <Input
+                  value={state[`${prefix}followupCurrency`] || "AUD"}
+                  onChange={e => setState({ ...state, [`${prefix}followupCurrency`]: e.target.value })}
+                  placeholder="AUD"
+                  data-testid="input-followup-currency"
+                />
+              </div>
+            </div>
+          )}
+          <div>
+            <Label className="text-xs">Follow-up Conditions</Label>
+            <Textarea
+              value={state[`${prefix}followupConditionsText`] || ""}
+              onChange={e => setState({ ...state, [`${prefix}followupConditionsText`]: e.target.value })}
+              placeholder="e.g., Applicable for 1st year only..."
+              className="text-sm"
+              data-testid="input-followup-conditions"
+            />
+          </div>
+          {hasFollowup && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="text-destructive text-xs"
+              onClick={() => setState({
+                ...state,
+                [`${prefix}followupStudyLevel`]: "",
+                [`${prefix}followupCommissionMode`]: "",
+                [`${prefix}followupPercentageValue`]: "",
+                [`${prefix}followupFlatAmount`]: "",
+                [`${prefix}followupCurrency`]: "",
+                [`${prefix}followupConditionsText`]: "",
+              })}
+              data-testid="button-clear-followup"
+            >
+              Clear Follow-up
+            </Button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function CommissionTab({ agreementId }: { agreementId: number }) {
   const { hasPermission } = useAuth();
@@ -89,7 +209,7 @@ export default function CommissionTab({ agreementId }: { agreementId: number }) 
   const payEventOptions = (dropdownOpts.pay_event || []).map((o: any) => ({ value: o.value, label: o.label }));
   const modeOptions = (dropdownOpts.commission_mode || []).map((o: any) => ({ value: o.value, label: o.label }));
 
-  const defaultForm = {
+  const defaultForm: Record<string, any> = {
     label: "",
     studyLevel: [] as string[],
     commissionMode: "percentage",
@@ -99,18 +219,40 @@ export default function CommissionTab({ agreementId }: { agreementId: number }) 
     basis: "per_subject",
     payEvent: "enrolment",
     conditionsText: "",
+    followupStudyLevel: "",
+    followupCommissionMode: "percentage",
+    followupPercentageValue: "",
+    followupFlatAmount: "",
+    followupCurrency: "AUD",
+    followupConditionsText: "",
   };
   const [form, setForm] = useState(defaultForm);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    createMutation.mutate({
-      ...form,
+    const payload: any = {
+      label: form.label,
       studyLevel: form.studyLevel.length === 0 ? "Any" : form.studyLevel.join(", "),
+      commissionMode: form.commissionMode,
       percentageValue: form.commissionMode === "percentage" ? form.percentageValue : null,
       flatAmount: form.commissionMode === "flat" ? form.flatAmount : null,
       currency: form.commissionMode === "flat" ? form.currency : null,
-    });
+      basis: form.basis,
+      payEvent: form.payEvent,
+      conditionsText: form.conditionsText,
+    };
+    if (form.followupStudyLevel) {
+      payload.followupStudyLevel = form.followupStudyLevel;
+      payload.followupCommissionMode = form.followupCommissionMode || "percentage";
+      if ((form.followupCommissionMode || "percentage") === "percentage") {
+        payload.followupPercentageValue = form.followupPercentageValue || null;
+      } else {
+        payload.followupFlatAmount = form.followupFlatAmount || null;
+        payload.followupCurrency = form.followupCurrency || "AUD";
+      }
+      payload.followupConditionsText = form.followupConditionsText || null;
+    }
+    createMutation.mutate(payload);
   };
 
   if (isLoading) return <div className="space-y-3">{Array.from({length: 2}).map((_,i) => <Skeleton key={i} className="h-24" />)}</div>;
@@ -120,13 +262,13 @@ export default function CommissionTab({ agreementId }: { agreementId: number }) 
       <div className="flex items-center justify-between gap-2">
         <h3 className="font-medium">Commission Rules</h3>
         {canCreate && (
-          <Dialog open={showDialog} onOpenChange={(open) => { if (open) setForm(defaultForm); setShowDialog(open); }}>
+          <Dialog open={showDialog} onOpenChange={(open) => { if (open) setForm({...defaultForm}); setShowDialog(open); }}>
             <DialogTrigger asChild>
               <Button size="sm" data-testid="button-add-commission">
                 <Plus className="w-4 h-4 mr-1" /> Add Rule
               </Button>
             </DialogTrigger>
-            <DialogContent className="max-w-lg">
+            <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
               <DialogHeader>
                 <DialogTitle>Add Commission Rule</DialogTitle>
               </DialogHeader>
@@ -200,6 +342,13 @@ export default function CommissionTab({ agreementId }: { agreementId: number }) 
                   <Label>Conditions</Label>
                   <Textarea value={form.conditionsText} onChange={e => setForm({...form, conditionsText: e.target.value})} placeholder="Clawback conditions, withdrawal rules..." data-testid="input-conditions" />
                 </div>
+                <FollowUpSection
+                  prefix=""
+                  state={form}
+                  setState={setForm}
+                  studyLevelOptions={baseStudyLevelOptions}
+                  modeOptions={modeOptions}
+                />
                 <Button type="submit" className="w-full" disabled={createMutation.isPending} data-testid="button-submit-commission">
                   {createMutation.isPending ? "Adding..." : "Add Rule"}
                 </Button>
@@ -239,6 +388,24 @@ export default function CommissionTab({ agreementId }: { agreementId: number }) 
                     {rule.conditionsText && (
                       <p className="text-xs text-muted-foreground mt-2 line-clamp-2">{rule.conditionsText}</p>
                     )}
+                    {rule.followupStudyLevel && (
+                      <div className="mt-2 pl-3 border-l-2 border-blue-300 dark:border-blue-700">
+                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                          <ArrowRight className="w-3 h-3 text-blue-500" />
+                          <span className="font-medium text-foreground">Follow-up:</span>
+                          <Badge variant="outline" className="text-[10px] py-0">{rule.followupStudyLevel}</Badge>
+                          <span>
+                            {rule.followupCommissionMode === "percentage"
+                              ? `${parseFloat(rule.followupPercentageValue || 0).toFixed(1)}%`
+                              : `${rule.followupCurrency || "AUD"} ${parseFloat(rule.followupFlatAmount || 0).toLocaleString()}`
+                            }
+                          </span>
+                        </div>
+                        {rule.followupConditionsText && (
+                          <p className="text-[11px] text-muted-foreground mt-0.5 ml-5">{rule.followupConditionsText}</p>
+                        )}
+                      </div>
+                    )}
                   </div>
                   <div className="flex items-center gap-1">
                     {canEdit && (
@@ -260,6 +427,12 @@ export default function CommissionTab({ agreementId }: { agreementId: number }) 
                             payEvent: rule.payEvent || "enrolment",
                             conditionsText: rule.conditionsText || "",
                             isActive: rule.isActive !== false,
+                            followupStudyLevel: rule.followupStudyLevel || "",
+                            followupCommissionMode: rule.followupCommissionMode || "percentage",
+                            followupPercentageValue: rule.followupPercentageValue || "",
+                            followupFlatAmount: rule.followupFlatAmount || "",
+                            followupCurrency: rule.followupCurrency || "AUD",
+                            followupConditionsText: rule.followupConditionsText || "",
                           });
                         }}
                         data-testid={`button-edit-commission-${rule.id}`}
@@ -293,24 +466,37 @@ export default function CommissionTab({ agreementId }: { agreementId: number }) 
       )}
 
       <Dialog open={!!editingRule} onOpenChange={(open) => { if (!open) setEditingRule(null); }}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Edit Commission Rule</DialogTitle>
           </DialogHeader>
           {editingRule && (
             <form onSubmit={(e) => {
               e.preventDefault();
-              const { id, ...data } = editingRule;
-              editMutation.mutate({
-                id,
-                data: {
-                  ...data,
-                  studyLevel: data.studyLevel.length === 0 ? "Any" : data.studyLevel.join(", "),
-                  percentageValue: data.commissionMode === "percentage" ? data.percentageValue : null,
-                  flatAmount: data.commissionMode === "flat" ? data.flatAmount : null,
-                  currency: data.commissionMode === "flat" ? data.currency : null,
-                },
-              });
+              const { id, studyLevel, ...rest } = editingRule;
+              const payload: any = {
+                ...rest,
+                studyLevel: studyLevel.length === 0 ? "Any" : studyLevel.join(", "),
+                percentageValue: rest.commissionMode === "percentage" ? rest.percentageValue : null,
+                flatAmount: rest.commissionMode === "flat" ? rest.flatAmount : null,
+                currency: rest.commissionMode === "flat" ? rest.currency : null,
+              };
+              if (!payload.followupStudyLevel) {
+                payload.followupStudyLevel = null;
+                payload.followupCommissionMode = null;
+                payload.followupPercentageValue = null;
+                payload.followupFlatAmount = null;
+                payload.followupCurrency = null;
+                payload.followupConditionsText = null;
+              } else {
+                if ((payload.followupCommissionMode || "percentage") === "percentage") {
+                  payload.followupFlatAmount = null;
+                  payload.followupCurrency = null;
+                } else {
+                  payload.followupPercentageValue = null;
+                }
+              }
+              editMutation.mutate({ id, data: payload });
             }} className="space-y-4">
               <div>
                 <Label>Label</Label>
@@ -389,6 +575,13 @@ export default function CommissionTab({ agreementId }: { agreementId: number }) 
                 <Label>Conditions</Label>
                 <Textarea value={editingRule.conditionsText} onChange={e => setEditingRule({...editingRule, conditionsText: e.target.value})} placeholder="Clawback conditions, withdrawal rules..." data-testid="input-edit-conditions" />
               </div>
+              <FollowUpSection
+                prefix=""
+                state={editingRule}
+                setState={setEditingRule}
+                studyLevelOptions={baseStudyLevelOptions}
+                modeOptions={modeOptions}
+              />
               <div className="flex items-center gap-2">
                 <Switch
                   checked={editingRule.isActive}
