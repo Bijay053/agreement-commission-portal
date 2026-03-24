@@ -268,15 +268,15 @@ export default function CommissionTablePage() {
                 <Table className="table-fixed w-full">
                   <TableHeader>
                     <TableRow>
-                      <TableHead className="w-[15%]">Provider</TableHead>
-                      <TableHead className="w-[18%]">Agreement</TableHead>
-                      <TableHead className="w-[10%]">Status</TableHead>
+                      <TableHead className="w-[14%]">Provider</TableHead>
+                      <TableHead className="w-[16%]">Agreement</TableHead>
+                      <TableHead className="w-[14%]">Label</TableHead>
                       <TableHead className="w-[10%]">Territory</TableHead>
                       <TableHead className="w-[8%]">Level</TableHead>
-                      <TableHead className="w-[10%]">Type</TableHead>
-                      <TableHead className="w-[10%]">Value</TableHead>
+                      <TableHead className="w-[9%]">Type</TableHead>
+                      <TableHead className="w-[9%]">Value</TableHead>
                       <TableHead className="w-[9%]">Basis</TableHead>
-                      <TableHead className="w-[6%]">Active</TableHead>
+                      <TableHead className="w-[7%]">Active</TableHead>
                       <TableHead className="w-[4%]"></TableHead>
                     </TableRow>
                   </TableHeader>
@@ -321,9 +321,6 @@ export default function CommissionTablePage() {
                                   </button>
                                 </TableCell>
                                 <TableCell rowSpan={rowCount} className="align-top border-r border-border/50">
-                                  {statusBadge(firstRule.agreementStatus)}
-                                </TableCell>
-                                <TableCell rowSpan={rowCount} className="align-top border-r border-border/50">
                                   <div className="text-xs truncate">
                                     {firstRule.territoryCountries?.length > 0
                                       ? firstRule.territoryCountries.length > 2
@@ -340,6 +337,9 @@ export default function CommissionTablePage() {
                                 </TableCell>
                               </>
                             )}
+                            <TableCell>
+                              <span className="text-sm truncate block">{rule.label || "—"}</span>
+                            </TableCell>
                             <TableCell>
                               <span className="text-sm">{rule.studyLevel || "Any"}</span>
                             </TableCell>

@@ -45,7 +45,7 @@ class AllCommissionRulesView(APIView):
                     continue
                 if agreement_status and agr.status != agreement_status:
                     continue
-                if search and search.lower() not in prov.name.lower() and search.lower() not in agr.agreement_code.lower():
+                if search and search.lower() not in prov.name.lower() and search.lower() not in agr.agreement_code.lower() and search.lower() not in (r.label or '').lower():
                     continue
                 d = rule_to_dict(r)
                 d['agreementCode'] = agr.agreement_code

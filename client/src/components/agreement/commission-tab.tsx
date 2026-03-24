@@ -15,7 +15,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger,
 } from "@/components/ui/dialog";
 import { Switch } from "@/components/ui/switch";
-import { Plus, DollarSign, Percent, Trash2 } from "lucide-react";
+import { Plus, DollarSign, Percent, Trash2, Pencil } from "lucide-react";
 import { COMMISSION_MODES, COMMISSION_BASIS, PAY_EVENTS, STUDY_LEVELS } from "@shared/schema";
 
 const basisLabels: Record<string, string> = {
@@ -34,6 +34,7 @@ export default function CommissionTab({ agreementId }: { agreementId: number }) 
   const canEdit = hasPermission("commission.edit");
   const canDelete = hasPermission("commission.delete");
   const [showDialog, setShowDialog] = useState(false);
+  const [editingRule, setEditingRule] = useState<any>(null);
 
   const { data: rules, isLoading } = useQuery<any[]>({
     queryKey: ["/api/agreements", agreementId, "commission-rules"],
@@ -65,6 +66,20 @@ export default function CommissionTab({ agreementId }: { agreementId: number }) 
       queryClient.invalidateQueries({ queryKey: ["/api/agreements", agreementId, "commission-rules"] });
       toast({ title: "Commission rule deleted" });
     },
+  });
+
+  const editMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: number; data: any }) => {
+      const res = await apiRequest("PATCH", `/api/commission-rules/${id}`, data);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/agreements", agreementId, "commission-rules"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/commission-rules"] });
+      setEditingRule(null);
+      toast({ title: "Commission rule updated" });
+    },
+    onError: (err: any) => toast({ title: "Error", description: err.message, variant: "destructive" }),
   });
 
   const defaultForm = {
@@ -220,16 +235,42 @@ export default function CommissionTab({ agreementId }: { agreementId: number }) 
                       <p className="text-xs text-muted-foreground mt-2 line-clamp-2">{rule.conditionsText}</p>
                     )}
                   </div>
-                  {canDelete && (
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => deleteMutation.mutate(rule.id)}
-                      data-testid={`button-delete-commission-${rule.id}`}
-                    >
-                      <Trash2 className="w-4 h-4 text-destructive" />
-                    </Button>
-                  )}
+                  <div className="flex items-center gap-1">
+                    {canEdit && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => {
+                          setEditingRule({
+                            id: rule.id,
+                            label: rule.label || "",
+                            studyLevel: rule.studyLevel || "Any",
+                            commissionMode: rule.commissionMode || "percentage",
+                            percentageValue: rule.percentageValue || "",
+                            flatAmount: rule.flatAmount || "",
+                            currency: rule.currency || "AUD",
+                            basis: rule.basis || "per_subject",
+                            payEvent: rule.payEvent || "enrolment",
+                            conditionsText: rule.conditionsText || "",
+                            isActive: rule.isActive !== false,
+                          });
+                        }}
+                        data-testid={`button-edit-commission-${rule.id}`}
+                      >
+                        <Pencil className="w-4 h-4" />
+                      </Button>
+                    )}
+                    {canDelete && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => deleteMutation.mutate(rule.id)}
+                        data-testid={`button-delete-commission-${rule.id}`}
+                      >
+                        <Trash2 className="w-4 h-4 text-destructive" />
+                      </Button>
+                    )}
+                  </div>
                 </div>
               </CardContent>
             </Card>
@@ -243,6 +284,113 @@ export default function CommissionTab({ agreementId }: { agreementId: number }) 
           </CardContent>
         </Card>
       )}
+
+      <Dialog open={!!editingRule} onOpenChange={(open) => { if (!open) setEditingRule(null); }}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Edit Commission Rule</DialogTitle>
+          </DialogHeader>
+          {editingRule && (
+            <form onSubmit={(e) => {
+              e.preventDefault();
+              const { id, ...data } = editingRule;
+              editMutation.mutate({
+                id,
+                data: {
+                  ...data,
+                  percentageValue: data.commissionMode === "percentage" ? data.percentageValue : null,
+                  flatAmount: data.commissionMode === "flat" ? data.flatAmount : null,
+                  currency: data.commissionMode === "flat" ? data.currency : null,
+                },
+              });
+            }} className="space-y-4">
+              <div>
+                <Label>Label</Label>
+                <Input value={editingRule.label} onChange={e => setEditingRule({...editingRule, label: e.target.value})} placeholder="e.g., Standard UG Commission" required data-testid="input-edit-commission-label" />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label>Study Level</Label>
+                  <SearchableSelect
+                    value={editingRule.studyLevel}
+                    onValueChange={v => setEditingRule({...editingRule, studyLevel: v})}
+                    options={STUDY_LEVELS.map(l => ({ value: l, label: l }))}
+                    placeholder="Select level"
+                    searchPlaceholder="Search levels..."
+                  />
+                </div>
+                <div>
+                  <Label>Mode</Label>
+                  <SearchableSelect
+                    value={editingRule.commissionMode}
+                    onValueChange={v => setEditingRule({...editingRule, commissionMode: v})}
+                    options={[
+                      { value: "percentage", label: "Percentage" },
+                      { value: "flat", label: "Flat Amount" },
+                    ]}
+                    placeholder="Select mode"
+                    searchPlaceholder="Search..."
+                  />
+                </div>
+              </div>
+              {editingRule.commissionMode === "percentage" ? (
+                <div>
+                  <Label>Percentage (%)</Label>
+                  <Input type="number" step="0.001" value={editingRule.percentageValue} onChange={e => setEditingRule({...editingRule, percentageValue: e.target.value})} placeholder="15.000" required data-testid="input-edit-percentage" />
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <Label>Amount</Label>
+                    <Input type="number" step="0.01" value={editingRule.flatAmount} onChange={e => setEditingRule({...editingRule, flatAmount: e.target.value})} placeholder="2500.00" required data-testid="input-edit-flat-amount" />
+                  </div>
+                  <div>
+                    <Label>Currency</Label>
+                    <Input value={editingRule.currency} onChange={e => setEditingRule({...editingRule, currency: e.target.value})} placeholder="AUD" data-testid="input-edit-currency" />
+                  </div>
+                </div>
+              )}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label>Basis</Label>
+                  <SearchableSelect
+                    value={editingRule.basis}
+                    onValueChange={v => setEditingRule({...editingRule, basis: v})}
+                    options={COMMISSION_BASIS.map(b => ({ value: b, label: basisLabels[b] }))}
+                    placeholder="Select basis"
+                    searchPlaceholder="Search..."
+                  />
+                </div>
+                <div>
+                  <Label>Pay Event</Label>
+                  <SearchableSelect
+                    value={editingRule.payEvent}
+                    onValueChange={v => setEditingRule({...editingRule, payEvent: v})}
+                    options={PAY_EVENTS.map(p => ({ value: p, label: p.charAt(0).toUpperCase() + p.slice(1) }))}
+                    placeholder="Select pay event"
+                    searchPlaceholder="Search..."
+                  />
+                </div>
+              </div>
+              <div>
+                <Label>Conditions</Label>
+                <Textarea value={editingRule.conditionsText} onChange={e => setEditingRule({...editingRule, conditionsText: e.target.value})} placeholder="Clawback conditions, withdrawal rules..." data-testid="input-edit-conditions" />
+              </div>
+              <div className="flex items-center gap-2">
+                <Switch
+                  checked={editingRule.isActive}
+                  onCheckedChange={v => setEditingRule({...editingRule, isActive: v})}
+                  data-testid="switch-edit-active"
+                />
+                <Label>Active</Label>
+              </div>
+              <Button type="submit" className="w-full" disabled={editMutation.isPending} data-testid="button-submit-edit-commission">
+                {editMutation.isPending ? "Saving..." : "Save Changes"}
+              </Button>
+            </form>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
