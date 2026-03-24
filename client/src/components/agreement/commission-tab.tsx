@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { SearchableSelect } from "@/components/ui/searchable-select";
+import { MultiSearchableSelect } from "@/components/ui/multi-searchable-select";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger,
 } from "@/components/ui/dialog";
@@ -82,9 +83,11 @@ export default function CommissionTab({ agreementId }: { agreementId: number }) 
     onError: (err: any) => toast({ title: "Error", description: err.message, variant: "destructive" }),
   });
 
+  const studyLevelOptions = STUDY_LEVELS.filter(l => l !== "Any").map(l => ({ value: l, label: l }));
+
   const defaultForm = {
     label: "",
-    studyLevel: "Any",
+    studyLevel: [] as string[],
     commissionMode: "percentage",
     percentageValue: "",
     flatAmount: "",
@@ -99,6 +102,7 @@ export default function CommissionTab({ agreementId }: { agreementId: number }) 
     e.preventDefault();
     createMutation.mutate({
       ...form,
+      studyLevel: form.studyLevel.length === 0 ? "Any" : form.studyLevel.join(", "),
       percentageValue: form.commissionMode === "percentage" ? form.percentageValue : null,
       flatAmount: form.commissionMode === "flat" ? form.flatAmount : null,
       currency: form.commissionMode === "flat" ? form.currency : null,
@@ -130,11 +134,11 @@ export default function CommissionTab({ agreementId }: { agreementId: number }) 
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <Label>Study Level</Label>
-                    <SearchableSelect
-                      value={form.studyLevel}
-                      onValueChange={v => setForm({...form, studyLevel: v})}
-                      options={STUDY_LEVELS.map(l => ({ value: l, label: l }))}
-                      placeholder="Select level"
+                    <MultiSearchableSelect
+                      values={form.studyLevel}
+                      onValuesChange={v => setForm({...form, studyLevel: v})}
+                      options={studyLevelOptions}
+                      placeholder="Any"
                       searchPlaceholder="Search levels..."
                     />
                   </div>
@@ -241,10 +245,12 @@ export default function CommissionTab({ agreementId }: { agreementId: number }) 
                         variant="ghost"
                         size="icon"
                         onClick={() => {
+                          const rawLevel = rule.studyLevel || "Any";
+                          const parsedLevels = rawLevel === "Any" ? [] : rawLevel.split(",").map((s: string) => s.trim()).filter(Boolean);
                           setEditingRule({
                             id: rule.id,
                             label: rule.label || "",
-                            studyLevel: rule.studyLevel || "Any",
+                            studyLevel: parsedLevels,
                             commissionMode: rule.commissionMode || "percentage",
                             percentageValue: rule.percentageValue || "",
                             flatAmount: rule.flatAmount || "",
@@ -298,6 +304,7 @@ export default function CommissionTab({ agreementId }: { agreementId: number }) 
                 id,
                 data: {
                   ...data,
+                  studyLevel: data.studyLevel.length === 0 ? "Any" : data.studyLevel.join(", "),
                   percentageValue: data.commissionMode === "percentage" ? data.percentageValue : null,
                   flatAmount: data.commissionMode === "flat" ? data.flatAmount : null,
                   currency: data.commissionMode === "flat" ? data.currency : null,
@@ -311,11 +318,11 @@ export default function CommissionTab({ agreementId }: { agreementId: number }) 
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <Label>Study Level</Label>
-                  <SearchableSelect
-                    value={editingRule.studyLevel}
-                    onValueChange={v => setEditingRule({...editingRule, studyLevel: v})}
-                    options={STUDY_LEVELS.map(l => ({ value: l, label: l }))}
-                    placeholder="Select level"
+                  <MultiSearchableSelect
+                    values={editingRule.studyLevel}
+                    onValuesChange={v => setEditingRule({...editingRule, studyLevel: v})}
+                    options={studyLevelOptions}
+                    placeholder="Any"
                     searchPlaceholder="Search levels..."
                   />
                 </div>

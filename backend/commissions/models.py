@@ -5,7 +5,7 @@ class AgreementCommissionRule(models.Model):
     id = models.AutoField(primary_key=True)
     agreement_id = models.IntegerField()
     label = models.CharField(max_length=255)
-    study_level = models.CharField(max_length=32, null=True, blank=True)
+    study_level = models.CharField(max_length=255, null=True, blank=True)
     commission_mode = models.CharField(max_length=16)
     percentage_value = models.DecimalField(max_digits=6, decimal_places=3, null=True, blank=True)
     flat_amount = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
