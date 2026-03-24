@@ -67,8 +67,12 @@ class AllCommissionRulesView(APIView):
                 d['agreementTitle'] = agr.title
                 d['agreementStatus'] = agr.status
                 d['providerName'] = prov.name
-                if agr.territory_type == 'global':
-                    d['territoryCountries'] = ['Global']
+                if agr.territory_type and agr.territory_type != 'country_specific':
+                    territory_labels = {
+                        'global': 'Global',
+                        'south_asia': 'South Asia',
+                    }
+                    d['territoryCountries'] = [territory_labels.get(agr.territory_type, agr.territory_type.replace('_', ' ').title())]
                 else:
                     terr_cids = territory_raw.get(agr.id, [])
                     d['territoryCountries'] = [country_names.get(cid, '') for cid in terr_cids if country_names.get(cid)]
