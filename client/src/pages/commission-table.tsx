@@ -16,7 +16,7 @@ import {
   Tooltip, TooltipContent, TooltipTrigger,
 } from "@/components/ui/tooltip";
 import {
-  Search, DollarSign, RotateCcw, ExternalLink, TrendingUp, Award,
+  Search, DollarSign, RotateCcw, ExternalLink, TrendingUp, Award, ArrowRight,
 } from "lucide-react";
 import { AGREEMENT_STATUSES, COMMISSION_MODES, BONUS_TYPES } from "@shared/schema";
 
@@ -268,14 +268,15 @@ export default function CommissionTablePage() {
                 <Table className="table-fixed w-full">
                   <TableHeader>
                     <TableRow>
-                      <TableHead className="w-[14%]">Provider</TableHead>
-                      <TableHead className="w-[16%]">Agreement</TableHead>
-                      <TableHead className="w-[10%]">Territory</TableHead>
-                      <TableHead className="w-[14%]">Label</TableHead>
-                      <TableHead className="w-[8%]">Level</TableHead>
-                      <TableHead className="w-[9%]">Type</TableHead>
-                      <TableHead className="w-[9%]">Value</TableHead>
-                      <TableHead className="w-[9%]">Basis</TableHead>
+                      <TableHead className="w-[13%]">Provider</TableHead>
+                      <TableHead className="w-[14%]">Agreement</TableHead>
+                      <TableHead className="w-[9%]">Territory</TableHead>
+                      <TableHead className="w-[12%]">Label</TableHead>
+                      <TableHead className="w-[7%]">Level</TableHead>
+                      <TableHead className="w-[7%]">Type</TableHead>
+                      <TableHead className="w-[7%]">Value</TableHead>
+                      <TableHead className="w-[12%]">Follow-up</TableHead>
+                      <TableHead className="w-[8%]">Basis</TableHead>
                       <TableHead className="w-[7%]">Active</TableHead>
                       <TableHead className="w-[4%]"></TableHead>
                     </TableRow>
@@ -387,6 +388,24 @@ export default function CommissionTablePage() {
                               </TableCell>
                               <TableCell>
                                 <span className="text-sm font-medium">{formatCommissionValue(rule)}</span>
+                              </TableCell>
+                              <TableCell>
+                                {rule.followupStudyLevel ? (
+                                  <div className="flex items-start gap-1">
+                                    <ArrowRight className="w-3 h-3 text-blue-500 mt-0.5 shrink-0" />
+                                    <div>
+                                      <div className="text-xs font-medium">{rule.followupStudyLevel}</div>
+                                      <div className="text-[11px] text-muted-foreground">
+                                        {rule.followupCommissionMode === "percentage"
+                                          ? `${parseFloat(rule.followupPercentageValue || 0)}%`
+                                          : `${rule.followupCurrency || "AUD"} ${parseFloat(rule.followupFlatAmount || 0).toLocaleString()}`
+                                        }
+                                      </div>
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <span className="text-xs text-muted-foreground">—</span>
+                                )}
                               </TableCell>
                               <TableCell>
                                 <span className="text-xs">{basisLabels[rule.basis] || rule.basis}</span>
