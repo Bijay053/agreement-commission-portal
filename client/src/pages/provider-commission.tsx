@@ -374,6 +374,9 @@ export default function ProviderCommissionPage() {
 
   const [configPct, setConfigPct] = useState("");
   const [selectedRules, setSelectedRules] = useState<number[]>([]);
+  const [selectedEntries, setSelectedEntries] = useState<number[]>([]);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<number | "bulk" | null>(null);
   const [bulkOpen, setBulkOpen] = useState(false);
   const [bulkFile, setBulkFile] = useState<File | null>(null);
   const [bulkResult, setBulkResult] = useState<{ created: number; errors: string[]; totalRows: number } | null>(null);
@@ -465,9 +468,37 @@ export default function ProviderCommissionPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/provider-commission"] });
       toast({ title: "Entry deleted" });
+      setSelectedEntries(prev => prev.filter(id => id !== (deleteTarget as number)));
     },
     onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
   });
+
+  const bulkDeleteMutation = useMutation({
+    mutationFn: async (ids: number[]) => {
+      for (const id of ids) {
+        const res = await fetch(`/api/provider-commission/${id}`, {
+          method: "DELETE", credentials: "include",
+        });
+        if (!res.ok) throw new Error(`Failed to delete entry ${id}`);
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/provider-commission"] });
+      toast({ title: `${selectedEntries.length} entries deleted` });
+      setSelectedEntries([]);
+    },
+    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+  });
+
+  function confirmDelete() {
+    if (deleteTarget === "bulk") {
+      bulkDeleteMutation.mutate(selectedEntries);
+    } else if (typeof deleteTarget === "number") {
+      deleteMutation.mutate(deleteTarget);
+    }
+    setDeleteConfirmOpen(false);
+    setDeleteTarget(null);
+  }
 
   const configMutation = useMutation({
     mutationFn: async (pct: string) => {
@@ -779,9 +810,49 @@ export default function ProviderCommissionPage() {
             </div>
           ) : (
             <div className="overflow-x-auto">
+              {canDelete && selectedEntries.length > 0 && (
+                <div className="flex items-center gap-2 mb-2 p-2 bg-destructive/10 border border-destructive/20 rounded-md">
+                  <span className="text-sm font-medium">{selectedEntries.length} selected</span>
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    className="h-7 text-xs"
+                    onClick={() => { setDeleteTarget("bulk"); setDeleteConfirmOpen(true); }}
+                    disabled={bulkDeleteMutation.isPending}
+                    data-testid="btn-bulk-delete"
+                  >
+                    <Trash2 className="w-3 h-3 mr-1" />
+                    {bulkDeleteMutation.isPending ? "Deleting..." : "Delete Selected"}
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 text-xs"
+                    onClick={() => setSelectedEntries([])}
+                    data-testid="btn-clear-selection"
+                  >
+                    Clear
+                  </Button>
+                </div>
+              )}
               <Table>
                 <TableHeader>
                   <TableRow>
+                    {canDelete && (
+                      <TableHead className="w-[40px]">
+                        <Checkbox
+                          checked={filtered.length > 0 && selectedEntries.length === filtered.length}
+                          onCheckedChange={(checked) => {
+                            if (checked) {
+                              setSelectedEntries(filtered.map(e => e.id));
+                            } else {
+                              setSelectedEntries([]);
+                            }
+                          }}
+                          data-testid="checkbox-select-all"
+                        />
+                      </TableHead>
+                    )}
                     <TableHead>Provider</TableHead>
                     <TableHead>Label</TableHead>
                     <TableHead>Study Level</TableHead>
@@ -816,6 +887,21 @@ export default function ProviderCommissionPage() {
                           data-testid={`row-entry-${entry.id}`}
                           className={idx === 0 && rowCount > 1 ? "border-t-2 border-border" : ""}
                         >
+                          {canDelete && (
+                            <TableCell className="w-[40px]">
+                              <Checkbox
+                                checked={selectedEntries.includes(entry.id)}
+                                onCheckedChange={(checked) => {
+                                  if (checked) {
+                                    setSelectedEntries(prev => [...prev, entry.id]);
+                                  } else {
+                                    setSelectedEntries(prev => prev.filter(id => id !== entry.id));
+                                  }
+                                }}
+                                data-testid={`checkbox-entry-${entry.id}`}
+                              />
+                            </TableCell>
+                          )}
                           {idx === 0 && (
                             <TableCell rowSpan={rowCount} className="font-medium align-top border-r border-border/50" data-testid={`text-provider-${firstEntry.id}`}>
                               <div className="text-sm font-medium">{firstEntry.providerName}</div>
@@ -1009,7 +1095,8 @@ export default function ProviderCommissionPage() {
                               )}
                               {canDelete && (
                                 <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => {
-                                  if (confirm("Delete this entry?")) deleteMutation.mutate(entry.id);
+                                  setDeleteTarget(entry.id);
+                                  setDeleteConfirmOpen(true);
                                 }} data-testid={`btn-delete-${entry.id}`}>
                                   <Trash2 className="w-4 h-4" />
                                 </Button>
@@ -1742,6 +1829,38 @@ export default function ProviderCommissionPage() {
               </Button>
             )}
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={deleteConfirmOpen} onOpenChange={(open) => { if (!open) { setDeleteConfirmOpen(false); setDeleteTarget(null); } }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle data-testid="delete-confirm-title">Confirm Delete</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            {deleteTarget === "bulk"
+              ? `Are you sure you want to delete ${selectedEntries.length} selected commission ${selectedEntries.length === 1 ? "entry" : "entries"}? This action cannot be undone.`
+              : "Are you sure you want to delete this commission entry? This action cannot be undone."}
+          </p>
+          <div className="flex justify-end gap-2 mt-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => { setDeleteConfirmOpen(false); setDeleteTarget(null); }}
+              data-testid="btn-cancel-delete"
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              size="sm"
+              onClick={confirmDelete}
+              disabled={deleteMutation.isPending || bulkDeleteMutation.isPending}
+              data-testid="btn-confirm-delete"
+            >
+              {(deleteMutation.isPending || bulkDeleteMutation.isPending) ? "Deleting..." : "Delete"}
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
 
