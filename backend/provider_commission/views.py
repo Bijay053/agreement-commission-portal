@@ -54,19 +54,20 @@ def entry_to_dict(e, global_sub_pct=None):
         d['subAgentCommission'] = None
     d['effectiveSubAgentPercentage'] = str(pct) if pct is not None else None
 
-    d['ruleLabel'] = None
-    d['followupStudyLevel'] = None
-    d['followupYearRates'] = None
+    d['ruleLabel'] = e.label or None
+    d['followupStudyLevel'] = e.followup_study_level or None
+    d['followupYearRates'] = e.followup_year_rates or None
     d['followupConditionsText'] = None
-    if e.copied_from_rule_id:
-        try:
-            rule = AgreementCommissionRule.objects.get(id=e.copied_from_rule_id)
-            d['ruleLabel'] = rule.label or None
-            d['followupStudyLevel'] = rule.followup_study_level or None
-            d['followupYearRates'] = rule.followup_year_rates or None
-            d['followupConditionsText'] = rule.followup_conditions_text or None
-        except AgreementCommissionRule.DoesNotExist:
-            pass
+    if not d['ruleLabel'] and not d['followupStudyLevel'] and not d['followupYearRates']:
+        if e.copied_from_rule_id:
+            try:
+                rule = AgreementCommissionRule.objects.get(id=e.copied_from_rule_id)
+                d['ruleLabel'] = d['ruleLabel'] or rule.label or None
+                d['followupStudyLevel'] = d['followupStudyLevel'] or rule.followup_study_level or None
+                d['followupYearRates'] = d['followupYearRates'] or rule.followup_year_rates or None
+                d['followupConditionsText'] = rule.followup_conditions_text or None
+            except AgreementCommissionRule.DoesNotExist:
+                pass
     return d
 
 
@@ -155,6 +156,10 @@ class ProviderCommissionListView(APIView):
                 if sub_pct_val < 0 or sub_pct_val > 100:
                     return Response({'message': 'Sub-agent percentage must be between 0 and 100'}, status=400)
 
+            followup_year_rates = data.get('followupYearRates')
+            if followup_year_rates and isinstance(followup_year_rates, list) and len(followup_year_rates) == 0:
+                followup_year_rates = None
+
             entry = ProviderCommissionEntry.objects.create(
                 provider_name=provider_name,
                 degree_level=data.get('degreeLevel', 'any'),
@@ -163,9 +168,12 @@ class ProviderCommissionListView(APIView):
                 commission_type=data.get('commissionType', 'percentage'),
                 currency=data.get('currency', 'AUD'),
                 commission_basis=data.get('commissionBasis', 'full_course'),
+                label=data.get('label', ''),
                 notes=data.get('notes', ''),
                 is_active=True,
                 sub_agent_percentage=sub_pct_val,
+                followup_study_level=data.get('followupStudyLevel', ''),
+                followup_year_rates=followup_year_rates,
                 created_by=request.session.get('userId'),
             )
             config = ProviderCommissionConfig.objects.first()
@@ -203,8 +211,17 @@ class ProviderCommissionDetailView(APIView):
             entry.currency = data['currency']
         if 'commissionBasis' in data:
             entry.commission_basis = data['commissionBasis']
+        if 'label' in data:
+            entry.label = data['label']
         if 'notes' in data:
             entry.notes = data['notes']
+        if 'followupStudyLevel' in data:
+            entry.followup_study_level = data['followupStudyLevel']
+        if 'followupYearRates' in data:
+            fyr = data['followupYearRates']
+            if fyr and isinstance(fyr, list) and len(fyr) == 0:
+                fyr = None
+            entry.followup_year_rates = fyr
         if 'isActive' in data:
             entry.is_active = data['isActive']
         if 'subAgentPercentage' in data:
@@ -371,9 +388,12 @@ class CopyFromCommissionRulesView(APIView):
                 commission_type=ctype,
                 currency=rule.currency or 'AUD',
                 commission_basis=basis,
+                label=rule.label or '',
                 notes=f'Copied from agreement {agr.agreement_code} rule #{rule.id}',
                 is_active=True,
                 copied_from_rule_id=rule.id,
+                followup_study_level=rule.followup_study_level or '',
+                followup_year_rates=rule.followup_year_rates,
                 created_by=request.session.get('userId'),
             )
             created += 1

@@ -353,6 +353,7 @@ export default function ProviderCommissionPage() {
   const [editEntry, setEditEntry] = useState<CommissionEntry | null>(null);
 
   const [formProvider, setFormProvider] = useState("");
+  const [formLabel, setFormLabel] = useState("");
   const [formDegree, setFormDegree] = useState("any");
   const [formTerritories, setFormTerritories] = useState<string[]>([]);
   const [formValue, setFormValue] = useState("");
@@ -360,6 +361,8 @@ export default function ProviderCommissionPage() {
   const [formCurrency, setFormCurrency] = useState("AUD");
   const [formBasis, setFormBasis] = useState("full_course");
   const [formNotes, setFormNotes] = useState("");
+  const [formFollowupStudyLevel, setFormFollowupStudyLevel] = useState("");
+  const [formFollowupYearRates, setFormFollowupYearRates] = useState<{year: string; value: string; mode: string; currency?: string}[]>([]);
 
   const [configPct, setConfigPct] = useState("");
   const [selectedRules, setSelectedRules] = useState<number[]>([]);
@@ -566,6 +569,7 @@ export default function ProviderCommissionPage() {
 
   function resetForm() {
     setFormProvider("");
+    setFormLabel("");
     setFormDegree("any");
     setFormTerritories([]);
     setFormValue("");
@@ -573,11 +577,14 @@ export default function ProviderCommissionPage() {
     setFormCurrency("AUD");
     setFormBasis("full_course");
     setFormNotes("");
+    setFormFollowupStudyLevel("");
+    setFormFollowupYearRates([]);
   }
 
   function openEdit(e: CommissionEntry) {
     setEditEntry(e);
     setFormProvider(e.providerName);
+    setFormLabel(e.ruleLabel || "");
     setFormDegree(e.degreeLevel);
     setFormTerritories(e.territory ? e.territory.split(",").map(t => t.trim()).filter(Boolean) : []);
     setFormValue(e.commissionValue);
@@ -585,6 +592,8 @@ export default function ProviderCommissionPage() {
     setFormCurrency(e.currency);
     setFormBasis(e.commissionBasis);
     setFormNotes(e.notes);
+    setFormFollowupStudyLevel(e.followupStudyLevel || "");
+    setFormFollowupYearRates(e.followupYearRates || []);
     setEditOpen(true);
   }
 
@@ -995,15 +1004,26 @@ export default function ProviderCommissionPage() {
           <DialogHeader>
             <DialogTitle>Add Commission Entry</DialogTitle>
           </DialogHeader>
-          <div className="space-y-4">
-            <div>
-              <Label>Provider Name *</Label>
-              <Input
-                value={formProvider}
-                onChange={e => setFormProvider(e.target.value)}
-                placeholder="Type provider name..."
-                data-testid="input-provider"
-              />
+          <div className="space-y-4 max-h-[70vh] overflow-y-auto pr-1">
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label>Provider Name *</Label>
+                <Input
+                  value={formProvider}
+                  onChange={e => setFormProvider(e.target.value)}
+                  placeholder="Type provider name..."
+                  data-testid="input-provider"
+                />
+              </div>
+              <div>
+                <Label>Label</Label>
+                <Input
+                  value={formLabel}
+                  onChange={e => setFormLabel(e.target.value)}
+                  placeholder="e.g. Standard UG Commission"
+                  data-testid="input-label"
+                />
+              </div>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
@@ -1082,6 +1102,101 @@ export default function ProviderCommissionPage() {
                 </SelectContent>
               </Select>
             </div>
+
+            <div className="border rounded-lg p-3 space-y-3 bg-muted/30">
+              <div className="flex items-center justify-between">
+                <Label className="text-sm font-medium">Follow-up Commission</Label>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-7 text-xs"
+                  onClick={() => setFormFollowupYearRates(prev => [...prev, { year: `${prev.length + 1}${prev.length === 0 ? 'st' : prev.length === 1 ? 'nd' : prev.length === 2 ? 'rd' : 'th'} Year`, value: "", mode: "percentage" }])}
+                  data-testid="btn-add-followup-year"
+                >
+                  <Plus className="w-3 h-3 mr-1" /> Add Year
+                </Button>
+              </div>
+              {formFollowupYearRates.length > 0 && (
+                <div>
+                  <Label className="text-xs">Follow-up Study Level</Label>
+                  <Select value={formFollowupStudyLevel || "__none__"} onValueChange={v => setFormFollowupStudyLevel(v === "__none__" ? "" : v)}>
+                    <SelectTrigger data-testid="select-followup-study-level" className="h-8">
+                      <SelectValue placeholder="Same as above" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__none__">Same as above</SelectItem>
+                      {studyLevelOptions.filter(d => d.value !== 'any').map(d => (
+                        <SelectItem key={d.value} value={d.label}>{d.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+              {formFollowupYearRates.map((yr, i) => (
+                <div key={i} className="flex items-end gap-2">
+                  <div className="flex-1">
+                    <Label className="text-xs">{yr.year}</Label>
+                    <div className="flex gap-1">
+                      <Select value={yr.mode} onValueChange={v => {
+                        const updated = [...formFollowupYearRates];
+                        updated[i] = { ...updated[i], mode: v };
+                        setFormFollowupYearRates(updated);
+                      }}>
+                        <SelectTrigger className="h-8 w-[110px]">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="percentage">%</SelectItem>
+                          <SelectItem value="flat">Flat</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <Input
+                        type="number"
+                        step="0.01"
+                        className="h-8"
+                        value={yr.value}
+                        onChange={e => {
+                          const updated = [...formFollowupYearRates];
+                          updated[i] = { ...updated[i], value: e.target.value };
+                          setFormFollowupYearRates(updated);
+                        }}
+                        placeholder={yr.mode === "percentage" ? "e.g. 10" : "e.g. 500"}
+                        data-testid={`input-followup-value-${i}`}
+                      />
+                      {yr.mode === "flat" && (
+                        <Select value={yr.currency || "AUD"} onValueChange={v => {
+                          const updated = [...formFollowupYearRates];
+                          updated[i] = { ...updated[i], currency: v };
+                          setFormFollowupYearRates(updated);
+                        }}>
+                          <SelectTrigger className="h-8 w-[80px]">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="AUD">AUD</SelectItem>
+                            <SelectItem value="USD">USD</SelectItem>
+                            <SelectItem value="NPR">NPR</SelectItem>
+                            <SelectItem value="GBP">GBP</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      )}
+                    </div>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8 text-destructive shrink-0"
+                    onClick={() => setFormFollowupYearRates(prev => prev.filter((_, idx) => idx !== i))}
+                    data-testid={`btn-remove-followup-${i}`}
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </Button>
+                </div>
+              ))}
+            </div>
+
             <div>
               <Label>Notes</Label>
               <Textarea
@@ -1098,6 +1213,7 @@ export default function ProviderCommissionPage() {
             <Button
               onClick={() => addMutation.mutate({
                 providerName: formProvider.trim(),
+                label: formLabel.trim(),
                 degreeLevel: formDegree,
                 territory: formTerritories,
                 commissionValue: formValue,
@@ -1105,6 +1221,8 @@ export default function ProviderCommissionPage() {
                 currency: formCurrency,
                 commissionBasis: formBasis,
                 notes: formNotes,
+                followupStudyLevel: formFollowupStudyLevel,
+                followupYearRates: formFollowupYearRates.filter(yr => yr.value),
               })}
               disabled={!formProvider.trim() || !formValue || addMutation.isPending}
               data-testid="btn-submit-add"
@@ -1121,15 +1239,26 @@ export default function ProviderCommissionPage() {
           <DialogHeader>
             <DialogTitle>Edit Commission Entry</DialogTitle>
           </DialogHeader>
-          <div className="space-y-4">
-            <div>
-              <Label>Provider Name *</Label>
-              <Input
-                value={formProvider}
-                onChange={e => setFormProvider(e.target.value)}
-                placeholder="Type provider name..."
-                data-testid="edit-input-provider"
-              />
+          <div className="space-y-4 max-h-[70vh] overflow-y-auto pr-1">
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label>Provider Name *</Label>
+                <Input
+                  value={formProvider}
+                  onChange={e => setFormProvider(e.target.value)}
+                  placeholder="Type provider name..."
+                  data-testid="edit-input-provider"
+                />
+              </div>
+              <div>
+                <Label>Label</Label>
+                <Input
+                  value={formLabel}
+                  onChange={e => setFormLabel(e.target.value)}
+                  placeholder="e.g. Standard UG Commission"
+                  data-testid="edit-input-label"
+                />
+              </div>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
@@ -1207,6 +1336,101 @@ export default function ProviderCommissionPage() {
                 </SelectContent>
               </Select>
             </div>
+
+            <div className="border rounded-lg p-3 space-y-3 bg-muted/30">
+              <div className="flex items-center justify-between">
+                <Label className="text-sm font-medium">Follow-up Commission</Label>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-7 text-xs"
+                  onClick={() => setFormFollowupYearRates(prev => [...prev, { year: `${prev.length + 1}${prev.length === 0 ? 'st' : prev.length === 1 ? 'nd' : prev.length === 2 ? 'rd' : 'th'} Year`, value: "", mode: "percentage" }])}
+                  data-testid="edit-btn-add-followup-year"
+                >
+                  <Plus className="w-3 h-3 mr-1" /> Add Year
+                </Button>
+              </div>
+              {formFollowupYearRates.length > 0 && (
+                <div>
+                  <Label className="text-xs">Follow-up Study Level</Label>
+                  <Select value={formFollowupStudyLevel || "__none__"} onValueChange={v => setFormFollowupStudyLevel(v === "__none__" ? "" : v)}>
+                    <SelectTrigger data-testid="edit-select-followup-study-level" className="h-8">
+                      <SelectValue placeholder="Same as above" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__none__">Same as above</SelectItem>
+                      {studyLevelOptions.filter(d => d.value !== 'any').map(d => (
+                        <SelectItem key={d.value} value={d.label}>{d.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+              {formFollowupYearRates.map((yr, i) => (
+                <div key={i} className="flex items-end gap-2">
+                  <div className="flex-1">
+                    <Label className="text-xs">{yr.year}</Label>
+                    <div className="flex gap-1">
+                      <Select value={yr.mode} onValueChange={v => {
+                        const updated = [...formFollowupYearRates];
+                        updated[i] = { ...updated[i], mode: v };
+                        setFormFollowupYearRates(updated);
+                      }}>
+                        <SelectTrigger className="h-8 w-[110px]">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="percentage">%</SelectItem>
+                          <SelectItem value="flat">Flat</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <Input
+                        type="number"
+                        step="0.01"
+                        className="h-8"
+                        value={yr.value}
+                        onChange={e => {
+                          const updated = [...formFollowupYearRates];
+                          updated[i] = { ...updated[i], value: e.target.value };
+                          setFormFollowupYearRates(updated);
+                        }}
+                        placeholder={yr.mode === "percentage" ? "e.g. 10" : "e.g. 500"}
+                        data-testid={`edit-input-followup-value-${i}`}
+                      />
+                      {yr.mode === "flat" && (
+                        <Select value={yr.currency || "AUD"} onValueChange={v => {
+                          const updated = [...formFollowupYearRates];
+                          updated[i] = { ...updated[i], currency: v };
+                          setFormFollowupYearRates(updated);
+                        }}>
+                          <SelectTrigger className="h-8 w-[80px]">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="AUD">AUD</SelectItem>
+                            <SelectItem value="USD">USD</SelectItem>
+                            <SelectItem value="NPR">NPR</SelectItem>
+                            <SelectItem value="GBP">GBP</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      )}
+                    </div>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8 text-destructive shrink-0"
+                    onClick={() => setFormFollowupYearRates(prev => prev.filter((_, idx) => idx !== i))}
+                    data-testid={`edit-btn-remove-followup-${i}`}
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </Button>
+                </div>
+              ))}
+            </div>
+
             <div>
               <Label>Notes</Label>
               <Textarea
@@ -1237,6 +1461,7 @@ export default function ProviderCommissionPage() {
                   id: editEntry.id,
                   data: {
                     providerName: formProvider.trim(),
+                    label: formLabel.trim(),
                     degreeLevel: formDegree,
                     territory: formTerritories,
                     commissionValue: formValue,
@@ -1245,6 +1470,8 @@ export default function ProviderCommissionPage() {
                     commissionBasis: formBasis,
                     notes: formNotes,
                     isActive: editEntry.isActive,
+                    followupStudyLevel: formFollowupStudyLevel,
+                    followupYearRates: formFollowupYearRates.filter(yr => yr.value),
                   },
                 });
               }}
