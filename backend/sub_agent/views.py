@@ -109,9 +109,6 @@ class SubAgentDashboardView(APIView):
                 year_term_entries = list(SubAgentTermEntry.objects.filter(term_name__in=term_names))
                 if excluded_ids:
                     year_term_entries = [e for e in year_term_entries if e.commission_student_id not in excluded_ids]
-                year_student_ids = set(e.commission_student_id for e in year_term_entries)
-                masters = masters.filter(commission_student_id__in=year_student_ids)
-                if excluded_ids:
                     masters = masters.exclude(commission_student_id__in=excluded_ids)
 
             student_ids = [m.commission_student_id for m in masters]
