@@ -95,12 +95,15 @@ export function SearchableSelect({
         className="p-0 z-[9999]"
         style={{ width: triggerWidth ? `${Math.max(triggerWidth, 180)}px` : undefined }}
         align="start"
+        side="bottom"
         sideOffset={4}
         collisionPadding={8}
+        avoidCollisions={true}
       >
         <Command>
           <CommandInput placeholder={searchPlaceholder} />
           <CommandList
+            className="!max-h-[200px] !overflow-y-auto"
             onWheel={(e) => {
               e.stopPropagation();
               const el = e.currentTarget;

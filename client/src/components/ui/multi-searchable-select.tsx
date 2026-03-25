@@ -108,9 +108,13 @@ export function MultiSearchableSelect({
         </Button>
       </PopoverTrigger>
       <PopoverContent
-        className="p-0"
+        className="p-0 z-[9999]"
         style={{ width: triggerWidth ? `${Math.max(triggerWidth, 200)}px` : undefined }}
         align="start"
+        side="bottom"
+        sideOffset={4}
+        collisionPadding={8}
+        avoidCollisions={true}
       >
         <Command>
           <CommandInput placeholder={searchPlaceholder} />
