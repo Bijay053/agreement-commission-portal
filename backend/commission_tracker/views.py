@@ -1213,6 +1213,10 @@ class PredictionView(APIView):
             course_predicted = {}
             country_predicted = {}
             level_predicted = {}
+            provider_student_ids = {}
+            course_student_ids = {}
+            country_student_ids = {}
+            level_student_ids = {}
 
             for t in target_terms:
                 tn = t.term_number
@@ -1292,9 +1296,6 @@ class PredictionView(APIView):
                                     avg_bonus_val = sum(bp['avg_bonus']) / len(bp['avg_bonus']) if bp['avg_bonus'] else 0
                                     if tn == min(target_term_numbers):
                                         pred_b = avg_bonus_val * bonus_prob
-                            elif hist_bonus_rate_global['total_students'] > 0 and hist_bonus_rate_global['bonus_students'] > 0:
-                                if tn == min(target_term_numbers):
-                                    pred_b = 0
 
                     if pred_c > 0:
                         pred_comm += pred_c
@@ -1303,27 +1304,31 @@ class PredictionView(APIView):
 
                         prov_key = provider or 'Unknown'
                         if prov_key not in provider_predicted:
-                            provider_predicted[prov_key] = {'predicted': 0, 'actual': 0, 'students': 0}
+                            provider_predicted[prov_key] = {'predicted': 0, 'actual': 0}
+                            provider_student_ids[prov_key] = set()
                         provider_predicted[prov_key]['predicted'] += pred_c
-                        provider_predicted[prov_key]['students'] += 1
+                        provider_student_ids[prov_key].add(sid)
 
                         course_key = course or 'Unknown'
                         if course_key not in course_predicted:
-                            course_predicted[course_key] = {'predicted': 0, 'actual': 0, 'students': 0}
+                            course_predicted[course_key] = {'predicted': 0, 'actual': 0}
+                            course_student_ids[course_key] = set()
                         course_predicted[course_key]['predicted'] += pred_c
-                        course_predicted[course_key]['students'] += 1
+                        course_student_ids[course_key].add(sid)
 
                         country_key = country or 'Unknown'
                         if country_key not in country_predicted:
-                            country_predicted[country_key] = {'predicted': 0, 'actual': 0, 'students': 0}
+                            country_predicted[country_key] = {'predicted': 0, 'actual': 0}
+                            country_student_ids[country_key] = set()
                         country_predicted[country_key]['predicted'] += pred_c
-                        country_predicted[country_key]['students'] += 1
+                        country_student_ids[country_key].add(sid)
 
                         level_key = level or 'Unknown'
                         if level_key not in level_predicted:
-                            level_predicted[level_key] = {'predicted': 0, 'actual': 0, 'students': 0}
+                            level_predicted[level_key] = {'predicted': 0, 'actual': 0}
+                            level_student_ids[level_key] = set()
                         level_predicted[level_key]['predicted'] += pred_c
-                        level_predicted[level_key]['students'] += 1
+                        level_student_ids[level_key].add(sid)
 
                 for sid in has_actual_students:
                     s = all_students.get(sid)
@@ -1331,24 +1336,28 @@ class PredictionView(APIView):
                         continue
                     prov_key = (s.provider or 'Unknown').strip()
                     if prov_key not in provider_predicted:
-                        provider_predicted[prov_key] = {'predicted': 0, 'actual': 0, 'students': 0}
+                        provider_predicted[prov_key] = {'predicted': 0, 'actual': 0}
+                        provider_student_ids[prov_key] = set()
                     sid_actual_comm = sum(float(e.commission_amount or 0) for e in target_entries
                                          if e.commission_student_id == sid and term_number_map.get(e.term_name) == tn)
                     provider_predicted[prov_key]['actual'] += sid_actual_comm
 
                     course_key = (s.course_name or 'Unknown').strip()
                     if course_key not in course_predicted:
-                        course_predicted[course_key] = {'predicted': 0, 'actual': 0, 'students': 0}
+                        course_predicted[course_key] = {'predicted': 0, 'actual': 0}
+                        course_student_ids[course_key] = set()
                     course_predicted[course_key]['actual'] += sid_actual_comm
 
                     country_key = (s.country or 'Unknown').strip()
                     if country_key not in country_predicted:
-                        country_predicted[country_key] = {'predicted': 0, 'actual': 0, 'students': 0}
+                        country_predicted[country_key] = {'predicted': 0, 'actual': 0}
+                        country_student_ids[country_key] = set()
                     country_predicted[country_key]['actual'] += sid_actual_comm
 
                     level_key = (s.course_level or 'Unknown').strip()
                     if level_key not in level_predicted:
-                        level_predicted[level_key] = {'predicted': 0, 'actual': 0, 'students': 0}
+                        level_predicted[level_key] = {'predicted': 0, 'actual': 0}
+                        level_student_ids[level_key] = set()
                     level_predicted[level_key]['actual'] += sid_actual_comm
 
                 total_predicted_comm += pred_comm
@@ -1376,7 +1385,7 @@ class PredictionView(APIView):
                     'predictedCommission': round2(data['predicted']),
                     'actualCommission': round2(data['actual']),
                     'totalExpected': round2(data['predicted'] + data['actual']),
-                    'predictedStudents': data['students'],
+                    'predictedStudents': len(provider_student_ids.get(prov, set())),
                 })
 
             course_list = []
@@ -1386,7 +1395,7 @@ class PredictionView(APIView):
                     'predictedCommission': round2(data['predicted']),
                     'actualCommission': round2(data['actual']),
                     'totalExpected': round2(data['predicted'] + data['actual']),
-                    'predictedStudents': data['students'],
+                    'predictedStudents': len(course_student_ids.get(crs, set())),
                 })
 
             hist_provider_summary = {}
@@ -1431,13 +1440,13 @@ class PredictionView(APIView):
 
             country_list = sorted([
                 {'country': k, 'predictedCommission': round2(v['predicted']), 'actualCommission': round2(v['actual']),
-                 'totalExpected': round2(v['predicted'] + v['actual']), 'predictedStudents': v['students']}
+                 'totalExpected': round2(v['predicted'] + v['actual']), 'predictedStudents': len(country_student_ids.get(k, set()))}
                 for k, v in country_predicted.items() if v['predicted'] + v['actual'] > 0
             ], key=lambda x: -x['totalExpected'])
 
             level_list = sorted([
                 {'studyLevel': k, 'predictedCommission': round2(v['predicted']), 'actualCommission': round2(v['actual']),
-                 'totalExpected': round2(v['predicted'] + v['actual']), 'predictedStudents': v['students']}
+                 'totalExpected': round2(v['predicted'] + v['actual']), 'predictedStudents': len(level_student_ids.get(k, set()))}
                 for k, v in level_predicted.items() if v['predicted'] + v['actual'] > 0
             ], key=lambda x: -x['totalExpected'])
 

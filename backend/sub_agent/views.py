@@ -717,6 +717,10 @@ class SubAgentPredictionView(APIView):
             course_predicted = {}
             country_predicted = {}
             level_predicted = {}
+            provider_student_ids = {}
+            course_student_ids = {}
+            country_student_ids = {}
+            level_student_ids = {}
 
             for t in target_terms:
                 tn = t.term_number
@@ -789,27 +793,31 @@ class SubAgentPredictionView(APIView):
 
                         prov_key = provider or 'Unknown'
                         if prov_key not in provider_predicted:
-                            provider_predicted[prov_key] = {'predicted': 0, 'actual': 0, 'students': 0}
+                            provider_predicted[prov_key] = {'predicted': 0, 'actual': 0}
+                            provider_student_ids[prov_key] = set()
                         provider_predicted[prov_key]['predicted'] += pred_p
-                        provider_predicted[prov_key]['students'] += 1
+                        provider_student_ids[prov_key].add(sid)
 
                         course_key = course or 'Unknown'
                         if course_key not in course_predicted:
-                            course_predicted[course_key] = {'predicted': 0, 'actual': 0, 'students': 0}
+                            course_predicted[course_key] = {'predicted': 0, 'actual': 0}
+                            course_student_ids[course_key] = set()
                         course_predicted[course_key]['predicted'] += pred_p
-                        course_predicted[course_key]['students'] += 1
+                        course_student_ids[course_key].add(sid)
 
                         country_key = country or 'Unknown'
                         if country_key not in country_predicted:
-                            country_predicted[country_key] = {'predicted': 0, 'actual': 0, 'students': 0}
+                            country_predicted[country_key] = {'predicted': 0, 'actual': 0}
+                            country_student_ids[country_key] = set()
                         country_predicted[country_key]['predicted'] += pred_p
-                        country_predicted[country_key]['students'] += 1
+                        country_student_ids[country_key].add(sid)
 
                         level_key = level or 'Unknown'
                         if level_key not in level_predicted:
-                            level_predicted[level_key] = {'predicted': 0, 'actual': 0, 'students': 0}
+                            level_predicted[level_key] = {'predicted': 0, 'actual': 0}
+                            level_student_ids[level_key] = set()
                         level_predicted[level_key]['predicted'] += pred_p
-                        level_predicted[level_key]['students'] += 1
+                        level_student_ids[level_key].add(sid)
 
                 for sid in has_actual_students:
                     s = all_students.get(sid)
@@ -817,24 +825,28 @@ class SubAgentPredictionView(APIView):
                         continue
                     prov_key = (s.provider or 'Unknown').strip()
                     if prov_key not in provider_predicted:
-                        provider_predicted[prov_key] = {'predicted': 0, 'actual': 0, 'students': 0}
+                        provider_predicted[prov_key] = {'predicted': 0, 'actual': 0}
+                        provider_student_ids[prov_key] = set()
                     sid_actual = sum(float(e.total_paid or 0) for e in target_sa_entries
                                     if e.commission_student_id == sid and term_number_map.get(e.term_name) == tn)
                     provider_predicted[prov_key]['actual'] += sid_actual
 
                     course_key = (s.course_name or 'Unknown').strip()
                     if course_key not in course_predicted:
-                        course_predicted[course_key] = {'predicted': 0, 'actual': 0, 'students': 0}
+                        course_predicted[course_key] = {'predicted': 0, 'actual': 0}
+                        course_student_ids[course_key] = set()
                     course_predicted[course_key]['actual'] += sid_actual
 
                     country_key = (s.country or 'Unknown').strip()
                     if country_key not in country_predicted:
-                        country_predicted[country_key] = {'predicted': 0, 'actual': 0, 'students': 0}
+                        country_predicted[country_key] = {'predicted': 0, 'actual': 0}
+                        country_student_ids[country_key] = set()
                     country_predicted[country_key]['actual'] += sid_actual
 
                     level_key = (s.course_level or 'Unknown').strip()
                     if level_key not in level_predicted:
-                        level_predicted[level_key] = {'predicted': 0, 'actual': 0, 'students': 0}
+                        level_predicted[level_key] = {'predicted': 0, 'actual': 0}
+                        level_student_ids[level_key] = set()
                     level_predicted[level_key]['actual'] += sid_actual
 
                 total_predicted_paid += pred_paid
@@ -856,7 +868,7 @@ class SubAgentPredictionView(APIView):
                     'predictedPaid': round2(v['predicted']),
                     'actualPaid': round2(v['actual']),
                     'totalExpected': round2(v['predicted'] + v['actual']),
-                    'predictedStudents': v['students'],
+                    'predictedStudents': len(provider_student_ids.get(k, set())),
                 }
                 for k, v in provider_predicted.items()
             ], key=lambda x: -x['totalExpected'])
@@ -867,7 +879,7 @@ class SubAgentPredictionView(APIView):
                     'predictedPaid': round2(v['predicted']),
                     'actualPaid': round2(v['actual']),
                     'totalExpected': round2(v['predicted'] + v['actual']),
-                    'predictedStudents': v['students'],
+                    'predictedStudents': len(course_student_ids.get(k, set())),
                 }
                 for k, v in course_predicted.items()
             ], key=lambda x: -x['totalExpected'])
@@ -910,13 +922,13 @@ class SubAgentPredictionView(APIView):
 
             country_list = sorted([
                 {'country': k, 'predictedPaid': round2(v['predicted']), 'actualPaid': round2(v['actual']),
-                 'totalExpected': round2(v['predicted'] + v['actual']), 'predictedStudents': v['students']}
+                 'totalExpected': round2(v['predicted'] + v['actual']), 'predictedStudents': len(country_student_ids.get(k, set()))}
                 for k, v in country_predicted.items() if v['predicted'] + v['actual'] > 0
             ], key=lambda x: -x['totalExpected'])
 
             level_list = sorted([
                 {'studyLevel': k, 'predictedPaid': round2(v['predicted']), 'actualPaid': round2(v['actual']),
-                 'totalExpected': round2(v['predicted'] + v['actual']), 'predictedStudents': v['students']}
+                 'totalExpected': round2(v['predicted'] + v['actual']), 'predictedStudents': len(level_student_ids.get(k, set()))}
                 for k, v in level_predicted.items() if v['predicted'] + v['actual'] > 0
             ], key=lambda x: -x['totalExpected'])
 
