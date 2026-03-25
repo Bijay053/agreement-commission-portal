@@ -1149,15 +1149,15 @@ function DashboardView({ dashboard, year, intakeFilter, onIntakeChange, provider
                 </p>
               </div>
               <div className="bg-white dark:bg-gray-900 rounded-lg p-2.5 border">
-                <p className="text-[10px] text-muted-foreground">Direct Students</p>
-                <p className="text-sm font-bold" data-testid="text-insight-direct">
-                  {insights.directStudents || 0} <span className="text-[10px] text-muted-foreground font-normal">/ {insights.totalStudents || 0}</span>
+                <p className="text-[10px] text-muted-foreground">Total Students</p>
+                <p className="text-sm font-bold" data-testid="text-insight-students">
+                  {insights.totalStudents || 0}
                 </p>
               </div>
               <div className="bg-white dark:bg-gray-900 rounded-lg p-2.5 border">
-                <p className="text-[10px] text-muted-foreground">Direct %</p>
-                <p className={`text-sm font-bold ${(insights.directPct || 0) >= 50 ? "text-emerald-600" : "text-amber-600"}`} data-testid="text-insight-direct-pct">
-                  {insights.directPct || 0}%
+                <p className="text-[10px] text-muted-foreground">Avg / Student</p>
+                <p className="text-sm font-bold text-blue-600" data-testid="text-insight-avg">
+                  ${insights.totalStudents > 0 ? Number(insights.totalCommission / insights.totalStudents).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0.00'}
                 </p>
               </div>
             </div>
