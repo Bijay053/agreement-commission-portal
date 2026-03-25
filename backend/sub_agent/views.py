@@ -89,22 +89,48 @@ class SubAgentDashboardView(APIView):
     @require_permission("sub_agent_commission.view")
     def get(self, request):
         try:
+            from commission_tracker.models import CommissionTerm
+            year = request.query_params.get('year')
+            intake_filter = request.query_params.get('intake', '')
+
             active_student_ids = set(CommissionStudent.objects.values_list('id', flat=True))
             masters = SubAgentEntry.objects.filter(commission_student_id__in=active_student_ids)
             user_id = request.session.get('userId')
             masters = filter_sub_agent_by_user(masters, user_id)
-            total = masters.count()
-            total_received = float(masters.aggregate(t=Sum('sic_received_total'))['t'] or 0)
-            total_paid = float(masters.aggregate(t=Sum('sub_agent_paid_total'))['t'] or 0)
-            total_margin = float(masters.aggregate(t=Sum('margin'))['t'] or 0)
-            overpay_count = masters.filter(overpay_warning__isnull=False).exclude(overpay_warning='').count()
+
+            if year:
+                terms = CommissionTerm.objects.filter(year=int(year))
+                term_names = [t.term_name for t in terms]
+                year_student_ids = set(
+                    SubAgentTermEntry.objects.filter(term_name__in=term_names)
+                    .values_list('commission_student_id', flat=True).distinct()
+                )
+                masters = masters.filter(commission_student_id__in=year_student_ids)
 
             student_ids = [m.commission_student_id for m in masters]
             students = {s.id: s for s in CommissionStudent.objects.filter(id__in=student_ids)}
 
+            if intake_filter and intake_filter.upper() != 'ALL':
+                filtered_ids = {sid for sid, s in students.items() if s.start_intake and intake_filter.lower() in s.start_intake.lower()}
+                masters = [m for m in masters if m.commission_student_id in filtered_ids]
+                students = {sid: s for sid, s in students.items() if sid in filtered_ids}
+
+            if isinstance(masters, list):
+                total = len(masters)
+                total_received = sum(float(m.sic_received_total or 0) for m in masters)
+                total_paid = sum(float(m.sub_agent_paid_total or 0) for m in masters)
+                total_margin = sum(float(m.margin or 0) for m in masters)
+                overpay_count = sum(1 for m in masters if m.overpay_warning)
+            else:
+                total = masters.count()
+                total_received = float(masters.aggregate(t=Sum('sic_received_total'))['t'] or 0)
+                total_paid = float(masters.aggregate(t=Sum('sub_agent_paid_total'))['t'] or 0)
+                total_margin = float(masters.aggregate(t=Sum('margin'))['t'] or 0)
+                overpay_count = masters.filter(overpay_warning__isnull=False).exclude(overpay_warning='').count()
+
             agent_data = {}
             status_counts = {}
-            for m in masters:
+            for m in (masters if isinstance(masters, list) else masters.all()):
                 student = students.get(m.commission_student_id)
                 agent = student.agent_name if student and student.agent_name else 'Unknown'
                 status = m.status or 'Unknown'

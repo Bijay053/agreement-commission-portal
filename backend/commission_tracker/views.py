@@ -860,9 +860,14 @@ class DashboardYearView(APIView):
 
             intake_filter = request.query_params.get('intake', '')
 
-            students = CommissionStudent.objects.all()
+            entries = CommissionEntry.objects.filter(term_name__in=term_names)
+
+            year_student_ids = set(entries.values_list('commission_student_id', flat=True).distinct())
+            students = CommissionStudent.objects.filter(id__in=year_student_ids)
             if intake_filter and intake_filter.upper() != 'ALL':
                 students = students.filter(start_intake__icontains=intake_filter)
+                filtered_student_ids = set(students.values_list('id', flat=True))
+                entries = entries.filter(commission_student_id__in=filtered_student_ids)
 
             total_students = students.count()
             providers_set = set()
@@ -877,8 +882,6 @@ class DashboardYearView(APIView):
 
             by_agent = sorted([{'agent': k, 'count': v} for k, v in agent_counts.items()], key=lambda x: -x['count'])
             by_provider = [{'provider': k, 'count': v} for k, v in provider_counts.items()]
-
-            entries = CommissionEntry.objects.filter(term_name__in=term_names)
             term_stats = []
             for t in terms:
                 term_entries = [e for e in entries if e.term_name == t.term_name]
@@ -915,7 +918,7 @@ class DashboardYearView(APIView):
                     p['totalCommission'] = round2(fin.get('totalCommission', 0))
                     p['totalBonus'] = round2(fin.get('totalBonus', 0))
                     try:
-                        prov_students = CommissionStudent.objects.filter(provider=p['provider'])
+                        prov_students = students.filter(provider=p['provider'])
                         p['totalReceived'] = round2(sum(float(s.total_received or 0) for s in prov_students))
                         p['pending'] = round2(p['totalCommission'] - p['totalReceived'])
                     except Exception:
