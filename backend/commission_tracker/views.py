@@ -45,24 +45,22 @@ def get_excluded_student_ids_for_year(target_year):
     )
     if not prior_student_ids:
         return set()
-    current_year_student_ids = set()
+    current_year_active_ids = set()
     if current_term_names:
-        current_year_student_ids = set(
-            CommissionEntry.objects.filter(term_name__in=current_term_names)
-            .values_list('commission_student_id', flat=True).distinct()
+        current_entries = CommissionEntry.objects.filter(
+            term_name__in=current_term_names,
+            commission_student_id__in=prior_student_ids
         )
+        for e in current_entries:
+            entry_status = (e.student_status or '').lower()
+            if entry_status not in TERMINAL_STATUSES:
+                current_year_active_ids.add(e.commission_student_id)
     excluded = set()
     for s in CommissionStudent.objects.filter(id__in=prior_student_ids):
         if (s.status or '').lower() in TERMINAL_STATUSES:
-            if s.id in current_year_student_ids:
+            if s.id in current_year_active_ids:
                 continue
-            latest_entry = CommissionEntry.objects.filter(
-                commission_student_id=s.id, term_name__in=prior_term_names
-            ).order_by('-term_name').first()
-            if latest_entry:
-                term = CommissionTerm.objects.filter(term_name=latest_entry.term_name).first()
-                if term and term.year < target_year:
-                    excluded.add(s.id)
+            excluded.add(s.id)
     return excluded
 
 
