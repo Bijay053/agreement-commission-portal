@@ -45,19 +45,25 @@ def get_excluded_student_ids_for_year(target_year):
 
     term_order = {t.term_name: (t.year, t.sort_order) for t in prior_terms}
 
-    latest_entry_status = {}
+    latest_status_per_provider = {}
     for e in prior_entries:
         sid = e.commission_student_id
+        prov_key = (sid, e.student_provider_id)
         order = term_order.get(e.term_name, (0, 0))
-        if sid not in latest_entry_status or order > latest_entry_status[sid][0]:
-            latest_entry_status[sid] = (order, (e.student_status or 'Under Enquiry').lower())
+        if prov_key not in latest_status_per_provider or order > latest_status_per_provider[prov_key][0]:
+            latest_status_per_provider[prov_key] = (order, (e.student_status or 'Under Enquiry').lower())
 
-    excluded = set()
-    for sid, (order, status) in latest_entry_status.items():
-        if status in TERMINAL_STATUSES:
-            excluded.add(sid)
+    has_active_provider = set()
+    all_terminal_students = set()
+    for (sid, _prov_id), (order, status) in latest_status_per_provider.items():
+        if status not in TERMINAL_STATUSES:
+            has_active_provider.add(sid)
 
-    return excluded
+    for sid in prior_student_ids:
+        if sid not in has_active_provider:
+            all_terminal_students.add(sid)
+
+    return all_terminal_students
 
 
 def _clean_id(val):
