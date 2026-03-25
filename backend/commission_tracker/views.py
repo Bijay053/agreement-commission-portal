@@ -920,12 +920,19 @@ class DashboardYearView(APIView):
             if excluded_ids:
                 entries = entries.exclude(commission_student_id__in=excluded_ids)
 
-            year_student_ids = set(entries.values_list('commission_student_id', flat=True).distinct())
-            students = CommissionStudent.objects.filter(id__in=year_student_ids)
+            entry_student_ids = set(entries.values_list('commission_student_id', flat=True).distinct())
+
+            all_students_qs = CommissionStudent.objects.all()
+            if excluded_ids:
+                all_students_qs = all_students_qs.exclude(id__in=excluded_ids)
+
             if intake_filter and intake_filter.upper() != 'ALL':
-                students = students.filter(start_intake__icontains=intake_filter)
-                filtered_student_ids = set(students.values_list('id', flat=True))
+                all_students_qs = all_students_qs.filter(start_intake__icontains=intake_filter)
+                filtered_student_ids = set(all_students_qs.values_list('id', flat=True))
                 entries = entries.filter(commission_student_id__in=filtered_student_ids)
+                entry_student_ids = entry_student_ids & filtered_student_ids
+
+            students = all_students_qs
 
             total_students = students.count()
             providers_set = set()
