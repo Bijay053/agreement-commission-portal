@@ -1678,17 +1678,20 @@ class PredictionView(APIView):
             current_year_students = {s.id: s for s in all_master_qs}
             all_students.update(current_year_students)
 
-            from provider_commission.models import ProviderCommissionEntry
             provider_comm_rules = {}
-            for pce in ProviderCommissionEntry.objects.filter(is_active=True):
-                prov_key = (pce.provider_name or '').strip().lower()
-                level_key = (pce.degree_level or 'any').strip().lower()
-                if prov_key not in provider_comm_rules:
-                    provider_comm_rules[prov_key] = {}
-                provider_comm_rules[prov_key][level_key] = {
-                    'basis': pce.commission_basis or 'full_course',
-                    'followup_year_rates': pce.followup_year_rates,
-                }
+            try:
+                from provider_commission.models import ProviderCommissionEntry
+                for pce in ProviderCommissionEntry.objects.filter(is_active=True):
+                    prov_key = (pce.provider_name or '').strip().lower()
+                    level_key = (pce.degree_level or 'any').strip().lower()
+                    if prov_key not in provider_comm_rules:
+                        provider_comm_rules[prov_key] = {}
+                    provider_comm_rules[prov_key][level_key] = {
+                        'basis': pce.commission_basis or 'full_course',
+                        'followup_year_rates': pce.followup_year_rates,
+                    }
+            except Exception:
+                provider_comm_rules = {}
 
             def normalize_course_level(course_level):
                 cl = (course_level or '').strip().lower()
@@ -1749,8 +1752,9 @@ class PredictionView(APIView):
                     return 99
                 return 99
 
+            relevant_student_ids = set(current_year_students.keys()) | past_student_ids | target_student_ids
             all_entries_by_student = {}
-            for e in list(CommissionEntry.objects.all()):
+            for e in CommissionEntry.objects.filter(commission_student_id__in=relevant_student_ids):
                 sid = e.commission_student_id
                 if sid not in all_entries_by_student:
                     all_entries_by_student[sid] = []
@@ -2235,7 +2239,7 @@ class PredictionView(APIView):
         except Exception as e:
             import traceback
             traceback.print_exc()
-            return Response({'message': str(e)}, status=500)
+            return Response({'prediction': None, 'message': f'Prediction error: {str(e)}'}, status=200)
 
 
 def _parse_bulk_row(row, i, col_map=None):
