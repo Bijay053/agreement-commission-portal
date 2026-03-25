@@ -1140,15 +1140,16 @@ export default function ProviderCommissionPage() {
               {formFollowupYearRates.map((yr, i) => (
                 <div key={i} className="p-2 bg-background/50 rounded-md space-y-1.5">
                   <div className="flex items-center gap-2">
-                    <SearchableSelect
-                      value={yr.studyLevel || ""}
-                      onValueChange={v => {
+                    <MultiSearchableSelect
+                      values={yr.studyLevel ? yr.studyLevel.split(",").map(s => s.trim()).filter(Boolean) : []}
+                      onValuesChange={v => {
                         const updated = [...formFollowupYearRates];
-                        updated[i] = { ...updated[i], studyLevel: v };
+                        updated[i] = { ...updated[i], studyLevel: v.join(", ") };
                         setFormFollowupYearRates(updated);
                       }}
-                      options={[{ value: "", label: "Same as above" }, ...studyLevelOptions.filter(d => d.value !== 'any')]}
-                      placeholder="Study Level"
+                      options={studyLevelOptions.filter(d => d.value !== 'any')}
+                      placeholder="Same as above"
+                      searchPlaceholder="Search levels..."
                       className="flex-1 h-8"
                     />
                     <SearchableSelect
@@ -1368,15 +1369,16 @@ export default function ProviderCommissionPage() {
               {formFollowupYearRates.map((yr, i) => (
                 <div key={i} className="p-2 bg-background/50 rounded-md space-y-1.5">
                   <div className="flex items-center gap-2">
-                    <SearchableSelect
-                      value={yr.studyLevel || ""}
-                      onValueChange={v => {
+                    <MultiSearchableSelect
+                      values={yr.studyLevel ? yr.studyLevel.split(",").map(s => s.trim()).filter(Boolean) : []}
+                      onValuesChange={v => {
                         const updated = [...formFollowupYearRates];
-                        updated[i] = { ...updated[i], studyLevel: v };
+                        updated[i] = { ...updated[i], studyLevel: v.join(", ") };
                         setFormFollowupYearRates(updated);
                       }}
-                      options={[{ value: "", label: "Same as above" }, ...studyLevelOptions.filter(d => d.value !== 'any')]}
-                      placeholder="Study Level"
+                      options={studyLevelOptions.filter(d => d.value !== 'any')}
+                      placeholder="Same as above"
+                      searchPlaceholder="Search levels..."
                       className="flex-1 h-8"
                     />
                     <SearchableSelect

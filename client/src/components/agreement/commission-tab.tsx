@@ -108,12 +108,12 @@ function FollowUpSection({ state, setState, studyLevelOptions, modeOptions }: {
                 {yearRates.map((yr: YearRate, idx: number) => (
                   <div key={idx} className="p-2 bg-muted/30 rounded-md space-y-1.5" data-testid={`followup-year-${idx}`}>
                     <div className="flex items-center gap-2">
-                      <SearchableSelect
-                        value={yr.studyLevel || ""}
-                        onValueChange={v => updateYearRate(idx, "studyLevel", v)}
-                        options={followupLevelOptions}
-                        placeholder="Study Level"
-                        searchPlaceholder="Search..."
+                      <MultiSearchableSelect
+                        values={yr.studyLevel ? yr.studyLevel.split(",").map(s => s.trim()).filter(Boolean) : []}
+                        onValuesChange={v => updateYearRate(idx, "studyLevel", v.join(", "))}
+                        options={studyLevelOptions}
+                        placeholder="Same as above"
+                        searchPlaceholder="Search levels..."
                         className="flex-1 h-8"
                       />
                       <SearchableSelect
