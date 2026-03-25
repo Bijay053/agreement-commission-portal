@@ -1265,6 +1265,7 @@ class CommissionInsightsView(APIView):
                 margin = apd['commission'] - apd['subPaid']
                 pct = (margin / apd['commission'] * 100) if apd['commission'] > 0 else 0
                 avg_comm = apd['commission'] / len(apd['students']) if apd['students'] else 0
+                sub_rate_ap = (apd['subPaid'] / apd['commission'] * 100) if apd['commission'] > 0 else 0
                 agent_provider_pairs.append({
                     'agent': agent, 'provider': prov,
                     'commission': round2(apd['commission']),
@@ -1273,28 +1274,127 @@ class CommissionInsightsView(APIView):
                     'marginPct': round(pct, 1),
                     'studentCount': len(apd['students']),
                     'avgCommPerStudent': round2(avg_comm),
+                    'subAgentRatePct': round(sub_rate_ap, 1),
                 })
             agent_provider_pairs.sort(key=lambda x: x['margin'], reverse=True)
+
+            def calc_recommended_payout(current_pct, margin_pct_val, student_count, is_high_margin_provider=False):
+                if current_pct <= 0:
+                    return current_pct, 'Optimized'
+                target = current_pct
+                if margin_pct_val < 0:
+                    target = max(current_pct - 10, 30)
+                elif margin_pct_val < 30 and student_count >= 3:
+                    target = max(current_pct - 10, 40)
+                elif margin_pct_val < 30:
+                    target = max(current_pct - 5, 40)
+                elif is_high_margin_provider and current_pct > 60:
+                    target = max(current_pct - 5, 50)
+                elif student_count <= 2 and current_pct < 70:
+                    target = min(current_pct + 2, 70)
+                reduction = current_pct - target
+                if reduction > 10:
+                    target = current_pct - 10
+                    reduction = 10
+                if current_pct < 30 and student_count >= 3:
+                    return round(min(current_pct + 5, 50), 1), 'Underpaid'
+                if reduction < 0:
+                    reduction = 0
+                    target = current_pct
+                if reduction >= 5:
+                    badge = 'High Payout Risk'
+                elif reduction > 0:
+                    badge = 'Optimize'
+                else:
+                    badge = 'Optimized'
+                return round(target, 1), badge
+
+            payout_optimizations = []
+            for a in agent_insights:
+                if a['subAgentPaid'] <= 0:
+                    continue
+                current_pct = a['subAgentRatePct']
+                is_high_margin_prov = False
+                rec_pct, badge = calc_recommended_payout(current_pct, a['marginPct'], a['studentCount'], is_high_margin_prov)
+                reduction = current_pct - rec_pct
+                expected_gain = a['commission'] * (reduction / 100) if reduction > 0 else 0
+                avg_margin_per_app = (a['margin'] / a['studentCount']) if a['studentCount'] > 0 else 0
+                payout_optimizations.append({
+                    'agent': a['agent'],
+                    'currentPayoutPct': round(current_pct, 1),
+                    'recommendedPayoutPct': round(rec_pct, 1),
+                    'reductionPct': round(reduction, 1),
+                    'expectedGain': round2(expected_gain),
+                    'commission': a['commission'],
+                    'subAgentPaid': a['subAgentPaid'],
+                    'marginPct': a['marginPct'],
+                    'studentCount': a['studentCount'],
+                    'avgMarginPerApp': round2(avg_margin_per_app),
+                    'badge': badge,
+                })
+                a['payoutBadge'] = badge
+                a['recommendedPayoutPct'] = round(rec_pct, 1)
+            payout_optimizations.sort(key=lambda x: x['expectedGain'], reverse=True)
+            total_payout_recovery = sum(p['expectedGain'] for p in payout_optimizations if p['expectedGain'] > 0)
+
+            ap_payout_optimizations = []
+            for ap in agent_provider_pairs:
+                if ap['subAgentPaid'] <= 0:
+                    continue
+                current_pct = ap['subAgentRatePct']
+                prov_margin_high = any(p['marginPct'] > 50 for p in provider_insights if p['provider'] == ap['provider'])
+                rec_pct, badge = calc_recommended_payout(current_pct, ap['marginPct'], ap['studentCount'], prov_margin_high)
+                reduction = current_pct - rec_pct
+                expected_gain = ap['commission'] * (reduction / 100) if reduction > 0 else 0
+                if reduction > 0:
+                    ap_payout_optimizations.append({
+                        'agent': ap['agent'], 'provider': ap['provider'],
+                        'currentPayoutPct': round(current_pct, 1),
+                        'recommendedPayoutPct': round(rec_pct, 1),
+                        'reductionPct': round(reduction, 1),
+                        'expectedGain': round2(expected_gain),
+                        'marginPct': ap['marginPct'],
+                        'studentCount': ap['studentCount'],
+                        'badge': badge,
+                    })
+            ap_payout_optimizations.sort(key=lambda x: x['expectedGain'], reverse=True)
 
             leakage_alerts = []
             for a in agent_insights:
                 if a['studentCount'] >= 2 and a['marginPct'] < 30 and a['subAgentPaid'] > 0:
                     missed = avg_margin_all * a['studentCount'] - a['margin'] if a['margin'] < avg_margin_all * a['studentCount'] else 0
                     if missed > 0:
+                        root_cause_parts = []
+                        if a['subAgentRatePct'] > 60:
+                            root_cause_parts.append(f'High payout ({a["subAgentRatePct"]}%)')
+                        if a['avgCommPerStudent'] < avg_comm_all * 0.7:
+                            root_cause_parts.append('Low provider commission rates')
+                        root_cause = ' + '.join(root_cause_parts) if root_cause_parts else 'Low overall margin'
+                        action_parts = []
+                        if a['subAgentRatePct'] > 60:
+                            rec = a.get('recommendedPayoutPct', a['subAgentRatePct'] - 5)
+                            action_parts.append(f'Reduce payout to {rec}%')
+                        if a['avgCommPerStudent'] < avg_comm_all * 0.7:
+                            action_parts.append('Renegotiate provider rates')
+                        action = ' OR '.join(action_parts) if action_parts else 'Review margin structure'
                         leakage_alerts.append({
                             'entity': a['agent'], 'entityType': 'agent',
                             'issue': f'High application volume ({a["studentCount"]} applications) but low margin ({a["marginPct"]}%)',
+                            'rootCause': root_cause,
                             'estimatedLoss': round2(missed),
-                            'action': f'Review sub-agent payout split. This agent generates volume but net margin is below the {round(margin_pct)}% portfolio average.',
+                            'action': action,
                         })
             for p in provider_insights:
                 if p['studentCount'] >= 2 and p['avgCommPerStudent'] < avg_comm_all * 0.5:
                     missed = (avg_comm_all - p['avgCommPerStudent']) * p['studentCount']
+                    root_cause = f'Commission rate ${p["avgCommPerStudent"]:,.2f}/app is {round((1 - p["avgCommPerStudent"] / avg_comm_all) * 100)}% below portfolio avg'
+                    action = f'Negotiate rate increase — closing the gap to ${avg_comm_all:,.2f}/app across {p["studentCount"]} applications'
                     leakage_alerts.append({
                         'entity': p['provider'], 'entityType': 'provider',
                         'issue': f'Below-average commission (${p["avgCommPerStudent"]:,.2f}/application vs ${avg_comm_all:,.2f} avg)',
+                        'rootCause': root_cause,
                         'estimatedLoss': round2(missed),
-                        'action': f'Negotiate higher commission rates with this provider — {p["studentCount"]} applications at below-benchmark rates represents recoverable margin.',
+                        'action': action,
                     })
             leakage_alerts.sort(key=lambda x: x['estimatedLoss'], reverse=True)
 
@@ -1304,18 +1404,31 @@ class CommissionInsightsView(APIView):
                 if p['studentCount'] >= 3 and p['avgCommPerStudent'] < benchmark_avg * 0.7 and p['commission'] > 0:
                     uplift_5pct = p['commission'] * 0.05
                     uplift_10pct = p['commission'] * 0.10
+                    gap_pct = ((benchmark_avg - p['avgCommPerStudent']) / benchmark_avg * 100) if benchmark_avg > 0 else 0
+                    if gap_pct > 50 and p['studentCount'] >= 5:
+                        priority = 'High'
+                    elif gap_pct > 30 or p['studentCount'] >= 5:
+                        priority = 'Medium'
+                    else:
+                        priority = 'Low'
+                    vol_factor = min(p['studentCount'] / max(total_students_count, 1) * 100, 100)
+                    gap_factor = min(gap_pct, 100)
+                    confidence = round(min((vol_factor * 0.4 + gap_factor * 0.6), 100))
                     negotiation_opps.append({
                         'provider': p['provider'],
                         'currentAvg': round2(p['avgCommPerStudent']),
                         'benchmarkAvg': round2(benchmark_avg),
                         'studentCount': p['studentCount'],
                         'gap': round2(benchmark_avg - p['avgCommPerStudent']),
+                        'gapPct': round(gap_pct, 1),
                         'uplift5pct': round2(uplift_5pct),
                         'uplift10pct': round2(uplift_10pct),
+                        'priority': priority,
+                        'confidence': confidence,
                     })
             negotiation_opps.sort(key=lambda x: x['uplift10pct'], reverse=True)
 
-            reallocation_suggestions = []
+            focus_opportunities = []
             agents_with_multi_provs = {}
             for (agent, prov), apd in agent_provider_data.items():
                 if agent not in agents_with_multi_provs:
@@ -1339,17 +1452,34 @@ class CommissionInsightsView(APIView):
                         margin_diff_per_student = best_p['avgMarginPerStudent'] - wp['avgMarginPerStudent']
                         if margin_diff_per_student > 0:
                             potential_gain = margin_diff_per_student * wp['students']
-                            reallocation_suggestions.append({
+                            focus_opportunities.append({
                                 'agent': agent,
                                 'lowMarginProvider': wp['provider'],
                                 'highMarginProvider': best_p['provider'],
                                 'lowMarginPct': wp['marginPct'],
                                 'highMarginPct': best_p['marginPct'],
-                                'currentStudents': wp['students'],
-                                'marginDiffPerStudent': round2(margin_diff_per_student),
+                                'currentVolume': wp['students'],
+                                'marginDiffPerApp': round2(margin_diff_per_student),
                                 'potentialGain': round2(potential_gain),
+                                'recommendation': f'Encourage {agent} to prioritize future applications with {best_p["provider"]} instead of {wp["provider"]}, based on significantly higher margin performance ({best_p["marginPct"]}% vs {wp["marginPct"]}%).',
                             })
-            reallocation_suggestions.sort(key=lambda x: x['potentialGain'], reverse=True)
+            focus_opportunities.sort(key=lambda x: x['potentialGain'], reverse=True)
+
+            top_loss_areas = []
+            for ap in agent_provider_pairs:
+                if ap['marginPct'] < 20 and ap['subAgentPaid'] > 0 and ap['studentCount'] >= 2:
+                    loss_vs_avg = (avg_margin_per_student * ap['studentCount']) - ap['margin'] if ap['margin'] < avg_margin_per_student * ap['studentCount'] else 0
+                    if loss_vs_avg > 0:
+                        top_loss_areas.append({
+                            'agent': ap['agent'], 'provider': ap['provider'],
+                            'marginLoss': round2(loss_vs_avg),
+                            'marginPct': ap['marginPct'],
+                            'subAgentRatePct': ap['subAgentRatePct'],
+                            'studentCount': ap['studentCount'],
+                            'commission': ap['commission'],
+                            'subAgentPaid': ap['subAgentPaid'],
+                        })
+            top_loss_areas.sort(key=lambda x: x['marginLoss'], reverse=True)
 
             intake_intelligence = []
             for tn in term_names:
@@ -1367,6 +1497,16 @@ class CommissionInsightsView(APIView):
 
             suggestions = []
 
+            if total_payout_recovery > 0:
+                top_po = payout_optimizations[0] if payout_optimizations else None
+                risk_count = sum(1 for p in payout_optimizations if p['badge'] == 'High Payout Risk')
+                msg = f'Optimizing sub-agent payout ratios could recover ~${total_payout_recovery:,.2f} in annual margin.'
+                if top_po:
+                    msg += f' Highest impact: {top_po["agent"]} (current {top_po["currentPayoutPct"]}% → recommended {top_po["recommendedPayoutPct"]}%, +${top_po["expectedGain"]:,.2f}).'
+                if risk_count > 0:
+                    msg += f' {risk_count} agent(s) flagged as High Payout Risk.'
+                suggestions.append({'type': 'danger', 'title': 'Sub-Agent Payout Optimization', 'message': msg})
+
             if prev_total > 0:
                 prev_margin_val = prev_total - prev_sub_paid
                 margin_change = total_margin - prev_margin_val
@@ -1379,21 +1519,10 @@ class CommissionInsightsView(APIView):
                     suggestions.append({'type': 'warning', 'title': 'Net Margin Decline',
                         'message': f'Net margin dropped ${abs(margin_change):,.2f} vs {target_year - 1} (${prev_margin_val:,.2f} → ${total_margin:,.2f}, {round(prev_margin_pct_val, 1)}% → {round(margin_pct, 1)}%). Review sub-agent payout ratios and provider rates to recover margin.'})
 
-            high_payout_agents = sorted([a for a in agent_insights if a['subAgentRatePct'] > 70 and a['studentCount'] >= 2 and a['subAgentPaid'] > 0],
-                key=lambda a: a['subAgentPaid'], reverse=True)
-            if high_payout_agents:
-                names = ', '.join(a['agent'] for a in high_payout_agents[:3])
-                total_excess = sum((a['subAgentPaid'] - a['commission'] * 0.60) for a in high_payout_agents if a['subAgentPaid'] > a['commission'] * 0.60)
-                suggestions.append({'type': 'warning', 'title': 'High Sub-Agent Payout Ratio',
-                    'message': f'{names} have sub-agent payout above 70% of commission. Optimizing payout structures toward 60% could improve margin by ~${total_excess:,.2f}. Review payout arrangements for these agent partnerships.'})
-
-            low_margin_provs = sorted([p for p in provider_insights if p['marginPct'] < 30 and p['studentCount'] >= 3 and p['subAgentPaid'] > 0],
-                key=lambda p: p['subAgentPaid'], reverse=True)
-            if low_margin_provs:
-                names = ', '.join(p['provider'] for p in low_margin_provs[:3])
-                total_sub = sum(p['subAgentPaid'] for p in low_margin_provs)
-                suggestions.append({'type': 'warning', 'title': 'Low-Margin Providers',
-                    'message': f'{names} yield <30% margin after sub-agent payouts (${total_sub:,.2f} paid out). Consider negotiating higher provider commission rates or reviewing sub-agent payout structures for future applications with these providers.'})
+            if top_loss_areas:
+                tla = top_loss_areas[0]
+                suggestions.append({'type': 'danger', 'title': 'Biggest Margin Loss Driver',
+                    'message': f'{tla["agent"]} + {tla["provider"]} combination causing ${tla["marginLoss"]:,.2f} margin loss ({tla["studentCount"]} applications at {tla["marginPct"]}% margin, {tla["subAgentRatePct"]}% payout). Address payout structure and provider rates for this pair.'})
 
             negotiate_provs = [p for p in provider_insights if p['aiAction'] == 'Negotiate']
             if negotiate_provs:
@@ -1409,11 +1538,11 @@ class CommissionInsightsView(APIView):
                 suggestions.append({'type': 'success', 'title': 'High-Margin Growth Targets',
                     'message': f'{names} have >50% margin. Encouraging agents to increase future application volume by 25% with these providers could add ~${total_pot:,.2f} in net margin.'})
 
-            if reallocation_suggestions:
-                total_realloc_gain = sum(r['potentialGain'] for r in reallocation_suggestions[:5])
-                top_r = reallocation_suggestions[0]
-                suggestions.append({'type': 'info', 'title': 'Referral Focus Opportunity',
-                    'message': f'{top_r["agent"]} earns {top_r["highMarginPct"]}% margin with {top_r["highMarginProvider"]} but only {top_r["lowMarginPct"]}% with {top_r["lowMarginProvider"]}. Encouraging future referrals toward higher-margin providers could improve margin by ~${total_realloc_gain:,.2f}.'})
+            if focus_opportunities:
+                total_focus_gain = sum(r['potentialGain'] for r in focus_opportunities[:5])
+                top_r = focus_opportunities[0]
+                suggestions.append({'type': 'info', 'title': 'Application Focus Opportunity',
+                    'message': f'{top_r["agent"]} earns {top_r["highMarginPct"]}% margin with {top_r["highMarginProvider"]} but only {top_r["lowMarginPct"]}% with {top_r["lowMarginProvider"]}. Guiding future application volume toward higher-margin providers could improve margin by ~${total_focus_gain:,.2f}.'})
 
             if leakage_alerts:
                 total_leak = sum(l['estimatedLoss'] for l in leakage_alerts[:5])
@@ -1490,7 +1619,11 @@ class CommissionInsightsView(APIView):
                     'agentProviderPairs': agent_provider_pairs[:20],
                     'leakageAlerts': leakage_alerts[:10],
                     'negotiationOpps': negotiation_opps[:10],
-                    'reallocationSuggestions': reallocation_suggestions[:10],
+                    'focusOpportunities': focus_opportunities[:10],
+                    'payoutOptimizations': payout_optimizations[:20],
+                    'apPayoutOptimizations': ap_payout_optimizations[:15],
+                    'totalPayoutRecovery': round2(total_payout_recovery),
+                    'topLossAreas': top_loss_areas[:5],
                     'intakeIntelligence': intake_intelligence,
                     'trendData': trend_data,
                 }

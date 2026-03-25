@@ -1531,6 +1531,14 @@ function InsightsPanel({ insights, year }: { insights: any; year: number }) {
                               a.aiAction === 'Review Payout' ? 'bg-pink-100 text-pink-700' :
                               'bg-gray-100 text-gray-600'
                             }`}>{a.aiAction}</Badge>
+                            {a.payoutBadge && (
+                              <Badge className={`text-[8px] px-1 py-0 ${
+                                a.payoutBadge === 'High Payout Risk' ? 'bg-red-200 text-red-800 border border-red-300' :
+                                a.payoutBadge === 'Optimize' ? 'bg-amber-200 text-amber-800 border border-amber-300' :
+                                a.payoutBadge === 'Underpaid' ? 'bg-blue-200 text-blue-800 border border-blue-300' :
+                                'bg-green-200 text-green-800 border border-green-300'
+                              }`}>{a.payoutBadge}</Badge>
+                            )}
                           </div>
                         </div>
                         <div className="flex gap-2 text-[10px] text-muted-foreground mt-0.5">
@@ -1580,6 +1588,112 @@ function InsightsPanel({ insights, year }: { insights: any; year: number }) {
               </div>
             )}
 
+            {insights.topLossAreas && insights.topLossAreas.length > 0 && (
+              <div className="mb-4">
+                <h4 className="text-xs font-medium text-red-700 mb-1.5 flex items-center gap-1"><AlertTriangle className="h-3 w-3" /> Biggest Margin Loss Drivers</h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                  {insights.topLossAreas.map((tla: any, i: number) => (
+                    <div key={i} className="text-xs bg-red-50 dark:bg-red-950/30 rounded-lg px-3 py-2.5 border-2 border-red-300 dark:border-red-700" data-testid={`top-loss-${i}`}>
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="font-bold text-red-800 dark:text-red-300">{tla.agent} + {tla.provider}</span>
+                        <Badge className="text-[9px] px-1.5 py-0.5 bg-red-200 text-red-800 font-bold">-${fmt(tla.marginLoss)}</Badge>
+                      </div>
+                      <div className="flex gap-3 text-[10px] text-muted-foreground">
+                        <span>{tla.studentCount} apps</span>
+                        <span>Margin: {tla.marginPct}%</span>
+                        <span>Payout: {tla.subAgentRatePct}%</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {insights.payoutOptimizations && insights.payoutOptimizations.length > 0 && (
+              <div className="mb-4">
+                <h4 className="text-xs font-medium text-pink-700 mb-1.5 flex items-center gap-1"><Shield className="h-3 w-3" /> Sub-Agent Payout Optimization</h4>
+                {insights.totalPayoutRecovery > 0 && (
+                  <div className="bg-pink-50 dark:bg-pink-950/30 rounded-lg px-3 py-2 border border-pink-300 dark:border-pink-700 mb-2 flex items-center justify-between">
+                    <span className="text-xs font-medium text-pink-800 dark:text-pink-300">Total Recoverable Margin</span>
+                    <span className="text-sm font-bold text-pink-700 dark:text-pink-400">${fmt(insights.totalPayoutRecovery)}</span>
+                  </div>
+                )}
+                <div className="rounded-lg border overflow-hidden">
+                  <table className="w-full text-xs">
+                    <thead><tr className="bg-pink-50/50 dark:bg-pink-950/20 text-left">
+                      <th className="px-2.5 py-1.5 font-medium text-muted-foreground">Agent</th>
+                      <th className="px-2.5 py-1.5 font-medium text-muted-foreground text-right">Current %</th>
+                      <th className="px-2.5 py-1.5 font-medium text-muted-foreground text-right">Recommended %</th>
+                      <th className="px-2.5 py-1.5 font-medium text-muted-foreground text-right">Apps</th>
+                      <th className="px-2.5 py-1.5 font-medium text-muted-foreground text-right">Margin %</th>
+                      <th className="px-2.5 py-1.5 font-medium text-muted-foreground text-right">Expected Gain</th>
+                      <th className="px-2.5 py-1.5 font-medium text-muted-foreground text-center">Status</th>
+                    </tr></thead>
+                    <tbody>
+                      {insights.payoutOptimizations.map((po: any, i: number) => (
+                        <tr key={i} className="border-t" data-testid={`payout-opt-${i}`}>
+                          <td className="px-2.5 py-1.5 font-medium truncate max-w-[120px]">{po.agent}</td>
+                          <td className="px-2.5 py-1.5 text-right font-mono">{po.currentPayoutPct}%</td>
+                          <td className="px-2.5 py-1.5 text-right font-mono font-bold text-pink-700 dark:text-pink-400">{po.recommendedPayoutPct}%</td>
+                          <td className="px-2.5 py-1.5 text-right">{po.studentCount}</td>
+                          <td className="px-2.5 py-1.5 text-right">
+                            <Badge className={`text-[8px] px-1 py-0 ${po.marginPct >= 50 ? 'bg-green-100 text-green-700' : po.marginPct >= 30 ? 'bg-amber-100 text-amber-700' : 'bg-red-100 text-red-700'}`}>{po.marginPct}%</Badge>
+                          </td>
+                          <td className="px-2.5 py-1.5 text-right font-mono font-bold text-green-600">{po.expectedGain > 0 ? `+$${fmt(po.expectedGain)}` : '—'}</td>
+                          <td className="px-2.5 py-1.5 text-center">
+                            <Badge className={`text-[8px] px-1.5 py-0 ${
+                              po.badge === 'High Payout Risk' ? 'bg-red-100 text-red-700' :
+                              po.badge === 'Optimize' ? 'bg-amber-100 text-amber-700' :
+                              po.badge === 'Underpaid' ? 'bg-blue-100 text-blue-700' :
+                              'bg-green-100 text-green-700'
+                            }`}>{po.badge}</Badge>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {insights.apPayoutOptimizations && insights.apPayoutOptimizations.length > 0 && (
+              <div className="mb-4">
+                <h4 className="text-xs font-medium text-pink-600 mb-1.5 flex items-center gap-1"><TrendingUp className="h-3 w-3" /> Agent–Provider Payout Optimization</h4>
+                <div className="rounded-lg border overflow-hidden">
+                  <table className="w-full text-xs">
+                    <thead><tr className="bg-pink-50/50 dark:bg-pink-950/20 text-left">
+                      <th className="px-2 py-1.5 font-medium text-muted-foreground">Agent</th>
+                      <th className="px-2 py-1.5 font-medium text-muted-foreground">Provider</th>
+                      <th className="px-2 py-1.5 font-medium text-muted-foreground text-right">Current %</th>
+                      <th className="px-2 py-1.5 font-medium text-muted-foreground text-right">Rec. %</th>
+                      <th className="px-2 py-1.5 font-medium text-muted-foreground text-right">Apps</th>
+                      <th className="px-2 py-1.5 font-medium text-muted-foreground text-right">Gain</th>
+                      <th className="px-2 py-1.5 font-medium text-muted-foreground text-center">Status</th>
+                    </tr></thead>
+                    <tbody>
+                      {insights.apPayoutOptimizations.map((ap: any, i: number) => (
+                        <tr key={i} className="border-t" data-testid={`ap-payout-opt-${i}`}>
+                          <td className="px-2 py-1.5 font-medium truncate max-w-[100px]">{ap.agent}</td>
+                          <td className="px-2 py-1.5 truncate max-w-[100px]">{ap.provider}</td>
+                          <td className="px-2 py-1.5 text-right font-mono">{ap.currentPayoutPct}%</td>
+                          <td className="px-2 py-1.5 text-right font-mono font-bold text-pink-700 dark:text-pink-400">{ap.recommendedPayoutPct}%</td>
+                          <td className="px-2 py-1.5 text-right">{ap.studentCount}</td>
+                          <td className="px-2 py-1.5 text-right font-mono font-bold text-green-600">+${fmt(ap.expectedGain)}</td>
+                          <td className="px-2 py-1.5 text-center">
+                            <Badge className={`text-[8px] px-1 py-0 ${
+                              ap.badge === 'High Payout Risk' ? 'bg-red-100 text-red-700' :
+                              ap.badge === 'Optimize' ? 'bg-amber-100 text-amber-700' :
+                              'bg-green-100 text-green-700'
+                            }`}>{ap.badge}</Badge>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
               {insights.leakageAlerts && insights.leakageAlerts.length > 0 && (
                 <div>
@@ -1589,10 +1703,11 @@ function InsightsPanel({ insights, year }: { insights: any; year: number }) {
                       <div key={i} className="text-xs bg-red-50 dark:bg-red-950/20 rounded-lg px-3 py-2 border border-red-200 dark:border-red-800" data-testid={`leakage-${i}`}>
                         <div className="flex items-center justify-between mb-0.5">
                           <span className="font-semibold">{l.entity}</span>
-                          <Badge className="text-[8px] px-1 py-0 bg-red-100 text-red-700">-${Number(l.estimatedLoss).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</Badge>
+                          <Badge className="text-[8px] px-1 py-0 bg-red-100 text-red-700">-${fmt(l.estimatedLoss)}</Badge>
                         </div>
                         <p className="text-muted-foreground">{l.issue}</p>
-                        <p className="text-red-700 dark:text-red-400 mt-0.5 font-medium">{l.action}</p>
+                        {l.rootCause && <p className="text-[10px] mt-1"><span className="font-semibold text-red-700 dark:text-red-400">Root Cause:</span> <span className="text-muted-foreground">{l.rootCause}</span></p>}
+                        <p className="text-[10px] mt-0.5"><span className="font-semibold text-red-700 dark:text-red-400">Action:</span> <span className="text-muted-foreground">{l.action}</span></p>
                       </div>
                     ))}
                   </div>
@@ -1606,13 +1721,19 @@ function InsightsPanel({ insights, year }: { insights: any; year: number }) {
                     {insights.negotiationOpps.map((n: any, i: number) => (
                       <div key={i} className="text-xs bg-orange-50 dark:bg-orange-950/20 rounded-lg px-3 py-2 border border-orange-200 dark:border-orange-800" data-testid={`negotiation-${i}`}>
                         <div className="flex items-center justify-between mb-0.5">
-                          <span className="font-semibold">{n.provider}</span>
-                          <span className="text-[10px] text-muted-foreground">{n.studentCount} applications</span>
+                          <div className="flex items-center gap-2">
+                            <span className="font-semibold">{n.provider}</span>
+                            <Badge className={`text-[8px] px-1 py-0 ${n.priority === 'High' ? 'bg-red-100 text-red-700' : n.priority === 'Medium' ? 'bg-amber-100 text-amber-700' : 'bg-gray-100 text-gray-600'}`}>{n.priority}</Badge>
+                          </div>
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-[10px] text-muted-foreground">{n.studentCount} apps</span>
+                            <Badge className="text-[8px] px-1 py-0 bg-blue-100 text-blue-700">{n.confidence}% conf</Badge>
+                          </div>
                         </div>
-                        <p className="text-muted-foreground">Current avg: ${Number(n.currentAvg).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}/application vs benchmark ${Number(n.benchmarkAvg).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                        <p className="text-muted-foreground">Avg: ${Number(n.currentAvg).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}/app vs benchmark ${Number(n.benchmarkAvg).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} (gap: {n.gapPct}%)</p>
                         <div className="flex gap-3 mt-1">
-                          <span className="text-orange-700 dark:text-orange-400 font-medium">+5% rate → +${Number(n.uplift5pct).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</span>
-                          <span className="text-orange-700 dark:text-orange-400 font-medium">+10% rate → +${Number(n.uplift10pct).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</span>
+                          <span className="text-orange-700 dark:text-orange-400 font-medium">+5% → +${fmt(n.uplift5pct)}</span>
+                          <span className="text-orange-700 dark:text-orange-400 font-medium">+10% → +${fmt(n.uplift10pct)}</span>
                         </div>
                       </div>
                     ))}
@@ -1621,20 +1742,20 @@ function InsightsPanel({ insights, year }: { insights: any; year: number }) {
               )}
             </div>
 
-            {insights.reallocationSuggestions && insights.reallocationSuggestions.length > 0 && (
+            {insights.focusOpportunities && insights.focusOpportunities.length > 0 && (
               <div className="mb-4">
-                <h4 className="text-xs font-medium text-purple-600 mb-1.5 flex items-center gap-1"><ExternalLink className="h-3 w-3" /> Referral Focus Opportunities</h4>
+                <h4 className="text-xs font-medium text-purple-600 mb-1.5 flex items-center gap-1"><ExternalLink className="h-3 w-3" /> Application Focus Opportunities</h4>
                 <div className="space-y-1.5">
-                  {insights.reallocationSuggestions.map((r: any, i: number) => (
-                    <div key={i} className="text-xs bg-purple-50 dark:bg-purple-950/20 rounded-lg px-3 py-2 border border-purple-200 dark:border-purple-800" data-testid={`reallocation-${i}`}>
+                  {insights.focusOpportunities.map((r: any, i: number) => (
+                    <div key={i} className="text-xs bg-purple-50 dark:bg-purple-950/20 rounded-lg px-3 py-2 border border-purple-200 dark:border-purple-800" data-testid={`focus-opp-${i}`}>
                       <div className="flex items-center gap-2">
                         <span className="font-semibold">{r.agent}</span>
                         <span className="text-muted-foreground">Low: {r.lowMarginProvider} ({r.lowMarginPct}%)</span>
                         <span className="text-purple-600">→</span>
                         <span className="font-medium text-purple-700 dark:text-purple-400">High: {r.highMarginProvider} ({r.highMarginPct}%)</span>
-                        <Badge className="text-[8px] px-1 py-0 bg-purple-100 text-purple-700 ml-auto">+${Number(r.potentialGain).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</Badge>
+                        <Badge className="text-[8px] px-1 py-0 bg-purple-100 text-purple-700 ml-auto">+${fmt(r.potentialGain)}</Badge>
                       </div>
-                      <p className="text-muted-foreground mt-0.5">Based on {r.currentStudents} applications with {r.lowMarginProvider} at {r.lowMarginPct}% margin, encouraging this agent to prioritize future applications toward {r.highMarginProvider} ({r.highMarginPct}% margin) could improve margin by ~${Number(r.marginDiffPerStudent).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}/application.</p>
+                      <p className="text-muted-foreground mt-0.5">{r.recommendation}</p>
                     </div>
                   ))}
                 </div>
