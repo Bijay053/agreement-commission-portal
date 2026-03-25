@@ -1210,7 +1210,7 @@ function DashboardView({ dashboard, year, intakeFilter, onIntakeChange, provider
                         <div className="flex gap-3 text-[10px] text-muted-foreground mt-0.5">
                           <span>Comm: ${Number(p.commission).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                           <span className="text-red-500">Sub: ${Number(p.subAgentPaid).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                          <span>{p.studentCount} students ({p.subAgentStudents} via sub-agent)</span>
+                          <span>{p.studentCount} students</span>
                         </div>
                       </div>
                     ))}
