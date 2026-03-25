@@ -53,6 +53,20 @@ def entry_to_dict(e, global_sub_pct=None):
     else:
         d['subAgentCommission'] = None
     d['effectiveSubAgentPercentage'] = str(pct) if pct is not None else None
+
+    d['ruleLabel'] = None
+    d['followupStudyLevel'] = None
+    d['followupYearRates'] = None
+    d['followupConditionsText'] = None
+    if e.copied_from_rule_id:
+        try:
+            rule = AgreementCommissionRule.objects.get(id=e.copied_from_rule_id)
+            d['ruleLabel'] = rule.label or None
+            d['followupStudyLevel'] = rule.followup_study_level or None
+            d['followupYearRates'] = rule.followup_year_rates or None
+            d['followupConditionsText'] = rule.followup_conditions_text or None
+        except AgreementCommissionRule.DoesNotExist:
+            pass
     return d
 
 

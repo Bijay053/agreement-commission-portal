@@ -23,7 +23,7 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import {
-  Search, Plus, Settings, Copy, Pencil, Trash2, Percent, X, ChevronDown, Upload, Download, FileSpreadsheet, AlertCircle, CheckCircle2, RotateCcw, History,
+  Search, Plus, Settings, Copy, Pencil, Trash2, Percent, X, ChevronDown, Upload, Download, FileSpreadsheet, AlertCircle, CheckCircle2, RotateCcw, History, ArrowRight,
 } from "lucide-react";
 
 const DEGREE_LEVELS = [
@@ -201,6 +201,10 @@ interface CommissionEntry {
   subAgentCommission: string | null;
   subAgentPercentage: string | null;
   effectiveSubAgentPercentage: string | null;
+  ruleLabel: string | null;
+  followupStudyLevel: string | null;
+  followupYearRates: { year: string; mode: string; value: string; currency: string }[] | null;
+  followupConditionsText: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -751,10 +755,12 @@ export default function ProviderCommissionPage() {
                 <TableHeader>
                   <TableRow>
                     <TableHead>Provider</TableHead>
+                    <TableHead>Label</TableHead>
                     <TableHead>Degree Level</TableHead>
                     <TableHead>Territory</TableHead>
                     <TableHead className="text-right">Commission</TableHead>
                     <TableHead>Basis</TableHead>
+                    <TableHead>Follow-up</TableHead>
                     <TableHead className="text-right">Sub-Agent %</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead className="text-right">Actions</TableHead>
@@ -852,6 +858,9 @@ export default function ProviderCommissionPage() {
                               )}
                             </TableCell>
                           )}
+                          <TableCell className="text-sm" data-testid={`text-label-${entry.id}`}>
+                            {entry.ruleLabel || <span className="text-muted-foreground">—</span>}
+                          </TableCell>
                           <TableCell data-testid={`text-degree-${entry.id}`}>
                             <Badge variant="outline">{degreeLabelMap[entry.degreeLevel] || entry.degreeLevel}</Badge>
                           </TableCell>
@@ -867,6 +876,27 @@ export default function ProviderCommissionPage() {
                           </TableCell>
                           <TableCell data-testid={`text-basis-${entry.id}`}>
                             {basisLabelMap[entry.commissionBasis] || entry.commissionBasis}
+                          </TableCell>
+                          <TableCell data-testid={`text-followup-${entry.id}`}>
+                            {(entry.followupStudyLevel || (entry.followupYearRates && entry.followupYearRates.length > 0)) ? (
+                              <div className="flex items-start gap-1">
+                                <ArrowRight className="w-3.5 h-3.5 text-blue-500 mt-0.5 shrink-0" />
+                                <div>
+                                  {entry.followupStudyLevel && <div className="text-xs font-medium">{entry.followupStudyLevel}</div>}
+                                  {entry.followupYearRates && entry.followupYearRates.length > 0 && (
+                                    <div className="space-y-0.5">
+                                      {entry.followupYearRates.map((yr, i) => (
+                                        <div key={i} className="text-[11px] text-muted-foreground">
+                                          {yr.year}: {yr.mode === "flat" ? `${yr.currency || "AUD"} ${parseFloat(yr.value || "0").toLocaleString()}` : `${parseFloat(yr.value || "0")}%`}
+                                        </div>
+                                      ))}
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            ) : (
+                              <span className="text-muted-foreground">—</span>
+                            )}
                           </TableCell>
                           <TableCell className="text-right font-mono" data-testid={`text-subagent-${entry.id}`}>
                             {entry.subAgentCommission ? (
