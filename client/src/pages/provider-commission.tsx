@@ -920,7 +920,9 @@ export default function ProviderCommissionPage() {
                                   const pct = parseFloat(entry.effectiveSubAgentPercentage || "0");
                                   return (
                                     <div className="mt-1 pt-1 border-t border-border/50 text-left">
-                                      <div className="text-[10px] text-muted-foreground font-sans mb-0.5">Follow-up:</div>
+                                      <div className="text-[10px] text-muted-foreground font-sans mb-0.5">
+                                        Follow-up:{entry.followupStudyLevel ? ` ${entry.followupStudyLevel}` : ""}
+                                      </div>
                                       {entry.followupYearRates.map((yr, i) => {
                                         const origVal = parseFloat(yr.value || "0");
                                         const subVal = pct > 0 ? (origVal * pct / 100).toFixed(2) : "0";
