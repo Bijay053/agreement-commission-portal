@@ -27,6 +27,34 @@ def _intake_sort_key(intake_str):
     return (year, term)
 
 
+TERMINAL_STATUSES = {'withdrawn', 'complete'}
+
+
+def get_excluded_student_ids_for_year(target_year):
+    prior_term_names = list(
+        CommissionTerm.objects.filter(year__lt=target_year).values_list('term_name', flat=True)
+    )
+    if not prior_term_names:
+        return set()
+    prior_student_ids = set(
+        CommissionEntry.objects.filter(term_name__in=prior_term_names)
+        .values_list('commission_student_id', flat=True).distinct()
+    )
+    if not prior_student_ids:
+        return set()
+    excluded = set()
+    for s in CommissionStudent.objects.filter(id__in=prior_student_ids):
+        if (s.status or '').lower() in TERMINAL_STATUSES:
+            latest_entry = CommissionEntry.objects.filter(
+                commission_student_id=s.id, term_name__in=prior_term_names
+            ).order_by('-term_name').first()
+            if latest_entry:
+                term = CommissionTerm.objects.filter(term_name=latest_entry.term_name).first()
+                if term and term.year < target_year:
+                    excluded.add(s.id)
+    return excluded
+
+
 def _clean_id(val):
     if val and isinstance(val, str) and val.endswith('.0'):
         stripped = val[:-2]
@@ -154,6 +182,7 @@ class StudentsListView(APIView):
         status = request.query_params.get('status')
         search = request.query_params.get('search')
         year = request.query_params.get('year')
+        exclude_year = request.query_params.get('excludeYear')
 
         if agent:
             agent_list = [a.strip() for a in agent.split(",") if a.strip()]
@@ -179,6 +208,11 @@ class StudentsListView(APIView):
             qs = qs.filter(Q(student_name__icontains=search) | Q(student_id__icontains=search) | Q(agentsic_id__icontains=search) | Q(agent_name__icontains=search))
         if year:
             qs = qs.filter(start_intake__icontains=year)
+
+        if exclude_year:
+            excluded_ids = get_excluded_student_ids_for_year(int(exclude_year))
+            if excluded_ids:
+                qs = qs.exclude(id__in=excluded_ids)
 
         students_list = sorted(qs, key=lambda s: _intake_sort_key(s.start_intake), reverse=True)
         user_perms = request.session.get('userPermissions', [])
@@ -688,7 +722,15 @@ class EntryDetailView(APIView):
 class AllEntriesView(APIView):
     @require_permission("commission_tracker.entry.read")
     def get(self, request):
+        year_param = request.query_params.get('year')
         entries = CommissionEntry.objects.all().order_by('commission_student_id', 'term_name')
+
+        if year_param:
+            target_year = int(year_param)
+            excluded_ids = get_excluded_student_ids_for_year(target_year)
+            if excluded_ids:
+                entries = entries.exclude(commission_student_id__in=excluded_ids)
+
         user_perms = request.session.get('userPermissions', [])
         grouped = {}
         for e in entries:
@@ -855,12 +897,17 @@ class DashboardYearView(APIView):
         try:
             user_perms = request.session.get('userPermissions', [])
             has_financials = 'commission_tracker.field.financials' in user_perms
-            terms = CommissionTerm.objects.filter(year=int(year)).order_by('sort_order')
+            target_year = int(year)
+            terms = CommissionTerm.objects.filter(year=target_year).order_by('sort_order')
             term_names = [t.term_name for t in terms]
 
             intake_filter = request.query_params.get('intake', '')
 
+            excluded_ids = get_excluded_student_ids_for_year(target_year)
+
             entries = CommissionEntry.objects.filter(term_name__in=term_names)
+            if excluded_ids:
+                entries = entries.exclude(commission_student_id__in=excluded_ids)
 
             year_student_ids = set(entries.values_list('commission_student_id', flat=True).distinct())
             students = CommissionStudent.objects.filter(id__in=year_student_ids)
@@ -969,8 +1016,12 @@ class PredictionView(APIView):
             target_term_names = [t.term_name for t in target_terms]
             term_number_map = {t.term_name: t.term_number for t in all_terms}
 
+            excluded_ids = get_excluded_student_ids_for_year(target_year)
+
             past_entries = list(CommissionEntry.objects.filter(term_name__in=past_term_names))
             target_entries = list(CommissionEntry.objects.filter(term_name__in=target_term_names))
+            if excluded_ids:
+                target_entries = [e for e in target_entries if e.commission_student_id not in excluded_ids]
 
             past_student_ids = set(e.commission_student_id for e in past_entries)
             target_student_ids = set(e.commission_student_id for e in target_entries)
@@ -984,7 +1035,10 @@ class PredictionView(APIView):
             )} if target_student_ids else {}
 
             if not current_year_students:
-                current_year_students = {s.id: s for s in CommissionStudent.objects.all()}
+                all_qs = CommissionStudent.objects.all()
+                if excluded_ids:
+                    all_qs = all_qs.exclude(id__in=excluded_ids)
+                current_year_students = {s.id: s for s in all_qs}
                 all_students.update(current_year_students)
 
             hist_prov_course = {}
@@ -1047,6 +1101,8 @@ class PredictionView(APIView):
             total_actual_bonus = 0
             provider_predicted = {}
             course_predicted = {}
+            country_predicted = {}
+            level_predicted = {}
 
             for t in target_terms:
                 tn = t.term_number
@@ -1118,6 +1174,18 @@ class PredictionView(APIView):
                         course_predicted[course_key]['predicted'] += avg_c
                         course_predicted[course_key]['students'] += 1
 
+                        country_key = country or 'Unknown'
+                        if country_key not in country_predicted:
+                            country_predicted[country_key] = {'predicted': 0, 'actual': 0, 'students': 0}
+                        country_predicted[country_key]['predicted'] += avg_c
+                        country_predicted[country_key]['students'] += 1
+
+                        level_key = level or 'Unknown'
+                        if level_key not in level_predicted:
+                            level_predicted[level_key] = {'predicted': 0, 'actual': 0, 'students': 0}
+                        level_predicted[level_key]['predicted'] += avg_c
+                        level_predicted[level_key]['students'] += 1
+
                 for sid in has_actual_students:
                     s = all_students.get(sid)
                     if not s:
@@ -1133,6 +1201,16 @@ class PredictionView(APIView):
                     if course_key not in course_predicted:
                         course_predicted[course_key] = {'predicted': 0, 'actual': 0, 'students': 0}
                     course_predicted[course_key]['actual'] += sid_actual_comm
+
+                    country_key = (s.country or 'Unknown').strip()
+                    if country_key not in country_predicted:
+                        country_predicted[country_key] = {'predicted': 0, 'actual': 0, 'students': 0}
+                    country_predicted[country_key]['actual'] += sid_actual_comm
+
+                    level_key = (s.course_level or 'Unknown').strip()
+                    if level_key not in level_predicted:
+                        level_predicted[level_key] = {'predicted': 0, 'actual': 0, 'students': 0}
+                    level_predicted[level_key]['actual'] += sid_actual_comm
 
                 total_predicted_comm += pred_comm
                 total_predicted_bonus += pred_bonus
@@ -1174,12 +1252,16 @@ class PredictionView(APIView):
 
             hist_provider_summary = {}
             hist_course_summary = {}
+            hist_country_summary = {}
+            hist_level_summary = {}
             for e in past_entries:
                 s = all_students.get(e.commission_student_id)
                 if not s:
                     continue
                 prov = (s.provider or 'Unknown').strip()
                 crs = (s.course_name or 'Unknown').strip()
+                country = (s.country or 'Unknown').strip()
+                level = (s.course_level or 'Unknown').strip()
                 comm = float(e.commission_amount or 0)
 
                 if prov not in hist_provider_summary:
@@ -1192,15 +1274,33 @@ class PredictionView(APIView):
                 hist_course_summary[crs]['total'] += comm
                 hist_course_summary[crs]['n'] += 1
 
-            hist_prov_list = sorted([
-                {'provider': k, 'avgCommission': round2(v['total'] / v['n']), 'entries': v['n'], 'totalCommission': round2(v['total'])}
-                for k, v in hist_provider_summary.items() if v['n'] > 0
-            ], key=lambda x: -x['totalCommission'])
+                if country not in hist_country_summary:
+                    hist_country_summary[country] = {'total': 0, 'n': 0}
+                hist_country_summary[country]['total'] += comm
+                hist_country_summary[country]['n'] += 1
 
-            hist_course_list = sorted([
-                {'course': k, 'avgCommission': round2(v['total'] / v['n']), 'entries': v['n'], 'totalCommission': round2(v['total'])}
-                for k, v in hist_course_summary.items() if v['n'] > 0
-            ], key=lambda x: -x['totalCommission'])
+                if level not in hist_level_summary:
+                    hist_level_summary[level] = {'total': 0, 'n': 0}
+                hist_level_summary[level]['total'] += comm
+                hist_level_summary[level]['n'] += 1
+
+            def _build_hist_list(summary, key_name):
+                return sorted([
+                    {key_name: k, 'avgCommission': round2(v['total'] / v['n']), 'entries': v['n'], 'totalCommission': round2(v['total'])}
+                    for k, v in summary.items() if v['n'] > 0
+                ], key=lambda x: -x['totalCommission'])
+
+            country_list = sorted([
+                {'country': k, 'predictedCommission': round2(v['predicted']), 'actualCommission': round2(v['actual']),
+                 'totalExpected': round2(v['predicted'] + v['actual']), 'predictedStudents': v['students']}
+                for k, v in country_predicted.items() if v['predicted'] + v['actual'] > 0
+            ], key=lambda x: -x['totalExpected'])
+
+            level_list = sorted([
+                {'studyLevel': k, 'predictedCommission': round2(v['predicted']), 'actualCommission': round2(v['actual']),
+                 'totalExpected': round2(v['predicted'] + v['actual']), 'predictedStudents': v['students']}
+                for k, v in level_predicted.items() if v['predicted'] + v['actual'] > 0
+            ], key=lambda x: -x['totalExpected'])
 
             return Response({
                 'prediction': {
@@ -1214,8 +1314,12 @@ class PredictionView(APIView):
                     'terms': term_predictions,
                     'byProvider': provider_list,
                     'byCourse': course_list,
-                    'histByProvider': hist_prov_list,
-                    'histByCourse': hist_course_list,
+                    'byCountry': country_list,
+                    'byStudyLevel': level_list,
+                    'histByProvider': _build_hist_list(hist_provider_summary, 'provider'),
+                    'histByCourse': _build_hist_list(hist_course_summary, 'course'),
+                    'histByCountry': _build_hist_list(hist_country_summary, 'country'),
+                    'histByStudyLevel': _build_hist_list(hist_level_summary, 'studyLevel'),
                     'studentCount': len(current_year_students),
                 },
             })
