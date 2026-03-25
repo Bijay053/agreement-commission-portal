@@ -24,6 +24,7 @@ def rule_to_dict(r):
         'followupFlatAmount': str(r.followup_flat_amount) if r.followup_flat_amount is not None else None,
         'followupCurrency': r.followup_currency,
         'followupConditionsText': r.followup_conditions_text,
+        'followupYearRates': r.followup_year_rates,
         'createdAt': r.created_at.isoformat() if r.created_at else None,
         'updatedAt': r.updated_at.isoformat() if r.updated_at else None,
     }
@@ -119,6 +120,7 @@ class AgreementCommissionRulesView(APIView):
                 followup_flat_amount=request.data.get('followupFlatAmount') or None,
                 followup_currency=request.data.get('followupCurrency') or None,
                 followup_conditions_text=request.data.get('followupConditionsText') or None,
+                followup_year_rates=request.data.get('followupYearRates') or None,
             )
             return Response(rule_to_dict(r))
         except Exception as e:
@@ -142,6 +144,7 @@ class CommissionRuleDetailView(APIView):
                 'followupStudyLevel': 'followup_study_level', 'followupCommissionMode': 'followup_commission_mode',
                 'followupPercentageValue': 'followup_percentage_value', 'followupFlatAmount': 'followup_flat_amount',
                 'followupCurrency': 'followup_currency', 'followupConditionsText': 'followup_conditions_text',
+                'followupYearRates': 'followup_year_rates',
             }
             for js_field, db_field in field_map.items():
                 if js_field in request.data:

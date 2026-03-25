@@ -23,6 +23,7 @@ class AgreementCommissionRule(models.Model):
     followup_flat_amount = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
     followup_currency = models.CharField(max_length=3, null=True, blank=True)
     followup_conditions_text = models.TextField(null=True, blank=True)
+    followup_year_rates = models.JSONField(null=True, blank=True)
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
