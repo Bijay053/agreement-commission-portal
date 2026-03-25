@@ -1678,6 +1678,115 @@ class PredictionView(APIView):
             current_year_students = {s.id: s for s in all_master_qs}
             all_students.update(current_year_students)
 
+            from provider_commission.models import ProviderCommissionEntry
+            provider_comm_rules = {}
+            for pce in ProviderCommissionEntry.objects.filter(is_active=True):
+                prov_key = (pce.provider_name or '').strip().lower()
+                level_key = (pce.degree_level or 'any').strip().lower()
+                if prov_key not in provider_comm_rules:
+                    provider_comm_rules[prov_key] = {}
+                provider_comm_rules[prov_key][level_key] = {
+                    'basis': pce.commission_basis or 'full_course',
+                    'followup_year_rates': pce.followup_year_rates,
+                }
+
+            def normalize_course_level(course_level):
+                cl = (course_level or '').strip().lower()
+                if not cl:
+                    return 'any'
+                undergrad_terms = ['bachelor', 'undergraduate', 'bachelors', "bachelor's", 'bsc', 'ba', 'beng', 'bcom', 'undergrad']
+                postgrad_terms = ['master', 'postgraduate', 'masters', "master's", 'msc', 'ma', 'mba', 'meng', 'postgrad', 'graduate diploma', 'graduate certificate', 'grad dip', 'grad cert']
+                phd_terms = ['phd', 'doctorate', 'doctoral', 'ph.d']
+                vet_terms = ['vet', 'vocational', 'certificate iii', 'certificate iv', 'cert iii', 'cert iv', 'advanced diploma']
+                diploma_terms = ['diploma']
+                foundation_terms = ['foundation', 'pathway']
+                english_terms = ['english', 'elicos', 'esl', 'ielts prep']
+                for term in undergrad_terms:
+                    if term in cl:
+                        return 'undergraduate'
+                for term in postgrad_terms:
+                    if term in cl:
+                        return 'postgraduate'
+                for term in phd_terms:
+                    if term in cl:
+                        return 'phd'
+                for term in vet_terms:
+                    if term in cl:
+                        return 'vet'
+                for term in diploma_terms:
+                    if term in cl:
+                        return 'diploma'
+                for term in foundation_terms:
+                    if term in cl:
+                        return 'foundation'
+                for term in english_terms:
+                    if term in cl:
+                        return 'english'
+                return cl
+
+            def get_max_payable_terms(provider, course_level):
+                prov_key = (provider or '').strip().lower()
+                level_key = normalize_course_level(course_level)
+                rule = None
+                if prov_key in provider_comm_rules:
+                    rule = provider_comm_rules[prov_key].get(level_key) or provider_comm_rules[prov_key].get('any')
+                if not rule:
+                    return 99
+                basis = rule['basis']
+                if basis == 'one_time':
+                    return 1
+                if basis == '1_year':
+                    return 2
+                if basis == '2_semesters':
+                    return 2
+                if basis == 'per_trimester':
+                    return 99
+                if basis == 'per_semester':
+                    return 99
+                if basis == 'per_year':
+                    return 99
+                if basis == 'full_course':
+                    return 99
+                return 99
+
+            all_entries_by_student = {}
+            for e in list(CommissionEntry.objects.all()):
+                sid = e.commission_student_id
+                if sid not in all_entries_by_student:
+                    all_entries_by_student[sid] = []
+                all_entries_by_student[sid].append(e)
+
+            def count_terms_already_paid(sid):
+                entries = all_entries_by_student.get(sid, [])
+                terms_paid = set()
+                for e in entries:
+                    if float(e.commission_amount or 0) > 0:
+                        terms_paid.add(e.term_name)
+                return len(terms_paid)
+
+            eligible_students = {}
+            ineligible_students = {}
+            ineligible_reasons = {}
+            for sid, s in current_year_students.items():
+                status = (s.status or 'Under Enquiry').lower()
+                if status == 'withdrawn':
+                    ineligible_students[sid] = s
+                    ineligible_reasons[sid] = 'Withdrawn'
+                    continue
+                provider = (s.provider or '').strip()
+                course_level = (s.course_level or '').strip()
+                max_terms = get_max_payable_terms(provider, course_level)
+                terms_paid = count_terms_already_paid(sid)
+                if status == 'complete' and terms_paid >= max_terms:
+                    ineligible_students[sid] = s
+                    ineligible_reasons[sid] = 'Complete - commission basis exhausted'
+                    continue
+                if terms_paid >= max_terms and max_terms < 99:
+                    ineligible_students[sid] = s
+                    ineligible_reasons[sid] = f'Commission basis exhausted ({terms_paid}/{max_terms} terms paid)'
+                    continue
+                eligible_students[sid] = s
+
             hist_by_year_term = {}
             hist_student_bonus_years = {}
             for e in past_entries:
@@ -1851,16 +1960,22 @@ class PredictionView(APIView):
                 has_actual_students = actual_students_by_term.get(tn, set())
 
                 students_to_predict = set()
-                for sid in current_year_students:
+                for sid in eligible_students:
                     if sid not in has_actual_students:
-                        students_to_predict.add(sid)
+                        s = eligible_students[sid]
+                        prov = (s.provider or '').strip()
+                        cl = (s.course_level or '').strip()
+                        max_t = get_max_payable_terms(prov, cl)
+                        paid_so_far = count_terms_already_paid(sid)
+                        if paid_so_far < max_t or max_t >= 99:
+                            students_to_predict.add(sid)
 
-                source = 'actual' if not students_to_predict and actual['count'] > 0 else 'mixed' if actual['count'] > 0 else 'predicted'
+                source = 'actual' if not students_to_predict and actual['count'] > 0 else 'mixed' if actual['count'] > 0 else 'estimated'
 
                 prior_actual_terms = [pt for pt in target_term_numbers if pt < tn]
 
                 for sid in students_to_predict:
-                    s = current_year_students.get(sid) or all_students.get(sid)
+                    s = eligible_students.get(sid) or all_students.get(sid)
                     if not s:
                         continue
                     provider = (s.provider or '').strip()
@@ -1907,15 +2022,29 @@ class PredictionView(APIView):
                         pred_c = avg_c if avg_c and avg_c > 0 else 0
 
                     pred_b = 0
-                    if sid not in students_with_bonus_this_year:
-                        already_got_bonus = sid in hist_student_bonus_years
-                        if not already_got_bonus:
-                            if provider and provider in hist_bonus_rate_by_prov:
-                                bp = hist_bonus_rate_by_prov[provider]
-                                if bp['total'] > 0 and bp['with_bonus'] > 0:
-                                    bonus_prob = bp['with_bonus'] / bp['total']
-                                    avg_bonus_val = sum(bp['avg_bonus']) / len(bp['avg_bonus']) if bp['avg_bonus'] else 0
-                                    if tn == min(target_term_numbers):
+                    if tn == min(target_term_numbers):
+                        student_entries = all_entries_by_student.get(sid, [])
+                        bonus_paid_target_year = sum(
+                            float(e.bonus or 0) for e in student_entries
+                            if e.term_name in target_term_names
+                        )
+                        bonus_paid_prior_years = sum(
+                            float(e.bonus or 0) for e in student_entries
+                            if e.term_name not in target_term_names
+                        )
+                        if provider and provider in hist_bonus_rate_by_prov:
+                            bp = hist_bonus_rate_by_prov[provider]
+                            if bp['total'] > 0 and bp['with_bonus'] > 0:
+                                avg_bonus_val = sum(bp['avg_bonus']) / len(bp['avg_bonus']) if bp['avg_bonus'] else 0
+                                if bonus_paid_target_year > 0 and avg_bonus_val > 0:
+                                    remaining = max(avg_bonus_val - bonus_paid_target_year, 0)
+                                    pred_b = remaining
+                                elif bonus_paid_target_year == 0:
+                                    if bonus_paid_prior_years > 0 and avg_bonus_val > 0:
+                                        remaining = max(avg_bonus_val - bonus_paid_prior_years, 0)
+                                        pred_b = remaining
+                                    else:
+                                        bonus_prob = bp['with_bonus'] / bp['total']
                                         pred_b = avg_bonus_val * bonus_prob
 
                     if pred_c > 0:
@@ -1988,13 +2117,13 @@ class PredictionView(APIView):
                     'termNumber': tn,
                     'termName': t.term_name,
                     'termLabel': t.term_label,
-                    'predictedCommission': round2(pred_comm),
-                    'predictedBonus': round2(pred_bonus),
-                    'predictedTotal': round2(pred_comm + pred_bonus),
+                    'expectedCommission': round2(pred_comm),
+                    'expectedBonus': round2(pred_bonus),
+                    'expectedTotal': round2(pred_comm + pred_bonus),
                     'actualCommission': round2(actual['comm']),
                     'actualBonus': round2(actual['bonus']),
                     'studentCount': student_count,
-                    'predictedStudents': len(students_to_predict),
+                    'estimatedStudents': len(students_to_predict),
                     'actualStudents': actual['count'],
                     'source': source,
                 })
@@ -2003,20 +2132,20 @@ class PredictionView(APIView):
             for prov, data in sorted(provider_predicted.items(), key=lambda x: -(x[1]['predicted'] + x[1]['actual'])):
                 provider_list.append({
                     'provider': prov,
-                    'predictedCommission': round2(data['predicted']),
+                    'estimatedCommission': round2(data['predicted']),
                     'actualCommission': round2(data['actual']),
                     'totalExpected': round2(data['predicted'] + data['actual']),
-                    'predictedStudents': len(provider_student_ids.get(prov, set())),
+                    'eligibleStudents': len(provider_student_ids.get(prov, set())),
                 })
 
             course_list = []
             for crs, data in sorted(course_predicted.items(), key=lambda x: -(x[1]['predicted'] + x[1]['actual'])):
                 course_list.append({
                     'course': crs,
-                    'predictedCommission': round2(data['predicted']),
+                    'estimatedCommission': round2(data['predicted']),
                     'actualCommission': round2(data['actual']),
                     'totalExpected': round2(data['predicted'] + data['actual']),
-                    'predictedStudents': len(course_student_ids.get(crs, set())),
+                    'eligibleStudents': len(course_student_ids.get(crs, set())),
                 })
 
             hist_provider_summary = {}
@@ -2060,24 +2189,32 @@ class PredictionView(APIView):
                 ], key=lambda x: -x['totalCommission'])
 
             country_list = sorted([
-                {'country': k, 'predictedCommission': round2(v['predicted']), 'actualCommission': round2(v['actual']),
-                 'totalExpected': round2(v['predicted'] + v['actual']), 'predictedStudents': len(country_student_ids.get(k, set()))}
+                {'country': k, 'estimatedCommission': round2(v['predicted']), 'actualCommission': round2(v['actual']),
+                 'totalExpected': round2(v['predicted'] + v['actual']), 'eligibleStudents': len(country_student_ids.get(k, set()))}
                 for k, v in country_predicted.items() if v['predicted'] + v['actual'] > 0
             ], key=lambda x: -x['totalExpected'])
 
             level_list = sorted([
-                {'studyLevel': k, 'predictedCommission': round2(v['predicted']), 'actualCommission': round2(v['actual']),
-                 'totalExpected': round2(v['predicted'] + v['actual']), 'predictedStudents': len(level_student_ids.get(k, set()))}
+                {'studyLevel': k, 'estimatedCommission': round2(v['predicted']), 'actualCommission': round2(v['actual']),
+                 'totalExpected': round2(v['predicted'] + v['actual']), 'eligibleStudents': len(level_student_ids.get(k, set()))}
                 for k, v in level_predicted.items() if v['predicted'] + v['actual'] > 0
             ], key=lambda x: -x['totalExpected'])
+
+            ineligible_summary = {}
+            for sid, reason in ineligible_reasons.items():
+                if reason not in ineligible_summary:
+                    ineligible_summary[reason] = 0
+                ineligible_summary[reason] += 1
+            if excluded_ids:
+                ineligible_summary['Excluded (prior-year terminal)'] = len(excluded_ids)
 
             return Response({
                 'prediction': {
                     'year': target_year,
                     'basedOnYears': past_years,
-                    'totalPredictedCommission': round2(total_predicted_comm),
-                    'totalPredictedBonus': round2(total_predicted_bonus),
-                    'totalPredictedReceivable': round2(total_predicted_comm + total_predicted_bonus),
+                    'totalExpectedCommission': round2(total_predicted_comm),
+                    'totalExpectedBonus': round2(total_predicted_bonus),
+                    'totalExpectedReceivable': round2(total_predicted_comm + total_predicted_bonus),
                     'totalActualCommission': round2(total_actual_comm),
                     'totalActualBonus': round2(total_actual_bonus),
                     'terms': term_predictions,
@@ -2089,7 +2226,10 @@ class PredictionView(APIView):
                     'histByCourse': _build_hist_list(hist_course_summary, 'course'),
                     'histByCountry': _build_hist_list(hist_country_summary, 'country'),
                     'histByStudyLevel': _build_hist_list(hist_level_summary, 'studyLevel'),
-                    'studentCount': len(current_year_students),
+                    'eligibleStudents': len(eligible_students),
+                    'excludedStudents': len(ineligible_students) + len(excluded_ids),
+                    'excludedReasons': ineligible_summary,
+                    'studentsConsidered': len(current_year_students),
                 },
             })
         except Exception as e:

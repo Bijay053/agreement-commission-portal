@@ -890,62 +890,73 @@ function DashboardView({ dashboard, year, intakeFilter, onIntakeChange, provider
           <CardContent className="p-4">
             <div className="flex items-center gap-2 mb-3">
               <Sparkles className="h-4 w-4 text-blue-500" />
-              <h3 className="text-sm font-semibold">Predicted Commission Receivable - {year}</h3>
-              <span className="text-[10px] text-muted-foreground ml-auto">Based on {prediction.basedOnYears?.join(", ")} data | By university &amp; course</span>
+              <h3 className="text-sm font-semibold">Expected Commission Receivable - {year}</h3>
+              <span className="text-[10px] text-muted-foreground ml-auto">Based on {prediction.basedOnYears?.join(", ")} data | Eligible students only</span>
             </div>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-3">
               <div className="bg-white dark:bg-gray-900 rounded-lg p-3 border">
-                <p className="text-[10px] text-muted-foreground">Predicted Total Receivable</p>
-                <p className="text-base font-bold text-blue-600" data-testid="text-predicted-total">
-                  ${Number(prediction.totalPredictedReceivable || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                <p className="text-[10px] text-muted-foreground">Expected Total Receivable</p>
+                <p className="text-base font-bold text-blue-600" data-testid="text-expected-total">
+                  ${Number(prediction.totalExpectedReceivable || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </p>
               </div>
               <div className="bg-white dark:bg-gray-900 rounded-lg p-3 border">
-                <p className="text-[10px] text-muted-foreground">Predicted Commission</p>
-                <p className="text-base font-bold text-green-600" data-testid="text-predicted-commission">
-                  ${Number(prediction.totalPredictedCommission || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                <p className="text-[10px] text-muted-foreground">Expected Commission</p>
+                <p className="text-base font-bold text-green-600" data-testid="text-expected-commission">
+                  ${Number(prediction.totalExpectedCommission || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </p>
               </div>
               <div className="bg-white dark:bg-gray-900 rounded-lg p-3 border">
-                <p className="text-[10px] text-muted-foreground">Predicted Bonus</p>
-                <p className="text-base font-bold text-amber-600" data-testid="text-predicted-bonus">
-                  ${Number(prediction.totalPredictedBonus || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                <p className="text-[10px] text-muted-foreground">Expected Bonus</p>
+                <p className="text-base font-bold text-amber-600" data-testid="text-expected-bonus">
+                  ${Number(prediction.totalExpectedBonus || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </p>
               </div>
               <div className="bg-white dark:bg-gray-900 rounded-lg p-3 border">
-                <p className="text-[10px] text-muted-foreground">Students Analyzed</p>
-                <p className="text-base font-bold" data-testid="text-predicted-students">{prediction.studentCount || 0}</p>
+                <p className="text-[10px] text-muted-foreground">Eligible Students</p>
+                <p className="text-base font-bold text-green-600" data-testid="text-eligible-students">{prediction.eligibleStudents || 0}</p>
+              </div>
+              <div className="bg-white dark:bg-gray-900 rounded-lg p-3 border">
+                <p className="text-[10px] text-muted-foreground">Excluded Students</p>
+                <p className="text-base font-bold text-red-500" data-testid="text-excluded-students">{prediction.excludedStudents || 0}</p>
+                {prediction.excludedReasons && Object.keys(prediction.excludedReasons).length > 0 && (
+                  <div className="text-[9px] text-muted-foreground mt-0.5">
+                    {Object.entries(prediction.excludedReasons).map(([reason, count]: [string, any]) => (
+                      <div key={reason}>{count} {reason}</div>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
 
             {prediction.terms && prediction.terms.length > 0 && (
               <div className="mb-3">
-                <h4 className="text-xs font-medium text-muted-foreground mb-2">Term-wise Prediction</h4>
+                <h4 className="text-xs font-medium text-muted-foreground mb-2">Term-wise Receivable Estimate</h4>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
                   {prediction.terms.map((t: any) => (
                     <div key={t.termNumber} className="bg-white dark:bg-gray-900 rounded-lg p-2.5 border">
                       <div className="flex items-center justify-between mb-1">
                         <span className="text-xs font-semibold">{t.termLabel || t.termName}</span>
                         <Badge className={`text-[9px] px-1.5 py-0 ${t.source === 'actual' ? 'bg-green-100 text-green-700' : t.source === 'mixed' ? 'bg-amber-100 text-amber-700' : 'bg-blue-100 text-blue-700'}`}>
-                          {t.source === 'actual' ? 'Actual' : t.source === 'mixed' ? 'Mixed' : 'Predicted'}
+                          {t.source === 'actual' ? 'Actual' : t.source === 'mixed' ? 'Mixed' : 'Estimated'}
                         </Badge>
                       </div>
                       <div className="flex justify-between text-xs">
                         <span className="text-muted-foreground">Commission:</span>
-                        <span className="font-mono font-medium">${Number(t.predictedCommission || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                        <span className="font-mono font-medium">${Number(t.expectedCommission || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                       </div>
                       <div className="flex justify-between text-xs">
                         <span className="text-muted-foreground">Bonus:</span>
-                        <span className="font-mono font-medium">${Number(t.predictedBonus || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                        <span className="font-mono font-medium">${Number(t.expectedBonus || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                       </div>
                       <div className="flex justify-between text-xs border-t mt-1 pt-1">
                         <span className="text-muted-foreground">Total:</span>
-                        <span className="font-mono font-bold text-blue-600">${Number(t.predictedTotal || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                        <span className="font-mono font-bold text-blue-600">${Number(t.expectedTotal || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                       </div>
                       <div className="text-[10px] text-muted-foreground mt-1">
                         {t.studentCount} students
-                        {t.actualStudents > 0 && t.predictedStudents > 0 && (
-                          <span className="ml-1">({t.actualStudents} actual, {t.predictedStudents} predicted)</span>
+                        {t.actualStudents > 0 && t.estimatedStudents > 0 && (
+                          <span className="ml-1">({t.actualStudents} actual, {t.estimatedStudents} estimated)</span>
                         )}
                       </div>
                     </div>
@@ -957,7 +968,7 @@ function DashboardView({ dashboard, year, intakeFilter, onIntakeChange, provider
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               {prediction.byProvider && prediction.byProvider.length > 0 && (
                 <div>
-                  <h4 className="text-xs font-medium text-muted-foreground mb-1.5">Prediction by University</h4>
+                  <h4 className="text-xs font-medium text-muted-foreground mb-1.5">Receivable by University</h4>
                   <div className="space-y-1 max-h-40 overflow-y-auto">
                     {prediction.byProvider.map((p: any) => (
                       <div key={p.provider} className="text-xs bg-white dark:bg-gray-900 rounded px-2 py-1.5 border">
@@ -967,8 +978,8 @@ function DashboardView({ dashboard, year, intakeFilter, onIntakeChange, provider
                         </div>
                         <div className="flex gap-3 text-[10px] text-muted-foreground mt-0.5">
                           {p.actualCommission > 0 && <span className="text-green-600">Actual: ${Number(p.actualCommission).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>}
-                          {p.predictedCommission > 0 && <span className="text-blue-600">Predicted: ${Number(p.predictedCommission).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>}
-                          {p.predictedStudents > 0 && <span>{p.predictedStudents} predicted students</span>}
+                          {p.estimatedCommission > 0 && <span className="text-blue-600">Estimated: ${Number(p.estimatedCommission).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>}
+                          {p.eligibleStudents > 0 && <span>{p.eligibleStudents} eligible students</span>}
                         </div>
                       </div>
                     ))}
@@ -977,7 +988,7 @@ function DashboardView({ dashboard, year, intakeFilter, onIntakeChange, provider
               )}
               {prediction.byCourse && prediction.byCourse.length > 0 && (
                 <div>
-                  <h4 className="text-xs font-medium text-muted-foreground mb-1.5">Prediction by Course</h4>
+                  <h4 className="text-xs font-medium text-muted-foreground mb-1.5">Receivable by Course</h4>
                   <div className="space-y-1 max-h-40 overflow-y-auto">
                     {prediction.byCourse.map((c: any) => (
                       <div key={c.course} className="text-xs bg-white dark:bg-gray-900 rounded px-2 py-1.5 border">
@@ -987,8 +998,8 @@ function DashboardView({ dashboard, year, intakeFilter, onIntakeChange, provider
                         </div>
                         <div className="flex gap-3 text-[10px] text-muted-foreground mt-0.5">
                           {c.actualCommission > 0 && <span className="text-green-600">Actual: ${Number(c.actualCommission).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>}
-                          {c.predictedCommission > 0 && <span className="text-blue-600">Predicted: ${Number(c.predictedCommission).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>}
-                          {c.predictedStudents > 0 && <span>{c.predictedStudents} predicted students</span>}
+                          {c.estimatedCommission > 0 && <span className="text-blue-600">Estimated: ${Number(c.estimatedCommission).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>}
+                          {c.eligibleStudents > 0 && <span>{c.eligibleStudents} eligible students</span>}
                         </div>
                       </div>
                     ))}
@@ -1000,7 +1011,7 @@ function DashboardView({ dashboard, year, intakeFilter, onIntakeChange, provider
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-2">
                 {prediction.byCountry && prediction.byCountry.length > 0 && (
                   <div>
-                    <h4 className="text-xs font-medium text-muted-foreground mb-1.5">Prediction by Country</h4>
+                    <h4 className="text-xs font-medium text-muted-foreground mb-1.5">Receivable by Country</h4>
                     <div className="space-y-1 max-h-40 overflow-y-auto">
                       {prediction.byCountry.map((c: any) => (
                         <div key={c.country} className="text-xs bg-white dark:bg-gray-900 rounded px-2 py-1.5 border">
@@ -1010,8 +1021,8 @@ function DashboardView({ dashboard, year, intakeFilter, onIntakeChange, provider
                           </div>
                           <div className="flex gap-3 text-[10px] text-muted-foreground mt-0.5">
                             {c.actualCommission > 0 && <span className="text-green-600">Actual: ${Number(c.actualCommission).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>}
-                            {c.predictedCommission > 0 && <span className="text-blue-600">Predicted: ${Number(c.predictedCommission).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>}
-                            {c.predictedStudents > 0 && <span>{c.predictedStudents} predicted students</span>}
+                            {c.estimatedCommission > 0 && <span className="text-blue-600">Estimated: ${Number(c.estimatedCommission).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>}
+                            {c.eligibleStudents > 0 && <span>{c.eligibleStudents} eligible students</span>}
                           </div>
                         </div>
                       ))}
@@ -1020,7 +1031,7 @@ function DashboardView({ dashboard, year, intakeFilter, onIntakeChange, provider
                 )}
                 {prediction.byStudyLevel && prediction.byStudyLevel.length > 0 && (
                   <div>
-                    <h4 className="text-xs font-medium text-muted-foreground mb-1.5">Prediction by Study Level</h4>
+                    <h4 className="text-xs font-medium text-muted-foreground mb-1.5">Receivable by Study Level</h4>
                     <div className="space-y-1 max-h-40 overflow-y-auto">
                       {prediction.byStudyLevel.map((l: any) => (
                         <div key={l.studyLevel} className="text-xs bg-white dark:bg-gray-900 rounded px-2 py-1.5 border">
@@ -1030,8 +1041,8 @@ function DashboardView({ dashboard, year, intakeFilter, onIntakeChange, provider
                           </div>
                           <div className="flex gap-3 text-[10px] text-muted-foreground mt-0.5">
                             {l.actualCommission > 0 && <span className="text-green-600">Actual: ${Number(l.actualCommission).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>}
-                            {l.predictedCommission > 0 && <span className="text-blue-600">Predicted: ${Number(l.predictedCommission).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>}
-                            {l.predictedStudents > 0 && <span>{l.predictedStudents} predicted students</span>}
+                            {l.estimatedCommission > 0 && <span className="text-blue-600">Estimated: ${Number(l.estimatedCommission).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>}
+                            {l.eligibleStudents > 0 && <span>{l.eligibleStudents} eligible students</span>}
                           </div>
                         </div>
                       ))}
