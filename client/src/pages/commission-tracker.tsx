@@ -1214,7 +1214,7 @@ function InsightsPanel({ insights, year }: { insights: any; year: number }) {
     return Array.from(set).sort();
   }, [insights.byAgent]);
 
-  const actionOptions = ['Scale', 'Negotiate', 'Re-engage', 'High Risk', 'Monitor'];
+  const actionOptions = ['Scale', 'Negotiate', 'Re-engage', 'High Risk', 'Review Payout', 'Monitor'];
 
   const filterFn = (item: any, type: 'provider' | 'agent') => {
     if (aiFilterAction && item.aiAction !== aiFilterAction) return false;
@@ -1261,7 +1261,7 @@ function InsightsPanel({ insights, year }: { insights: any; year: number }) {
     <>
             <div className="flex items-center gap-2 mb-3">
               <Sparkles className="h-4 w-4 text-amber-500" />
-              <h3 className="text-sm font-semibold">AI Commission Intelligence - {year}</h3>
+              <h3 className="text-sm font-semibold">AI Margin Intelligence - {year}</h3>
               <div className="ml-auto flex items-center gap-1.5">
                 <Button variant={showWhatIf ? "default" : "outline"} size="sm" className="h-6 text-[10px] px-2 gap-1" onClick={() => setShowWhatIf(!showWhatIf)} data-testid="btn-whatif-toggle">
                   <Calculator className="h-3 w-3" /> What-If
@@ -1432,7 +1432,7 @@ function InsightsPanel({ insights, year }: { insights: any; year: number }) {
 
             {insights.suggestions && insights.suggestions.length > 0 && (
               <div className="mb-4">
-                <h4 className="text-xs font-medium text-muted-foreground mb-2 flex items-center gap-1"><Target className="h-3 w-3" /> AI Recommendations</h4>
+                <h4 className="text-xs font-medium text-muted-foreground mb-2 flex items-center gap-1"><Target className="h-3 w-3" /> Margin Optimization Recommendations</h4>
                 <div className="space-y-1.5">
                   {insights.suggestions.map((s: any, i: number) => (
                     <div key={i} className={`text-xs rounded-lg px-3 py-2 border flex items-start gap-2 ${
@@ -1481,6 +1481,7 @@ function InsightsPanel({ insights, year }: { insights: any; year: number }) {
                               p.aiAction === 'Negotiate' ? 'bg-orange-100 text-orange-700' :
                               p.aiAction === 'Re-engage' ? 'bg-purple-100 text-purple-700' :
                               p.aiAction === 'High Risk' ? 'bg-red-100 text-red-700' :
+                              p.aiAction === 'Review Payout' ? 'bg-pink-100 text-pink-700' :
                               'bg-gray-100 text-gray-600'
                             }`}>{p.aiAction}</Badge>
                           </div>
@@ -1527,6 +1528,7 @@ function InsightsPanel({ insights, year }: { insights: any; year: number }) {
                               a.aiAction === 'Negotiate' ? 'bg-orange-100 text-orange-700' :
                               a.aiAction === 'Re-engage' ? 'bg-purple-100 text-purple-700' :
                               a.aiAction === 'High Risk' ? 'bg-red-100 text-red-700' :
+                              a.aiAction === 'Review Payout' ? 'bg-pink-100 text-pink-700' :
                               'bg-gray-100 text-gray-600'
                             }`}>{a.aiAction}</Badge>
                           </div>
