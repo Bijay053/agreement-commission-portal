@@ -1137,16 +1137,6 @@ class CommissionInsightsView(APIView):
                     'message': f'Sub-agent(s) {names} have been paid more than the commission received — net loss ${total_loss:,.2f}. Review and adjust sub-agent rates immediately to stop revenue leakage.',
                 })
 
-            high_sub_agents = [a for a in agent_insights if a['subAgentRatePct'] > 50 and a['subAgentPaid'] > 0 and a['subAgentPaid'] <= a['commission']]
-            if high_sub_agents:
-                names = ', '.join(a['agent'] for a in high_sub_agents[:3])
-                potential_save = sum(a['subAgentPaid'] * 0.15 for a in high_sub_agents)
-                suggestions.append({
-                    'type': 'warning',
-                    'title': 'High Sub-Agent Cost',
-                    'message': f'Sub-agents {names} cost over 50% of commission. Renegotiating rates by just 15% could save ~${potential_save:,.2f} this year.',
-                })
-
             low_margin_provs = [p for p in provider_insights if p['marginPct'] < 30 and p['subAgentPaid'] > 0]
             if low_margin_provs:
                 names = ', '.join(p['provider'] for p in low_margin_provs[:3])
@@ -1212,16 +1202,13 @@ class CommissionInsightsView(APIView):
 
             sub_agents_with_students = [a for a in agent_insights if a['subAgentStudents'] > 0]
             if sub_agents_with_students:
-                avg_sub_rate = sum(a['subAgentRatePct'] for a in sub_agents_with_students) / len(sub_agents_with_students)
-                best_rate_agent = min(sub_agents_with_students, key=lambda a: a['subAgentRatePct'])
-                if best_rate_agent['subAgentRatePct'] < avg_sub_rate * 0.7 and len(sub_agents_with_students) >= 2:
-                    savings_if_all_at_best = total_sub_paid - (total_commission * best_rate_agent['subAgentRatePct'] / 100)
-                    if savings_if_all_at_best > 0:
-                        suggestions.append({
-                            'type': 'info',
-                            'title': 'Sub-Agent Rate Benchmark',
-                            'message': f'Best sub-agent rate is {round(best_rate_agent["subAgentRatePct"])}% ({best_rate_agent["agent"]}) vs average {round(avg_sub_rate)}%. Bringing all sub-agents closer to this benchmark could save ~${savings_if_all_at_best:,.2f}.',
-                        })
+                top_sub_agent = max(sub_agents_with_students, key=lambda a: a['commission'])
+                if top_sub_agent['commission'] > 0:
+                    suggestions.append({
+                        'type': 'success',
+                        'title': 'Top Performing Sub-Agent',
+                        'message': f'{top_sub_agent["agent"]} is the strongest sub-agent partner, bringing in ${top_sub_agent["commission"]:,.2f} commission from {top_sub_agent["studentCount"]} students. Strengthening this partnership could drive further growth.',
+                    })
 
             no_sub_provs = [p for p in provider_insights if p['subAgentStudents'] == 0 and p['commission'] > 0]
             if no_sub_provs:
