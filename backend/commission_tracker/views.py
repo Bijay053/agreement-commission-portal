@@ -1138,7 +1138,7 @@ class CommissionInsightsView(APIView):
                 suggestions.append({
                     'type': 'warning',
                     'title': 'Low Margin Providers',
-                    'message': f'{names} have margin below 30% after sub-agent payments. Focus on recruiting direct students for these providers or negotiate higher commission rates.',
+                    'message': f'{names} have margin below 30% after sub-agent payments. Consider negotiating higher commission rates with these providers or reviewing sub-agent rates.',
                 })
 
             high_margin_provs = [p for p in provider_insights if p['marginPct'] > 70 and p['commission'] > 0]
@@ -1153,18 +1153,6 @@ class CommissionInsightsView(APIView):
             direct_students = sum(len(pd['students']) - len(pd['hasSubAgent']) for pd in provider_data.values())
             total_students_count = sum(len(pd['students']) for pd in provider_data.values())
             direct_pct = (direct_students / total_students_count * 100) if total_students_count > 0 else 0
-            if direct_pct < 30:
-                suggestions.append({
-                    'type': 'info',
-                    'title': 'Increase Direct Recruitment',
-                    'message': f'Only {round(direct_pct)}% of students are direct (no sub-agent). Increasing direct recruitment to 50%+ would significantly improve margins.',
-                })
-            elif direct_pct > 60:
-                suggestions.append({
-                    'type': 'success',
-                    'title': 'Strong Direct Student Base',
-                    'message': f'{round(direct_pct)}% of students are direct recruits — great for margins. Continue building direct channels.',
-                })
 
             no_sub_provs = [p for p in provider_insights if p['subAgentStudents'] == 0 and p['commission'] > 0]
             if no_sub_provs:
