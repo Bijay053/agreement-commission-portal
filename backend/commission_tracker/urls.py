@@ -24,4 +24,5 @@ urlpatterns = [
     path('commission-tracker/bulk-upload/confirm', views.BulkUploadConfirmView.as_view()),
     path('commission-tracker/provider-agreements-map', views.ProviderAgreementsMapView.as_view()),
     path('commission-tracker/recalculate-all', views.RecalculateAllView.as_view()),
+    path('commission-tracker/prediction/<int:year>', views.PredictionView.as_view()),
 ]

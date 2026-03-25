@@ -4,7 +4,7 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from core.permissions import require_auth, require_permission
 from core.object_permissions import filter_sub_agent_by_user
-from commission_tracker.models import CommissionStudent, CommissionEntry
+from commission_tracker.models import CommissionStudent, CommissionEntry, CommissionTerm
 from commission_tracker.services import round2, num
 from .models import SubAgentEntry, SubAgentTermEntry
 from .services import calculate_sub_agent_term_entry, calculate_master_totals
@@ -514,4 +514,149 @@ class SubAgentTermEntryUpdateView(APIView):
 
             return Response({'message': 'Deleted'})
         except Exception as e:
+            return Response({'message': str(e)}, status=500)
+
+
+class SubAgentPredictionView(APIView):
+    @require_permission("sub_agent_commission.view")
+    def get(self, request, year):
+        try:
+            target_year = int(year)
+            all_terms = list(CommissionTerm.objects.all().order_by('year', 'sort_order'))
+            target_terms = [t for t in all_terms if t.year == target_year]
+            past_years = sorted(set(t.year for t in all_terms if t.year < target_year))
+
+            if not past_years:
+                return Response({'prediction': None, 'message': 'No historical data available'})
+
+            past_term_names = [t.term_name for t in all_terms if t.year < target_year]
+            target_term_names = [t.term_name for t in target_terms]
+
+            term_number_map = {t.term_name: t.term_number for t in all_terms}
+
+            past_sa_entries = list(SubAgentTermEntry.objects.filter(term_name__in=past_term_names))
+            target_sa_entries = list(SubAgentTermEntry.objects.filter(term_name__in=target_term_names))
+
+            past_student_ids = set(e.commission_student_id for e in past_sa_entries)
+            target_student_ids = set(e.commission_student_id for e in target_sa_entries)
+            all_student_ids = past_student_ids | target_student_ids
+            students = {s.id: s for s in CommissionStudent.objects.filter(id__in=all_student_ids)}
+
+            avg_by_group = {}
+            for e in past_sa_entries:
+                s = students.get(e.commission_student_id)
+                if not s:
+                    continue
+                country = (s.country or 'Unknown').strip()
+                course_level = (s.course_level or 'Unknown').strip()
+                tn = term_number_map.get(e.term_name, 0)
+                key = (country, course_level, tn)
+                if key not in avg_by_group:
+                    avg_by_group[key] = {'total_paid': 0, 'total_margin': 0, 'count': 0}
+                avg_by_group[key]['total_paid'] += float(e.total_paid or 0)
+                avg_by_group[key]['count'] += 1
+
+            country_tn_avg = {}
+            for key, vals in avg_by_group.items():
+                country, _, tn = key
+                ckey = (country, tn)
+                if ckey not in country_tn_avg:
+                    country_tn_avg[ckey] = {'total_paid': 0, 'count': 0}
+                country_tn_avg[ckey]['total_paid'] += vals['total_paid']
+                country_tn_avg[ckey]['count'] += vals['count']
+
+            global_tn_avg = {}
+            for key, vals in avg_by_group.items():
+                _, _, tn = key
+                if tn not in global_tn_avg:
+                    global_tn_avg[tn] = {'total_paid': 0, 'count': 0}
+                global_tn_avg[tn]['total_paid'] += vals['total_paid']
+                global_tn_avg[tn]['count'] += vals['count']
+
+            actual_by_term = {}
+            for t in target_terms:
+                actual_by_term[t.term_number] = {'paid': 0, 'count': 0}
+            for e in target_sa_entries:
+                tn = term_number_map.get(e.term_name, 0)
+                if tn in actual_by_term:
+                    actual_by_term[tn]['paid'] += float(e.total_paid or 0)
+                    actual_by_term[tn]['count'] += 1
+
+            all_target_students = target_student_ids or past_student_ids
+
+            term_predictions = []
+            total_predicted_paid = 0
+            total_actual_paid = 0
+
+            for t in target_terms:
+                tn = t.term_number
+                actual = actual_by_term.get(tn, {'paid': 0, 'count': 0})
+                total_actual_paid += actual['paid']
+
+                if actual['count'] > 0:
+                    pred_paid = actual['paid']
+                    source = 'actual'
+                    student_count = actual['count']
+                else:
+                    pred_paid = 0
+                    student_count = 0
+                    source = 'predicted'
+                    for sid in all_target_students:
+                        s = students.get(sid)
+                        if not s:
+                            continue
+                        country = (s.country or 'Unknown').strip()
+                        course_level = (s.course_level or 'Unknown').strip()
+                        key = (country, course_level, tn)
+                        if key in avg_by_group and avg_by_group[key]['count'] > 0:
+                            avg_paid = avg_by_group[key]['total_paid'] / avg_by_group[key]['count']
+                        elif (country, tn) in country_tn_avg and country_tn_avg[(country, tn)]['count'] > 0:
+                            avg_paid = country_tn_avg[(country, tn)]['total_paid'] / country_tn_avg[(country, tn)]['count']
+                        elif tn in global_tn_avg and global_tn_avg[tn]['count'] > 0:
+                            avg_paid = global_tn_avg[tn]['total_paid'] / global_tn_avg[tn]['count']
+                        else:
+                            avg_paid = 0
+                        pred_paid += avg_paid
+                        student_count += 1
+
+                total_predicted_paid += pred_paid
+                term_predictions.append({
+                    'termNumber': tn,
+                    'termName': t.term_name,
+                    'termLabel': t.term_label,
+                    'predictedPaid': round2(pred_paid),
+                    'actualPaid': round2(actual['paid']),
+                    'studentCount': student_count,
+                    'source': source,
+                })
+
+            country_breakdown = {}
+            for e in past_sa_entries:
+                s = students.get(e.commission_student_id)
+                if not s:
+                    continue
+                country = (s.country or 'Unknown').strip()
+                if country not in country_breakdown:
+                    country_breakdown[country] = {'avgPaid': 0, 'totalStudents': 0, 'totalPaid': 0}
+                country_breakdown[country]['totalPaid'] += float(e.total_paid or 0)
+                country_breakdown[country]['totalStudents'] += 1
+            for c in country_breakdown:
+                if country_breakdown[c]['totalStudents'] > 0:
+                    country_breakdown[c]['avgPaid'] = round2(country_breakdown[c]['totalPaid'] / country_breakdown[c]['totalStudents'])
+                country_breakdown[c]['totalPaid'] = round2(country_breakdown[c]['totalPaid'])
+
+            return Response({
+                'prediction': {
+                    'year': target_year,
+                    'basedOnYears': past_years,
+                    'totalPredictedPaid': round2(total_predicted_paid),
+                    'totalActualPaid': round2(total_actual_paid),
+                    'terms': term_predictions,
+                    'byCountry': country_breakdown,
+                    'studentCount': len(all_target_students),
+                },
+            })
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
             return Response({'message': str(e)}, status=500)

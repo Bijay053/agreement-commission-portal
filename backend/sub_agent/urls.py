@@ -8,4 +8,5 @@ urlpatterns = [
     path('sub-agent-commission/sync', views.SubAgentSyncView.as_view()),
     path('sub-agent-commission/terms/<str:term_name>', views.SubAgentTermEntriesView.as_view()),
     path('sub-agent-commission/terms/<str:term_name>/entries/<int:entry_id>', views.SubAgentTermEntryUpdateView.as_view()),
+    path('sub-agent-commission/prediction/<int:year>', views.SubAgentPredictionView.as_view()),
 ]

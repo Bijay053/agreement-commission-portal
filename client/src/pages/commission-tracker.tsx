@@ -18,7 +18,7 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   Plus, Search, Trash2, Users, DollarSign, TrendingUp, AlertCircle,
-  Settings, X, Upload, Download, Clock, CheckCircle2, FileSpreadsheet, AlertTriangle, RotateCcw, ExternalLink
+  Settings, X, Upload, Download, Clock, CheckCircle2, FileSpreadsheet, AlertTriangle, RotateCcw, ExternalLink, BarChart3, Sparkles
 } from "lucide-react";
 import { ScrollableTableWrapper } from "@/components/ui/scrollable-table-wrapper";
 import type { CommissionStudent, CommissionEntry } from "@shared/schema";
@@ -322,6 +322,16 @@ export default function CommissionTrackerPage() {
     enabled: !!selectedYear,
   });
 
+  const { data: predictionData } = useQuery<any>({
+    queryKey: ["/api/commission-tracker/prediction", selectedYear],
+    queryFn: async () => {
+      const res = await fetch(`/api/commission-tracker/prediction/${selectedYear}`, { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to fetch");
+      return res.json();
+    },
+    enabled: !!selectedYear,
+  });
+
   const invalidateAll = useCallback(() => {
     queryClient.invalidateQueries({ queryKey: ["/api/commission-tracker/students"] });
     queryClient.invalidateQueries({ queryKey: ["/api/commission-tracker/all-entries"] });
@@ -594,6 +604,7 @@ export default function CommissionTrackerPage() {
               onIntakeChange={setIntakeFilter}
               providersByStudent={providersByStudent}
               yearTerms={yearTerms}
+              prediction={predictionData?.prediction}
             />
           </div>
         ) : activeTab === "MASTER" ? (
@@ -786,13 +797,14 @@ function AddProviderButton({ studentId, studentName }: { studentId: number; stud
   );
 }
 
-function DashboardView({ dashboard, year, intakeFilter, onIntakeChange, providersByStudent, yearTerms }: {
+function DashboardView({ dashboard, year, intakeFilter, onIntakeChange, providersByStudent, yearTerms, prediction }: {
   dashboard: any;
   year: number | null;
   intakeFilter: string;
   onIntakeChange: (v: string) => void;
   providersByStudent: Record<number, any[]>;
   yearTerms: CommissionTerm[];
+  prediction?: any;
 }) {
   if (!dashboard || !year) {
     return (
@@ -859,6 +871,108 @@ function DashboardView({ dashboard, year, intakeFilter, onIntakeChange, provider
           </Card>
         ))}
       </div>
+
+      {prediction && (
+        <Card className="border-dashed border-blue-300 bg-gradient-to-r from-blue-50/50 to-purple-50/50 dark:from-blue-950/20 dark:to-purple-950/20" data-testid="card-prediction">
+          <CardContent className="p-4">
+            <div className="flex items-center gap-2 mb-3">
+              <Sparkles className="h-4 w-4 text-blue-500" />
+              <h3 className="text-sm font-semibold">Predicted Commission Receivable - {year}</h3>
+              <span className="text-[10px] text-muted-foreground ml-auto">Based on {prediction.basedOnYears?.join(", ")} data | By country &amp; study level</span>
+            </div>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
+              <div className="bg-white dark:bg-gray-900 rounded-lg p-3 border">
+                <p className="text-[10px] text-muted-foreground">Predicted Total Receivable</p>
+                <p className="text-base font-bold text-blue-600" data-testid="text-predicted-total">
+                  ${Number(prediction.totalPredictedReceivable || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </p>
+              </div>
+              <div className="bg-white dark:bg-gray-900 rounded-lg p-3 border">
+                <p className="text-[10px] text-muted-foreground">Predicted Commission</p>
+                <p className="text-base font-bold text-green-600" data-testid="text-predicted-commission">
+                  ${Number(prediction.totalPredictedCommission || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </p>
+              </div>
+              <div className="bg-white dark:bg-gray-900 rounded-lg p-3 border">
+                <p className="text-[10px] text-muted-foreground">Predicted Bonus</p>
+                <p className="text-base font-bold text-amber-600" data-testid="text-predicted-bonus">
+                  ${Number(prediction.totalPredictedBonus || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </p>
+              </div>
+              <div className="bg-white dark:bg-gray-900 rounded-lg p-3 border">
+                <p className="text-[10px] text-muted-foreground">Students Analyzed</p>
+                <p className="text-base font-bold" data-testid="text-predicted-students">{prediction.studentCount || 0}</p>
+              </div>
+            </div>
+
+            {prediction.terms && prediction.terms.length > 0 && (
+              <div className="mb-3">
+                <h4 className="text-xs font-medium text-muted-foreground mb-2">Term-wise Prediction</h4>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                  {prediction.terms.map((t: any) => (
+                    <div key={t.termNumber} className="bg-white dark:bg-gray-900 rounded-lg p-2.5 border">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-xs font-semibold">{t.termLabel || t.termName}</span>
+                        <Badge className={`text-[9px] px-1.5 py-0 ${t.source === 'actual' ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700'}`}>
+                          {t.source === 'actual' ? 'Actual' : 'Predicted'}
+                        </Badge>
+                      </div>
+                      <div className="flex justify-between text-xs">
+                        <span className="text-muted-foreground">Commission:</span>
+                        <span className="font-mono font-medium">${Number(t.predictedCommission || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                      </div>
+                      <div className="flex justify-between text-xs">
+                        <span className="text-muted-foreground">Bonus:</span>
+                        <span className="font-mono font-medium">${Number(t.predictedBonus || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                      </div>
+                      <div className="flex justify-between text-xs border-t mt-1 pt-1">
+                        <span className="text-muted-foreground">Total:</span>
+                        <span className="font-mono font-bold text-blue-600">${Number(t.predictedTotal || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                      </div>
+                      <div className="text-[10px] text-muted-foreground mt-1">{t.studentCount} students</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {prediction.byCountry && Object.keys(prediction.byCountry).length > 0 && (
+                <div>
+                  <h4 className="text-xs font-medium text-muted-foreground mb-1.5">Historical Avg by Country</h4>
+                  <div className="space-y-1 max-h-32 overflow-y-auto">
+                    {Object.entries(prediction.byCountry).sort((a: any, b: any) => b[1].totalCommission - a[1].totalCommission).map(([country, data]: [string, any]) => (
+                      <div key={country} className="flex items-center justify-between text-xs bg-white dark:bg-gray-900 rounded px-2 py-1 border">
+                        <span className="truncate max-w-[120px]">{country}</span>
+                        <div className="flex gap-3 text-[10px]">
+                          <span className="text-muted-foreground">{data.totalStudents} entries</span>
+                          <span className="font-mono">Avg: ${Number(data.avgCommission || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {prediction.byStudyLevel && Object.keys(prediction.byStudyLevel).length > 0 && (
+                <div>
+                  <h4 className="text-xs font-medium text-muted-foreground mb-1.5">Historical Avg by Study Level</h4>
+                  <div className="space-y-1 max-h-32 overflow-y-auto">
+                    {Object.entries(prediction.byStudyLevel).sort((a: any, b: any) => b[1].totalCommission - a[1].totalCommission).map(([level, data]: [string, any]) => (
+                      <div key={level} className="flex items-center justify-between text-xs bg-white dark:bg-gray-900 rounded px-2 py-1 border">
+                        <span className="truncate max-w-[120px]">{level}</span>
+                        <div className="flex gap-3 text-[10px]">
+                          <span className="text-muted-foreground">{data.totalStudents} entries</span>
+                          <span className="font-mono">Avg: ${Number(data.avgCommission || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {dashboard.byStatus && Object.keys(dashboard.byStatus).length > 0 && (
         <div>

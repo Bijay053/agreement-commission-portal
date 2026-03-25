@@ -16,7 +16,7 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   Search, Users, DollarSign, TrendingUp, AlertCircle,
-  RefreshCw, ArrowDownUp, AlertTriangle, CalendarDays, ExternalLink
+  RefreshCw, ArrowDownUp, AlertTriangle, CalendarDays, ExternalLink, Sparkles
 } from "lucide-react";
 import { ScrollableTableWrapper } from "@/components/ui/scrollable-table-wrapper";
 import type { CommissionStudent, SubAgentEntry, SubAgentTermEntry } from "@shared/schema";
@@ -316,6 +316,15 @@ export default function SubAgentCommissionPage() {
     enabled: activeTab === "DASHBOARD",
   });
 
+  const { data: predictionData } = useQuery<any>({
+    queryKey: ["/api/sub-agent-commission/prediction", selectedYear],
+    queryFn: async () => {
+      const res = await fetch(`/api/sub-agent-commission/prediction/${selectedYear}`, { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to fetch");
+      return res.json();
+    },
+  });
+
   const applyFilters = useCallback(<T extends { student: any; status?: string; studentStatus?: string }>(rows: T[]): T[] => {
     let filtered = rows;
     if (search) {
@@ -586,7 +595,7 @@ export default function SubAgentCommissionPage() {
               {[...Array(6)].map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}
             </div>
           ) : activeTab === "DASHBOARD" ? (
-            <DashboardView data={dashboardQuery.data} />
+            <DashboardView data={dashboardQuery.data} prediction={predictionData?.prediction} year={selectedYear} />
           ) : activeTab === "MASTER" ? (
             <MasterTable
               rows={filteredMasterRows}
@@ -610,7 +619,7 @@ export default function SubAgentCommissionPage() {
   );
 }
 
-function DashboardView({ data }: { data: any }) {
+function DashboardView({ data, prediction, year }: { data: any; prediction?: any; year: number }) {
   if (!data) return <div className="text-center text-muted-foreground py-8" data-testid="text-no-data">No data available. Click "Sync from Main" first.</div>;
 
   return (
@@ -682,6 +691,76 @@ function DashboardView({ data }: { data: any }) {
           </CardContent>
         </Card>
       </div>
+
+      {prediction && (
+        <Card className="border-dashed border-blue-300 bg-gradient-to-r from-blue-50/50 to-purple-50/50 dark:from-blue-950/20 dark:to-purple-950/20" data-testid="card-sa-prediction">
+          <CardContent className="p-4">
+            <div className="flex items-center gap-2 mb-3">
+              <Sparkles className="h-4 w-4 text-blue-500" />
+              <h3 className="text-sm font-semibold">Predicted Sub-Agent Payable - {year}</h3>
+              <span className="text-[10px] text-muted-foreground ml-auto">Based on {prediction.basedOnYears?.join(", ")} data | By country &amp; study level</span>
+            </div>
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-3">
+              <div className="bg-white dark:bg-gray-900 rounded-lg p-3 border">
+                <p className="text-[10px] text-muted-foreground">Predicted Total Payable</p>
+                <p className="text-base font-bold text-blue-600" data-testid="text-sa-predicted-total">
+                  ${Number(prediction.totalPredictedPaid || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </p>
+              </div>
+              <div className="bg-white dark:bg-gray-900 rounded-lg p-3 border">
+                <p className="text-[10px] text-muted-foreground">Current Actual Paid</p>
+                <p className="text-base font-bold text-green-600" data-testid="text-sa-actual-paid">
+                  ${Number(prediction.totalActualPaid || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </p>
+              </div>
+              <div className="bg-white dark:bg-gray-900 rounded-lg p-3 border">
+                <p className="text-[10px] text-muted-foreground">Students Analyzed</p>
+                <p className="text-base font-bold" data-testid="text-sa-predicted-students">{prediction.studentCount || 0}</p>
+              </div>
+            </div>
+
+            {prediction.terms && prediction.terms.length > 0 && (
+              <div className="mb-3">
+                <h4 className="text-xs font-medium text-muted-foreground mb-2">Term-wise Prediction</h4>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                  {prediction.terms.map((t: any) => (
+                    <div key={t.termNumber} className="bg-white dark:bg-gray-900 rounded-lg p-2.5 border">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-xs font-semibold">{t.termLabel || t.termName}</span>
+                        <Badge className={`text-[9px] px-1.5 py-0 ${t.source === 'actual' ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700'}`}>
+                          {t.source === 'actual' ? 'Actual' : 'Predicted'}
+                        </Badge>
+                      </div>
+                      <div className="flex justify-between text-xs">
+                        <span className="text-muted-foreground">Payable:</span>
+                        <span className="font-mono font-bold text-blue-600">${Number(t.predictedPaid || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                      </div>
+                      <div className="text-[10px] text-muted-foreground mt-1">{t.studentCount} students</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {prediction.byCountry && Object.keys(prediction.byCountry).length > 0 && (
+              <div>
+                <h4 className="text-xs font-medium text-muted-foreground mb-1.5">Historical Avg by Country</h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-1 max-h-32 overflow-y-auto">
+                  {Object.entries(prediction.byCountry).sort((a: any, b: any) => b[1].totalPaid - a[1].totalPaid).map(([country, d]: [string, any]) => (
+                    <div key={country} className="flex items-center justify-between text-xs bg-white dark:bg-gray-900 rounded px-2 py-1 border">
+                      <span className="truncate max-w-[120px]">{country}</span>
+                      <div className="flex gap-3 text-[10px]">
+                        <span className="text-muted-foreground">{d.totalStudents} entries</span>
+                        <span className="font-mono">Avg: ${Number(d.avgPaid || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <Card data-testid="card-agent-breakdown">
