@@ -1123,61 +1123,162 @@ class CommissionInsightsView(APIView):
             agent_insights.sort(key=lambda x: x['margin'], reverse=True)
 
             suggestions = []
-            high_sub_agents = [a for a in agent_insights if a['subAgentRatePct'] > 50 and a['subAgentPaid'] > 0]
+            direct_students = sum(len(pd['students']) - len(pd['hasSubAgent']) for pd in provider_data.values())
+            total_students_count = sum(len(pd['students']) for pd in provider_data.values())
+            direct_pct = (direct_students / total_students_count * 100) if total_students_count > 0 else 0
+
+            overpay_agents = [a for a in agent_insights if a['subAgentPaid'] > a['commission'] and a['commission'] > 0]
+            if overpay_agents:
+                names = ', '.join(a['agent'] for a in overpay_agents[:3])
+                total_loss = sum(a['subAgentPaid'] - a['commission'] for a in overpay_agents)
+                suggestions.append({
+                    'type': 'danger',
+                    'title': 'Sub-Agent Overpayment Alert',
+                    'message': f'Sub-agent(s) {names} have been paid more than the commission received — net loss ${total_loss:,.2f}. Review and adjust sub-agent rates immediately to stop revenue leakage.',
+                })
+
+            high_sub_agents = [a for a in agent_insights if a['subAgentRatePct'] > 50 and a['subAgentPaid'] > 0 and a['subAgentPaid'] <= a['commission']]
             if high_sub_agents:
                 names = ', '.join(a['agent'] for a in high_sub_agents[:3])
+                potential_save = sum(a['subAgentPaid'] * 0.15 for a in high_sub_agents)
                 suggestions.append({
                     'type': 'warning',
                     'title': 'High Sub-Agent Cost',
-                    'message': f'Sub-agents {names} are costing over 50% of commission. Consider renegotiating rates or converting to direct students.',
+                    'message': f'Sub-agents {names} cost over 50% of commission. Renegotiating rates by just 15% could save ~${potential_save:,.2f} this year.',
                 })
 
             low_margin_provs = [p for p in provider_insights if p['marginPct'] < 30 and p['subAgentPaid'] > 0]
             if low_margin_provs:
                 names = ', '.join(p['provider'] for p in low_margin_provs[:3])
+                lost_margin = sum(p['subAgentPaid'] - (p['commission'] * 0.5) for p in low_margin_provs if p['subAgentPaid'] > p['commission'] * 0.5)
+                msg = f'{names} have margin below 30% after sub-agent payments.'
+                if lost_margin > 0:
+                    msg += f' Optimizing sub-agent rates here could recover ~${lost_margin:,.2f}.'
+                msg += ' Consider negotiating higher commission rates with these providers or reviewing sub-agent rates.'
                 suggestions.append({
                     'type': 'warning',
                     'title': 'Low Margin Providers',
-                    'message': f'{names} have margin below 30% after sub-agent payments. Consider negotiating higher commission rates with these providers or reviewing sub-agent rates.',
+                    'message': msg,
                 })
 
             high_margin_provs = [p for p in provider_insights if p['marginPct'] > 70 and p['commission'] > 0]
             if high_margin_provs:
                 names = ', '.join(p['provider'] for p in high_margin_provs[:3])
+                total_high_margin_comm = sum(p['commission'] for p in high_margin_provs)
+                avg_students = sum(p['studentCount'] for p in high_margin_provs) / len(high_margin_provs)
+                growth_potential = total_high_margin_comm * 0.25
                 suggestions.append({
                     'type': 'success',
-                    'title': 'High Margin Providers',
-                    'message': f'{names} have excellent margins (>70%). Prioritize growing student numbers with these providers.',
+                    'title': 'High Margin Growth Opportunity',
+                    'message': f'{names} have excellent margins (>70%) with avg {round(avg_students)} students each. Growing these by 25% could add ~${growth_potential:,.2f} in high-margin revenue.',
                 })
 
-            direct_students = sum(len(pd['students']) - len(pd['hasSubAgent']) for pd in provider_data.values())
-            total_students_count = sum(len(pd['students']) for pd in provider_data.values())
-            direct_pct = (direct_students / total_students_count * 100) if total_students_count > 0 else 0
+            if len(provider_insights) > 0:
+                top_prov = max(provider_insights, key=lambda p: p['commission'])
+                top_share = (top_prov['commission'] / total_commission * 100) if total_commission > 0 else 0
+                if top_share > 50:
+                    suggestions.append({
+                        'type': 'warning',
+                        'title': 'Provider Concentration Risk',
+                        'message': f'{top_prov["provider"]} accounts for {round(top_share)}% of total commission (${top_prov["commission"]:,.2f}). Diversifying across more providers reduces dependency risk.',
+                    })
+
+            if len(provider_insights) >= 3:
+                sorted_by_avg = sorted([p for p in provider_insights if p['studentCount'] >= 2], key=lambda p: p['avgCommPerStudent'], reverse=True)
+                if sorted_by_avg:
+                    best = sorted_by_avg[0]
+                    worst_candidates = [p for p in sorted_by_avg if p['avgCommPerStudent'] < best['avgCommPerStudent'] * 0.4 and p['studentCount'] >= 2]
+                    if worst_candidates:
+                        worst = worst_candidates[0]
+                        diff = best['avgCommPerStudent'] - worst['avgCommPerStudent']
+                        suggestions.append({
+                            'type': 'info',
+                            'title': 'Commission Rate Gap',
+                            'message': f'{best["provider"]} pays ${best["avgCommPerStudent"]:,.2f}/student vs {worst["provider"]} at ${worst["avgCommPerStudent"]:,.2f}/student — a ${diff:,.2f} gap. Negotiating rates with lower-paying providers could boost overall revenue.',
+                        })
+
+            if len(agent_insights) >= 2:
+                top_agent = max(agent_insights, key=lambda a: a['commission'])
+                if top_agent['commission'] > 0:
+                    second_best = sorted(agent_insights, key=lambda a: a['commission'], reverse=True)
+                    if len(second_best) > 1 and second_best[1]['commission'] > 0:
+                        ratio = top_agent['commission'] / second_best[1]['commission']
+                        if ratio > 3:
+                            suggestions.append({
+                                'type': 'info',
+                                'title': 'Agent Revenue Distribution',
+                                'message': f'{top_agent["agent"]} generates {ratio:.1f}x more than the next agent. Investing in training or support for other agents could help balance revenue streams.',
+                            })
+
+            sub_agents_with_students = [a for a in agent_insights if a['subAgentStudents'] > 0]
+            if sub_agents_with_students:
+                avg_sub_rate = sum(a['subAgentRatePct'] for a in sub_agents_with_students) / len(sub_agents_with_students)
+                best_rate_agent = min(sub_agents_with_students, key=lambda a: a['subAgentRatePct'])
+                if best_rate_agent['subAgentRatePct'] < avg_sub_rate * 0.7 and len(sub_agents_with_students) >= 2:
+                    savings_if_all_at_best = total_sub_paid - (total_commission * best_rate_agent['subAgentRatePct'] / 100)
+                    if savings_if_all_at_best > 0:
+                        suggestions.append({
+                            'type': 'info',
+                            'title': 'Sub-Agent Rate Benchmark',
+                            'message': f'Best sub-agent rate is {round(best_rate_agent["subAgentRatePct"])}% ({best_rate_agent["agent"]}) vs average {round(avg_sub_rate)}%. Bringing all sub-agents closer to this benchmark could save ~${savings_if_all_at_best:,.2f}.',
+                        })
 
             no_sub_provs = [p for p in provider_insights if p['subAgentStudents'] == 0 and p['commission'] > 0]
             if no_sub_provs:
                 total_no_sub_comm = sum(p['commission'] for p in no_sub_provs)
                 suggestions.append({
                     'type': 'success',
-                    'title': 'Fully Direct Providers',
-                    'message': f'{len(no_sub_provs)} provider(s) have only direct students, generating ${total_no_sub_comm:,.2f} in full-margin commission.',
+                    'title': 'Full-Margin Providers',
+                    'message': f'{len(no_sub_provs)} provider(s) have zero sub-agent costs, generating ${total_no_sub_comm:,.2f} in full-margin commission. These are your most profitable partnerships.',
                 })
 
-            overpay_agents = [a for a in agent_insights if a['subAgentPaid'] > a['commission'] and a['commission'] > 0]
-            if overpay_agents:
-                names = ', '.join(a['agent'] for a in overpay_agents[:3])
+            small_but_profitable = [p for p in provider_insights if p['marginPct'] > 60 and p['studentCount'] <= 3 and p['commission'] > 0]
+            if small_but_profitable:
+                names = ', '.join(p['provider'] for p in small_but_profitable[:3])
+                potential = sum(p['commission'] for p in small_but_profitable) * 2
                 suggestions.append({
-                    'type': 'danger',
-                    'title': 'Sub-Agent Overpayment',
-                    'message': f'Sub-agent(s) {names} have been paid more than the commission received. Review and adjust sub-agent rates immediately.',
+                    'type': 'info',
+                    'title': 'Untapped Potential',
+                    'message': f'{names} have strong margins (>60%) but few students (≤3 each). Scaling these partnerships could double revenue to ~${potential:,.2f} while maintaining healthy margins.',
                 })
 
             if total_commission > 0 and margin_pct < 40:
+                target_margin = total_commission * 0.5
+                needed_savings = target_margin - total_margin
                 suggestions.append({
                     'type': 'info',
-                    'title': 'Overall Margin Improvement',
-                    'message': f'Current overall margin is {round(margin_pct)}%. Target 50%+ by focusing on direct recruitment and negotiating better provider commission rates.',
+                    'title': 'Margin Improvement Target',
+                    'message': f'Current margin is {round(margin_pct)}%. Reaching 50% requires saving ~${needed_savings:,.2f} through better sub-agent rates or higher provider commissions.',
                 })
+            elif total_commission > 0 and margin_pct >= 60:
+                suggestions.append({
+                    'type': 'success',
+                    'title': 'Strong Overall Margin',
+                    'message': f'Overall margin at {round(margin_pct)}% is excellent. Focus on volume growth while maintaining current rate structures.',
+                })
+
+            prev_year_terms = CommissionTerm.objects.filter(year=target_year - 1).order_by('sort_order')
+            if prev_year_terms.exists():
+                prev_term_names = [t.term_name for t in prev_year_terms]
+                prev_entries = CommissionEntry.objects.filter(term_name__in=prev_term_names)
+                prev_excluded = get_excluded_student_ids_for_year(target_year - 1)
+                if prev_excluded:
+                    prev_entries = prev_entries.exclude(commission_student_id__in=prev_excluded)
+                prev_total = sum(float(e.commission_amount or 0) for e in prev_entries)
+                if prev_total > 0:
+                    yoy_growth = ((total_commission - prev_total) / prev_total) * 100
+                    if yoy_growth > 0:
+                        suggestions.append({
+                            'type': 'success',
+                            'title': 'Year-over-Year Growth',
+                            'message': f'Commission is up {round(yoy_growth)}% vs {target_year - 1} (${prev_total:,.2f} → ${total_commission:,.2f}). Maintain momentum by expanding top-performing provider relationships.',
+                        })
+                    elif yoy_growth < -10:
+                        suggestions.append({
+                            'type': 'warning',
+                            'title': 'Revenue Decline',
+                            'message': f'Commission is down {round(abs(yoy_growth))}% vs {target_year - 1} (${prev_total:,.2f} → ${total_commission:,.2f}). Review provider relationships and intake pipeline to reverse the trend.',
+                        })
 
             return Response({
                 'insights': {
