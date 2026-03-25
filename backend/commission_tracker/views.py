@@ -1283,18 +1283,18 @@ class CommissionInsightsView(APIView):
                     if missed > 0:
                         leakage_alerts.append({
                             'entity': a['agent'], 'entityType': 'agent',
-                            'issue': f'High volume ({a["studentCount"]} students) but low margin ({a["marginPct"]}%)',
+                            'issue': f'High application volume ({a["studentCount"]} applications) but low margin ({a["marginPct"]}%)',
                             'estimatedLoss': round2(missed),
-                            'action': f'Review commission split. This agent brings volume but margin is below the {round(margin_pct)}% average.',
+                            'action': f'Review sub-agent payout split. This agent generates volume but net margin is below the {round(margin_pct)}% portfolio average.',
                         })
             for p in provider_insights:
                 if p['studentCount'] >= 2 and p['avgCommPerStudent'] < avg_comm_all * 0.5:
                     missed = (avg_comm_all - p['avgCommPerStudent']) * p['studentCount']
                     leakage_alerts.append({
                         'entity': p['provider'], 'entityType': 'provider',
-                        'issue': f'Below-average commission (${p["avgCommPerStudent"]:,.2f}/student vs ${avg_comm_all:,.2f} avg)',
+                        'issue': f'Below-average commission (${p["avgCommPerStudent"]:,.2f}/application vs ${avg_comm_all:,.2f} avg)',
                         'estimatedLoss': round2(missed),
-                        'action': f'Negotiate higher rates — {p["studentCount"]} students at low commission represents missed revenue.',
+                        'action': f'Negotiate higher commission rates with this provider — {p["studentCount"]} applications at below-benchmark rates represents recoverable margin.',
                     })
             leakage_alerts.sort(key=lambda x: x['estimatedLoss'], reverse=True)
 
@@ -1322,9 +1322,12 @@ class CommissionInsightsView(APIView):
                     agents_with_multi_provs[agent] = []
                 margin = apd['commission'] - apd['subPaid']
                 pct = (margin / apd['commission'] * 100) if apd['commission'] > 0 else 0
+                avg_margin_per = (margin / len(apd['students'])) if apd['students'] else 0
                 agents_with_multi_provs[agent].append({
                     'provider': prov, 'margin': margin, 'marginPct': round(pct, 1),
-                    'students': len(apd['students']), 'avgComm': round2(apd['commission'] / len(apd['students'])) if apd['students'] else 0,
+                    'students': len(apd['students']),
+                    'avgComm': round2(apd['commission'] / len(apd['students'])) if apd['students'] else 0,
+                    'avgMarginPerStudent': round2(avg_margin_per),
                 })
             for agent, provs in agents_with_multi_provs.items():
                 if len(provs) < 2:
@@ -1333,15 +1336,17 @@ class CommissionInsightsView(APIView):
                 best_p = provs[0]
                 for wp in provs[1:]:
                     if wp['marginPct'] < best_p['marginPct'] * 0.5 and wp['students'] >= 2 and best_p['marginPct'] > 30:
-                        potential_gain = (best_p['avgComm'] - wp['avgComm']) * wp['students'] if best_p['avgComm'] > wp['avgComm'] else 0
-                        if potential_gain > 0:
+                        margin_diff_per_student = best_p['avgMarginPerStudent'] - wp['avgMarginPerStudent']
+                        if margin_diff_per_student > 0:
+                            potential_gain = margin_diff_per_student * wp['students']
                             reallocation_suggestions.append({
                                 'agent': agent,
-                                'fromProvider': wp['provider'],
-                                'toProvider': best_p['provider'],
-                                'fromMarginPct': wp['marginPct'],
-                                'toMarginPct': best_p['marginPct'],
-                                'studentsToShift': wp['students'],
+                                'lowMarginProvider': wp['provider'],
+                                'highMarginProvider': best_p['provider'],
+                                'lowMarginPct': wp['marginPct'],
+                                'highMarginPct': best_p['marginPct'],
+                                'currentStudents': wp['students'],
+                                'marginDiffPerStudent': round2(margin_diff_per_student),
                                 'potentialGain': round2(potential_gain),
                             })
             reallocation_suggestions.sort(key=lambda x: x['potentialGain'], reverse=True)
@@ -1380,7 +1385,7 @@ class CommissionInsightsView(APIView):
                 names = ', '.join(a['agent'] for a in high_payout_agents[:3])
                 total_excess = sum((a['subAgentPaid'] - a['commission'] * 0.60) for a in high_payout_agents if a['subAgentPaid'] > a['commission'] * 0.60)
                 suggestions.append({'type': 'warning', 'title': 'High Sub-Agent Payout Ratio',
-                    'message': f'{names} have sub-agent payout above 70% of commission. If payout ratios were brought to 60%, margin would improve by ~${total_excess:,.2f}. Review payout splits for these agents.'})
+                    'message': f'{names} have sub-agent payout above 70% of commission. Optimizing payout structures toward 60% could improve margin by ~${total_excess:,.2f}. Review payout arrangements for these agent partnerships.'})
 
             low_margin_provs = sorted([p for p in provider_insights if p['marginPct'] < 30 and p['studentCount'] >= 3 and p['subAgentPaid'] > 0],
                 key=lambda p: p['subAgentPaid'], reverse=True)
@@ -1388,27 +1393,27 @@ class CommissionInsightsView(APIView):
                 names = ', '.join(p['provider'] for p in low_margin_provs[:3])
                 total_sub = sum(p['subAgentPaid'] for p in low_margin_provs)
                 suggestions.append({'type': 'warning', 'title': 'Low-Margin Providers',
-                    'message': f'{names} yield <30% margin after sub-agent payouts (${total_sub:,.2f} paid out). Either negotiate higher provider rates or review sub-agent splits for these providers.'})
+                    'message': f'{names} yield <30% margin after sub-agent payouts (${total_sub:,.2f} paid out). Consider negotiating higher provider commission rates or reviewing sub-agent payout structures for future applications with these providers.'})
 
             negotiate_provs = [p for p in provider_insights if p['aiAction'] == 'Negotiate']
             if negotiate_provs:
                 names = ', '.join(p['provider'] for p in negotiate_provs[:3])
                 total_gap = sum((avg_comm_all - p['avgCommPerStudent']) * p['studentCount'] for p in negotiate_provs if p['avgCommPerStudent'] < avg_comm_all)
                 suggestions.append({'type': 'info', 'title': 'Provider Negotiation Opportunity',
-                    'message': f'{names} pay below-average commission per student. Closing the gap to the ${avg_comm_all:,.2f} benchmark could recover ~${total_gap:,.2f} in margin.'})
+                    'message': f'{names} pay below-average commission per application. Closing the gap to the ${avg_comm_all:,.2f} benchmark through rate negotiation could recover ~${total_gap:,.2f} in margin.'})
 
             scale_provs = [p for p in provider_insights if p['aiAction'] == 'Scale' and p['marginPct'] > 50]
             if scale_provs:
                 names = ', '.join(p['provider'] for p in scale_provs[:3])
                 total_pot = sum(p['margin'] * 0.25 for p in scale_provs)
-                suggestions.append({'type': 'success', 'title': 'High-Margin Scale Targets',
-                    'message': f'{names} have >50% margin. Growing volume 25% at these providers adds ~${total_pot:,.2f} in net margin. Prioritize agent referrals here.'})
+                suggestions.append({'type': 'success', 'title': 'High-Margin Growth Targets',
+                    'message': f'{names} have >50% margin. Encouraging agents to increase future application volume by 25% with these providers could add ~${total_pot:,.2f} in net margin.'})
 
             if reallocation_suggestions:
                 total_realloc_gain = sum(r['potentialGain'] for r in reallocation_suggestions[:5])
                 top_r = reallocation_suggestions[0]
-                suggestions.append({'type': 'info', 'title': 'Agent-Provider Reallocation',
-                    'message': f'{top_r["agent"]} earns {top_r["toMarginPct"]}% margin with {top_r["toProvider"]} but only {top_r["fromMarginPct"]}% with {top_r["fromProvider"]}. Shifting student referrals to higher-margin providers could unlock ~${total_realloc_gain:,.2f} across all flagged pairs.'})
+                suggestions.append({'type': 'info', 'title': 'Referral Focus Opportunity',
+                    'message': f'{top_r["agent"]} earns {top_r["highMarginPct"]}% margin with {top_r["highMarginProvider"]} but only {top_r["lowMarginPct"]}% with {top_r["lowMarginProvider"]}. Encouraging future referrals toward higher-margin providers could improve margin by ~${total_realloc_gain:,.2f}.'})
 
             if leakage_alerts:
                 total_leak = sum(l['estimatedLoss'] for l in leakage_alerts[:5])
@@ -1420,12 +1425,12 @@ class CommissionInsightsView(APIView):
                 if prov_leaks:
                     detail_parts.append(f'{len(prov_leaks)} provider(s) with below-benchmark rates')
                 suggestions.append({'type': 'warning', 'title': 'Margin Leakage',
-                    'message': f'~${total_leak:,.2f} in margin leakage detected: {" and ".join(detail_parts)}. Address sub-agent splits and provider negotiations to recover.'})
+                    'message': f'~${total_leak:,.2f} in estimated margin leakage: {" and ".join(detail_parts)}. Review sub-agent payout arrangements and negotiate stronger provider rates to recover margin on future business.'})
 
             if overpaid_students:
                 total_loss = sum(o['loss'] for o in overpaid_students)
                 suggestions.append({'type': 'danger', 'title': 'Sub-Agent Overpayment',
-                    'message': f'{len(overpaid_students)} student(s) where sub-agent payout exceeds commission earned, totalling ${total_loss:,.2f} in net loss. Immediately review payout records for these students.'})
+                    'message': f'{len(overpaid_students)} application(s) where sub-agent payout exceeds commission earned, totalling ${total_loss:,.2f} in net loss. Immediately review payout records for these cases.'})
 
             filled_intakes = [t for t in intake_intelligence if t['studentCount'] > 0]
             empty_intakes = [t for t in intake_intelligence if t['studentCount'] == 0]
@@ -1436,7 +1441,7 @@ class CommissionInsightsView(APIView):
                     gap_value = (best_intake['margin'] / best_intake['studentCount'] - worst_intake['margin'] / worst_intake['studentCount']) * worst_intake['studentCount'] if worst_intake['studentCount'] > 0 and best_intake['studentCount'] > 0 else 0
                     if gap_value > 0:
                         suggestions.append({'type': 'info', 'title': 'Intake Margin Gap',
-                            'message': f'{best_intake["term"]} yields {best_intake["marginPct"]}% margin vs {worst_intake["term"]} at {worst_intake["marginPct"]}%. Improving the weaker intake\'s margin to match could add ~${gap_value:,.2f}.'})
+                            'message': f'{best_intake["term"]} yields {best_intake["marginPct"]}% margin vs {worst_intake["term"]} at {worst_intake["marginPct"]}%. Improving provider mix and payout structures for the weaker intake could add ~${gap_value:,.2f} in margin.'})
 
             if empty_intakes and filled_intakes:
                 avg_margin_per_intake = sum(t['margin'] for t in filled_intakes) / len(filled_intakes)
@@ -1444,7 +1449,7 @@ class CommissionInsightsView(APIView):
                 if potential > 0:
                     names = ', '.join(t['term'] for t in empty_intakes[:3])
                     suggestions.append({'type': 'info', 'title': 'Unfilled Intakes',
-                        'message': f'{names} — {len(empty_intakes)} intake(s) with no commission yet. Based on avg margin per intake, filling these could add ~${potential:,.2f} in net margin.'})
+                        'message': f'{names} — {len(empty_intakes)} intake(s) with no commission yet. Growing future application volume in these intakes could add ~${potential:,.2f} in net margin based on current averages.'})
 
             top_10_provs = sorted(provider_insights, key=lambda p: p['opportunityScore'], reverse=True)[:10]
             top_10_agents = sorted(agent_insights, key=lambda a: a['opportunityScore'], reverse=True)[:10]

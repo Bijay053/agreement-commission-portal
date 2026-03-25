@@ -1321,7 +1321,7 @@ function InsightsPanel({ insights, year }: { insights: any; year: number }) {
                     </Select>
                   </div>
                   <div>
-                    <label className="text-[10px] text-muted-foreground mb-0.5 block">Student Change (+/-)</label>
+                    <label className="text-[10px] text-muted-foreground mb-0.5 block">Application Volume Change (+/-)</label>
                     <Input type="number" className="h-7 text-xs" placeholder="+5 or -2" value={wifStudentChange} onChange={(e) => { setWifStudentChange(e.target.value); setWifResult(null); }} data-testid="whatif-students" />
                   </div>
                   <div>
@@ -1339,11 +1339,11 @@ function InsightsPanel({ insights, year }: { insights: any; year: number }) {
                     <p className="text-xs font-semibold mb-2">{wifResult.provider} — Simulation Result</p>
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
                       <div>
-                        <p className="text-[10px] text-muted-foreground">Students</p>
+                        <p className="text-[10px] text-muted-foreground">Applications</p>
                         <p className="font-bold">{wifResult.currentStudents} → {wifResult.newStudents}</p>
                       </div>
                       <div>
-                        <p className="text-[10px] text-muted-foreground">Avg / Student</p>
+                        <p className="text-[10px] text-muted-foreground">Avg / Application</p>
                         <p className="font-bold font-mono">${fmt(wifResult.currentAvg, 2)} → ${fmt(wifResult.newAvg, 2)}</p>
                       </div>
                       <div>
@@ -1372,8 +1372,8 @@ function InsightsPanel({ insights, year }: { insights: any; year: number }) {
                 { label: 'Sub-Agent Paid', value: insights.totalSubAgentPaid, color: 'text-red-500' },
                 { label: 'Net Margin', value: insights.totalMargin, color: (insights.totalMargin || 0) >= 0 ? 'text-emerald-600' : 'text-red-600', trend: insights.trendData?.marginChangePct },
                 { label: 'Margin %', value: null, pct: insights.marginPct, color: (insights.marginPct || 0) >= 50 ? 'text-emerald-600' : (insights.marginPct || 0) >= 30 ? 'text-amber-600' : 'text-red-600' },
-                { label: 'Total Students', value: null, count: insights.totalStudents, trend: insights.trendData?.studentChange },
-                { label: 'Avg / Student', value: insights.avgPerStudent, color: 'text-blue-600' },
+                { label: 'Total Applications', value: null, count: insights.totalStudents, trend: insights.trendData?.studentChange },
+                { label: 'Avg / Application', value: insights.avgPerStudent, color: 'text-blue-600' },
               ].map((c, i) => (
                 <div key={i} className="bg-white dark:bg-gray-900 rounded-lg p-2.5 border">
                   <p className="text-[10px] text-muted-foreground">{c.label}</p>
@@ -1384,7 +1384,7 @@ function InsightsPanel({ insights, year }: { insights: any; year: number }) {
                     {c.trend !== undefined && c.trend !== null && c.trend !== 0 && (
                       <span className={`text-[9px] font-medium flex items-center ${c.trend > 0 ? 'text-green-600' : 'text-red-500'}`}>
                         {c.trend > 0 ? <ArrowUpRight className="h-3 w-3" /> : <ArrowDownRight className="h-3 w-3" />}
-                        {typeof c.trend === 'number' && c.label !== 'Total Students' ? `${Math.abs(c.trend)}%` : `${c.trend > 0 ? '+' : ''}${c.trend}`}
+                        {typeof c.trend === 'number' && c.label !== 'Total Applications' ? `${Math.abs(c.trend)}%` : `${c.trend > 0 ? '+' : ''}${c.trend}`}
                       </span>
                     )}
                   </div>
@@ -1395,7 +1395,7 @@ function InsightsPanel({ insights, year }: { insights: any; year: number }) {
             {insights.overpaidStudents && insights.overpaidStudents.length > 0 && (
               <div className="mb-4">
                 <h4 className="text-xs font-medium text-red-600 mb-2 flex items-center gap-1">
-                  <AlertTriangle className="h-3 w-3" /> Overpaid Agents ({insights.overpaidStudents.length} student{insights.overpaidStudents.length > 1 ? 's' : ''})
+                  <AlertTriangle className="h-3 w-3" /> Sub-Agent Overpayment ({insights.overpaidStudents.length} application{insights.overpaidStudents.length > 1 ? 's' : ''})
                 </h4>
                 <div className="rounded-lg border border-red-200 dark:border-red-800 overflow-hidden">
                   <table className="w-full text-xs">
@@ -1487,7 +1487,7 @@ function InsightsPanel({ insights, year }: { insights: any; year: number }) {
                           </div>
                         </div>
                         <div className="flex gap-2 text-[10px] text-muted-foreground mt-0.5">
-                          <span>{p.studentCount} students</span>
+                          <span>{p.studentCount} applications</span>
                           <span>Avg: ${Number(p.avgCommPerStudent).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</span>
                           <span>Comm: ${Number(p.commission).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</span>
                           {p.subAgentPaid > 0 && <span className="text-red-500">Sub: ${Number(p.subAgentPaid).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</span>}
@@ -1534,7 +1534,7 @@ function InsightsPanel({ insights, year }: { insights: any; year: number }) {
                           </div>
                         </div>
                         <div className="flex gap-2 text-[10px] text-muted-foreground mt-0.5">
-                          <span>{a.studentCount} students</span>
+                          <span>{a.studentCount} applications</span>
                           <span>Avg: ${Number(a.avgCommPerStudent).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</span>
                           <span>Comm: ${Number(a.commission).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</span>
                           {a.subAgentPaid > 0 && <span className="text-red-500">Sub: ${Number(a.subAgentPaid).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</span>}
@@ -1554,11 +1554,11 @@ function InsightsPanel({ insights, year }: { insights: any; year: number }) {
                     <thead><tr className="bg-muted/50 text-left">
                       <th className="px-2.5 py-1.5 font-medium text-muted-foreground">Agent</th>
                       <th className="px-2.5 py-1.5 font-medium text-muted-foreground">Provider</th>
-                      <th className="px-2.5 py-1.5 font-medium text-muted-foreground text-right">Students</th>
+                      <th className="px-2.5 py-1.5 font-medium text-muted-foreground text-right">Applications</th>
                       <th className="px-2.5 py-1.5 font-medium text-muted-foreground text-right">Commission</th>
                       <th className="px-2.5 py-1.5 font-medium text-muted-foreground text-right">Margin</th>
                       <th className="px-2.5 py-1.5 font-medium text-muted-foreground text-right">Margin%</th>
-                      <th className="px-2.5 py-1.5 font-medium text-muted-foreground text-right">Avg/Student</th>
+                      <th className="px-2.5 py-1.5 font-medium text-muted-foreground text-right">Avg/App</th>
                     </tr></thead>
                     <tbody>
                       {insights.agentProviderPairs.slice(0, 15).map((ap: any, i: number) => (
@@ -1607,9 +1607,9 @@ function InsightsPanel({ insights, year }: { insights: any; year: number }) {
                       <div key={i} className="text-xs bg-orange-50 dark:bg-orange-950/20 rounded-lg px-3 py-2 border border-orange-200 dark:border-orange-800" data-testid={`negotiation-${i}`}>
                         <div className="flex items-center justify-between mb-0.5">
                           <span className="font-semibold">{n.provider}</span>
-                          <span className="text-[10px] text-muted-foreground">{n.studentCount} students</span>
+                          <span className="text-[10px] text-muted-foreground">{n.studentCount} applications</span>
                         </div>
-                        <p className="text-muted-foreground">Current avg: ${Number(n.currentAvg).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}/student vs benchmark ${Number(n.benchmarkAvg).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                        <p className="text-muted-foreground">Current avg: ${Number(n.currentAvg).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}/application vs benchmark ${Number(n.benchmarkAvg).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                         <div className="flex gap-3 mt-1">
                           <span className="text-orange-700 dark:text-orange-400 font-medium">+5% rate → +${Number(n.uplift5pct).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</span>
                           <span className="text-orange-700 dark:text-orange-400 font-medium">+10% rate → +${Number(n.uplift10pct).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</span>
@@ -1623,18 +1623,18 @@ function InsightsPanel({ insights, year }: { insights: any; year: number }) {
 
             {insights.reallocationSuggestions && insights.reallocationSuggestions.length > 0 && (
               <div className="mb-4">
-                <h4 className="text-xs font-medium text-purple-600 mb-1.5 flex items-center gap-1"><ExternalLink className="h-3 w-3" /> Agent Reallocation Suggestions</h4>
+                <h4 className="text-xs font-medium text-purple-600 mb-1.5 flex items-center gap-1"><ExternalLink className="h-3 w-3" /> Referral Focus Opportunities</h4>
                 <div className="space-y-1.5">
                   {insights.reallocationSuggestions.map((r: any, i: number) => (
                     <div key={i} className="text-xs bg-purple-50 dark:bg-purple-950/20 rounded-lg px-3 py-2 border border-purple-200 dark:border-purple-800" data-testid={`reallocation-${i}`}>
                       <div className="flex items-center gap-2">
                         <span className="font-semibold">{r.agent}</span>
-                        <span className="text-muted-foreground">{r.fromProvider} ({r.fromMarginPct}%)</span>
+                        <span className="text-muted-foreground">Low: {r.lowMarginProvider} ({r.lowMarginPct}%)</span>
                         <span className="text-purple-600">→</span>
-                        <span className="font-medium text-purple-700 dark:text-purple-400">{r.toProvider} ({r.toMarginPct}%)</span>
+                        <span className="font-medium text-purple-700 dark:text-purple-400">High: {r.highMarginProvider} ({r.highMarginPct}%)</span>
                         <Badge className="text-[8px] px-1 py-0 bg-purple-100 text-purple-700 ml-auto">+${Number(r.potentialGain).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</Badge>
                       </div>
-                      <p className="text-muted-foreground mt-0.5">Shifting {r.studentsToShift} students could improve margin by ${Number(r.potentialGain).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                      <p className="text-muted-foreground mt-0.5">Based on {r.currentStudents} applications with {r.lowMarginProvider} at {r.lowMarginPct}% margin, encouraging this agent to prioritize future applications toward {r.highMarginProvider} ({r.highMarginPct}% margin) could improve margin by ~${Number(r.marginDiffPerStudent).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}/application.</p>
                     </div>
                   ))}
                 </div>
@@ -1654,10 +1654,10 @@ function InsightsPanel({ insights, year }: { insights: any; year: number }) {
                         </Badge>
                       </div>
                       <div className="space-y-0.5 text-[10px] text-muted-foreground">
-                        <div className="flex justify-between"><span>Students</span><span className="font-medium">{t.studentCount}</span></div>
+                        <div className="flex justify-between"><span>Applications</span><span className="font-medium">{t.studentCount}</span></div>
                         <div className="flex justify-between"><span>Commission</span><span className="font-medium font-mono">${fmt(t.commission)}</span></div>
                         <div className="flex justify-between"><span>Margin</span><span className={`font-medium font-mono ${t.margin >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>${fmt(t.margin)}</span></div>
-                        {t.studentCount > 0 && <div className="flex justify-between"><span>Avg/Student</span><span className="font-medium font-mono">${fmt(t.avgPerStudent)}</span></div>}
+                        {t.studentCount > 0 && <div className="flex justify-between"><span>Avg/Application</span><span className="font-medium font-mono">${fmt(t.avgPerStudent)}</span></div>}
                       </div>
                     </div>
                   ))}
