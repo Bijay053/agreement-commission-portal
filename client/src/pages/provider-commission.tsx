@@ -26,6 +26,8 @@ import {
   Search, Plus, Settings, Copy, Pencil, Trash2, Percent, X, ChevronDown, Upload, Download, FileSpreadsheet, AlertCircle, CheckCircle2, RotateCcw, History, ArrowRight,
 } from "lucide-react";
 import { useDropdownOptions } from "@/hooks/use-dropdown-options";
+import { SearchableSelect } from "@/components/ui/searchable-select";
+import { MultiSearchableSelect } from "@/components/ui/multi-searchable-select";
 
 const DEGREE_LEVELS = [
   { value: "any", label: "Any" },
@@ -360,7 +362,7 @@ export default function ProviderCommissionPage() {
 
   const [formProvider, setFormProvider] = useState("");
   const [formLabel, setFormLabel] = useState("");
-  const [formDegree, setFormDegree] = useState("any");
+  const [formDegrees, setFormDegrees] = useState<string[]>(["any"]);
   const [formTerritories, setFormTerritories] = useState<string[]>([]);
   const [formValue, setFormValue] = useState("");
   const [formType, setFormType] = useState("percentage");
@@ -576,7 +578,7 @@ export default function ProviderCommissionPage() {
   function resetForm() {
     setFormProvider("");
     setFormLabel("");
-    setFormDegree("any");
+    setFormDegrees(["any"]);
     setFormTerritories([]);
     setFormValue("");
     setFormType("percentage");
@@ -591,7 +593,7 @@ export default function ProviderCommissionPage() {
     setEditEntry(e);
     setFormProvider(e.providerName);
     setFormLabel(e.ruleLabel || "");
-    setFormDegree(e.degreeLevel);
+    setFormDegrees(e.degreeLevel ? e.degreeLevel.split(",").map(s => s.trim()).filter(Boolean) : ["any"]);
     setFormTerritories(e.territory ? e.territory.split(",").map(t => t.trim()).filter(Boolean) : []);
     setFormValue(e.commissionValue);
     setFormType(e.commissionType);
@@ -1034,16 +1036,12 @@ export default function ProviderCommissionPage() {
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <Label>Study Level</Label>
-                <Select value={formDegree} onValueChange={setFormDegree}>
-                  <SelectTrigger data-testid="select-degree">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {studyLevelOptions.map(d => (
-                      <SelectItem key={d.value} value={d.value}>{d.label}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <MultiSearchableSelect
+                  values={formDegrees}
+                  onValuesChange={setFormDegrees}
+                  options={studyLevelOptions}
+                  placeholder="Select study levels..."
+                />
               </div>
               <div>
                 <Label>Territory</Label>
@@ -1057,15 +1055,11 @@ export default function ProviderCommissionPage() {
             <div className="grid grid-cols-3 gap-3">
               <div>
                 <Label>Commission Type</Label>
-                <Select value={formType} onValueChange={setFormType}>
-                  <SelectTrigger data-testid="select-type">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="percentage">Percentage</SelectItem>
-                    <SelectItem value="flat">Flat Amount</SelectItem>
-                  </SelectContent>
-                </Select>
+                <SearchableSelect
+                  value={formType}
+                  onValueChange={setFormType}
+                  options={[{ value: "percentage", label: "Percentage" }, { value: "flat", label: "Flat Amount" }]}
+                />
               </div>
               <div>
                 <Label>Value *</Label>
@@ -1081,32 +1075,21 @@ export default function ProviderCommissionPage() {
               {formType === "flat" && (
                 <div>
                   <Label>Currency</Label>
-                  <Select value={formCurrency} onValueChange={setFormCurrency}>
-                    <SelectTrigger data-testid="select-currency">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="AUD">AUD</SelectItem>
-                      <SelectItem value="USD">USD</SelectItem>
-                      <SelectItem value="NPR">NPR</SelectItem>
-                      <SelectItem value="GBP">GBP</SelectItem>
-                    </SelectContent>
-                  </Select>
+                  <SearchableSelect
+                    value={formCurrency}
+                    onValueChange={setFormCurrency}
+                    options={[{ value: "AUD", label: "AUD" }, { value: "USD", label: "USD" }, { value: "NPR", label: "NPR" }, { value: "GBP", label: "GBP" }]}
+                  />
                 </div>
               )}
             </div>
             <div>
               <Label>Commission Basis</Label>
-              <Select value={formBasis} onValueChange={setFormBasis}>
-                <SelectTrigger data-testid="select-basis">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {effectiveBasisOptions.map(b => (
-                    <SelectItem key={b.value} value={b.value}>{b.label}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <SearchableSelect
+                value={formBasis}
+                onValueChange={setFormBasis}
+                options={effectiveBasisOptions}
+              />
             </div>
 
             <div className="border rounded-lg p-3 space-y-3 bg-muted/30">
@@ -1126,17 +1109,11 @@ export default function ProviderCommissionPage() {
               {formFollowupYearRates.length > 0 && (
                 <div>
                   <Label className="text-xs">Follow-up Study Level</Label>
-                  <Select value={formFollowupStudyLevel || "__none__"} onValueChange={v => setFormFollowupStudyLevel(v === "__none__" ? "" : v)}>
-                    <SelectTrigger data-testid="select-followup-study-level" className="h-8">
-                      <SelectValue placeholder="Same as above" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="__none__">Same as above</SelectItem>
-                      {studyLevelOptions.filter(d => d.value !== 'any').map(d => (
-                        <SelectItem key={d.value} value={d.label}>{d.label}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <SearchableSelect
+                    value={formFollowupStudyLevel || ""}
+                    onValueChange={v => setFormFollowupStudyLevel(v)}
+                    options={[{ value: "", label: "Same as above" }, ...studyLevelOptions.filter(d => d.value !== 'any')]}
+                  />
                 </div>
               )}
               {formFollowupYearRates.map((yr, i) => (
@@ -1144,19 +1121,15 @@ export default function ProviderCommissionPage() {
                   <div className="flex-1">
                     <Label className="text-xs">{yr.year}</Label>
                     <div className="flex gap-1">
-                      <Select value={yr.mode} onValueChange={v => {
-                        const updated = [...formFollowupYearRates];
-                        updated[i] = { ...updated[i], mode: v };
-                        setFormFollowupYearRates(updated);
-                      }}>
-                        <SelectTrigger className="h-8 w-[110px]">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="percentage">%</SelectItem>
-                          <SelectItem value="flat">Flat</SelectItem>
-                        </SelectContent>
-                      </Select>
+                      <SearchableSelect
+                        value={yr.mode}
+                        onValueChange={v => {
+                          const updated = [...formFollowupYearRates];
+                          updated[i] = { ...updated[i], mode: v };
+                          setFormFollowupYearRates(updated);
+                        }}
+                        options={[{ value: "percentage", label: "%" }, { value: "flat", label: "Flat" }]}
+                      />
                       <Input
                         type="number"
                         step="0.01"
@@ -1171,21 +1144,15 @@ export default function ProviderCommissionPage() {
                         data-testid={`input-followup-value-${i}`}
                       />
                       {yr.mode === "flat" && (
-                        <Select value={yr.currency || "AUD"} onValueChange={v => {
-                          const updated = [...formFollowupYearRates];
-                          updated[i] = { ...updated[i], currency: v };
-                          setFormFollowupYearRates(updated);
-                        }}>
-                          <SelectTrigger className="h-8 w-[80px]">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="AUD">AUD</SelectItem>
-                            <SelectItem value="USD">USD</SelectItem>
-                            <SelectItem value="NPR">NPR</SelectItem>
-                            <SelectItem value="GBP">GBP</SelectItem>
-                          </SelectContent>
-                        </Select>
+                        <SearchableSelect
+                          value={yr.currency || "AUD"}
+                          onValueChange={v => {
+                            const updated = [...formFollowupYearRates];
+                            updated[i] = { ...updated[i], currency: v };
+                            setFormFollowupYearRates(updated);
+                          }}
+                          options={[{ value: "AUD", label: "AUD" }, { value: "USD", label: "USD" }, { value: "NPR", label: "NPR" }, { value: "GBP", label: "GBP" }]}
+                        />
                       )}
                     </div>
                   </div>
@@ -1220,7 +1187,7 @@ export default function ProviderCommissionPage() {
               onClick={() => addMutation.mutate({
                 providerName: formProvider.trim(),
                 label: formLabel.trim(),
-                degreeLevel: formDegree,
+                degreeLevel: formDegrees.join(", "),
                 territory: formTerritories,
                 commissionValue: formValue,
                 commissionType: formType,
@@ -1269,16 +1236,12 @@ export default function ProviderCommissionPage() {
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <Label>Study Level</Label>
-                <Select value={formDegree} onValueChange={setFormDegree}>
-                  <SelectTrigger data-testid="edit-select-degree">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {studyLevelOptions.map(d => (
-                      <SelectItem key={d.value} value={d.value}>{d.label}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <MultiSearchableSelect
+                  values={formDegrees}
+                  onValuesChange={setFormDegrees}
+                  options={studyLevelOptions}
+                  placeholder="Select study levels..."
+                />
               </div>
               <div>
                 <Label>Territory</Label>
@@ -1292,15 +1255,11 @@ export default function ProviderCommissionPage() {
             <div className="grid grid-cols-3 gap-3">
               <div>
                 <Label>Commission Type</Label>
-                <Select value={formType} onValueChange={setFormType}>
-                  <SelectTrigger data-testid="edit-select-type">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="percentage">Percentage</SelectItem>
-                    <SelectItem value="flat">Flat Amount</SelectItem>
-                  </SelectContent>
-                </Select>
+                <SearchableSelect
+                  value={formType}
+                  onValueChange={setFormType}
+                  options={[{ value: "percentage", label: "Percentage" }, { value: "flat", label: "Flat Amount" }]}
+                />
               </div>
               <div>
                 <Label>Value *</Label>
@@ -1315,32 +1274,21 @@ export default function ProviderCommissionPage() {
               {formType === "flat" && (
                 <div>
                   <Label>Currency</Label>
-                  <Select value={formCurrency} onValueChange={setFormCurrency}>
-                    <SelectTrigger data-testid="edit-select-currency">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="AUD">AUD</SelectItem>
-                      <SelectItem value="USD">USD</SelectItem>
-                      <SelectItem value="NPR">NPR</SelectItem>
-                      <SelectItem value="GBP">GBP</SelectItem>
-                    </SelectContent>
-                  </Select>
+                  <SearchableSelect
+                    value={formCurrency}
+                    onValueChange={setFormCurrency}
+                    options={[{ value: "AUD", label: "AUD" }, { value: "USD", label: "USD" }, { value: "NPR", label: "NPR" }, { value: "GBP", label: "GBP" }]}
+                  />
                 </div>
               )}
             </div>
             <div>
               <Label>Commission Basis</Label>
-              <Select value={formBasis} onValueChange={setFormBasis}>
-                <SelectTrigger data-testid="edit-select-basis">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {effectiveBasisOptions.map(b => (
-                    <SelectItem key={b.value} value={b.value}>{b.label}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <SearchableSelect
+                value={formBasis}
+                onValueChange={setFormBasis}
+                options={effectiveBasisOptions}
+              />
             </div>
 
             <div className="border rounded-lg p-3 space-y-3 bg-muted/30">
@@ -1360,17 +1308,11 @@ export default function ProviderCommissionPage() {
               {formFollowupYearRates.length > 0 && (
                 <div>
                   <Label className="text-xs">Follow-up Study Level</Label>
-                  <Select value={formFollowupStudyLevel || "__none__"} onValueChange={v => setFormFollowupStudyLevel(v === "__none__" ? "" : v)}>
-                    <SelectTrigger data-testid="edit-select-followup-study-level" className="h-8">
-                      <SelectValue placeholder="Same as above" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="__none__">Same as above</SelectItem>
-                      {studyLevelOptions.filter(d => d.value !== 'any').map(d => (
-                        <SelectItem key={d.value} value={d.label}>{d.label}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <SearchableSelect
+                    value={formFollowupStudyLevel || ""}
+                    onValueChange={v => setFormFollowupStudyLevel(v)}
+                    options={[{ value: "", label: "Same as above" }, ...studyLevelOptions.filter(d => d.value !== 'any')]}
+                  />
                 </div>
               )}
               {formFollowupYearRates.map((yr, i) => (
@@ -1378,19 +1320,15 @@ export default function ProviderCommissionPage() {
                   <div className="flex-1">
                     <Label className="text-xs">{yr.year}</Label>
                     <div className="flex gap-1">
-                      <Select value={yr.mode} onValueChange={v => {
-                        const updated = [...formFollowupYearRates];
-                        updated[i] = { ...updated[i], mode: v };
-                        setFormFollowupYearRates(updated);
-                      }}>
-                        <SelectTrigger className="h-8 w-[110px]">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="percentage">%</SelectItem>
-                          <SelectItem value="flat">Flat</SelectItem>
-                        </SelectContent>
-                      </Select>
+                      <SearchableSelect
+                        value={yr.mode}
+                        onValueChange={v => {
+                          const updated = [...formFollowupYearRates];
+                          updated[i] = { ...updated[i], mode: v };
+                          setFormFollowupYearRates(updated);
+                        }}
+                        options={[{ value: "percentage", label: "%" }, { value: "flat", label: "Flat" }]}
+                      />
                       <Input
                         type="number"
                         step="0.01"
@@ -1405,21 +1343,15 @@ export default function ProviderCommissionPage() {
                         data-testid={`edit-input-followup-value-${i}`}
                       />
                       {yr.mode === "flat" && (
-                        <Select value={yr.currency || "AUD"} onValueChange={v => {
-                          const updated = [...formFollowupYearRates];
-                          updated[i] = { ...updated[i], currency: v };
-                          setFormFollowupYearRates(updated);
-                        }}>
-                          <SelectTrigger className="h-8 w-[80px]">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="AUD">AUD</SelectItem>
-                            <SelectItem value="USD">USD</SelectItem>
-                            <SelectItem value="NPR">NPR</SelectItem>
-                            <SelectItem value="GBP">GBP</SelectItem>
-                          </SelectContent>
-                        </Select>
+                        <SearchableSelect
+                          value={yr.currency || "AUD"}
+                          onValueChange={v => {
+                            const updated = [...formFollowupYearRates];
+                            updated[i] = { ...updated[i], currency: v };
+                            setFormFollowupYearRates(updated);
+                          }}
+                          options={[{ value: "AUD", label: "AUD" }, { value: "USD", label: "USD" }, { value: "NPR", label: "NPR" }, { value: "GBP", label: "GBP" }]}
+                        />
                       )}
                     </div>
                   </div>
@@ -1468,7 +1400,7 @@ export default function ProviderCommissionPage() {
                   data: {
                     providerName: formProvider.trim(),
                     label: formLabel.trim(),
-                    degreeLevel: formDegree,
+                    degreeLevel: formDegrees.join(", "),
                     territory: formTerritories,
                     commissionValue: formValue,
                     commissionType: formType,
