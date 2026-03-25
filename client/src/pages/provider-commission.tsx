@@ -765,10 +765,10 @@ export default function ProviderCommissionPage() {
                     <TableHead>Label</TableHead>
                     <TableHead>Study Level</TableHead>
                     <TableHead>Territory</TableHead>
-                    <TableHead className="text-right">Commission</TableHead>
+                    <TableHead className="text-right">Original Commission</TableHead>
+                    <TableHead>Original Follow-up</TableHead>
                     <TableHead>Basis</TableHead>
-                    <TableHead>Follow-up</TableHead>
-                    <TableHead className="text-right">Sub-Agent %</TableHead>
+                    <TableHead className="text-right">Sub-Agent Commission %</TableHead>
                     <TableHead>Sub-Agent Follow-up</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead className="text-right">Actions</TableHead>
@@ -882,9 +882,6 @@ export default function ProviderCommissionPage() {
                               <span>{entry.currency} {entry.commissionValue}</span>
                             )}
                           </TableCell>
-                          <TableCell data-testid={`text-basis-${entry.id}`}>
-                            {basisLabelMap[entry.commissionBasis] || entry.commissionBasis}
-                          </TableCell>
                           <TableCell data-testid={`text-followup-${entry.id}`}>
                             {(entry.followupStudyLevel || (entry.followupYearRates && entry.followupYearRates.length > 0)) ? (
                               <div className="flex items-start gap-1">
@@ -905,6 +902,9 @@ export default function ProviderCommissionPage() {
                             ) : (
                               <span className="text-muted-foreground">—</span>
                             )}
+                          </TableCell>
+                          <TableCell data-testid={`text-basis-${entry.id}`}>
+                            {basisLabelMap[entry.commissionBasis] || entry.commissionBasis}
                           </TableCell>
                           <TableCell className="text-right font-mono" data-testid={`text-subagent-${entry.id}`}>
                             {entry.subAgentCommission ? (
