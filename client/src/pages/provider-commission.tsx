@@ -226,7 +226,7 @@ interface CopyRule {
 }
 
 const degreeLabelMap: Record<string, string> = Object.fromEntries(DEGREE_LEVELS.map(d => [d.value, d.label]));
-const basisLabelMap: Record<string, string> = Object.fromEntries(COMMISSION_BASIS.map(b => [b.value, b.label]));
+const basisLabelMapFallback: Record<string, string> = Object.fromEntries(COMMISSION_BASIS.map(b => [b.value, b.label]));
 
 function MultiTerritorySelect({
   value,
@@ -340,11 +340,17 @@ export default function ProviderCommissionPage() {
   const [filterBasis, setFilterBasis] = useState("all");
   const [showInactive, setShowInactive] = useState(false);
 
-  const { data: dropdownOpts = {} } = useDropdownOptions();
+  const { options: dropdownOpts = {} } = useDropdownOptions();
   const studyLevelOptions = [
     { value: "any", label: "Any" },
     ...(dropdownOpts.study_level || []).map((o: any) => ({ value: o.value, label: o.label })),
   ];
+  const basisOptions = (dropdownOpts.commission_basis || []).map((o: any) => ({ value: o.value, label: o.label }));
+  const effectiveBasisOptions = basisOptions.length > 0 ? basisOptions : COMMISSION_BASIS;
+  const basisLabelMap: Record<string, string> = {
+    ...basisLabelMapFallback,
+    ...Object.fromEntries(effectiveBasisOptions.map(b => [b.value, b.label])),
+  };
 
   const [addOpen, setAddOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
@@ -727,7 +733,7 @@ export default function ProviderCommissionPage() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Basis</SelectItem>
-                {COMMISSION_BASIS.map(b => (
+                {effectiveBasisOptions.map(b => (
                   <SelectItem key={b.value} value={b.value}>{b.label}</SelectItem>
                 ))}
               </SelectContent>
@@ -1096,7 +1102,7 @@ export default function ProviderCommissionPage() {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {COMMISSION_BASIS.map(b => (
+                  {effectiveBasisOptions.map(b => (
                     <SelectItem key={b.value} value={b.value}>{b.label}</SelectItem>
                   ))}
                 </SelectContent>
@@ -1330,7 +1336,7 @@ export default function ProviderCommissionPage() {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {COMMISSION_BASIS.map(b => (
+                  {effectiveBasisOptions.map(b => (
                     <SelectItem key={b.value} value={b.value}>{b.label}</SelectItem>
                   ))}
                 </SelectContent>

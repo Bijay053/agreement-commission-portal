@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/dialog";
 import { ArrowLeft, Save, Plus, X, Globe } from "lucide-react";
 import { AGREEMENT_TYPES, AGREEMENT_STATUSES, PROVIDER_TYPES } from "@shared/schema";
+import { useDropdownOptions } from "@/hooks/use-dropdown-options";
 
 const typeLabels: Record<string, string> = {
   agency: "Agency Agreement",
@@ -221,7 +222,11 @@ export default function AgreementFormPage() {
     })) || []),
   ];
 
-  const typeOptions = AGREEMENT_TYPES.map(t => ({ value: t, label: typeLabels[t] }));
+  const { options: ddOpts = {} } = useDropdownOptions();
+  const ddAgreementTypes = (ddOpts.agreement_type || []).map((o: any) => ({ value: o.value, label: o.label }));
+  const typeOptions = ddAgreementTypes.length > 0
+    ? ddAgreementTypes
+    : AGREEMENT_TYPES.map(t => ({ value: t, label: typeLabels[t] }));
   const statusOptions = AGREEMENT_STATUSES.map(s => ({ value: s, label: statusLabels[s] }));
 
   const territoryTypeOptions = [
