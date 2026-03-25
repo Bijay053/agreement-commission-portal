@@ -35,7 +35,7 @@ class ProviderCommissionEntry(models.Model):
 
     id = models.AutoField(primary_key=True)
     provider_name = models.CharField(max_length=255, default='')
-    degree_level = models.CharField(max_length=32, choices=DEGREE_LEVEL_CHOICES, default='any')
+    degree_level = models.CharField(max_length=255, default='any')
     territory = models.TextField(blank=True, default='')
     commission_value = models.DecimalField(max_digits=10, decimal_places=2)
     commission_type = models.CharField(max_length=16, default='percentage')

@@ -25,6 +25,7 @@ import { useToast } from "@/hooks/use-toast";
 import {
   Search, Plus, Settings, Copy, Pencil, Trash2, Percent, X, ChevronDown, Upload, Download, FileSpreadsheet, AlertCircle, CheckCircle2, RotateCcw, History, ArrowRight,
 } from "lucide-react";
+import { useDropdownOptions } from "@/hooks/use-dropdown-options";
 
 const DEGREE_LEVELS = [
   { value: "any", label: "Any" },
@@ -338,6 +339,12 @@ export default function ProviderCommissionPage() {
   const [filterDegree, setFilterDegree] = useState("all");
   const [filterBasis, setFilterBasis] = useState("all");
   const [showInactive, setShowInactive] = useState(false);
+
+  const { data: dropdownOpts = {} } = useDropdownOptions();
+  const studyLevelOptions = [
+    { value: "any", label: "Any" },
+    ...(dropdownOpts.study_level || []).map((o: any) => ({ value: o.value, label: o.label })),
+  ];
 
   const [addOpen, setAddOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
@@ -696,11 +703,11 @@ export default function ProviderCommissionPage() {
             </div>
             <Select value={filterDegree} onValueChange={setFilterDegree}>
               <SelectTrigger className="w-[160px]" data-testid="filter-degree">
-                <SelectValue placeholder="Degree Level" />
+                <SelectValue placeholder="Study Level" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All Degrees</SelectItem>
-                {DEGREE_LEVELS.map(d => (
+                <SelectItem value="all">All Levels</SelectItem>
+                {studyLevelOptions.map(d => (
                   <SelectItem key={d.value} value={d.value}>{d.label}</SelectItem>
                 ))}
               </SelectContent>
@@ -756,7 +763,7 @@ export default function ProviderCommissionPage() {
                   <TableRow>
                     <TableHead>Provider</TableHead>
                     <TableHead>Label</TableHead>
-                    <TableHead>Degree Level</TableHead>
+                    <TableHead>Study Level</TableHead>
                     <TableHead>Territory</TableHead>
                     <TableHead className="text-right">Commission</TableHead>
                     <TableHead>Basis</TableHead>
@@ -862,7 +869,7 @@ export default function ProviderCommissionPage() {
                             {entry.ruleLabel || <span className="text-muted-foreground">—</span>}
                           </TableCell>
                           <TableCell data-testid={`text-degree-${entry.id}`}>
-                            <Badge variant="outline">{degreeLabelMap[entry.degreeLevel] || entry.degreeLevel}</Badge>
+                            <Badge variant="outline">{entry.degreeLevel === 'any' ? 'Any' : entry.degreeLevel}</Badge>
                           </TableCell>
                           <TableCell data-testid={`text-territory-${entry.id}`}>
                             {formatTerritoryDisplay(entry.territory) || <span className="text-muted-foreground">—</span>}
@@ -973,13 +980,13 @@ export default function ProviderCommissionPage() {
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <Label>Degree Level</Label>
+                <Label>Study Level</Label>
                 <Select value={formDegree} onValueChange={setFormDegree}>
                   <SelectTrigger data-testid="select-degree">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {DEGREE_LEVELS.map(d => (
+                    {studyLevelOptions.map(d => (
                       <SelectItem key={d.value} value={d.value}>{d.label}</SelectItem>
                     ))}
                   </SelectContent>
@@ -1099,13 +1106,13 @@ export default function ProviderCommissionPage() {
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <Label>Degree Level</Label>
+                <Label>Study Level</Label>
                 <Select value={formDegree} onValueChange={setFormDegree}>
                   <SelectTrigger data-testid="edit-select-degree">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {DEGREE_LEVELS.map(d => (
+                    {studyLevelOptions.map(d => (
                       <SelectItem key={d.value} value={d.value}>{d.label}</SelectItem>
                     ))}
                   </SelectContent>

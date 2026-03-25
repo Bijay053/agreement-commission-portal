@@ -340,16 +340,7 @@ class CopyFromCommissionRulesView(APIView):
                 skipped += 1
                 continue
 
-            level_map = {
-                'Undergraduate': 'undergraduate',
-                'Postgraduate': 'postgraduate',
-                'VET': 'vet',
-                'Foundation': 'foundation',
-                'Diploma': 'diploma',
-                'PhD': 'phd',
-                'English Language': 'english',
-            }
-            degree = level_map.get(rule.study_level, 'any')
+            degree = rule.study_level or 'Any'
 
             if rule.commission_mode == 'percentage' and rule.percentage_value:
                 cval = rule.percentage_value
@@ -390,7 +381,7 @@ class CopyFromCommissionRulesView(APIView):
         return Response({'created': created, 'skipped': skipped})
 
 
-VALID_DEGREE_LEVELS = {'any', 'undergraduate', 'postgraduate', 'vet', 'foundation', 'diploma', 'phd', 'english'}
+VALID_DEGREE_LEVELS = None
 VALID_COMMISSION_TYPES = {'percentage', 'flat'}
 VALID_BASES = {'1_year', '2_semesters', 'full_course', 'per_semester', 'per_year', 'per_trimester', 'one_time'}
 
@@ -422,7 +413,7 @@ class SampleDownloadView(APIView):
         ws.title = "Commission Distribution"
 
         headers = [
-            "Provider Name*", "Degree Level", "Territory",
+            "Provider Name*", "Study Level", "Territory",
             "Commission Type*", "Value*", "Currency", "Commission Basis", "Notes"
         ]
 
@@ -543,11 +534,9 @@ class BulkUploadView(APIView):
                     errors.append(f"Row {idx}: Provider Name is required")
                     continue
 
-                degree_raw = str(row[1]).strip().lower() if len(row) > 1 and row[1] else 'any'
-                degree_level = DEGREE_LABEL_TO_VALUE.get(degree_raw, None)
+                degree_level = str(row[1]).strip() if len(row) > 1 and row[1] else 'Any'
                 if not degree_level:
-                    errors.append(f"Row {idx}: Invalid degree level '{row[1]}'")
-                    continue
+                    degree_level = 'Any'
 
                 territory = str(row[2]).strip() if len(row) > 2 and row[2] else ''
 
