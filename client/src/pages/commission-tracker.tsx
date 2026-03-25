@@ -18,7 +18,7 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   Plus, Search, Trash2, Users, DollarSign, TrendingUp, AlertCircle,
-  Settings, X, Upload, Download, Clock, CheckCircle2, FileSpreadsheet, AlertTriangle, RotateCcw, ExternalLink, BarChart3, Sparkles, Lightbulb, ArrowUpRight, ArrowDownRight, Target, Shield
+  Settings, X, Upload, Download, Clock, CheckCircle2, FileSpreadsheet, AlertTriangle, RotateCcw, ExternalLink, BarChart3, Sparkles, Lightbulb, ArrowUpRight, ArrowDownRight, Target, Shield, Filter, Calculator, Play
 } from "lucide-react";
 import { ScrollableTableWrapper } from "@/components/ui/scrollable-table-wrapper";
 import type { CommissionStudent, CommissionEntry } from "@shared/schema";
@@ -1117,11 +1117,254 @@ function DashboardView({ dashboard, year, intakeFilter, onIntakeChange, provider
       {insights && (
         <Card className="border-dashed border-amber-300 bg-gradient-to-r from-amber-50/50 to-orange-50/50 dark:from-amber-950/20 dark:to-orange-950/20" data-testid="card-insights">
           <CardContent className="p-4">
+            <InsightsPanel insights={insights} year={year} />
+          </CardContent>
+        </Card>
+      )}
+
+      {dashboard.byStatus && Object.keys(dashboard.byStatus).length > 0 && (
+        <div>
+          <h3 className="text-sm font-medium mb-2">By Status</h3>
+          <div className="flex flex-wrap gap-2">
+            {Object.entries(dashboard.byStatus).map(([status, count]) => (
+              <Badge key={status} className={`${STATUS_COLORS[status] || "bg-gray-100 text-gray-800"} text-xs px-2 py-1`}>
+                {status}: {count as number}
+              </Badge>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {dashboard.byProvider && dashboard.byProvider.length > 0 && (
+          <div>
+            <h3 className="text-sm font-medium mb-2">Provider by Student Number</h3>
+            <div className="space-y-1 max-h-60 overflow-y-auto">
+              {dashboard.byProvider.map((p: any) => (
+                <div key={p.provider} className="flex justify-between text-xs py-1.5 px-2 border rounded">
+                  <span className="truncate max-w-[250px]">{p.provider}</span>
+                  <span className="font-mono font-semibold">{p.count} students</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+        {dashboard.byProvider && dashboard.byProvider.length > 0 && (
+          <div>
+            <h3 className="text-sm font-medium mb-2">Provider Commission Summary</h3>
+            <div className="space-y-1 max-h-60 overflow-y-auto">
+              {dashboard.byProvider.map((p: any) => (
+                <div key={p.provider} className="text-xs py-1.5 px-2 border rounded">
+                  <div className="flex justify-between">
+                    <span className="truncate max-w-[200px] font-medium">{p.provider}</span>
+                    <span className="font-mono text-green-600">${Number(p.totalCommission || 0).toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between text-[10px] text-muted-foreground mt-0.5">
+                    <span>Bonus: ${Number(p.totalBonus || 0).toFixed(2)}</span>
+                    <span>Received: ${Number(p.totalReceived || 0).toFixed(2)}</span>
+                    <span className="text-orange-500">Pending: ${Number(p.pending || 0).toFixed(2)}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {dashboard.byAgent && dashboard.byAgent.length > 0 && (
+        <div>
+          <h3 className="text-sm font-medium mb-2">By Agent</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-1">
+            {dashboard.byAgent.map((a: any) => (
+              <div key={a.agent} className="flex justify-between text-xs py-1 px-2 border rounded">
+                <span>{a.agent}</span>
+                <span className="font-mono font-semibold">{a.count} students</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <DashboardStudentList dashboard={dashboard} />
+    </div>
+  );
+}
+
+function InsightsPanel({ insights, year }: { insights: any; year: number }) {
+  const [aiFilterProvider, setAiFilterProvider] = useState('');
+  const [aiFilterAgent, setAiFilterAgent] = useState('');
+  const [aiFilterAction, setAiFilterAction] = useState('');
+  const [aiFilterMinMargin, setAiFilterMinMargin] = useState('');
+  const [showFilters, setShowFilters] = useState(false);
+  const [showWhatIf, setShowWhatIf] = useState(false);
+  const [wifProvider, setWifProvider] = useState('');
+  const [wifStudentChange, setWifStudentChange] = useState('');
+  const [wifRateChange, setWifRateChange] = useState('');
+  const [wifResult, setWifResult] = useState<any>(null);
+
+  const allProviders = useMemo(() => {
+    const set = new Set<string>();
+    (insights.byProvider || []).forEach((p: any) => set.add(p.provider));
+    return Array.from(set).sort();
+  }, [insights.byProvider]);
+
+  const allAgents = useMemo(() => {
+    const set = new Set<string>();
+    (insights.byAgent || []).forEach((a: any) => set.add(a.agent));
+    return Array.from(set).sort();
+  }, [insights.byAgent]);
+
+  const actionOptions = ['Scale', 'Negotiate', 'Re-engage', 'High Risk', 'Monitor'];
+
+  const filterFn = (item: any, type: 'provider' | 'agent') => {
+    if (aiFilterAction && item.aiAction !== aiFilterAction) return false;
+    if (aiFilterMinMargin && item.marginPct < parseFloat(aiFilterMinMargin)) return false;
+    if (type === 'provider' && aiFilterProvider && item.provider !== aiFilterProvider) return false;
+    if (type === 'agent' && aiFilterAgent && item.agent !== aiFilterAgent) return false;
+    return true;
+  };
+
+  const filteredProviders = useMemo(() => (insights.byProvider || []).filter((p: any) => filterFn(p, 'provider')), [insights.byProvider, aiFilterProvider, aiFilterAction, aiFilterMinMargin]);
+  const filteredAgents = useMemo(() => (insights.byAgent || []).filter((a: any) => filterFn(a, 'agent')), [insights.byAgent, aiFilterAgent, aiFilterAction, aiFilterMinMargin]);
+
+  const runWhatIf = () => {
+    if (!wifProvider) return;
+    const prov = (insights.byProvider || []).find((p: any) => p.provider === wifProvider);
+    if (!prov) return;
+    const studentDelta = parseInt(wifStudentChange || '0') || 0;
+    const rateDelta = parseFloat(wifRateChange || '0') || 0;
+    const newStudents = Math.max(prov.studentCount + studentDelta, 0);
+    const newAvg = prov.avgCommPerStudent * (1 + rateDelta / 100);
+    const newCommission = newStudents * newAvg;
+    const currentSubRate = prov.commission > 0 ? prov.subAgentPaid / prov.commission : 0;
+    const newSubPaid = newCommission * currentSubRate;
+    const newMargin = newCommission - newSubPaid;
+    const commDelta = newCommission - prov.commission;
+    const marginDelta = newMargin - prov.margin;
+    setWifResult({
+      provider: wifProvider,
+      currentStudents: prov.studentCount, newStudents,
+      currentAvg: prov.avgCommPerStudent, newAvg,
+      currentCommission: prov.commission, newCommission,
+      currentMargin: prov.margin, newMargin,
+      commissionDelta: commDelta, marginDelta,
+      currentMarginPct: prov.marginPct,
+      newMarginPct: newCommission > 0 ? Math.round(newMargin / newCommission * 1000) / 10 : 0,
+    });
+  };
+
+  const hasActiveFilters = aiFilterProvider || aiFilterAgent || aiFilterAction || aiFilterMinMargin;
+
+  const fmt = (v: number, dec = 0) => Number(v).toLocaleString(undefined, { minimumFractionDigits: dec, maximumFractionDigits: dec });
+
+  return (
+    <>
             <div className="flex items-center gap-2 mb-3">
               <Sparkles className="h-4 w-4 text-amber-500" />
               <h3 className="text-sm font-semibold">AI Commission Intelligence - {year}</h3>
-              <span className="text-[10px] text-muted-foreground ml-auto">AI-Driven Decision Dashboard</span>
+              <div className="ml-auto flex items-center gap-1.5">
+                <Button variant={showWhatIf ? "default" : "outline"} size="sm" className="h-6 text-[10px] px-2 gap-1" onClick={() => setShowWhatIf(!showWhatIf)} data-testid="btn-whatif-toggle">
+                  <Calculator className="h-3 w-3" /> What-If
+                </Button>
+                <Button variant={showFilters ? "default" : "outline"} size="sm" className="h-6 text-[10px] px-2 gap-1" onClick={() => setShowFilters(!showFilters)} data-testid="btn-filter-toggle">
+                  <Filter className="h-3 w-3" /> Filters {hasActiveFilters ? '●' : ''}
+                </Button>
+              </div>
             </div>
+
+            {showFilters && (
+              <div className="bg-white dark:bg-gray-900 rounded-lg border p-3 mb-3" data-testid="insights-filters">
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                  <div>
+                    <label className="text-[10px] text-muted-foreground mb-0.5 block">Provider</label>
+                    <Select value={aiFilterProvider} onValueChange={setAiFilterProvider}>
+                      <SelectTrigger className="h-7 text-xs" data-testid="filter-provider"><SelectValue placeholder="All Providers" /></SelectTrigger>
+                      <SelectContent>{allProviders.map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}</SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-muted-foreground mb-0.5 block">Agent</label>
+                    <Select value={aiFilterAgent} onValueChange={setAiFilterAgent}>
+                      <SelectTrigger className="h-7 text-xs" data-testid="filter-agent"><SelectValue placeholder="All Agents" /></SelectTrigger>
+                      <SelectContent>{allAgents.map(a => <SelectItem key={a} value={a}>{a}</SelectItem>)}</SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-muted-foreground mb-0.5 block">AI Action</label>
+                    <Select value={aiFilterAction} onValueChange={setAiFilterAction}>
+                      <SelectTrigger className="h-7 text-xs" data-testid="filter-action"><SelectValue placeholder="All Actions" /></SelectTrigger>
+                      <SelectContent>{actionOptions.map(a => <SelectItem key={a} value={a}>{a}</SelectItem>)}</SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-muted-foreground mb-0.5 block">Min Margin %</label>
+                    <Input type="number" className="h-7 text-xs" placeholder="e.g. 30" value={aiFilterMinMargin} onChange={(e) => setAiFilterMinMargin(e.target.value)} data-testid="filter-min-margin" />
+                  </div>
+                </div>
+                {hasActiveFilters && (
+                  <Button variant="ghost" size="sm" className="h-5 text-[10px] mt-2 px-2 text-muted-foreground" onClick={() => { setAiFilterProvider(''); setAiFilterAgent(''); setAiFilterAction(''); setAiFilterMinMargin(''); }} data-testid="btn-clear-filters">
+                    <X className="h-3 w-3 mr-1" /> Clear Filters
+                  </Button>
+                )}
+              </div>
+            )}
+
+            {showWhatIf && (
+              <div className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/20 dark:to-indigo-950/20 rounded-lg border border-blue-200 dark:border-blue-800 p-3 mb-4" data-testid="whatif-panel">
+                <h4 className="text-xs font-semibold text-blue-700 dark:text-blue-400 mb-2 flex items-center gap-1"><Calculator className="h-3 w-3" /> What-If Simulation</h4>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-2">
+                  <div>
+                    <label className="text-[10px] text-muted-foreground mb-0.5 block">Provider</label>
+                    <Select value={wifProvider} onValueChange={(v) => { setWifProvider(v); setWifResult(null); }}>
+                      <SelectTrigger className="h-7 text-xs" data-testid="whatif-provider"><SelectValue placeholder="Select Provider" /></SelectTrigger>
+                      <SelectContent>{allProviders.map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}</SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-muted-foreground mb-0.5 block">Student Change (+/-)</label>
+                    <Input type="number" className="h-7 text-xs" placeholder="+5 or -2" value={wifStudentChange} onChange={(e) => { setWifStudentChange(e.target.value); setWifResult(null); }} data-testid="whatif-students" />
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-muted-foreground mb-0.5 block">Rate Change %</label>
+                    <Input type="number" className="h-7 text-xs" placeholder="+10 or -5" value={wifRateChange} onChange={(e) => { setWifRateChange(e.target.value); setWifResult(null); }} data-testid="whatif-rate" />
+                  </div>
+                  <div className="flex items-end">
+                    <Button size="sm" className="h-7 text-xs gap-1 w-full" onClick={runWhatIf} disabled={!wifProvider} data-testid="btn-simulate">
+                      <Play className="h-3 w-3" /> Simulate
+                    </Button>
+                  </div>
+                </div>
+                {wifResult && (
+                  <div className="bg-white dark:bg-gray-900 rounded-lg border p-3 mt-2" data-testid="whatif-result">
+                    <p className="text-xs font-semibold mb-2">{wifResult.provider} — Simulation Result</p>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
+                      <div>
+                        <p className="text-[10px] text-muted-foreground">Students</p>
+                        <p className="font-bold">{wifResult.currentStudents} → {wifResult.newStudents}</p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] text-muted-foreground">Avg / Student</p>
+                        <p className="font-bold font-mono">${fmt(wifResult.currentAvg, 2)} → ${fmt(wifResult.newAvg, 2)}</p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] text-muted-foreground">Commission</p>
+                        <p className="font-bold font-mono">${fmt(wifResult.currentCommission)} → ${fmt(wifResult.newCommission)}</p>
+                        <span className={`text-[10px] font-medium ${wifResult.commissionDelta >= 0 ? 'text-green-600' : 'text-red-500'}`}>
+                          {wifResult.commissionDelta >= 0 ? '+' : ''}${fmt(wifResult.commissionDelta)}
+                        </span>
+                      </div>
+                      <div>
+                        <p className="text-[10px] text-muted-foreground">Net Margin</p>
+                        <p className="font-bold font-mono">${fmt(wifResult.currentMargin)} → ${fmt(wifResult.newMargin)}</p>
+                        <span className={`text-[10px] font-medium ${wifResult.marginDelta >= 0 ? 'text-green-600' : 'text-red-500'}`}>
+                          {wifResult.marginDelta >= 0 ? '+' : ''}${fmt(wifResult.marginDelta)} ({wifResult.currentMarginPct}% → {wifResult.newMarginPct}%)
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
 
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-4">
               {[
@@ -1210,11 +1453,11 @@ function DashboardView({ dashboard, year, intakeFilter, onIntakeChange, provider
             )}
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
-              {insights.byProvider && insights.byProvider.length > 0 && (
+              {filteredProviders.length > 0 && (
                 <div>
-                  <h4 className="text-xs font-medium text-muted-foreground mb-1.5 flex items-center gap-1"><BarChart3 className="h-3 w-3" /> Provider Intelligence</h4>
+                  <h4 className="text-xs font-medium text-muted-foreground mb-1.5 flex items-center gap-1"><BarChart3 className="h-3 w-3" /> Provider Intelligence {hasActiveFilters ? <span className="text-[9px] text-amber-600">({filteredProviders.length}/{(insights.byProvider || []).length})</span> : null}</h4>
                   <div className="space-y-1 max-h-64 overflow-y-auto">
-                    {insights.byProvider.map((p: any) => (
+                    {filteredProviders.map((p: any) => (
                       <div key={p.provider} className="text-xs bg-white dark:bg-gray-900 rounded px-2.5 py-1.5 border" data-testid={`insight-provider-${p.provider}`}>
                         <div className="flex items-center justify-between gap-1">
                           <span className="truncate max-w-[120px] font-medium">{p.provider}</span>
@@ -1254,11 +1497,11 @@ function DashboardView({ dashboard, year, intakeFilter, onIntakeChange, provider
                 </div>
               )}
 
-              {insights.byAgent && insights.byAgent.length > 0 && (
+              {filteredAgents.length > 0 && (
                 <div>
-                  <h4 className="text-xs font-medium text-muted-foreground mb-1.5 flex items-center gap-1"><Users className="h-3 w-3" /> Agent Intelligence</h4>
+                  <h4 className="text-xs font-medium text-muted-foreground mb-1.5 flex items-center gap-1"><Users className="h-3 w-3" /> Agent Intelligence {hasActiveFilters ? <span className="text-[9px] text-amber-600">({filteredAgents.length}/{(insights.byAgent || []).length})</span> : null}</h4>
                   <div className="space-y-1 max-h-64 overflow-y-auto">
-                    {insights.byAgent.map((a: any) => (
+                    {filteredAgents.map((a: any) => (
                       <div key={a.agent} className="text-xs bg-white dark:bg-gray-900 rounded px-2.5 py-1.5 border" data-testid={`insight-agent-${a.agent}`}>
                         <div className="flex items-center justify-between gap-1">
                           <span className="truncate max-w-[120px] font-medium">{a.agent}</span>
@@ -1410,82 +1653,24 @@ function DashboardView({ dashboard, year, intakeFilter, onIntakeChange, provider
                       </div>
                       <div className="space-y-0.5 text-[10px] text-muted-foreground">
                         <div className="flex justify-between"><span>Students</span><span className="font-medium">{t.studentCount}</span></div>
-                        <div className="flex justify-between"><span>Commission</span><span className="font-medium font-mono">${Number(t.commission).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</span></div>
-                        <div className="flex justify-between"><span>Margin</span><span className={`font-medium font-mono ${t.margin >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>${Number(t.margin).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</span></div>
-                        {t.studentCount > 0 && <div className="flex justify-between"><span>Avg/Student</span><span className="font-medium font-mono">${Number(t.avgPerStudent).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</span></div>}
+                        <div className="flex justify-between"><span>Commission</span><span className="font-medium font-mono">${fmt(t.commission)}</span></div>
+                        <div className="flex justify-between"><span>Margin</span><span className={`font-medium font-mono ${t.margin >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>${fmt(t.margin)}</span></div>
+                        {t.studentCount > 0 && <div className="flex justify-between"><span>Avg/Student</span><span className="font-medium font-mono">${fmt(t.avgPerStudent)}</span></div>}
                       </div>
                     </div>
                   ))}
                 </div>
               </div>
             )}
-          </CardContent>
-        </Card>
-      )}
+    </>
+  );
+}
 
-      {dashboard.byStatus && Object.keys(dashboard.byStatus).length > 0 && (
-        <div>
-          <h3 className="text-sm font-medium mb-2">By Status</h3>
-          <div className="flex flex-wrap gap-2">
-            {Object.entries(dashboard.byStatus).map(([status, count]) => (
-              <Badge key={status} className={`${STATUS_COLORS[status] || "bg-gray-100 text-gray-800"} text-xs px-2 py-1`}>
-                {status}: {count as number}
-              </Badge>
-            ))}
-          </div>
-        </div>
-      )}
-
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {dashboard.byProvider && dashboard.byProvider.length > 0 && (
-          <div>
-            <h3 className="text-sm font-medium mb-2">Provider by Student Number</h3>
-            <div className="space-y-1 max-h-60 overflow-y-auto">
-              {dashboard.byProvider.map((p: any) => (
-                <div key={p.provider} className="flex justify-between text-xs py-1.5 px-2 border rounded">
-                  <span className="truncate max-w-[250px]">{p.provider}</span>
-                  <span className="font-mono font-semibold">{p.count} students</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-        {dashboard.byProvider && dashboard.byProvider.length > 0 && (
-          <div>
-            <h3 className="text-sm font-medium mb-2">Provider Commission Summary</h3>
-            <div className="space-y-1 max-h-60 overflow-y-auto">
-              {dashboard.byProvider.map((p: any) => (
-                <div key={p.provider} className="text-xs py-1.5 px-2 border rounded">
-                  <div className="flex justify-between">
-                    <span className="truncate max-w-[200px] font-medium">{p.provider}</span>
-                    <span className="font-mono text-green-600">${Number(p.totalCommission || 0).toFixed(2)}</span>
-                  </div>
-                  <div className="flex justify-between text-[10px] text-muted-foreground mt-0.5">
-                    <span>Bonus: ${Number(p.totalBonus || 0).toFixed(2)}</span>
-                    <span>Received: ${Number(p.totalReceived || 0).toFixed(2)}</span>
-                    <span className="text-orange-500">Pending: ${Number(p.pending || 0).toFixed(2)}</span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-      </div>
-
-      {dashboard.byAgent && dashboard.byAgent.length > 0 && (
-        <div>
-          <h3 className="text-sm font-medium mb-2">By Agent</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-1">
-            {dashboard.byAgent.map((a: any) => (
-              <div key={a.agent} className="flex justify-between text-xs py-1 px-2 border rounded">
-                <span>{a.agent}</span>
-                <span className="font-mono font-semibold">{a.count} students</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
+function DashboardStudentList({ dashboard }: { dashboard: any }) {
+  if (!dashboard.studentDetails || dashboard.studentDetails.length === 0) return null;
+  const termNames = dashboard.termNames || [];
+  return (
+      <div>
       {dashboard.studentDetails && dashboard.studentDetails.length > 0 && (
         <div>
           <h3 className="text-sm font-medium mb-2">Student List</h3>
