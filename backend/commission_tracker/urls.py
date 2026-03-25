@@ -25,4 +25,5 @@ urlpatterns = [
     path('commission-tracker/provider-agreements-map', views.ProviderAgreementsMapView.as_view()),
     path('commission-tracker/recalculate-all', views.RecalculateAllView.as_view()),
     path('commission-tracker/prediction/<int:year>', views.PredictionView.as_view()),
+    path('commission-tracker/insights/<int:year>', views.CommissionInsightsView.as_view()),
 ]

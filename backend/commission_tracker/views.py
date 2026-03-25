@@ -1013,6 +1013,204 @@ class DashboardYearView(APIView):
             return Response({'message': str(e)}, status=500)
 
 
+class CommissionInsightsView(APIView):
+    @require_permission("commission_tracker.student.read")
+    def get(self, request, year):
+        try:
+            from sub_agent.models import SubAgentEntry, SubAgentTermEntry
+            user_perms = request.session.get('userPermissions', [])
+            has_financials = 'commission_tracker.field.financials' in user_perms
+            if not has_financials:
+                return Response({'insights': None})
+
+            target_year = int(year)
+            terms = CommissionTerm.objects.filter(year=target_year).order_by('sort_order')
+            term_names = [t.term_name for t in terms]
+            excluded_ids = get_excluded_student_ids_for_year(target_year)
+
+            entries = list(CommissionEntry.objects.filter(term_name__in=term_names))
+            if excluded_ids:
+                entries = [e for e in entries if e.commission_student_id not in excluded_ids]
+
+            all_students_qs = CommissionStudent.objects.all()
+            if excluded_ids:
+                all_students_qs = all_students_qs.exclude(id__in=excluded_ids)
+            students = {s.id: s for s in all_students_qs}
+
+            sub_masters = {m.commission_student_id: m for m in SubAgentEntry.objects.all()}
+            sub_term_entries = list(SubAgentTermEntry.objects.filter(term_name__in=term_names))
+            if excluded_ids:
+                sub_term_entries = [e for e in sub_term_entries if e.commission_student_id not in excluded_ids]
+
+            sub_paid_by_student = {}
+            for se in sub_term_entries:
+                sub_paid_by_student[se.commission_student_id] = sub_paid_by_student.get(se.commission_student_id, 0) + float(se.total_paid or 0)
+
+            provider_data = {}
+            agent_data = {}
+            for e in entries:
+                s = students.get(e.commission_student_id)
+                if not s:
+                    continue
+                prov = (s.provider or 'Unknown').strip()
+                agent = (s.agent_name or 'Unknown').strip()
+                comm = float(e.commission_amount or 0)
+                total_with_gst = float(e.total_amount or 0)
+
+                if prov not in provider_data:
+                    provider_data[prov] = {'commission': 0, 'totalWithGst': 0, 'subPaid': 0, 'students': set(), 'hasSubAgent': set()}
+                provider_data[prov]['commission'] += comm
+                provider_data[prov]['totalWithGst'] += total_with_gst
+                provider_data[prov]['students'].add(e.commission_student_id)
+
+                if agent not in agent_data:
+                    agent_data[agent] = {'commission': 0, 'subPaid': 0, 'students': set(), 'hasSubAgent': set()}
+                agent_data[agent]['commission'] += comm
+                agent_data[agent]['students'].add(e.commission_student_id)
+
+            for sid, sub_paid in sub_paid_by_student.items():
+                s = students.get(sid)
+                if not s:
+                    continue
+                prov = (s.provider or 'Unknown').strip()
+                agent = (s.agent_name or 'Unknown').strip()
+                if prov in provider_data:
+                    provider_data[prov]['subPaid'] += sub_paid
+                    provider_data[prov]['hasSubAgent'].add(sid)
+                if agent in agent_data:
+                    agent_data[agent]['subPaid'] += sub_paid
+                    agent_data[agent]['hasSubAgent'].add(sid)
+
+            total_commission = sum(pd['commission'] for pd in provider_data.values())
+            total_sub_paid = sum(pd['subPaid'] for pd in provider_data.values())
+            total_margin = total_commission - total_sub_paid
+            margin_pct = (total_margin / total_commission * 100) if total_commission > 0 else 0
+
+            provider_insights = []
+            for prov, pd in provider_data.items():
+                margin = pd['commission'] - pd['subPaid']
+                pct = (margin / pd['commission'] * 100) if pd['commission'] > 0 else 0
+                avg_comm = pd['commission'] / len(pd['students']) if pd['students'] else 0
+                sub_rate_pct = (pd['subPaid'] / pd['commission'] * 100) if pd['commission'] > 0 else 0
+                provider_insights.append({
+                    'provider': prov,
+                    'commission': round2(pd['commission']),
+                    'subAgentPaid': round2(pd['subPaid']),
+                    'margin': round2(margin),
+                    'marginPct': round(pct, 1),
+                    'studentCount': len(pd['students']),
+                    'subAgentStudents': len(pd['hasSubAgent']),
+                    'avgCommPerStudent': round2(avg_comm),
+                    'subAgentRatePct': round(sub_rate_pct, 1),
+                })
+            provider_insights.sort(key=lambda x: x['margin'], reverse=True)
+
+            agent_insights = []
+            for agent, ad in agent_data.items():
+                margin = ad['commission'] - ad['subPaid']
+                pct = (margin / ad['commission'] * 100) if ad['commission'] > 0 else 0
+                sub_rate = (ad['subPaid'] / ad['commission'] * 100) if ad['commission'] > 0 else 0
+                agent_insights.append({
+                    'agent': agent,
+                    'commission': round2(ad['commission']),
+                    'subAgentPaid': round2(ad['subPaid']),
+                    'margin': round2(margin),
+                    'marginPct': round(pct, 1),
+                    'studentCount': len(ad['students']),
+                    'subAgentStudents': len(ad['hasSubAgent']),
+                    'subAgentRatePct': round(sub_rate, 1),
+                })
+            agent_insights.sort(key=lambda x: x['margin'], reverse=True)
+
+            suggestions = []
+            high_sub_agents = [a for a in agent_insights if a['subAgentRatePct'] > 50 and a['subAgentPaid'] > 0]
+            if high_sub_agents:
+                names = ', '.join(a['agent'] for a in high_sub_agents[:3])
+                suggestions.append({
+                    'type': 'warning',
+                    'title': 'High Sub-Agent Cost',
+                    'message': f'Sub-agents {names} are costing over 50% of commission. Consider renegotiating rates or converting to direct students.',
+                })
+
+            low_margin_provs = [p for p in provider_insights if p['marginPct'] < 30 and p['subAgentPaid'] > 0]
+            if low_margin_provs:
+                names = ', '.join(p['provider'] for p in low_margin_provs[:3])
+                suggestions.append({
+                    'type': 'warning',
+                    'title': 'Low Margin Providers',
+                    'message': f'{names} have margin below 30% after sub-agent payments. Focus on recruiting direct students for these providers or negotiate higher commission rates.',
+                })
+
+            high_margin_provs = [p for p in provider_insights if p['marginPct'] > 70 and p['commission'] > 0]
+            if high_margin_provs:
+                names = ', '.join(p['provider'] for p in high_margin_provs[:3])
+                suggestions.append({
+                    'type': 'success',
+                    'title': 'High Margin Providers',
+                    'message': f'{names} have excellent margins (>70%). Prioritize growing student numbers with these providers.',
+                })
+
+            direct_students = sum(len(pd['students']) - len(pd['hasSubAgent']) for pd in provider_data.values())
+            total_students_count = sum(len(pd['students']) for pd in provider_data.values())
+            direct_pct = (direct_students / total_students_count * 100) if total_students_count > 0 else 0
+            if direct_pct < 30:
+                suggestions.append({
+                    'type': 'info',
+                    'title': 'Increase Direct Recruitment',
+                    'message': f'Only {round(direct_pct)}% of students are direct (no sub-agent). Increasing direct recruitment to 50%+ would significantly improve margins.',
+                })
+            elif direct_pct > 60:
+                suggestions.append({
+                    'type': 'success',
+                    'title': 'Strong Direct Student Base',
+                    'message': f'{round(direct_pct)}% of students are direct recruits — great for margins. Continue building direct channels.',
+                })
+
+            no_sub_provs = [p for p in provider_insights if p['subAgentStudents'] == 0 and p['commission'] > 0]
+            if no_sub_provs:
+                total_no_sub_comm = sum(p['commission'] for p in no_sub_provs)
+                suggestions.append({
+                    'type': 'success',
+                    'title': 'Fully Direct Providers',
+                    'message': f'{len(no_sub_provs)} provider(s) have only direct students, generating ${total_no_sub_comm:,.2f} in full-margin commission.',
+                })
+
+            overpay_agents = [a for a in agent_insights if a['subAgentPaid'] > a['commission'] and a['commission'] > 0]
+            if overpay_agents:
+                names = ', '.join(a['agent'] for a in overpay_agents[:3])
+                suggestions.append({
+                    'type': 'danger',
+                    'title': 'Sub-Agent Overpayment',
+                    'message': f'Sub-agent(s) {names} have been paid more than the commission received. Review and adjust sub-agent rates immediately.',
+                })
+
+            if total_commission > 0 and margin_pct < 40:
+                suggestions.append({
+                    'type': 'info',
+                    'title': 'Overall Margin Improvement',
+                    'message': f'Current overall margin is {round(margin_pct)}%. Target 50%+ by focusing on direct recruitment and negotiating better provider commission rates.',
+                })
+
+            return Response({
+                'insights': {
+                    'totalCommission': round2(total_commission),
+                    'totalSubAgentPaid': round2(total_sub_paid),
+                    'totalMargin': round2(total_margin),
+                    'marginPct': round(margin_pct, 1),
+                    'totalStudents': total_students_count,
+                    'directStudents': direct_students,
+                    'directPct': round(direct_pct, 1),
+                    'byProvider': provider_insights,
+                    'byAgent': agent_insights,
+                    'suggestions': suggestions,
+                }
+            })
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            return Response({'message': str(e)}, status=500)
+
+
 class PredictionView(APIView):
     @require_permission("commission_tracker.student.read")
     def get(self, request, year):

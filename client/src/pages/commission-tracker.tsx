@@ -18,7 +18,7 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   Plus, Search, Trash2, Users, DollarSign, TrendingUp, AlertCircle,
-  Settings, X, Upload, Download, Clock, CheckCircle2, FileSpreadsheet, AlertTriangle, RotateCcw, ExternalLink, BarChart3, Sparkles
+  Settings, X, Upload, Download, Clock, CheckCircle2, FileSpreadsheet, AlertTriangle, RotateCcw, ExternalLink, BarChart3, Sparkles, Lightbulb, ArrowUpRight, ArrowDownRight, Target, Shield
 } from "lucide-react";
 import { ScrollableTableWrapper } from "@/components/ui/scrollable-table-wrapper";
 import type { CommissionStudent, CommissionEntry } from "@shared/schema";
@@ -333,6 +333,16 @@ export default function CommissionTrackerPage() {
     enabled: !!selectedYear,
   });
 
+  const { data: insightsData } = useQuery<any>({
+    queryKey: ["/api/commission-tracker/insights", selectedYear],
+    queryFn: async () => {
+      const res = await fetch(`/api/commission-tracker/insights/${selectedYear}`, { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to fetch");
+      return res.json();
+    },
+    enabled: !!selectedYear,
+  });
+
   const invalidateAll = useCallback(() => {
     queryClient.invalidateQueries({ queryKey: ["/api/commission-tracker/students"] });
     queryClient.invalidateQueries({ queryKey: ["/api/commission-tracker/all-entries"] });
@@ -606,6 +616,7 @@ export default function CommissionTrackerPage() {
               providersByStudent={providersByStudent}
               yearTerms={yearTerms}
               prediction={predictionData?.prediction}
+              insights={insightsData?.insights}
             />
           </div>
         ) : activeTab === "MASTER" ? (
@@ -798,7 +809,7 @@ function AddProviderButton({ studentId, studentName }: { studentId: number; stud
   );
 }
 
-function DashboardView({ dashboard, year, intakeFilter, onIntakeChange, providersByStudent, yearTerms, prediction }: {
+function DashboardView({ dashboard, year, intakeFilter, onIntakeChange, providersByStudent, yearTerms, prediction, insights }: {
   dashboard: any;
   year: number | null;
   intakeFilter: string;
@@ -806,6 +817,7 @@ function DashboardView({ dashboard, year, intakeFilter, onIntakeChange, provider
   providersByStudent: Record<number, any[]>;
   yearTerms: CommissionTerm[];
   prediction?: any;
+  insights?: any;
 }) {
   if (!dashboard || !year) {
     return (
@@ -1098,6 +1110,147 @@ function DashboardView({ dashboard, year, intakeFilter, onIntakeChange, provider
                 )}
               </div>
             )}
+          </CardContent>
+        </Card>
+      )}
+
+      {insights && (
+        <Card className="border-dashed border-amber-300 bg-gradient-to-r from-amber-50/50 to-orange-50/50 dark:from-amber-950/20 dark:to-orange-950/20" data-testid="card-insights">
+          <CardContent className="p-4">
+            <div className="flex items-center gap-2 mb-3">
+              <Lightbulb className="h-4 w-4 text-amber-500" />
+              <h3 className="text-sm font-semibold">Commission Margin Insights - {year}</h3>
+              <span className="text-[10px] text-muted-foreground ml-auto">Commission vs Sub-Agent Analysis</span>
+            </div>
+
+            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3 mb-4">
+              <div className="bg-white dark:bg-gray-900 rounded-lg p-2.5 border">
+                <p className="text-[10px] text-muted-foreground">Total Commission</p>
+                <p className="text-sm font-bold text-green-600" data-testid="text-insight-commission">
+                  ${Number(insights.totalCommission || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </p>
+              </div>
+              <div className="bg-white dark:bg-gray-900 rounded-lg p-2.5 border">
+                <p className="text-[10px] text-muted-foreground">Sub-Agent Paid</p>
+                <p className="text-sm font-bold text-red-500" data-testid="text-insight-subpaid">
+                  ${Number(insights.totalSubAgentPaid || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </p>
+              </div>
+              <div className="bg-white dark:bg-gray-900 rounded-lg p-2.5 border">
+                <p className="text-[10px] text-muted-foreground">Net Margin</p>
+                <p className={`text-sm font-bold ${(insights.totalMargin || 0) >= 0 ? "text-emerald-600" : "text-red-600"}`} data-testid="text-insight-margin">
+                  ${Number(insights.totalMargin || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </p>
+              </div>
+              <div className="bg-white dark:bg-gray-900 rounded-lg p-2.5 border">
+                <p className="text-[10px] text-muted-foreground">Margin %</p>
+                <p className={`text-sm font-bold ${(insights.marginPct || 0) >= 50 ? "text-emerald-600" : (insights.marginPct || 0) >= 30 ? "text-amber-600" : "text-red-600"}`} data-testid="text-insight-margin-pct">
+                  {insights.marginPct || 0}%
+                </p>
+              </div>
+              <div className="bg-white dark:bg-gray-900 rounded-lg p-2.5 border">
+                <p className="text-[10px] text-muted-foreground">Direct Students</p>
+                <p className="text-sm font-bold" data-testid="text-insight-direct">
+                  {insights.directStudents || 0} <span className="text-[10px] text-muted-foreground font-normal">/ {insights.totalStudents || 0}</span>
+                </p>
+              </div>
+              <div className="bg-white dark:bg-gray-900 rounded-lg p-2.5 border">
+                <p className="text-[10px] text-muted-foreground">Direct %</p>
+                <p className={`text-sm font-bold ${(insights.directPct || 0) >= 50 ? "text-emerald-600" : "text-amber-600"}`} data-testid="text-insight-direct-pct">
+                  {insights.directPct || 0}%
+                </p>
+              </div>
+            </div>
+
+            {insights.suggestions && insights.suggestions.length > 0 && (
+              <div className="mb-4">
+                <h4 className="text-xs font-medium text-muted-foreground mb-2 flex items-center gap-1">
+                  <Target className="h-3 w-3" /> Actionable Suggestions
+                </h4>
+                <div className="space-y-1.5">
+                  {insights.suggestions.map((s: any, i: number) => (
+                    <div key={i} className={`text-xs rounded-lg px-3 py-2 border flex items-start gap-2 ${
+                      s.type === 'danger' ? 'bg-red-50 border-red-200 dark:bg-red-950/30 dark:border-red-800' :
+                      s.type === 'warning' ? 'bg-amber-50 border-amber-200 dark:bg-amber-950/30 dark:border-amber-800' :
+                      s.type === 'success' ? 'bg-green-50 border-green-200 dark:bg-green-950/30 dark:border-green-800' :
+                      'bg-blue-50 border-blue-200 dark:bg-blue-950/30 dark:border-blue-800'
+                    }`} data-testid={`suggestion-${i}`}>
+                      {s.type === 'danger' ? <AlertTriangle className="h-3.5 w-3.5 text-red-500 shrink-0 mt-0.5" /> :
+                       s.type === 'warning' ? <AlertTriangle className="h-3.5 w-3.5 text-amber-500 shrink-0 mt-0.5" /> :
+                       s.type === 'success' ? <ArrowUpRight className="h-3.5 w-3.5 text-green-500 shrink-0 mt-0.5" /> :
+                       <Lightbulb className="h-3.5 w-3.5 text-blue-500 shrink-0 mt-0.5" />}
+                      <div>
+                        <span className="font-semibold">{s.title}: </span>
+                        <span className="text-muted-foreground">{s.message}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {insights.byProvider && insights.byProvider.length > 0 && (
+                <div>
+                  <h4 className="text-xs font-medium text-muted-foreground mb-1.5">Margin by Provider</h4>
+                  <div className="space-y-1 max-h-48 overflow-y-auto">
+                    {insights.byProvider.map((p: any) => (
+                      <div key={p.provider} className="text-xs bg-white dark:bg-gray-900 rounded px-2.5 py-1.5 border" data-testid={`insight-provider-${p.provider}`}>
+                        <div className="flex items-center justify-between">
+                          <span className="truncate max-w-[160px] font-medium">{p.provider}</span>
+                          <div className="flex items-center gap-1.5">
+                            <span className={`font-mono font-bold ${p.margin >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                              ${Number(p.margin).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </span>
+                            <Badge className={`text-[9px] px-1 py-0 ${p.marginPct >= 70 ? 'bg-green-100 text-green-700' : p.marginPct >= 40 ? 'bg-amber-100 text-amber-700' : 'bg-red-100 text-red-700'}`}>
+                              {p.marginPct}%
+                            </Badge>
+                          </div>
+                        </div>
+                        <div className="flex gap-3 text-[10px] text-muted-foreground mt-0.5">
+                          <span>Comm: ${Number(p.commission).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                          <span className="text-red-500">Sub: ${Number(p.subAgentPaid).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                          <span>{p.studentCount} students ({p.subAgentStudents} via sub-agent)</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {insights.byAgent && insights.byAgent.length > 0 && (
+                <div>
+                  <h4 className="text-xs font-medium text-muted-foreground mb-1.5">Margin by Agent</h4>
+                  <div className="space-y-1 max-h-48 overflow-y-auto">
+                    {insights.byAgent.map((a: any) => (
+                      <div key={a.agent} className="text-xs bg-white dark:bg-gray-900 rounded px-2.5 py-1.5 border" data-testid={`insight-agent-${a.agent}`}>
+                        <div className="flex items-center justify-between">
+                          <span className="truncate max-w-[160px] font-medium">{a.agent}</span>
+                          <div className="flex items-center gap-1.5">
+                            <span className={`font-mono font-bold ${a.margin >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                              ${Number(a.margin).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </span>
+                            {a.subAgentPaid > 0 && (
+                              <Badge className={`text-[9px] px-1 py-0 ${a.marginPct >= 70 ? 'bg-green-100 text-green-700' : a.marginPct >= 40 ? 'bg-amber-100 text-amber-700' : 'bg-red-100 text-red-700'}`}>
+                                {a.marginPct}%
+                              </Badge>
+                            )}
+                            {a.subAgentStudents === 0 && (
+                              <Badge className="text-[9px] px-1 py-0 bg-emerald-100 text-emerald-700">Direct</Badge>
+                            )}
+                          </div>
+                        </div>
+                        <div className="flex gap-3 text-[10px] text-muted-foreground mt-0.5">
+                          <span>Comm: ${Number(a.commission).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                          {a.subAgentPaid > 0 && <span className="text-red-500">Sub: ${Number(a.subAgentPaid).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>}
+                          <span>{a.studentCount} students</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
           </CardContent>
         </Card>
       )}
