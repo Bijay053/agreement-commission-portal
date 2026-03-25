@@ -354,9 +354,11 @@ export default function SubAgentCommissionPage() {
   }, [search, selectedAgents, selectedProviders, selectedStatuses]);
 
   const masterQuery = useQuery<MasterRow[]>({
-    queryKey: ["/api/sub-agent-commission/master"],
+    queryKey: ["/api/sub-agent-commission/master", selectedYear],
     queryFn: async () => {
-      const res = await fetch("/api/sub-agent-commission/master", { credentials: "include" });
+      const params = new URLSearchParams();
+      if (selectedYear) params.set("excludeYear", String(selectedYear));
+      const res = await fetch(`/api/sub-agent-commission/master?${params}`, { credentials: "include" });
       if (!res.ok) throw new Error("Failed to fetch");
       return res.json();
     },
