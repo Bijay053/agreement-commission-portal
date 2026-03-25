@@ -207,6 +207,7 @@ interface CommissionEntry {
 
 interface CopyRule {
   ruleId: number;
+  label: string;
   providerName: string;
   studyLevel: string;
   commissionMode: string;
@@ -1268,6 +1269,7 @@ export default function ProviderCommissionPage() {
                         data-testid="checkbox-select-all"
                       />
                     </TableHead>
+                    <TableHead>Label</TableHead>
                     <TableHead>Provider</TableHead>
                     <TableHead>Agreement</TableHead>
                     <TableHead>Level</TableHead>
@@ -1292,6 +1294,7 @@ export default function ProviderCommissionPage() {
                           }}
                         />
                       </TableCell>
+                      <TableCell className="text-sm">{rule.label || "—"}</TableCell>
                       <TableCell className="font-medium">{rule.providerName}</TableCell>
                       <TableCell className="text-xs text-muted-foreground">{rule.agreementCode}</TableCell>
                       <TableCell>{rule.studyLevel}</TableCell>

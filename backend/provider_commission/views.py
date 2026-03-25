@@ -291,6 +291,7 @@ class CopyFromCommissionRulesView(APIView):
             already_copied = ProviderCommissionEntry.objects.filter(copied_from_rule_id=r.id).exists()
             result.append({
                 'ruleId': r.id,
+                'label': r.label or '',
                 'providerName': prov.name,
                 'studyLevel': r.study_level or 'Any',
                 'commissionMode': r.commission_mode,
