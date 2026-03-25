@@ -762,8 +762,10 @@ class FiltersView(APIView):
 class YearsView(APIView):
     @require_auth
     def get(self, request):
-        years = CommissionTerm.objects.values_list('year', flat=True).distinct()
-        return Response(sorted(set(years), reverse=True))
+        from datetime import datetime
+        years = set(CommissionTerm.objects.values_list('year', flat=True).distinct())
+        years.add(datetime.now().year)
+        return Response(sorted(years, reverse=True))
 
 
 class CommissionTrackerExportView(APIView):

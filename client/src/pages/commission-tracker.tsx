@@ -234,7 +234,12 @@ export default function CommissionTrackerPage() {
 
   useEffect(() => {
     if (years.length > 0 && selectedYear === null) {
-      setSelectedYear(years[years.length - 1]);
+      const currentYear = new Date().getFullYear();
+      if (years.includes(currentYear)) {
+        setSelectedYear(currentYear);
+      } else {
+        setSelectedYear(years[years.length - 1]);
+      }
     }
   }, [years, selectedYear]);
 

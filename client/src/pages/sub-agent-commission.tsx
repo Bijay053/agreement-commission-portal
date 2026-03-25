@@ -302,7 +302,7 @@ export default function SubAgentCommissionPage() {
 
   const termsQuery = useQuery<CommissionTerm[]>({ queryKey: ["/api/commission-tracker/terms"] });
   const terms = (termsQuery.data || []).filter(t => t.year === selectedYear).sort((a, b) => a.sortOrder - b.sortOrder);
-  const years = [...new Set((termsQuery.data || []).map(t => t.year))].sort((a, b) => b - a);
+  const years = [...new Set([...(termsQuery.data || []).map(t => t.year), new Date().getFullYear()])].sort((a, b) => b - a);
 
   const dashboardQuery = useQuery({
     queryKey: ["/api/sub-agent-commission/dashboard", selectedYear, selectedIntake],
