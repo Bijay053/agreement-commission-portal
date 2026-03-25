@@ -1162,6 +1162,52 @@ function DashboardView({ dashboard, year, intakeFilter, onIntakeChange, provider
               </div>
             </div>
 
+            {insights.overpaidStudents && insights.overpaidStudents.length > 0 && (
+              <div className="mb-4">
+                <h4 className="text-xs font-medium text-red-600 mb-2 flex items-center gap-1">
+                  <AlertTriangle className="h-3 w-3" /> Overpaid Agents ({insights.overpaidStudents.length} student{insights.overpaidStudents.length > 1 ? 's' : ''})
+                </h4>
+                <div className="rounded-lg border border-red-200 dark:border-red-800 overflow-hidden">
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="bg-red-50 dark:bg-red-950/30 text-left">
+                        <th className="px-3 py-1.5 font-medium text-muted-foreground">Agent</th>
+                        <th className="px-3 py-1.5 font-medium text-muted-foreground">Student</th>
+                        <th className="px-3 py-1.5 font-medium text-muted-foreground">Provider</th>
+                        <th className="px-3 py-1.5 font-medium text-muted-foreground text-right">Commission</th>
+                        <th className="px-3 py-1.5 font-medium text-muted-foreground text-right">Sub-Agent Paid</th>
+                        <th className="px-3 py-1.5 font-medium text-muted-foreground text-right">Overpaid</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {insights.overpaidStudents.map((o: any, i: number) => (
+                        <tr key={i} className="border-t border-red-100 dark:border-red-900" data-testid={`overpaid-row-${i}`}>
+                          <td className="px-3 py-1.5 font-medium">{o.agentName}</td>
+                          <td className="px-3 py-1.5">{o.studentName}</td>
+                          <td className="px-3 py-1.5 text-muted-foreground">{o.provider}</td>
+                          <td className="px-3 py-1.5 text-right font-mono text-green-600">${Number(o.commission).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                          <td className="px-3 py-1.5 text-right font-mono text-red-500">${Number(o.subAgentPaid).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                          <td className="px-3 py-1.5 text-right font-mono font-bold text-red-600">-${Number(o.loss).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                        </tr>
+                      ))}
+                      <tr className="border-t-2 border-red-300 dark:border-red-700 bg-red-50 dark:bg-red-950/30 font-bold">
+                        <td className="px-3 py-1.5" colSpan={3}>Total Overpayment</td>
+                        <td className="px-3 py-1.5 text-right font-mono text-green-600">
+                          ${insights.overpaidStudents.reduce((s: number, o: any) => s + Number(o.commission), 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </td>
+                        <td className="px-3 py-1.5 text-right font-mono text-red-500">
+                          ${insights.overpaidStudents.reduce((s: number, o: any) => s + Number(o.subAgentPaid), 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </td>
+                        <td className="px-3 py-1.5 text-right font-mono text-red-600">
+                          -${insights.overpaidStudents.reduce((s: number, o: any) => s + Number(o.loss), 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
             {insights.suggestions && insights.suggestions.length > 0 && (
               <div className="mb-4">
                 <h4 className="text-xs font-medium text-muted-foreground mb-2 flex items-center gap-1">

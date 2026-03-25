@@ -1081,6 +1081,28 @@ class CommissionInsightsView(APIView):
                     agent_data[agent]['subPaid'] += sub_paid
                     agent_data[agent]['hasSubAgent'].add(sid)
 
+            comm_by_student = {}
+            for e in entries:
+                sid = e.commission_student_id
+                comm_by_student[sid] = comm_by_student.get(sid, 0) + float(e.commission_amount or 0) + float(e.bonus or 0)
+
+            overpaid_students = []
+            for sid, sub_paid in sub_paid_by_student.items():
+                s = students.get(sid)
+                if not s:
+                    continue
+                student_comm = comm_by_student.get(sid, 0)
+                if sub_paid > student_comm and student_comm > 0:
+                    overpaid_students.append({
+                        'studentName': s.student_name,
+                        'agentName': s.agent_name or 'Unknown',
+                        'provider': (s.provider or 'Unknown').strip(),
+                        'commission': round2(student_comm),
+                        'subAgentPaid': round2(sub_paid),
+                        'loss': round2(sub_paid - student_comm),
+                    })
+            overpaid_students.sort(key=lambda x: x['loss'], reverse=True)
+
             total_commission = sum(pd['commission'] for pd in provider_data.values())
             total_sub_paid = sum(pd['subPaid'] for pd in provider_data.values())
             total_margin = total_commission - total_sub_paid
@@ -1333,6 +1355,7 @@ class CommissionInsightsView(APIView):
                     'directPct': round(direct_pct, 1),
                     'byProvider': provider_insights,
                     'byAgent': agent_insights,
+                    'overpaidStudents': overpaid_students,
                     'suggestions': suggestions,
                 }
             })
