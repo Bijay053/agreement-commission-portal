@@ -516,8 +516,8 @@ export default function ProviderCommissionPage() {
       }
       return res.json();
     },
-    onSuccess: (data: any) => {
-      queryClient.invalidateQueries({ queryKey: ["/api/provider-commission"] });
+    onSuccess: async (data: any) => {
+      await queryClient.refetchQueries({ queryKey: ["/api/provider-commission", showInactive ? "all" : "active"] });
       queryClient.invalidateQueries({ queryKey: ["/api/provider-commission/audit-log"] });
       toast({ title: `Updated sub-agent % for ${data.providerName}` });
       setEditingProviderPct(null);
