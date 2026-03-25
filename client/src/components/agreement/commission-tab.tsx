@@ -32,6 +32,7 @@ interface YearRate {
   mode: string;
   value: string;
   currency: string;
+  studyLevel?: string;
 }
 
 const YEAR_OPTIONS = [
@@ -45,15 +46,17 @@ function FollowUpSection({ state, setState, studyLevelOptions, modeOptions }: {
   modeOptions: { value: string; label: string }[];
 }) {
   const yearRates: YearRate[] = state.followupYearRates || [];
-  const hasFollowup = state.followupStudyLevel || yearRates.length > 0;
+  const hasFollowup = yearRates.length > 0;
   const [expanded, setExpanded] = useState(!!hasFollowup);
 
   const addYearRate = () => {
-    const usedYears = yearRates.map((r: YearRate) => r.year);
-    const nextYear = YEAR_OPTIONS.find(y => !usedYears.includes(y)) || `Year ${yearRates.length + 1}`;
+    const lastStudyLevel = yearRates.length > 0 ? yearRates[yearRates.length - 1].studyLevel || "" : "";
+    const sameStudyRates = yearRates.filter((r: YearRate) => (r.studyLevel || "") === lastStudyLevel);
+    const usedYears = sameStudyRates.map((r: YearRate) => r.year);
+    const nextYear = YEAR_OPTIONS.find(y => !usedYears.includes(y)) || `Year ${sameStudyRates.length + 1}`;
     setState({
       ...state,
-      followupYearRates: [...yearRates, { year: nextYear, mode: "percentage", value: "", currency: "AUD" }],
+      followupYearRates: [...yearRates, { year: nextYear, mode: "percentage", value: "", currency: "AUD", studyLevel: lastStudyLevel }],
     });
   };
 
@@ -66,6 +69,8 @@ function FollowUpSection({ state, setState, studyLevelOptions, modeOptions }: {
   const removeYearRate = (idx: number) => {
     setState({ ...state, followupYearRates: yearRates.filter((_: YearRate, i: number) => i !== idx) });
   };
+
+  const followupLevelOptions = [{ value: "", label: "Same as above" }, ...studyLevelOptions];
 
   return (
     <div className="border rounded-lg">
@@ -82,17 +87,7 @@ function FollowUpSection({ state, setState, studyLevelOptions, modeOptions }: {
       </button>
       {expanded && (
         <div className="px-3 pb-3 space-y-3 border-t pt-3">
-          <p className="text-xs text-muted-foreground">If the student progresses to a new course (e.g., Diploma → Bachelor), specify the follow-up commission rates per year.</p>
-          <div>
-            <Label className="text-xs">Follow-up Study Level</Label>
-            <SearchableSelect
-              value={state.followupStudyLevel || ""}
-              onValueChange={v => setState({ ...state, followupStudyLevel: v })}
-              options={studyLevelOptions}
-              placeholder="Select level"
-              searchPlaceholder="Search..."
-            />
-          </div>
+          <p className="text-xs text-muted-foreground">If the student progresses to a new course (e.g., Diploma → Bachelor), specify the follow-up commission rates per year. Each row can have its own study level.</p>
 
           <div className="space-y-2">
             <div className="flex items-center justify-between">
@@ -111,62 +106,74 @@ function FollowUpSection({ state, setState, studyLevelOptions, modeOptions }: {
             {yearRates.length > 0 ? (
               <div className="space-y-2">
                 {yearRates.map((yr: YearRate, idx: number) => (
-                  <div key={idx} className="flex items-center gap-2 p-2 bg-muted/30 rounded-md" data-testid={`followup-year-${idx}`}>
-                    <SearchableSelect
-                      value={yr.year}
-                      onValueChange={v => updateYearRate(idx, "year", v)}
-                      options={YEAR_OPTIONS.map(y => ({ value: y, label: y }))}
-                      placeholder="Year"
-                      searchPlaceholder="Search..."
-                      className="w-[120px] h-8"
-                    />
-                    <SearchableSelect
-                      value={yr.mode || "percentage"}
-                      onValueChange={v => updateYearRate(idx, "mode", v)}
-                      options={modeOptions.length > 0 ? modeOptions : [{ value: "percentage", label: "%" }, { value: "flat", label: "Flat" }]}
-                      placeholder="Mode"
-                      searchPlaceholder="Search..."
-                      className="w-[110px] h-8"
-                    />
-                    {(yr.mode || "percentage") === "percentage" ? (
-                      <Input
-                        type="number"
-                        step="0.001"
-                        value={yr.value}
-                        onChange={e => updateYearRate(idx, "value", e.target.value)}
-                        placeholder="%"
-                        className="h-8 w-[90px]"
-                        data-testid={`input-year-rate-${idx}`}
+                  <div key={idx} className="p-2 bg-muted/30 rounded-md space-y-1.5" data-testid={`followup-year-${idx}`}>
+                    <div className="flex items-center gap-2">
+                      <SearchableSelect
+                        value={yr.studyLevel || ""}
+                        onValueChange={v => updateYearRate(idx, "studyLevel", v)}
+                        options={followupLevelOptions}
+                        placeholder="Study Level"
+                        searchPlaceholder="Search..."
+                        className="flex-1 h-8"
                       />
-                    ) : (
-                      <>
+                      <SearchableSelect
+                        value={yr.year}
+                        onValueChange={v => updateYearRate(idx, "year", v)}
+                        options={YEAR_OPTIONS.map(y => ({ value: y, label: y }))}
+                        placeholder="Year"
+                        searchPlaceholder="Search..."
+                        className="w-[120px] h-8"
+                      />
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7 shrink-0"
+                        onClick={() => removeYearRate(idx)}
+                        data-testid={`button-remove-year-${idx}`}
+                      >
+                        <Trash2 className="w-3.5 h-3.5 text-destructive" />
+                      </Button>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <SearchableSelect
+                        value={yr.mode || "percentage"}
+                        onValueChange={v => updateYearRate(idx, "mode", v)}
+                        options={modeOptions.length > 0 ? modeOptions : [{ value: "percentage", label: "%" }, { value: "flat", label: "Flat" }]}
+                        placeholder="Mode"
+                        searchPlaceholder="Search..."
+                        className="w-[100px] h-8"
+                      />
+                      {(yr.mode || "percentage") === "percentage" ? (
                         <Input
                           type="number"
-                          step="0.01"
+                          step="0.001"
                           value={yr.value}
                           onChange={e => updateYearRate(idx, "value", e.target.value)}
-                          placeholder="Amount"
-                          className="h-8 w-[90px]"
+                          placeholder="%"
+                          className="h-8 flex-1"
                           data-testid={`input-year-rate-${idx}`}
                         />
-                        <Input
-                          value={yr.currency || "AUD"}
-                          onChange={e => updateYearRate(idx, "currency", e.target.value)}
-                          placeholder="AUD"
-                          className="h-8 w-[60px]"
-                        />
-                      </>
-                    )}
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      className="h-7 w-7 shrink-0"
-                      onClick={() => removeYearRate(idx)}
-                      data-testid={`button-remove-year-${idx}`}
-                    >
-                      <Trash2 className="w-3.5 h-3.5 text-destructive" />
-                    </Button>
+                      ) : (
+                        <>
+                          <Input
+                            type="number"
+                            step="0.01"
+                            value={yr.value}
+                            onChange={e => updateYearRate(idx, "value", e.target.value)}
+                            placeholder="Amount"
+                            className="h-8 flex-1"
+                            data-testid={`input-year-rate-${idx}`}
+                          />
+                          <Input
+                            value={yr.currency || "AUD"}
+                            onChange={e => updateYearRate(idx, "currency", e.target.value)}
+                            placeholder="AUD"
+                            className="h-8 w-[60px]"
+                          />
+                        </>
+                      )}
+                    </div>
                   </div>
                 ))}
               </div>
@@ -439,27 +446,39 @@ export default function CommissionTab({ agreementId }: { agreementId: number }) 
                     {rule.conditionsText && (
                       <p className="text-xs text-muted-foreground mt-2 line-clamp-2">{rule.conditionsText}</p>
                     )}
-                    {(rule.followupStudyLevel || (rule.followupYearRates && rule.followupYearRates.length > 0)) && (
-                      <div className="mt-2 pl-3 border-l-2 border-blue-300 dark:border-blue-700">
-                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                          <ArrowRight className="w-3 h-3 text-blue-500" />
-                          <span className="font-medium text-foreground">Follow-up:</span>
-                          {rule.followupStudyLevel && <Badge variant="outline" className="text-[10px] py-0">{rule.followupStudyLevel}</Badge>}
-                        </div>
-                        {rule.followupYearRates && rule.followupYearRates.length > 0 && (
-                          <div className="ml-5 mt-1 space-y-0.5">
-                            {rule.followupYearRates.map((yr: any, i: number) => (
-                              <div key={i} className="text-[11px] text-muted-foreground">
-                                {yr.year}: {yr.mode === "flat" ? `${yr.currency || "AUD"} ${parseFloat(yr.value || 0).toLocaleString()}` : `${parseFloat(yr.value || 0)}%`}
+                    {(rule.followupYearRates && rule.followupYearRates.length > 0) && (() => {
+                      const grouped: Record<string, any[]> = {};
+                      rule.followupYearRates.forEach((yr: any) => {
+                        const lvl = yr.studyLevel || rule.followupStudyLevel || "";
+                        if (!grouped[lvl]) grouped[lvl] = [];
+                        grouped[lvl].push(yr);
+                      });
+                      return (
+                        <div className="mt-2 pl-3 border-l-2 border-blue-300 dark:border-blue-700">
+                          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                            <ArrowRight className="w-3 h-3 text-blue-500" />
+                            <span className="font-medium text-foreground">Follow-up:</span>
+                          </div>
+                          <div className="ml-5 mt-1 space-y-1">
+                            {Object.entries(grouped).map(([lvl, rates]) => (
+                              <div key={lvl}>
+                                {lvl && <Badge variant="outline" className="text-[10px] py-0 mb-0.5">{lvl}</Badge>}
+                                <div className="space-y-0.5">
+                                  {rates.map((yr: any, i: number) => (
+                                    <div key={i} className="text-[11px] text-muted-foreground">
+                                      {yr.year}: {yr.mode === "flat" ? `${yr.currency || "AUD"} ${parseFloat(yr.value || 0).toLocaleString()}` : `${parseFloat(yr.value || 0)}%`}
+                                    </div>
+                                  ))}
+                                </div>
                               </div>
                             ))}
                           </div>
-                        )}
-                        {rule.followupConditionsText && (
-                          <p className="text-[11px] text-muted-foreground mt-0.5 ml-5">{rule.followupConditionsText}</p>
-                        )}
-                      </div>
-                    )}
+                          {rule.followupConditionsText && (
+                            <p className="text-[11px] text-muted-foreground mt-0.5 ml-5">{rule.followupConditionsText}</p>
+                          )}
+                        </div>
+                      );
+                    })()}
                   </div>
                   <div className="flex items-center gap-1">
                     {canEdit && (

@@ -370,7 +370,7 @@ export default function ProviderCommissionPage() {
   const [formBasis, setFormBasis] = useState("full_course");
   const [formNotes, setFormNotes] = useState("");
   const [formFollowupStudyLevel, setFormFollowupStudyLevel] = useState("");
-  const [formFollowupYearRates, setFormFollowupYearRates] = useState<{year: string; value: string; mode: string; currency?: string}[]>([]);
+  const [formFollowupYearRates, setFormFollowupYearRates] = useState<{year: string; value: string; mode: string; currency?: string; studyLevel?: string}[]>([]);
 
   const [configPct, setConfigPct] = useState("");
   const [selectedRules, setSelectedRules] = useState<number[]>([]);
@@ -601,7 +601,11 @@ export default function ProviderCommissionPage() {
     setFormBasis(e.commissionBasis);
     setFormNotes(e.notes);
     setFormFollowupStudyLevel(e.followupStudyLevel || "");
-    setFormFollowupYearRates(e.followupYearRates || []);
+    const loadedRates = (e.followupYearRates || []).map((yr: any) => ({
+      ...yr,
+      studyLevel: yr.studyLevel !== undefined ? yr.studyLevel : (e.followupStudyLevel || ""),
+    }));
+    setFormFollowupYearRates(loadedRates);
     setEditOpen(true);
   }
 
@@ -900,23 +904,33 @@ export default function ProviderCommissionPage() {
                             )}
                           </TableCell>
                           <TableCell data-testid={`text-followup-${entry.id}`}>
-                            {(entry.followupStudyLevel || (entry.followupYearRates && entry.followupYearRates.length > 0)) ? (
-                              <div className="flex items-start gap-1">
-                                <ArrowRight className="w-3.5 h-3.5 text-blue-500 mt-0.5 shrink-0" />
-                                <div>
-                                  {entry.followupStudyLevel && <div className="text-xs font-medium">{entry.followupStudyLevel}</div>}
-                                  {entry.followupYearRates && entry.followupYearRates.length > 0 && (
-                                    <div className="space-y-0.5">
-                                      {entry.followupYearRates.map((yr, i) => (
-                                        <div key={i} className="text-[11px] text-muted-foreground">
-                                          {yr.year}: {yr.mode === "flat" ? `${yr.currency || "AUD"} ${parseFloat(yr.value || "0").toLocaleString()}` : `${parseFloat(yr.value || "0")}%`}
+                            {(entry.followupYearRates && entry.followupYearRates.length > 0) ? (() => {
+                              const grouped: Record<string, typeof entry.followupYearRates> = {};
+                              entry.followupYearRates.forEach((yr: any) => {
+                                const lvl = yr.studyLevel || entry.followupStudyLevel || "";
+                                if (!grouped[lvl]) grouped[lvl] = [];
+                                grouped[lvl].push(yr);
+                              });
+                              return (
+                                <div className="flex items-start gap-1">
+                                  <ArrowRight className="w-3.5 h-3.5 text-blue-500 mt-0.5 shrink-0" />
+                                  <div className="space-y-1">
+                                    {Object.entries(grouped).map(([lvl, rates]) => (
+                                      <div key={lvl}>
+                                        {lvl && <div className="text-xs font-medium">{lvl}</div>}
+                                        <div className="space-y-0.5">
+                                          {(rates as any[]).map((yr, i) => (
+                                            <div key={i} className="text-[11px] text-muted-foreground">
+                                              {yr.year}: {yr.mode === "flat" ? `${yr.currency || "AUD"} ${parseFloat(yr.value || "0").toLocaleString()}` : `${parseFloat(yr.value || "0")}%`}
+                                            </div>
+                                          ))}
                                         </div>
-                                      ))}
-                                    </div>
-                                  )}
+                                      </div>
+                                    ))}
+                                  </div>
                                 </div>
-                              </div>
-                            ) : (
+                              );
+                            })() : (
                               <span className="text-muted-foreground">—</span>
                             )}
                           </TableCell>
@@ -940,22 +954,32 @@ export default function ProviderCommissionPage() {
                           <TableCell data-testid={`text-subagent-followup-${entry.id}`}>
                             {entry.followupYearRates && entry.followupYearRates.length > 0 ? (() => {
                               const pct = parseFloat(entry.effectiveSubAgentPercentage || "0");
+                              const grouped: Record<string, any[]> = {};
+                              entry.followupYearRates.forEach((yr: any) => {
+                                const lvl = yr.studyLevel || entry.followupStudyLevel || "";
+                                if (!grouped[lvl]) grouped[lvl] = [];
+                                grouped[lvl].push(yr);
+                              });
                               return (
                                 <div className="flex items-start gap-1">
                                   <ArrowRight className="w-3.5 h-3.5 text-emerald-500 mt-0.5 shrink-0" />
-                                  <div>
-                                    {entry.followupStudyLevel && <div className="text-xs font-medium">{entry.followupStudyLevel}</div>}
-                                    <div className="space-y-0.5">
-                                      {entry.followupYearRates.map((yr, i) => {
-                                        const origVal = parseFloat(yr.value || "0");
-                                        const subVal = pct > 0 ? (origVal * pct / 100).toFixed(2) : "0";
-                                        return (
-                                          <div key={i} className="text-[11px] text-emerald-600 dark:text-emerald-400">
-                                            {yr.year}: {yr.mode === "flat" ? `${yr.currency || "AUD"} ${parseFloat(subVal).toLocaleString()}` : `${subVal}%`}
-                                          </div>
-                                        );
-                                      })}
-                                    </div>
+                                  <div className="space-y-1">
+                                    {Object.entries(grouped).map(([lvl, rates]) => (
+                                      <div key={lvl}>
+                                        {lvl && <div className="text-xs font-medium">{lvl}</div>}
+                                        <div className="space-y-0.5">
+                                          {rates.map((yr: any, i: number) => {
+                                            const origVal = parseFloat(yr.value || "0");
+                                            const subVal = pct > 0 ? (origVal * pct / 100).toFixed(2) : "0";
+                                            return (
+                                              <div key={i} className="text-[11px] text-emerald-600 dark:text-emerald-400">
+                                                {yr.year}: {yr.mode === "flat" ? `${yr.currency || "AUD"} ${parseFloat(subVal).toLocaleString()}` : `${subVal}%`}
+                                              </div>
+                                            );
+                                          })}
+                                        </div>
+                                      </div>
+                                    ))}
                                   </div>
                                 </div>
                               );
@@ -1100,74 +1124,103 @@ export default function ProviderCommissionPage() {
                   variant="outline"
                   size="sm"
                   className="h-7 text-xs"
-                  onClick={() => setFormFollowupYearRates(prev => [...prev, { year: `${prev.length + 1}${prev.length === 0 ? 'st' : prev.length === 1 ? 'nd' : prev.length === 2 ? 'rd' : 'th'} Year`, value: "", mode: "percentage" }])}
+                  onClick={() => {
+                    const last = formFollowupYearRates.length > 0 ? formFollowupYearRates[formFollowupYearRates.length - 1] : null;
+                    const lastLevel = last?.studyLevel || "";
+                    const sameRates = formFollowupYearRates.filter(r => (r.studyLevel || "") === lastLevel);
+                    const n = sameRates.length;
+                    const suffix = n === 0 ? 'st' : n === 1 ? 'nd' : n === 2 ? 'rd' : 'th';
+                    setFormFollowupYearRates(prev => [...prev, { year: `${n + 1}${suffix} Year`, value: "", mode: "percentage", studyLevel: lastLevel }]);
+                  }}
                   data-testid="btn-add-followup-year"
                 >
                   <Plus className="w-3 h-3 mr-1" /> Add Year
                 </Button>
               </div>
-              {formFollowupYearRates.length > 0 && (
-                <div>
-                  <Label className="text-xs">Follow-up Study Level</Label>
-                  <SearchableSelect
-                    value={formFollowupStudyLevel || ""}
-                    onValueChange={v => setFormFollowupStudyLevel(v)}
-                    options={[{ value: "", label: "Same as above" }, ...studyLevelOptions.filter(d => d.value !== 'any')]}
-                  />
-                </div>
-              )}
               {formFollowupYearRates.map((yr, i) => (
-                <div key={i} className="flex items-end gap-2">
-                  <div className="flex-1">
-                    <Label className="text-xs">{yr.year}</Label>
-                    <div className="flex gap-1">
+                <div key={i} className="p-2 bg-background/50 rounded-md space-y-1.5">
+                  <div className="flex items-center gap-2">
+                    <SearchableSelect
+                      value={yr.studyLevel || ""}
+                      onValueChange={v => {
+                        const updated = [...formFollowupYearRates];
+                        updated[i] = { ...updated[i], studyLevel: v };
+                        setFormFollowupYearRates(updated);
+                      }}
+                      options={[{ value: "", label: "Same as above" }, ...studyLevelOptions.filter(d => d.value !== 'any')]}
+                      placeholder="Study Level"
+                      className="flex-1 h-8"
+                    />
+                    <SearchableSelect
+                      value={yr.year}
+                      onValueChange={v => {
+                        const updated = [...formFollowupYearRates];
+                        updated[i] = { ...updated[i], year: v };
+                        setFormFollowupYearRates(updated);
+                      }}
+                      options={[
+                        { value: "1st Year", label: "1st Year" },
+                        { value: "2nd Year", label: "2nd Year" },
+                        { value: "3rd Year", label: "3rd Year" },
+                        { value: "4th Year", label: "4th Year" },
+                        { value: "5th Year", label: "5th Year" },
+                      ]}
+                      placeholder="Year"
+                      className="w-[120px] h-8"
+                    />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7 text-destructive shrink-0"
+                      onClick={() => setFormFollowupYearRates(prev => prev.filter((_, idx) => idx !== i))}
+                      data-testid={`btn-remove-followup-${i}`}
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </Button>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <SearchableSelect
+                      value={yr.mode}
+                      onValueChange={v => {
+                        const updated = [...formFollowupYearRates];
+                        updated[i] = { ...updated[i], mode: v };
+                        setFormFollowupYearRates(updated);
+                      }}
+                      options={[{ value: "percentage", label: "%" }, { value: "flat", label: "Flat" }]}
+                      className="w-[90px] h-8"
+                    />
+                    <Input
+                      type="number"
+                      step="0.01"
+                      className="h-8 flex-1"
+                      value={yr.value}
+                      onChange={e => {
+                        const updated = [...formFollowupYearRates];
+                        updated[i] = { ...updated[i], value: e.target.value };
+                        setFormFollowupYearRates(updated);
+                      }}
+                      placeholder={yr.mode === "percentage" ? "e.g. 10" : "e.g. 500"}
+                      data-testid={`input-followup-value-${i}`}
+                    />
+                    {yr.mode === "flat" && (
                       <SearchableSelect
-                        value={yr.mode}
+                        value={yr.currency || "AUD"}
                         onValueChange={v => {
                           const updated = [...formFollowupYearRates];
-                          updated[i] = { ...updated[i], mode: v };
+                          updated[i] = { ...updated[i], currency: v };
                           setFormFollowupYearRates(updated);
                         }}
-                        options={[{ value: "percentage", label: "%" }, { value: "flat", label: "Flat" }]}
+                        options={[{ value: "AUD", label: "AUD" }, { value: "USD", label: "USD" }, { value: "NPR", label: "NPR" }, { value: "GBP", label: "GBP" }]}
+                        className="w-[80px] h-8"
                       />
-                      <Input
-                        type="number"
-                        step="0.01"
-                        className="h-8"
-                        value={yr.value}
-                        onChange={e => {
-                          const updated = [...formFollowupYearRates];
-                          updated[i] = { ...updated[i], value: e.target.value };
-                          setFormFollowupYearRates(updated);
-                        }}
-                        placeholder={yr.mode === "percentage" ? "e.g. 10" : "e.g. 500"}
-                        data-testid={`input-followup-value-${i}`}
-                      />
-                      {yr.mode === "flat" && (
-                        <SearchableSelect
-                          value={yr.currency || "AUD"}
-                          onValueChange={v => {
-                            const updated = [...formFollowupYearRates];
-                            updated[i] = { ...updated[i], currency: v };
-                            setFormFollowupYearRates(updated);
-                          }}
-                          options={[{ value: "AUD", label: "AUD" }, { value: "USD", label: "USD" }, { value: "NPR", label: "NPR" }, { value: "GBP", label: "GBP" }]}
-                        />
-                      )}
-                    </div>
+                    )}
                   </div>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    className="h-8 w-8 text-destructive shrink-0"
-                    onClick={() => setFormFollowupYearRates(prev => prev.filter((_, idx) => idx !== i))}
-                    data-testid={`btn-remove-followup-${i}`}
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </Button>
                 </div>
               ))}
+              {formFollowupYearRates.length === 0 && (
+                <p className="text-xs text-muted-foreground text-center py-1">Click "Add Year" to add follow-up rates with per-study-level support.</p>
+              )}
             </div>
 
             <div>
@@ -1299,74 +1352,103 @@ export default function ProviderCommissionPage() {
                   variant="outline"
                   size="sm"
                   className="h-7 text-xs"
-                  onClick={() => setFormFollowupYearRates(prev => [...prev, { year: `${prev.length + 1}${prev.length === 0 ? 'st' : prev.length === 1 ? 'nd' : prev.length === 2 ? 'rd' : 'th'} Year`, value: "", mode: "percentage" }])}
+                  onClick={() => {
+                    const last = formFollowupYearRates.length > 0 ? formFollowupYearRates[formFollowupYearRates.length - 1] : null;
+                    const lastLevel = last?.studyLevel || "";
+                    const sameRates = formFollowupYearRates.filter(r => (r.studyLevel || "") === lastLevel);
+                    const n = sameRates.length;
+                    const suffix = n === 0 ? 'st' : n === 1 ? 'nd' : n === 2 ? 'rd' : 'th';
+                    setFormFollowupYearRates(prev => [...prev, { year: `${n + 1}${suffix} Year`, value: "", mode: "percentage", studyLevel: lastLevel }]);
+                  }}
                   data-testid="edit-btn-add-followup-year"
                 >
                   <Plus className="w-3 h-3 mr-1" /> Add Year
                 </Button>
               </div>
-              {formFollowupYearRates.length > 0 && (
-                <div>
-                  <Label className="text-xs">Follow-up Study Level</Label>
-                  <SearchableSelect
-                    value={formFollowupStudyLevel || ""}
-                    onValueChange={v => setFormFollowupStudyLevel(v)}
-                    options={[{ value: "", label: "Same as above" }, ...studyLevelOptions.filter(d => d.value !== 'any')]}
-                  />
-                </div>
-              )}
               {formFollowupYearRates.map((yr, i) => (
-                <div key={i} className="flex items-end gap-2">
-                  <div className="flex-1">
-                    <Label className="text-xs">{yr.year}</Label>
-                    <div className="flex gap-1">
+                <div key={i} className="p-2 bg-background/50 rounded-md space-y-1.5">
+                  <div className="flex items-center gap-2">
+                    <SearchableSelect
+                      value={yr.studyLevel || ""}
+                      onValueChange={v => {
+                        const updated = [...formFollowupYearRates];
+                        updated[i] = { ...updated[i], studyLevel: v };
+                        setFormFollowupYearRates(updated);
+                      }}
+                      options={[{ value: "", label: "Same as above" }, ...studyLevelOptions.filter(d => d.value !== 'any')]}
+                      placeholder="Study Level"
+                      className="flex-1 h-8"
+                    />
+                    <SearchableSelect
+                      value={yr.year}
+                      onValueChange={v => {
+                        const updated = [...formFollowupYearRates];
+                        updated[i] = { ...updated[i], year: v };
+                        setFormFollowupYearRates(updated);
+                      }}
+                      options={[
+                        { value: "1st Year", label: "1st Year" },
+                        { value: "2nd Year", label: "2nd Year" },
+                        { value: "3rd Year", label: "3rd Year" },
+                        { value: "4th Year", label: "4th Year" },
+                        { value: "5th Year", label: "5th Year" },
+                      ]}
+                      placeholder="Year"
+                      className="w-[120px] h-8"
+                    />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7 text-destructive shrink-0"
+                      onClick={() => setFormFollowupYearRates(prev => prev.filter((_, idx) => idx !== i))}
+                      data-testid={`edit-btn-remove-followup-${i}`}
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </Button>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <SearchableSelect
+                      value={yr.mode}
+                      onValueChange={v => {
+                        const updated = [...formFollowupYearRates];
+                        updated[i] = { ...updated[i], mode: v };
+                        setFormFollowupYearRates(updated);
+                      }}
+                      options={[{ value: "percentage", label: "%" }, { value: "flat", label: "Flat" }]}
+                      className="w-[90px] h-8"
+                    />
+                    <Input
+                      type="number"
+                      step="0.01"
+                      className="h-8 flex-1"
+                      value={yr.value}
+                      onChange={e => {
+                        const updated = [...formFollowupYearRates];
+                        updated[i] = { ...updated[i], value: e.target.value };
+                        setFormFollowupYearRates(updated);
+                      }}
+                      placeholder={yr.mode === "percentage" ? "e.g. 10" : "e.g. 500"}
+                      data-testid={`edit-input-followup-value-${i}`}
+                    />
+                    {yr.mode === "flat" && (
                       <SearchableSelect
-                        value={yr.mode}
+                        value={yr.currency || "AUD"}
                         onValueChange={v => {
                           const updated = [...formFollowupYearRates];
-                          updated[i] = { ...updated[i], mode: v };
+                          updated[i] = { ...updated[i], currency: v };
                           setFormFollowupYearRates(updated);
                         }}
-                        options={[{ value: "percentage", label: "%" }, { value: "flat", label: "Flat" }]}
+                        options={[{ value: "AUD", label: "AUD" }, { value: "USD", label: "USD" }, { value: "NPR", label: "NPR" }, { value: "GBP", label: "GBP" }]}
+                        className="w-[80px] h-8"
                       />
-                      <Input
-                        type="number"
-                        step="0.01"
-                        className="h-8"
-                        value={yr.value}
-                        onChange={e => {
-                          const updated = [...formFollowupYearRates];
-                          updated[i] = { ...updated[i], value: e.target.value };
-                          setFormFollowupYearRates(updated);
-                        }}
-                        placeholder={yr.mode === "percentage" ? "e.g. 10" : "e.g. 500"}
-                        data-testid={`edit-input-followup-value-${i}`}
-                      />
-                      {yr.mode === "flat" && (
-                        <SearchableSelect
-                          value={yr.currency || "AUD"}
-                          onValueChange={v => {
-                            const updated = [...formFollowupYearRates];
-                            updated[i] = { ...updated[i], currency: v };
-                            setFormFollowupYearRates(updated);
-                          }}
-                          options={[{ value: "AUD", label: "AUD" }, { value: "USD", label: "USD" }, { value: "NPR", label: "NPR" }, { value: "GBP", label: "GBP" }]}
-                        />
-                      )}
-                    </div>
+                    )}
                   </div>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    className="h-8 w-8 text-destructive shrink-0"
-                    onClick={() => setFormFollowupYearRates(prev => prev.filter((_, idx) => idx !== i))}
-                    data-testid={`edit-btn-remove-followup-${i}`}
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </Button>
                 </div>
               ))}
+              {formFollowupYearRates.length === 0 && (
+                <p className="text-xs text-muted-foreground text-center py-1">Click "Add Year" to add follow-up rates with per-study-level support.</p>
+              )}
             </div>
 
             <div>
