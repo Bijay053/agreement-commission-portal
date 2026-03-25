@@ -92,9 +92,11 @@ export function SearchableSelect({
         </Button>
       </PopoverTrigger>
       <PopoverContent
-        className="p-0"
-        style={{ width: triggerWidth ? `${triggerWidth}px` : undefined }}
+        className="p-0 z-[9999]"
+        style={{ width: triggerWidth ? `${Math.max(triggerWidth, 180)}px` : undefined }}
         align="start"
+        sideOffset={4}
+        collisionPadding={8}
       >
         <Command>
           <CommandInput placeholder={searchPlaceholder} />
