@@ -569,11 +569,11 @@ class SubAgentPredictionView(APIView):
     def get(self, request, year):
         try:
             target_year = int(year)
-            all_terms = list(CommissionTerm.objects.all().order_by('year', 'sort_order'))
-            target_terms = [t for t in all_terms if t.year == target_year]
-            all_past_years = sorted(set(t.year for t in all_terms if t.year < target_year))
+            all_terms_raw = list(CommissionTerm.objects.all().order_by('year', 'sort_order'))
+            target_terms = [t for t in all_terms_raw if t.year == target_year]
+            all_past_years = sorted(set(t.year for t in all_terms_raw if t.year < target_year))
             past_years = all_past_years[-5:] if len(all_past_years) > 5 else all_past_years
-            all_terms = [t for t in all_terms if t.year in past_years or t.year == target_year]
+            all_terms = [t for t in all_terms_raw if t.year in past_years or t.year == target_year]
 
             if not past_years:
                 return Response({'prediction': None, 'message': 'No historical data available'})
@@ -581,6 +581,7 @@ class SubAgentPredictionView(APIView):
             past_term_names = [t.term_name for t in all_terms if t.year < target_year]
             target_term_names = [t.term_name for t in target_terms]
             term_number_map = {t.term_name: t.term_number for t in all_terms}
+            term_year_map = {t.term_name: t.year for t in all_terms}
 
             excluded_ids = get_excluded_student_ids_for_year(target_year)
 
@@ -596,18 +597,60 @@ class SubAgentPredictionView(APIView):
                 id__in=past_student_ids | target_student_ids
             )}
 
-            current_year_students = {s.id: s for s in CommissionStudent.objects.filter(
-                id__in=target_student_ids
-            )} if target_student_ids else {}
+            sa_qs = CommissionStudent.objects.filter(
+                id__in=set(SubAgentEntry.objects.values_list('commission_student_id', flat=True))
+            )
+            if excluded_ids:
+                sa_qs = sa_qs.exclude(id__in=excluded_ids)
+            current_year_students = {s.id: s for s in sa_qs}
+            all_students.update(current_year_students)
 
-            if not current_year_students:
-                sa_qs = CommissionStudent.objects.filter(
-                    id__in=set(SubAgentEntry.objects.values_list('commission_student_id', flat=True))
-                )
-                if excluded_ids:
-                    sa_qs = sa_qs.exclude(id__in=excluded_ids)
-                current_year_students = {s.id: s for s in sa_qs}
-                all_students.update(current_year_students)
+            hist_by_year_term = {}
+            for e in past_sa_entries:
+                s = all_students.get(e.commission_student_id)
+                if not s:
+                    continue
+                tn = term_number_map.get(e.term_name, 0)
+                yr = term_year_map.get(e.term_name, 0)
+                paid = float(e.total_paid or 0)
+                key = (yr, e.commission_student_id)
+                if key not in hist_by_year_term:
+                    hist_by_year_term[key] = {}
+                if tn not in hist_by_year_term[key]:
+                    hist_by_year_term[key][tn] = 0
+                hist_by_year_term[key][tn] += paid
+
+            hist_term_ratios = {}
+            for (yr, sid), term_data in hist_by_year_term.items():
+                s = all_students.get(sid)
+                if not s:
+                    continue
+                provider = (s.provider or '').strip()
+                course = (s.course_name or '').strip()
+                sorted_terms = sorted(term_data.keys())
+                for i, from_tn in enumerate(sorted_terms):
+                    for to_tn in sorted_terms[i+1:]:
+                        from_paid = term_data[from_tn]
+                        to_paid = term_data[to_tn]
+                        if from_paid > 0:
+                            ratio = to_paid / from_paid
+                            ratio_key_pc = (provider, course, from_tn, to_tn) if provider and course else None
+                            ratio_key_p = (provider, from_tn, to_tn) if provider else None
+                            ratio_key_g = (from_tn, to_tn)
+                            for rk in [ratio_key_pc, ratio_key_p, ratio_key_g]:
+                                if rk:
+                                    if rk not in hist_term_ratios:
+                                        hist_term_ratios[rk] = []
+                                    hist_term_ratios[rk].append(ratio)
+
+            def _median(lst):
+                if not lst:
+                    return None
+                s = sorted(lst)
+                n = len(s)
+                if n % 2 == 0:
+                    return (s[n//2 - 1] + s[n//2]) / 2
+                return s[n//2]
 
             hist_prov_course = {}
             hist_prov = {}
@@ -649,15 +692,23 @@ class SubAgentPredictionView(APIView):
 
             actual_by_term = {}
             actual_students_by_term = {}
+            actual_student_paid_by_term = {}
             for t in target_terms:
                 actual_by_term[t.term_number] = {'paid': 0, 'count': 0}
                 actual_students_by_term[t.term_number] = set()
+                actual_student_paid_by_term[t.term_number] = {}
             for e in target_sa_entries:
                 tn = term_number_map.get(e.term_name, 0)
                 if tn in actual_by_term:
-                    actual_by_term[tn]['paid'] += float(e.total_paid or 0)
+                    paid = float(e.total_paid or 0)
+                    actual_by_term[tn]['paid'] += paid
                     actual_by_term[tn]['count'] += 1
                     actual_students_by_term[tn].add(e.commission_student_id)
+                    if e.commission_student_id not in actual_student_paid_by_term[tn]:
+                        actual_student_paid_by_term[tn][e.commission_student_id] = 0
+                    actual_student_paid_by_term[tn][e.commission_student_id] += paid
+
+            target_term_numbers = sorted([t.term_number for t in target_terms])
 
             term_predictions = []
             total_predicted_paid = 0
@@ -683,6 +734,8 @@ class SubAgentPredictionView(APIView):
 
                 source = 'actual' if not students_to_predict and actual['count'] > 0 else 'mixed' if actual['count'] > 0 else 'predicted'
 
+                prior_actual_terms = [pt for pt in target_term_numbers if pt < tn]
+
                 for sid in students_to_predict:
                     s = current_year_students.get(sid) or all_students.get(sid)
                     if not s:
@@ -692,49 +745,70 @@ class SubAgentPredictionView(APIView):
                     country = (s.country or '').strip()
                     level = (s.course_level or '').strip()
 
-                    avg_p = None
+                    ratio_pred = None
+                    for from_tn in reversed(prior_actual_terms):
+                        if sid in actual_student_paid_by_term.get(from_tn, {}):
+                            from_paid = actual_student_paid_by_term[from_tn][sid]
+                            if from_paid > 0:
+                                ratio = None
+                                if provider and course:
+                                    r = _median(hist_term_ratios.get((provider, course, from_tn, tn), []))
+                                    if r is not None:
+                                        ratio = r
+                                if ratio is None and provider:
+                                    r = _median(hist_term_ratios.get((provider, from_tn, tn), []))
+                                    if r is not None:
+                                        ratio = r
+                                if ratio is None:
+                                    r = _median(hist_term_ratios.get((from_tn, tn), []))
+                                    if r is not None:
+                                        ratio = r
+                                if ratio is not None:
+                                    ratio_pred = from_paid * ratio
+                                    break
 
-                    if provider and course:
-                        avg_p, _ = _avg(hist_prov_course, (provider, course, tn))
+                    if ratio_pred is not None:
+                        pred_p = ratio_pred
+                    else:
+                        avg_p = None
+                        if provider and course:
+                            avg_p, _ = _avg(hist_prov_course, (provider, course, tn))
+                        if avg_p is None and provider:
+                            avg_p, _ = _avg(hist_prov, (provider, tn))
+                        if avg_p is None and country and level:
+                            avg_p, _ = _avg(hist_country_level, (country, level, tn))
+                        if avg_p is None and country:
+                            avg_p, _ = _avg(hist_country, (country, tn))
+                        if avg_p is None:
+                            avg_p, _ = _avg(hist_global, tn)
+                        pred_p = avg_p if avg_p and avg_p > 0 else 0
 
-                    if avg_p is None and provider:
-                        avg_p, _ = _avg(hist_prov, (provider, tn))
-
-                    if avg_p is None and country and level:
-                        avg_p, _ = _avg(hist_country_level, (country, level, tn))
-
-                    if avg_p is None and country:
-                        avg_p, _ = _avg(hist_country, (country, tn))
-
-                    if avg_p is None:
-                        avg_p, _ = _avg(hist_global, tn)
-
-                    if avg_p and avg_p > 0:
-                        pred_paid += avg_p
+                    if pred_p > 0:
+                        pred_paid += pred_p
                         student_count += 1
 
                         prov_key = provider or 'Unknown'
                         if prov_key not in provider_predicted:
                             provider_predicted[prov_key] = {'predicted': 0, 'actual': 0, 'students': 0}
-                        provider_predicted[prov_key]['predicted'] += avg_p
+                        provider_predicted[prov_key]['predicted'] += pred_p
                         provider_predicted[prov_key]['students'] += 1
 
                         course_key = course or 'Unknown'
                         if course_key not in course_predicted:
                             course_predicted[course_key] = {'predicted': 0, 'actual': 0, 'students': 0}
-                        course_predicted[course_key]['predicted'] += avg_p
+                        course_predicted[course_key]['predicted'] += pred_p
                         course_predicted[course_key]['students'] += 1
 
                         country_key = country or 'Unknown'
                         if country_key not in country_predicted:
                             country_predicted[country_key] = {'predicted': 0, 'actual': 0, 'students': 0}
-                        country_predicted[country_key]['predicted'] += avg_p
+                        country_predicted[country_key]['predicted'] += pred_p
                         country_predicted[country_key]['students'] += 1
 
                         level_key = level or 'Unknown'
                         if level_key not in level_predicted:
                             level_predicted[level_key] = {'predicted': 0, 'actual': 0, 'students': 0}
-                        level_predicted[level_key]['predicted'] += avg_p
+                        level_predicted[level_key]['predicted'] += pred_p
                         level_predicted[level_key]['students'] += 1
 
                 for sid in has_actual_students:
