@@ -390,27 +390,40 @@ export default function CommissionTablePage() {
                                 <span className="text-sm font-medium whitespace-nowrap">{formatCommissionValue(rule)}</span>
                               </TableCell>
                               <TableCell>
-                                {(rule.followupStudyLevel || (rule.followupYearRates && rule.followupYearRates.length > 0)) ? (
+                                {(rule.followupYearRates && rule.followupYearRates.length > 0) ? (() => {
+                                  const grouped: Record<string, any[]> = {};
+                                  rule.followupYearRates.forEach((yr: any) => {
+                                    const lvl = yr.studyLevel || rule.followupStudyLevel || "";
+                                    if (!grouped[lvl]) grouped[lvl] = [];
+                                    grouped[lvl].push(yr);
+                                  });
+                                  return (
+                                    <div className="flex items-start gap-1">
+                                      <ArrowRight className="w-3.5 h-3.5 text-blue-500 mt-0.5 shrink-0" />
+                                      <div className="space-y-1">
+                                        {Object.entries(grouped).map(([lvl, rates]) => (
+                                          <div key={lvl}>
+                                            {lvl && <div className="text-xs font-semibold">{lvl}</div>}
+                                            <div className="space-y-0.5">
+                                              {rates.map((yr: any, i: number) => (
+                                                <div key={i} className="text-xs text-muted-foreground">
+                                                  {yr.year}: {yr.mode === "flat" ? `${yr.currency || "AUD"} ${parseFloat(yr.value || 0).toLocaleString()}` : `${parseFloat(yr.value || 0)}%`}
+                                                </div>
+                                              ))}
+                                            </div>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  );
+                                })() : rule.followupCommissionMode ? (
                                   <div className="flex items-start gap-1">
                                     <ArrowRight className="w-3.5 h-3.5 text-blue-500 mt-0.5 shrink-0" />
-                                    <div>
-                                      {rule.followupStudyLevel && <div className="text-sm font-medium">{rule.followupStudyLevel}</div>}
-                                      {rule.followupYearRates && rule.followupYearRates.length > 0 ? (
-                                        <div className="space-y-0.5">
-                                          {rule.followupYearRates.map((yr: any, i: number) => (
-                                            <div key={i} className="text-xs text-muted-foreground">
-                                              {yr.year}: {yr.mode === "flat" ? `${yr.currency || "AUD"} ${parseFloat(yr.value || 0).toLocaleString()}` : `${parseFloat(yr.value || 0)}%`}
-                                            </div>
-                                          ))}
-                                        </div>
-                                      ) : rule.followupCommissionMode ? (
-                                        <div className="text-sm text-muted-foreground">
-                                          {rule.followupCommissionMode === "percentage"
-                                            ? `${parseFloat(rule.followupPercentageValue || 0)}%`
-                                            : `${rule.followupCurrency || "AUD"} ${parseFloat(rule.followupFlatAmount || 0).toLocaleString()}`
-                                          }
-                                        </div>
-                                      ) : null}
+                                    <div className="text-sm text-muted-foreground">
+                                      {rule.followupCommissionMode === "percentage"
+                                        ? `${parseFloat(rule.followupPercentageValue || 0)}%`
+                                        : `${rule.followupCurrency || "AUD"} ${parseFloat(rule.followupFlatAmount || 0).toLocaleString()}`
+                                      }
                                     </div>
                                   </div>
                                 ) : (
