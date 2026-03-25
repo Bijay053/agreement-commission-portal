@@ -31,36 +31,32 @@ TERMINAL_STATUSES = {'withdrawn', 'complete'}
 
 
 def get_excluded_student_ids_for_year(target_year):
-    prior_term_names = list(
-        CommissionTerm.objects.filter(year__lt=target_year).values_list('term_name', flat=True)
+    prior_terms = list(
+        CommissionTerm.objects.filter(year__lt=target_year).order_by('-year', '-sort_order')
     )
-    if not prior_term_names:
+    if not prior_terms:
         return set()
-    current_term_names = list(
-        CommissionTerm.objects.filter(year=target_year).values_list('term_name', flat=True)
-    )
-    prior_student_ids = set(
-        CommissionEntry.objects.filter(term_name__in=prior_term_names)
-        .values_list('commission_student_id', flat=True).distinct()
-    )
+    prior_term_names = [t.term_name for t in prior_terms]
+
+    prior_entries = CommissionEntry.objects.filter(term_name__in=prior_term_names)
+    prior_student_ids = set(prior_entries.values_list('commission_student_id', flat=True).distinct())
     if not prior_student_ids:
         return set()
-    current_year_active_ids = set()
-    if current_term_names:
-        current_entries = CommissionEntry.objects.filter(
-            term_name__in=current_term_names,
-            commission_student_id__in=prior_student_ids
-        )
-        for e in current_entries:
-            entry_status = (e.student_status or '').lower()
-            if entry_status not in TERMINAL_STATUSES:
-                current_year_active_ids.add(e.commission_student_id)
+
+    term_order = {t.term_name: (t.year, t.sort_order) for t in prior_terms}
+
+    latest_entry_status = {}
+    for e in prior_entries:
+        sid = e.commission_student_id
+        order = term_order.get(e.term_name, (0, 0))
+        if sid not in latest_entry_status or order > latest_entry_status[sid][0]:
+            latest_entry_status[sid] = (order, (e.student_status or 'Under Enquiry').lower())
+
     excluded = set()
-    for s in CommissionStudent.objects.filter(id__in=prior_student_ids):
-        if (s.status or '').lower() in TERMINAL_STATUSES:
-            if s.id in current_year_active_ids:
-                continue
-            excluded.add(s.id)
+    for sid, (order, status) in latest_entry_status.items():
+        if status in TERMINAL_STATUSES:
+            excluded.add(sid)
+
     return excluded
 
 
