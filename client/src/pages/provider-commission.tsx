@@ -769,6 +769,7 @@ export default function ProviderCommissionPage() {
                     <TableHead>Basis</TableHead>
                     <TableHead>Follow-up</TableHead>
                     <TableHead className="text-right">Sub-Agent %</TableHead>
+                    <TableHead>Sub-Agent Follow-up</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
@@ -916,27 +917,34 @@ export default function ProviderCommissionPage() {
                                 <div className="text-[10px] text-muted-foreground">
                                   ({entry.effectiveSubAgentPercentage}%)
                                 </div>
-                                {entry.followupYearRates && entry.followupYearRates.length > 0 && (() => {
-                                  const pct = parseFloat(entry.effectiveSubAgentPercentage || "0");
-                                  return (
-                                    <div className="mt-1 pt-1 border-t border-border/50 text-left">
-                                      <div className="text-[10px] text-muted-foreground font-sans mb-0.5">
-                                        Follow-up:{entry.followupStudyLevel ? ` ${entry.followupStudyLevel}` : ""}
-                                      </div>
+                              </div>
+                            ) : "—"}
+                          </TableCell>
+                          <TableCell data-testid={`text-subagent-followup-${entry.id}`}>
+                            {entry.followupYearRates && entry.followupYearRates.length > 0 ? (() => {
+                              const pct = parseFloat(entry.effectiveSubAgentPercentage || "0");
+                              return (
+                                <div className="flex items-start gap-1">
+                                  <ArrowRight className="w-3.5 h-3.5 text-emerald-500 mt-0.5 shrink-0" />
+                                  <div>
+                                    {entry.followupStudyLevel && <div className="text-xs font-medium">{entry.followupStudyLevel}</div>}
+                                    <div className="space-y-0.5">
                                       {entry.followupYearRates.map((yr, i) => {
                                         const origVal = parseFloat(yr.value || "0");
                                         const subVal = pct > 0 ? (origVal * pct / 100).toFixed(2) : "0";
                                         return (
-                                          <div key={i} className="text-[11px] text-emerald-600 dark:text-emerald-400 font-sans">
+                                          <div key={i} className="text-[11px] text-emerald-600 dark:text-emerald-400">
                                             {yr.year}: {yr.mode === "flat" ? `${yr.currency || "AUD"} ${parseFloat(subVal).toLocaleString()}` : `${subVal}%`}
                                           </div>
                                         );
                                       })}
                                     </div>
-                                  );
-                                })()}
-                              </div>
-                            ) : "—"}
+                                  </div>
+                                </div>
+                              );
+                            })() : (
+                              <span className="text-muted-foreground">—</span>
+                            )}
                           </TableCell>
                           <TableCell>
                             <Badge variant={entry.isActive ? "default" : "secondary"} data-testid={`badge-active-${entry.id}`}>
