@@ -878,7 +878,7 @@ function DashboardView({ dashboard, year, intakeFilter, onIntakeChange, provider
             <div className="flex items-center gap-2 mb-3">
               <Sparkles className="h-4 w-4 text-blue-500" />
               <h3 className="text-sm font-semibold">Predicted Commission Receivable - {year}</h3>
-              <span className="text-[10px] text-muted-foreground ml-auto">Based on {prediction.basedOnYears?.join(", ")} data | By country &amp; study level</span>
+              <span className="text-[10px] text-muted-foreground ml-auto">Based on {prediction.basedOnYears?.join(", ")} data | By university &amp; course</span>
             </div>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
               <div className="bg-white dark:bg-gray-900 rounded-lg p-3 border">
@@ -913,8 +913,8 @@ function DashboardView({ dashboard, year, intakeFilter, onIntakeChange, provider
                     <div key={t.termNumber} className="bg-white dark:bg-gray-900 rounded-lg p-2.5 border">
                       <div className="flex items-center justify-between mb-1">
                         <span className="text-xs font-semibold">{t.termLabel || t.termName}</span>
-                        <Badge className={`text-[9px] px-1.5 py-0 ${t.source === 'actual' ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700'}`}>
-                          {t.source === 'actual' ? 'Actual' : 'Predicted'}
+                        <Badge className={`text-[9px] px-1.5 py-0 ${t.source === 'actual' ? 'bg-green-100 text-green-700' : t.source === 'mixed' ? 'bg-amber-100 text-amber-700' : 'bg-blue-100 text-blue-700'}`}>
+                          {t.source === 'actual' ? 'Actual' : t.source === 'mixed' ? 'Mixed' : 'Predicted'}
                         </Badge>
                       </div>
                       <div className="flex justify-between text-xs">
@@ -929,7 +929,12 @@ function DashboardView({ dashboard, year, intakeFilter, onIntakeChange, provider
                         <span className="text-muted-foreground">Total:</span>
                         <span className="font-mono font-bold text-blue-600">${Number(t.predictedTotal || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                       </div>
-                      <div className="text-[10px] text-muted-foreground mt-1">{t.studentCount} students</div>
+                      <div className="text-[10px] text-muted-foreground mt-1">
+                        {t.studentCount} students
+                        {t.actualStudents > 0 && t.predictedStudents > 0 && (
+                          <span className="ml-1">({t.actualStudents} actual, {t.predictedStudents} predicted)</span>
+                        )}
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -937,32 +942,40 @@ function DashboardView({ dashboard, year, intakeFilter, onIntakeChange, provider
             )}
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              {prediction.byCountry && Object.keys(prediction.byCountry).length > 0 && (
+              {prediction.byProvider && prediction.byProvider.length > 0 && (
                 <div>
-                  <h4 className="text-xs font-medium text-muted-foreground mb-1.5">Historical Avg by Country</h4>
-                  <div className="space-y-1 max-h-32 overflow-y-auto">
-                    {Object.entries(prediction.byCountry).sort((a: any, b: any) => b[1].totalCommission - a[1].totalCommission).map(([country, data]: [string, any]) => (
-                      <div key={country} className="flex items-center justify-between text-xs bg-white dark:bg-gray-900 rounded px-2 py-1 border">
-                        <span className="truncate max-w-[120px]">{country}</span>
-                        <div className="flex gap-3 text-[10px]">
-                          <span className="text-muted-foreground">{data.totalStudents} entries</span>
-                          <span className="font-mono">Avg: ${Number(data.avgCommission || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                  <h4 className="text-xs font-medium text-muted-foreground mb-1.5">Prediction by University</h4>
+                  <div className="space-y-1 max-h-40 overflow-y-auto">
+                    {prediction.byProvider.map((p: any) => (
+                      <div key={p.provider} className="text-xs bg-white dark:bg-gray-900 rounded px-2 py-1.5 border">
+                        <div className="flex items-center justify-between">
+                          <span className="truncate max-w-[140px] font-medium">{p.provider}</span>
+                          <span className="font-mono font-bold text-blue-600">${Number(p.totalExpected || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                        </div>
+                        <div className="flex gap-3 text-[10px] text-muted-foreground mt-0.5">
+                          {p.actualCommission > 0 && <span className="text-green-600">Actual: ${Number(p.actualCommission).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>}
+                          {p.predictedCommission > 0 && <span className="text-blue-600">Predicted: ${Number(p.predictedCommission).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>}
+                          {p.predictedStudents > 0 && <span>{p.predictedStudents} predicted students</span>}
                         </div>
                       </div>
                     ))}
                   </div>
                 </div>
               )}
-              {prediction.byStudyLevel && Object.keys(prediction.byStudyLevel).length > 0 && (
+              {prediction.byCourse && prediction.byCourse.length > 0 && (
                 <div>
-                  <h4 className="text-xs font-medium text-muted-foreground mb-1.5">Historical Avg by Study Level</h4>
-                  <div className="space-y-1 max-h-32 overflow-y-auto">
-                    {Object.entries(prediction.byStudyLevel).sort((a: any, b: any) => b[1].totalCommission - a[1].totalCommission).map(([level, data]: [string, any]) => (
-                      <div key={level} className="flex items-center justify-between text-xs bg-white dark:bg-gray-900 rounded px-2 py-1 border">
-                        <span className="truncate max-w-[120px]">{level}</span>
-                        <div className="flex gap-3 text-[10px]">
-                          <span className="text-muted-foreground">{data.totalStudents} entries</span>
-                          <span className="font-mono">Avg: ${Number(data.avgCommission || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                  <h4 className="text-xs font-medium text-muted-foreground mb-1.5">Prediction by Course</h4>
+                  <div className="space-y-1 max-h-40 overflow-y-auto">
+                    {prediction.byCourse.map((c: any) => (
+                      <div key={c.course} className="text-xs bg-white dark:bg-gray-900 rounded px-2 py-1.5 border">
+                        <div className="flex items-center justify-between">
+                          <span className="truncate max-w-[140px] font-medium">{c.course}</span>
+                          <span className="font-mono font-bold text-blue-600">${Number(c.totalExpected || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                        </div>
+                        <div className="flex gap-3 text-[10px] text-muted-foreground mt-0.5">
+                          {c.actualCommission > 0 && <span className="text-green-600">Actual: ${Number(c.actualCommission).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>}
+                          {c.predictedCommission > 0 && <span className="text-blue-600">Predicted: ${Number(c.predictedCommission).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>}
+                          {c.predictedStudents > 0 && <span>{c.predictedStudents} predicted students</span>}
                         </div>
                       </div>
                     ))}
@@ -970,6 +983,40 @@ function DashboardView({ dashboard, year, intakeFilter, onIntakeChange, provider
                 </div>
               )}
             </div>
+            {prediction.histByProvider && prediction.histByProvider.length > 0 && (
+              <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div>
+                  <h4 className="text-xs font-medium text-muted-foreground mb-1.5">Historical Avg by University</h4>
+                  <div className="space-y-1 max-h-32 overflow-y-auto">
+                    {prediction.histByProvider.map((p: any) => (
+                      <div key={p.provider} className="flex items-center justify-between text-xs bg-white dark:bg-gray-900 rounded px-2 py-1 border">
+                        <span className="truncate max-w-[140px]">{p.provider}</span>
+                        <div className="flex gap-3 text-[10px]">
+                          <span className="text-muted-foreground">{p.entries} entries</span>
+                          <span className="font-mono">Avg: ${Number(p.avgCommission || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                {prediction.histByCourse && prediction.histByCourse.length > 0 && (
+                  <div>
+                    <h4 className="text-xs font-medium text-muted-foreground mb-1.5">Historical Avg by Course</h4>
+                    <div className="space-y-1 max-h-32 overflow-y-auto">
+                      {prediction.histByCourse.map((c: any) => (
+                        <div key={c.course} className="flex items-center justify-between text-xs bg-white dark:bg-gray-900 rounded px-2 py-1 border">
+                          <span className="truncate max-w-[140px]">{c.course}</span>
+                          <div className="flex gap-3 text-[10px]">
+                            <span className="text-muted-foreground">{c.entries} entries</span>
+                            <span className="font-mono">Avg: ${Number(c.avgCommission || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
           </CardContent>
         </Card>
       )}

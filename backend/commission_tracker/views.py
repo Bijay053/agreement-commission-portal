@@ -967,132 +967,172 @@ class PredictionView(APIView):
 
             past_term_names = [t.term_name for t in all_terms if t.year < target_year]
             target_term_names = [t.term_name for t in target_terms]
+            term_number_map = {t.term_name: t.term_number for t in all_terms}
 
             past_entries = list(CommissionEntry.objects.filter(term_name__in=past_term_names))
             target_entries = list(CommissionEntry.objects.filter(term_name__in=target_term_names))
 
             past_student_ids = set(e.commission_student_id for e in past_entries)
             target_student_ids = set(e.commission_student_id for e in target_entries)
-            all_student_ids = past_student_ids | target_student_ids
-            students = {s.id: s for s in CommissionStudent.objects.filter(id__in=all_student_ids)}
 
-            term_number_map = {}
-            for t in all_terms:
-                term_number_map[t.term_name] = t.term_number
+            all_students = {s.id: s for s in CommissionStudent.objects.filter(
+                id__in=past_student_ids | target_student_ids
+            )}
 
-            past_year_term_map = {}
-            for t in all_terms:
-                if t.year < target_year:
-                    past_year_term_map[t.term_name] = t.year
+            current_year_students = {s.id: s for s in CommissionStudent.objects.filter(
+                id__in=target_student_ids
+            )} if target_student_ids else {}
 
-            avg_by_group = {}
+            if not current_year_students:
+                current_year_students = {s.id: s for s in CommissionStudent.objects.all()}
+                all_students.update(current_year_students)
+
+            hist_prov_course = {}
+            hist_prov = {}
+            hist_country_level = {}
+            hist_country = {}
+            hist_global = {}
             for e in past_entries:
-                s = students.get(e.commission_student_id)
+                s = all_students.get(e.commission_student_id)
                 if not s:
                     continue
-                country = (s.country or 'Unknown').strip()
-                course_level = (s.course_level or 'Unknown').strip()
+                provider = (s.provider or '').strip()
+                course = (s.course_name or '').strip()
+                country = (s.country or '').strip()
+                level = (s.course_level or '').strip()
                 tn = term_number_map.get(e.term_name, 0)
-                key = (country, course_level, tn)
-                if key not in avg_by_group:
-                    avg_by_group[key] = {'total_comm': 0, 'total_bonus': 0, 'count': 0}
-                avg_by_group[key]['total_comm'] += float(e.commission_amount or 0)
-                avg_by_group[key]['total_bonus'] += float(e.bonus or 0)
-                avg_by_group[key]['count'] += 1
+                comm = float(e.commission_amount or 0)
+                bonus = float(e.bonus or 0)
 
-            country_tn_avg = {}
-            for key, vals in avg_by_group.items():
-                country, course_level, tn = key
-                ckey = (country, tn)
-                if ckey not in country_tn_avg:
-                    country_tn_avg[ckey] = {'total_comm': 0, 'total_bonus': 0, 'count': 0}
-                country_tn_avg[ckey]['total_comm'] += vals['total_comm']
-                country_tn_avg[ckey]['total_bonus'] += vals['total_bonus']
-                country_tn_avg[ckey]['count'] += vals['count']
+                def _add(d, k):
+                    if k not in d:
+                        d[k] = {'comm': 0, 'bonus': 0, 'n': 0}
+                    d[k]['comm'] += comm
+                    d[k]['bonus'] += bonus
+                    d[k]['n'] += 1
 
-            global_tn_avg = {}
-            for key, vals in avg_by_group.items():
-                _, _, tn = key
-                if tn not in global_tn_avg:
-                    global_tn_avg[tn] = {'total_comm': 0, 'total_bonus': 0, 'count': 0}
-                global_tn_avg[tn]['total_comm'] += vals['total_comm']
-                global_tn_avg[tn]['total_bonus'] += vals['total_bonus']
-                global_tn_avg[tn]['count'] += vals['count']
+                if provider and course:
+                    _add(hist_prov_course, (provider, course, tn))
+                if provider:
+                    _add(hist_prov, (provider, tn))
+                if country and level:
+                    _add(hist_country_level, (country, level, tn))
+                if country:
+                    _add(hist_country, (country, tn))
+                _add(hist_global, tn)
+
+            def _avg(d, k):
+                v = d.get(k)
+                if v and v['n'] > 0:
+                    return v['comm'] / v['n'], v['bonus'] / v['n'], v['n']
+                return None, None, 0
 
             actual_by_term = {}
+            actual_students_by_term = {}
             for t in target_terms:
-                actual_by_term[t.term_number] = {'commission': 0, 'bonus': 0, 'count': 0}
+                actual_by_term[t.term_number] = {'comm': 0, 'bonus': 0, 'count': 0}
+                actual_students_by_term[t.term_number] = set()
             for e in target_entries:
                 tn = term_number_map.get(e.term_name, 0)
                 if tn in actual_by_term:
-                    actual_by_term[tn]['commission'] += float(e.commission_amount or 0)
+                    actual_by_term[tn]['comm'] += float(e.commission_amount or 0)
                     actual_by_term[tn]['bonus'] += float(e.bonus or 0)
                     actual_by_term[tn]['count'] += 1
-
-            target_students_by_term = {}
-            for t in target_terms:
-                tn = t.term_number
-                term_entry_students = set(
-                    e.commission_student_id for e in target_entries
-                    if term_number_map.get(e.term_name) == tn
-                )
-                target_students_by_term[tn] = term_entry_students
-
-            all_target_students = set()
-            for sids in target_students_by_term.values():
-                all_target_students |= sids
-
-            if not all_target_students and past_student_ids:
-                all_target_students = past_student_ids
+                    actual_students_by_term[tn].add(e.commission_student_id)
 
             term_predictions = []
             total_predicted_comm = 0
             total_predicted_bonus = 0
             total_actual_comm = 0
             total_actual_bonus = 0
+            provider_predicted = {}
+            course_predicted = {}
 
             for t in target_terms:
                 tn = t.term_number
-                actual = actual_by_term.get(tn, {'commission': 0, 'bonus': 0, 'count': 0})
-                total_actual_comm += actual['commission']
+                actual = actual_by_term.get(tn, {'comm': 0, 'bonus': 0, 'count': 0})
+                total_actual_comm += actual['comm']
                 total_actual_bonus += actual['bonus']
 
-                has_actual = actual['count'] > 0
+                pred_comm = actual['comm']
+                pred_bonus = actual['bonus']
+                student_count = actual['count']
+                has_actual_students = actual_students_by_term.get(tn, set())
 
-                if has_actual:
-                    pred_comm = actual['commission']
-                    pred_bonus = actual['bonus']
-                    source = 'actual'
-                    student_count = actual['count']
-                else:
-                    pred_comm = 0
-                    pred_bonus = 0
-                    student_count = 0
-                    source = 'predicted'
+                students_to_predict = set()
+                for sid in current_year_students:
+                    if sid not in has_actual_students:
+                        students_to_predict.add(sid)
 
-                    predict_students = all_target_students
-                    for sid in predict_students:
-                        s = students.get(sid)
-                        if not s:
-                            continue
-                        country = (s.country or 'Unknown').strip()
-                        course_level = (s.course_level or 'Unknown').strip()
-                        key = (country, course_level, tn)
-                        if key in avg_by_group and avg_by_group[key]['count'] > 0:
-                            avg_comm = avg_by_group[key]['total_comm'] / avg_by_group[key]['count']
-                            avg_bonus = avg_by_group[key]['total_bonus'] / avg_by_group[key]['count']
-                        elif (country, tn) in country_tn_avg and country_tn_avg[(country, tn)]['count'] > 0:
-                            avg_comm = country_tn_avg[(country, tn)]['total_comm'] / country_tn_avg[(country, tn)]['count']
-                            avg_bonus = country_tn_avg[(country, tn)]['total_bonus'] / country_tn_avg[(country, tn)]['count']
-                        elif tn in global_tn_avg and global_tn_avg[tn]['count'] > 0:
-                            avg_comm = global_tn_avg[tn]['total_comm'] / global_tn_avg[tn]['count']
-                            avg_bonus = global_tn_avg[tn]['total_bonus'] / global_tn_avg[tn]['count']
-                        else:
-                            avg_comm = 0
-                            avg_bonus = 0
-                        pred_comm += avg_comm
-                        pred_bonus += avg_bonus
+                source = 'actual' if not students_to_predict and actual['count'] > 0 else 'mixed' if actual['count'] > 0 else 'predicted'
+
+                for sid in students_to_predict:
+                    s = current_year_students.get(sid) or all_students.get(sid)
+                    if not s:
+                        continue
+                    provider = (s.provider or '').strip()
+                    course = (s.course_name or '').strip()
+                    country = (s.country or '').strip()
+                    level = (s.course_level or '').strip()
+
+                    avg_c, avg_b, matched = None, None, 0
+                    match_source = 'global'
+
+                    if provider and course:
+                        avg_c, avg_b, matched = _avg(hist_prov_course, (provider, course, tn))
+                        if avg_c is not None:
+                            match_source = 'provider+course'
+
+                    if avg_c is None and provider:
+                        avg_c, avg_b, matched = _avg(hist_prov, (provider, tn))
+                        if avg_c is not None:
+                            match_source = 'provider'
+
+                    if avg_c is None and country and level:
+                        avg_c, avg_b, matched = _avg(hist_country_level, (country, level, tn))
+                        if avg_c is not None:
+                            match_source = 'country+level'
+
+                    if avg_c is None and country:
+                        avg_c, avg_b, matched = _avg(hist_country, (country, tn))
+                        if avg_c is not None:
+                            match_source = 'country'
+
+                    if avg_c is None:
+                        avg_c, avg_b, matched = _avg(hist_global, tn)
+
+                    if avg_c and avg_c > 0:
+                        pred_comm += avg_c
+                        pred_bonus += (avg_b or 0)
                         student_count += 1
+
+                        prov_key = provider or 'Unknown'
+                        if prov_key not in provider_predicted:
+                            provider_predicted[prov_key] = {'predicted': 0, 'actual': 0, 'students': 0}
+                        provider_predicted[prov_key]['predicted'] += avg_c
+                        provider_predicted[prov_key]['students'] += 1
+
+                        course_key = course or 'Unknown'
+                        if course_key not in course_predicted:
+                            course_predicted[course_key] = {'predicted': 0, 'actual': 0, 'students': 0}
+                        course_predicted[course_key]['predicted'] += avg_c
+                        course_predicted[course_key]['students'] += 1
+
+                for sid in has_actual_students:
+                    s = all_students.get(sid)
+                    if not s:
+                        continue
+                    prov_key = (s.provider or 'Unknown').strip()
+                    if prov_key not in provider_predicted:
+                        provider_predicted[prov_key] = {'predicted': 0, 'actual': 0, 'students': 0}
+                    sid_actual_comm = sum(float(e.commission_amount or 0) for e in target_entries
+                                         if e.commission_student_id == sid and term_number_map.get(e.term_name) == tn)
+                    provider_predicted[prov_key]['actual'] += sid_actual_comm
+
+                    course_key = (s.course_name or 'Unknown').strip()
+                    if course_key not in course_predicted:
+                        course_predicted[course_key] = {'predicted': 0, 'actual': 0, 'students': 0}
+                    course_predicted[course_key]['actual'] += sid_actual_comm
 
                 total_predicted_comm += pred_comm
                 total_predicted_bonus += pred_bonus
@@ -1104,51 +1144,63 @@ class PredictionView(APIView):
                     'predictedCommission': round2(pred_comm),
                     'predictedBonus': round2(pred_bonus),
                     'predictedTotal': round2(pred_comm + pred_bonus),
-                    'actualCommission': round2(actual['commission']),
+                    'actualCommission': round2(actual['comm']),
                     'actualBonus': round2(actual['bonus']),
                     'studentCount': student_count,
+                    'predictedStudents': len(students_to_predict),
+                    'actualStudents': actual['count'],
                     'source': source,
                 })
 
-            country_breakdown = {}
-            provider_breakdown = {}
-            course_breakdown = {}
-            level_breakdown = {}
+            provider_list = []
+            for prov, data in sorted(provider_predicted.items(), key=lambda x: -(x[1]['predicted'] + x[1]['actual'])):
+                provider_list.append({
+                    'provider': prov,
+                    'predictedCommission': round2(data['predicted']),
+                    'actualCommission': round2(data['actual']),
+                    'totalExpected': round2(data['predicted'] + data['actual']),
+                    'predictedStudents': data['students'],
+                })
+
+            course_list = []
+            for crs, data in sorted(course_predicted.items(), key=lambda x: -(x[1]['predicted'] + x[1]['actual'])):
+                course_list.append({
+                    'course': crs,
+                    'predictedCommission': round2(data['predicted']),
+                    'actualCommission': round2(data['actual']),
+                    'totalExpected': round2(data['predicted'] + data['actual']),
+                    'predictedStudents': data['students'],
+                })
+
+            hist_provider_summary = {}
+            hist_course_summary = {}
             for e in past_entries:
-                s = students.get(e.commission_student_id)
+                s = all_students.get(e.commission_student_id)
                 if not s:
                     continue
-                country = (s.country or 'Unknown').strip()
-                provider = (s.provider or 'Unknown').strip()
-                course = (s.course_name or 'Unknown').strip()
-                level = (s.course_level or 'Unknown').strip()
+                prov = (s.provider or 'Unknown').strip()
+                crs = (s.course_name or 'Unknown').strip()
                 comm = float(e.commission_amount or 0)
 
-                if country not in country_breakdown:
-                    country_breakdown[country] = {'avgCommission': 0, 'totalStudents': 0, 'totalCommission': 0}
-                country_breakdown[country]['totalCommission'] += comm
-                country_breakdown[country]['totalStudents'] += 1
+                if prov not in hist_provider_summary:
+                    hist_provider_summary[prov] = {'total': 0, 'n': 0}
+                hist_provider_summary[prov]['total'] += comm
+                hist_provider_summary[prov]['n'] += 1
 
-                if provider not in provider_breakdown:
-                    provider_breakdown[provider] = {'avgCommission': 0, 'totalStudents': 0, 'totalCommission': 0}
-                provider_breakdown[provider]['totalCommission'] += comm
-                provider_breakdown[provider]['totalStudents'] += 1
+                if crs not in hist_course_summary:
+                    hist_course_summary[crs] = {'total': 0, 'n': 0}
+                hist_course_summary[crs]['total'] += comm
+                hist_course_summary[crs]['n'] += 1
 
-                if course not in course_breakdown:
-                    course_breakdown[course] = {'avgCommission': 0, 'totalStudents': 0, 'totalCommission': 0}
-                course_breakdown[course]['totalCommission'] += comm
-                course_breakdown[course]['totalStudents'] += 1
+            hist_prov_list = sorted([
+                {'provider': k, 'avgCommission': round2(v['total'] / v['n']), 'entries': v['n'], 'totalCommission': round2(v['total'])}
+                for k, v in hist_provider_summary.items() if v['n'] > 0
+            ], key=lambda x: -x['totalCommission'])
 
-                if level not in level_breakdown:
-                    level_breakdown[level] = {'avgCommission': 0, 'totalStudents': 0, 'totalCommission': 0}
-                level_breakdown[level]['totalCommission'] += comm
-                level_breakdown[level]['totalStudents'] += 1
-
-            for bd in [country_breakdown, provider_breakdown, course_breakdown, level_breakdown]:
-                for k in bd:
-                    if bd[k]['totalStudents'] > 0:
-                        bd[k]['avgCommission'] = round2(bd[k]['totalCommission'] / bd[k]['totalStudents'])
-                    bd[k]['totalCommission'] = round2(bd[k]['totalCommission'])
+            hist_course_list = sorted([
+                {'course': k, 'avgCommission': round2(v['total'] / v['n']), 'entries': v['n'], 'totalCommission': round2(v['total'])}
+                for k, v in hist_course_summary.items() if v['n'] > 0
+            ], key=lambda x: -x['totalCommission'])
 
             return Response({
                 'prediction': {
@@ -1160,11 +1212,11 @@ class PredictionView(APIView):
                     'totalActualCommission': round2(total_actual_comm),
                     'totalActualBonus': round2(total_actual_bonus),
                     'terms': term_predictions,
-                    'byCountry': country_breakdown,
-                    'byProvider': provider_breakdown,
-                    'byCourse': course_breakdown,
-                    'byStudyLevel': level_breakdown,
-                    'studentCount': len(all_target_students),
+                    'byProvider': provider_list,
+                    'byCourse': course_list,
+                    'histByProvider': hist_prov_list,
+                    'histByCourse': hist_course_list,
+                    'studentCount': len(current_year_students),
                 },
             })
         except Exception as e:

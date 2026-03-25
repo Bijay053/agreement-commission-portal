@@ -556,7 +556,6 @@ class SubAgentPredictionView(APIView):
 
             past_term_names = [t.term_name for t in all_terms if t.year < target_year]
             target_term_names = [t.term_name for t in target_terms]
-
             term_number_map = {t.term_name: t.term_number for t in all_terms}
 
             past_sa_entries = list(SubAgentTermEntry.objects.filter(term_name__in=past_term_names))
@@ -564,85 +563,149 @@ class SubAgentPredictionView(APIView):
 
             past_student_ids = set(e.commission_student_id for e in past_sa_entries)
             target_student_ids = set(e.commission_student_id for e in target_sa_entries)
-            all_student_ids = past_student_ids | target_student_ids
-            students = {s.id: s for s in CommissionStudent.objects.filter(id__in=all_student_ids)}
 
-            avg_by_group = {}
+            all_students = {s.id: s for s in CommissionStudent.objects.filter(
+                id__in=past_student_ids | target_student_ids
+            )}
+
+            current_year_students = {s.id: s for s in CommissionStudent.objects.filter(
+                id__in=target_student_ids
+            )} if target_student_ids else {}
+
+            if not current_year_students:
+                sa_student_ids = set(SubAgentEntry.objects.values_list('commission_student_id', flat=True))
+                current_year_students = {s.id: s for s in CommissionStudent.objects.filter(id__in=sa_student_ids)}
+                all_students.update(current_year_students)
+
+            hist_prov_course = {}
+            hist_prov = {}
+            hist_country_level = {}
+            hist_country = {}
+            hist_global = {}
             for e in past_sa_entries:
-                s = students.get(e.commission_student_id)
+                s = all_students.get(e.commission_student_id)
                 if not s:
                     continue
-                country = (s.country or 'Unknown').strip()
-                course_level = (s.course_level or 'Unknown').strip()
+                provider = (s.provider or '').strip()
+                course = (s.course_name or '').strip()
+                country = (s.country or '').strip()
+                level = (s.course_level or '').strip()
                 tn = term_number_map.get(e.term_name, 0)
-                key = (country, course_level, tn)
-                if key not in avg_by_group:
-                    avg_by_group[key] = {'total_paid': 0, 'total_margin': 0, 'count': 0}
-                avg_by_group[key]['total_paid'] += float(e.total_paid or 0)
-                avg_by_group[key]['count'] += 1
+                paid = float(e.total_paid or 0)
 
-            country_tn_avg = {}
-            for key, vals in avg_by_group.items():
-                country, _, tn = key
-                ckey = (country, tn)
-                if ckey not in country_tn_avg:
-                    country_tn_avg[ckey] = {'total_paid': 0, 'count': 0}
-                country_tn_avg[ckey]['total_paid'] += vals['total_paid']
-                country_tn_avg[ckey]['count'] += vals['count']
+                def _add(d, k):
+                    if k not in d:
+                        d[k] = {'paid': 0, 'n': 0}
+                    d[k]['paid'] += paid
+                    d[k]['n'] += 1
 
-            global_tn_avg = {}
-            for key, vals in avg_by_group.items():
-                _, _, tn = key
-                if tn not in global_tn_avg:
-                    global_tn_avg[tn] = {'total_paid': 0, 'count': 0}
-                global_tn_avg[tn]['total_paid'] += vals['total_paid']
-                global_tn_avg[tn]['count'] += vals['count']
+                if provider and course:
+                    _add(hist_prov_course, (provider, course, tn))
+                if provider:
+                    _add(hist_prov, (provider, tn))
+                if country and level:
+                    _add(hist_country_level, (country, level, tn))
+                if country:
+                    _add(hist_country, (country, tn))
+                _add(hist_global, tn)
+
+            def _avg(d, k):
+                v = d.get(k)
+                if v and v['n'] > 0:
+                    return v['paid'] / v['n'], v['n']
+                return None, 0
 
             actual_by_term = {}
+            actual_students_by_term = {}
             for t in target_terms:
                 actual_by_term[t.term_number] = {'paid': 0, 'count': 0}
+                actual_students_by_term[t.term_number] = set()
             for e in target_sa_entries:
                 tn = term_number_map.get(e.term_name, 0)
                 if tn in actual_by_term:
                     actual_by_term[tn]['paid'] += float(e.total_paid or 0)
                     actual_by_term[tn]['count'] += 1
-
-            all_target_students = target_student_ids or past_student_ids
+                    actual_students_by_term[tn].add(e.commission_student_id)
 
             term_predictions = []
             total_predicted_paid = 0
             total_actual_paid = 0
+            provider_predicted = {}
+            course_predicted = {}
 
             for t in target_terms:
                 tn = t.term_number
                 actual = actual_by_term.get(tn, {'paid': 0, 'count': 0})
                 total_actual_paid += actual['paid']
 
-                if actual['count'] > 0:
-                    pred_paid = actual['paid']
-                    source = 'actual'
-                    student_count = actual['count']
-                else:
-                    pred_paid = 0
-                    student_count = 0
-                    source = 'predicted'
-                    for sid in all_target_students:
-                        s = students.get(sid)
-                        if not s:
-                            continue
-                        country = (s.country or 'Unknown').strip()
-                        course_level = (s.course_level or 'Unknown').strip()
-                        key = (country, course_level, tn)
-                        if key in avg_by_group and avg_by_group[key]['count'] > 0:
-                            avg_paid = avg_by_group[key]['total_paid'] / avg_by_group[key]['count']
-                        elif (country, tn) in country_tn_avg and country_tn_avg[(country, tn)]['count'] > 0:
-                            avg_paid = country_tn_avg[(country, tn)]['total_paid'] / country_tn_avg[(country, tn)]['count']
-                        elif tn in global_tn_avg and global_tn_avg[tn]['count'] > 0:
-                            avg_paid = global_tn_avg[tn]['total_paid'] / global_tn_avg[tn]['count']
-                        else:
-                            avg_paid = 0
-                        pred_paid += avg_paid
+                pred_paid = actual['paid']
+                student_count = actual['count']
+                has_actual_students = actual_students_by_term.get(tn, set())
+
+                students_to_predict = set()
+                for sid in current_year_students:
+                    if sid not in has_actual_students:
+                        students_to_predict.add(sid)
+
+                source = 'actual' if not students_to_predict and actual['count'] > 0 else 'mixed' if actual['count'] > 0 else 'predicted'
+
+                for sid in students_to_predict:
+                    s = current_year_students.get(sid) or all_students.get(sid)
+                    if not s:
+                        continue
+                    provider = (s.provider or '').strip()
+                    course = (s.course_name or '').strip()
+                    country = (s.country or '').strip()
+                    level = (s.course_level or '').strip()
+
+                    avg_p = None
+
+                    if provider and course:
+                        avg_p, _ = _avg(hist_prov_course, (provider, course, tn))
+
+                    if avg_p is None and provider:
+                        avg_p, _ = _avg(hist_prov, (provider, tn))
+
+                    if avg_p is None and country and level:
+                        avg_p, _ = _avg(hist_country_level, (country, level, tn))
+
+                    if avg_p is None and country:
+                        avg_p, _ = _avg(hist_country, (country, tn))
+
+                    if avg_p is None:
+                        avg_p, _ = _avg(hist_global, tn)
+
+                    if avg_p and avg_p > 0:
+                        pred_paid += avg_p
                         student_count += 1
+
+                        prov_key = provider or 'Unknown'
+                        if prov_key not in provider_predicted:
+                            provider_predicted[prov_key] = {'predicted': 0, 'actual': 0, 'students': 0}
+                        provider_predicted[prov_key]['predicted'] += avg_p
+                        provider_predicted[prov_key]['students'] += 1
+
+                        course_key = course or 'Unknown'
+                        if course_key not in course_predicted:
+                            course_predicted[course_key] = {'predicted': 0, 'actual': 0, 'students': 0}
+                        course_predicted[course_key]['predicted'] += avg_p
+                        course_predicted[course_key]['students'] += 1
+
+                for sid in has_actual_students:
+                    s = all_students.get(sid)
+                    if not s:
+                        continue
+                    prov_key = (s.provider or 'Unknown').strip()
+                    if prov_key not in provider_predicted:
+                        provider_predicted[prov_key] = {'predicted': 0, 'actual': 0, 'students': 0}
+                    sid_actual = sum(float(e.total_paid or 0) for e in target_sa_entries
+                                    if e.commission_student_id == sid and term_number_map.get(e.term_name) == tn)
+                    provider_predicted[prov_key]['actual'] += sid_actual
+
+                    course_key = (s.course_name or 'Unknown').strip()
+                    if course_key not in course_predicted:
+                        course_predicted[course_key] = {'predicted': 0, 'actual': 0, 'students': 0}
+                    course_predicted[course_key]['actual'] += sid_actual
 
                 total_predicted_paid += pred_paid
                 term_predictions.append({
@@ -652,23 +715,60 @@ class SubAgentPredictionView(APIView):
                     'predictedPaid': round2(pred_paid),
                     'actualPaid': round2(actual['paid']),
                     'studentCount': student_count,
+                    'predictedStudents': len(students_to_predict),
+                    'actualStudents': actual['count'],
                     'source': source,
                 })
 
-            country_breakdown = {}
+            provider_list = sorted([
+                {
+                    'provider': k,
+                    'predictedPaid': round2(v['predicted']),
+                    'actualPaid': round2(v['actual']),
+                    'totalExpected': round2(v['predicted'] + v['actual']),
+                    'predictedStudents': v['students'],
+                }
+                for k, v in provider_predicted.items()
+            ], key=lambda x: -x['totalExpected'])
+
+            course_list = sorted([
+                {
+                    'course': k,
+                    'predictedPaid': round2(v['predicted']),
+                    'actualPaid': round2(v['actual']),
+                    'totalExpected': round2(v['predicted'] + v['actual']),
+                    'predictedStudents': v['students'],
+                }
+                for k, v in course_predicted.items()
+            ], key=lambda x: -x['totalExpected'])
+
+            hist_provider_summary = {}
+            hist_course_summary = {}
             for e in past_sa_entries:
-                s = students.get(e.commission_student_id)
+                s = all_students.get(e.commission_student_id)
                 if not s:
                     continue
-                country = (s.country or 'Unknown').strip()
-                if country not in country_breakdown:
-                    country_breakdown[country] = {'avgPaid': 0, 'totalStudents': 0, 'totalPaid': 0}
-                country_breakdown[country]['totalPaid'] += float(e.total_paid or 0)
-                country_breakdown[country]['totalStudents'] += 1
-            for c in country_breakdown:
-                if country_breakdown[c]['totalStudents'] > 0:
-                    country_breakdown[c]['avgPaid'] = round2(country_breakdown[c]['totalPaid'] / country_breakdown[c]['totalStudents'])
-                country_breakdown[c]['totalPaid'] = round2(country_breakdown[c]['totalPaid'])
+                prov = (s.provider or 'Unknown').strip()
+                crs = (s.course_name or 'Unknown').strip()
+                paid = float(e.total_paid or 0)
+                if prov not in hist_provider_summary:
+                    hist_provider_summary[prov] = {'total': 0, 'n': 0}
+                hist_provider_summary[prov]['total'] += paid
+                hist_provider_summary[prov]['n'] += 1
+                if crs not in hist_course_summary:
+                    hist_course_summary[crs] = {'total': 0, 'n': 0}
+                hist_course_summary[crs]['total'] += paid
+                hist_course_summary[crs]['n'] += 1
+
+            hist_prov_list = sorted([
+                {'provider': k, 'avgPaid': round2(v['total'] / v['n']), 'entries': v['n'], 'totalPaid': round2(v['total'])}
+                for k, v in hist_provider_summary.items() if v['n'] > 0
+            ], key=lambda x: -x['totalPaid'])
+
+            hist_course_list = sorted([
+                {'course': k, 'avgPaid': round2(v['total'] / v['n']), 'entries': v['n'], 'totalPaid': round2(v['total'])}
+                for k, v in hist_course_summary.items() if v['n'] > 0
+            ], key=lambda x: -x['totalPaid'])
 
             return Response({
                 'prediction': {
@@ -677,8 +777,11 @@ class SubAgentPredictionView(APIView):
                     'totalPredictedPaid': round2(total_predicted_paid),
                     'totalActualPaid': round2(total_actual_paid),
                     'terms': term_predictions,
-                    'byCountry': country_breakdown,
-                    'studentCount': len(all_target_students),
+                    'byProvider': provider_list,
+                    'byCourse': course_list,
+                    'histByProvider': hist_prov_list,
+                    'histByCourse': hist_course_list,
+                    'studentCount': len(current_year_students),
                 },
             })
         except Exception as e:
