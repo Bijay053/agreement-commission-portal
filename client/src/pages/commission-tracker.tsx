@@ -1118,48 +1118,35 @@ function DashboardView({ dashboard, year, intakeFilter, onIntakeChange, provider
         <Card className="border-dashed border-amber-300 bg-gradient-to-r from-amber-50/50 to-orange-50/50 dark:from-amber-950/20 dark:to-orange-950/20" data-testid="card-insights">
           <CardContent className="p-4">
             <div className="flex items-center gap-2 mb-3">
-              <Lightbulb className="h-4 w-4 text-amber-500" />
-              <h3 className="text-sm font-semibold">Commission Margin Insights - {year}</h3>
-              <span className="text-[10px] text-muted-foreground ml-auto">Commission vs Sub-Agent Analysis</span>
+              <Sparkles className="h-4 w-4 text-amber-500" />
+              <h3 className="text-sm font-semibold">AI Commission Intelligence - {year}</h3>
+              <span className="text-[10px] text-muted-foreground ml-auto">AI-Driven Decision Dashboard</span>
             </div>
 
-            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3 mb-4">
-              <div className="bg-white dark:bg-gray-900 rounded-lg p-2.5 border">
-                <p className="text-[10px] text-muted-foreground">Total Commission</p>
-                <p className="text-sm font-bold text-green-600" data-testid="text-insight-commission">
-                  ${Number(insights.totalCommission || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                </p>
-              </div>
-              <div className="bg-white dark:bg-gray-900 rounded-lg p-2.5 border">
-                <p className="text-[10px] text-muted-foreground">Sub-Agent Paid</p>
-                <p className="text-sm font-bold text-red-500" data-testid="text-insight-subpaid">
-                  ${Number(insights.totalSubAgentPaid || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                </p>
-              </div>
-              <div className="bg-white dark:bg-gray-900 rounded-lg p-2.5 border">
-                <p className="text-[10px] text-muted-foreground">Net Margin</p>
-                <p className={`text-sm font-bold ${(insights.totalMargin || 0) >= 0 ? "text-emerald-600" : "text-red-600"}`} data-testid="text-insight-margin">
-                  ${Number(insights.totalMargin || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                </p>
-              </div>
-              <div className="bg-white dark:bg-gray-900 rounded-lg p-2.5 border">
-                <p className="text-[10px] text-muted-foreground">Margin %</p>
-                <p className={`text-sm font-bold ${(insights.marginPct || 0) >= 50 ? "text-emerald-600" : (insights.marginPct || 0) >= 30 ? "text-amber-600" : "text-red-600"}`} data-testid="text-insight-margin-pct">
-                  {insights.marginPct || 0}%
-                </p>
-              </div>
-              <div className="bg-white dark:bg-gray-900 rounded-lg p-2.5 border">
-                <p className="text-[10px] text-muted-foreground">Total Students</p>
-                <p className="text-sm font-bold" data-testid="text-insight-students">
-                  {insights.totalStudents || 0}
-                </p>
-              </div>
-              <div className="bg-white dark:bg-gray-900 rounded-lg p-2.5 border">
-                <p className="text-[10px] text-muted-foreground">Avg / Student</p>
-                <p className="text-sm font-bold text-blue-600" data-testid="text-insight-avg">
-                  ${insights.totalStudents > 0 ? Number(insights.totalCommission / insights.totalStudents).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0.00'}
-                </p>
-              </div>
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-4">
+              {[
+                { label: 'Total Commission', value: insights.totalCommission, color: 'text-green-600', trend: insights.trendData?.commissionChangePct },
+                { label: 'Sub-Agent Paid', value: insights.totalSubAgentPaid, color: 'text-red-500' },
+                { label: 'Net Margin', value: insights.totalMargin, color: (insights.totalMargin || 0) >= 0 ? 'text-emerald-600' : 'text-red-600', trend: insights.trendData?.marginChangePct },
+                { label: 'Margin %', value: null, pct: insights.marginPct, color: (insights.marginPct || 0) >= 50 ? 'text-emerald-600' : (insights.marginPct || 0) >= 30 ? 'text-amber-600' : 'text-red-600' },
+                { label: 'Total Students', value: null, count: insights.totalStudents, trend: insights.trendData?.studentChange },
+                { label: 'Avg / Student', value: insights.avgPerStudent, color: 'text-blue-600' },
+              ].map((c, i) => (
+                <div key={i} className="bg-white dark:bg-gray-900 rounded-lg p-2.5 border">
+                  <p className="text-[10px] text-muted-foreground">{c.label}</p>
+                  <div className="flex items-center gap-1">
+                    <p className={`text-sm font-bold ${c.color || ''}`}>
+                      {c.pct !== undefined ? `${c.pct || 0}%` : c.count !== undefined ? c.count : `$${Number(c.value || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+                    </p>
+                    {c.trend !== undefined && c.trend !== null && c.trend !== 0 && (
+                      <span className={`text-[9px] font-medium flex items-center ${c.trend > 0 ? 'text-green-600' : 'text-red-500'}`}>
+                        {c.trend > 0 ? <ArrowUpRight className="h-3 w-3" /> : <ArrowDownRight className="h-3 w-3" />}
+                        {typeof c.trend === 'number' && c.label !== 'Total Students' ? `${Math.abs(c.trend)}%` : `${c.trend > 0 ? '+' : ''}${c.trend}`}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              ))}
             </div>
 
             {insights.overpaidStudents && insights.overpaidStudents.length > 0 && (
@@ -1169,16 +1156,14 @@ function DashboardView({ dashboard, year, intakeFilter, onIntakeChange, provider
                 </h4>
                 <div className="rounded-lg border border-red-200 dark:border-red-800 overflow-hidden">
                   <table className="w-full text-xs">
-                    <thead>
-                      <tr className="bg-red-50 dark:bg-red-950/30 text-left">
-                        <th className="px-3 py-1.5 font-medium text-muted-foreground">Agent</th>
-                        <th className="px-3 py-1.5 font-medium text-muted-foreground">Student</th>
-                        <th className="px-3 py-1.5 font-medium text-muted-foreground">Provider</th>
-                        <th className="px-3 py-1.5 font-medium text-muted-foreground text-right">Commission</th>
-                        <th className="px-3 py-1.5 font-medium text-muted-foreground text-right">Sub-Agent Paid</th>
-                        <th className="px-3 py-1.5 font-medium text-muted-foreground text-right">Overpaid</th>
-                      </tr>
-                    </thead>
+                    <thead><tr className="bg-red-50 dark:bg-red-950/30 text-left">
+                      <th className="px-3 py-1.5 font-medium text-muted-foreground">Agent</th>
+                      <th className="px-3 py-1.5 font-medium text-muted-foreground">Student</th>
+                      <th className="px-3 py-1.5 font-medium text-muted-foreground">Provider</th>
+                      <th className="px-3 py-1.5 font-medium text-muted-foreground text-right">Commission</th>
+                      <th className="px-3 py-1.5 font-medium text-muted-foreground text-right">Sub-Agent Paid</th>
+                      <th className="px-3 py-1.5 font-medium text-muted-foreground text-right">Overpaid</th>
+                    </tr></thead>
                     <tbody>
                       {insights.overpaidStudents.map((o: any, i: number) => (
                         <tr key={i} className="border-t border-red-100 dark:border-red-900" data-testid={`overpaid-row-${i}`}>
@@ -1192,15 +1177,9 @@ function DashboardView({ dashboard, year, intakeFilter, onIntakeChange, provider
                       ))}
                       <tr className="border-t-2 border-red-300 dark:border-red-700 bg-red-50 dark:bg-red-950/30 font-bold">
                         <td className="px-3 py-1.5" colSpan={3}>Total Overpayment</td>
-                        <td className="px-3 py-1.5 text-right font-mono text-green-600">
-                          ${insights.overpaidStudents.reduce((s: number, o: any) => s + Number(o.commission), 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                        </td>
-                        <td className="px-3 py-1.5 text-right font-mono text-red-500">
-                          ${insights.overpaidStudents.reduce((s: number, o: any) => s + Number(o.subAgentPaid), 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                        </td>
-                        <td className="px-3 py-1.5 text-right font-mono text-red-600">
-                          -${insights.overpaidStudents.reduce((s: number, o: any) => s + Number(o.loss), 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                        </td>
+                        <td className="px-3 py-1.5 text-right font-mono text-green-600">${insights.overpaidStudents.reduce((s: number, o: any) => s + Number(o.commission), 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                        <td className="px-3 py-1.5 text-right font-mono text-red-500">${insights.overpaidStudents.reduce((s: number, o: any) => s + Number(o.subAgentPaid), 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                        <td className="px-3 py-1.5 text-right font-mono text-red-600">-${insights.overpaidStudents.reduce((s: number, o: any) => s + Number(o.loss), 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                       </tr>
                     </tbody>
                   </table>
@@ -1210,9 +1189,7 @@ function DashboardView({ dashboard, year, intakeFilter, onIntakeChange, provider
 
             {insights.suggestions && insights.suggestions.length > 0 && (
               <div className="mb-4">
-                <h4 className="text-xs font-medium text-muted-foreground mb-2 flex items-center gap-1">
-                  <Target className="h-3 w-3" /> Actionable Suggestions
-                </h4>
+                <h4 className="text-xs font-medium text-muted-foreground mb-2 flex items-center gap-1"><Target className="h-3 w-3" /> AI Recommendations</h4>
                 <div className="space-y-1.5">
                   {insights.suggestions.map((s: any, i: number) => (
                     <div key={i} className={`text-xs rounded-lg px-3 py-2 border flex items-start gap-2 ${
@@ -1225,38 +1202,51 @@ function DashboardView({ dashboard, year, intakeFilter, onIntakeChange, provider
                        s.type === 'warning' ? <AlertTriangle className="h-3.5 w-3.5 text-amber-500 shrink-0 mt-0.5" /> :
                        s.type === 'success' ? <ArrowUpRight className="h-3.5 w-3.5 text-green-500 shrink-0 mt-0.5" /> :
                        <Lightbulb className="h-3.5 w-3.5 text-blue-500 shrink-0 mt-0.5" />}
-                      <div>
-                        <span className="font-semibold">{s.title}: </span>
-                        <span className="text-muted-foreground">{s.message}</span>
-                      </div>
+                      <div><span className="font-semibold">{s.title}: </span><span className="text-muted-foreground">{s.message}</span></div>
                     </div>
                   ))}
                 </div>
               </div>
             )}
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
               {insights.byProvider && insights.byProvider.length > 0 && (
                 <div>
-                  <h4 className="text-xs font-medium text-muted-foreground mb-1.5">Margin by Provider</h4>
-                  <div className="space-y-1 max-h-48 overflow-y-auto">
+                  <h4 className="text-xs font-medium text-muted-foreground mb-1.5 flex items-center gap-1"><BarChart3 className="h-3 w-3" /> Provider Intelligence</h4>
+                  <div className="space-y-1 max-h-64 overflow-y-auto">
                     {insights.byProvider.map((p: any) => (
                       <div key={p.provider} className="text-xs bg-white dark:bg-gray-900 rounded px-2.5 py-1.5 border" data-testid={`insight-provider-${p.provider}`}>
-                        <div className="flex items-center justify-between">
-                          <span className="truncate max-w-[160px] font-medium">{p.provider}</span>
-                          <div className="flex items-center gap-1.5">
-                            <span className={`font-mono font-bold ${p.margin >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
-                              ${Number(p.margin).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        <div className="flex items-center justify-between gap-1">
+                          <span className="truncate max-w-[120px] font-medium">{p.provider}</span>
+                          <div className="flex items-center gap-1 shrink-0">
+                            {p.trend !== null && p.trend !== undefined && (
+                              <span className={`text-[9px] ${p.trend > 0 ? 'text-green-600' : 'text-red-500'}`}>
+                                {p.trend > 0 ? '↑' : '↓'}{Math.abs(p.trend)}%
+                              </span>
+                            )}
+                            <span className={`font-mono font-bold text-[11px] ${p.margin >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                              ${Number(p.margin).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
                             </span>
-                            <Badge className={`text-[9px] px-1 py-0 ${p.marginPct >= 70 ? 'bg-green-100 text-green-700' : p.marginPct >= 40 ? 'bg-amber-100 text-amber-700' : 'bg-red-100 text-red-700'}`}>
+                            <Badge className={`text-[8px] px-1 py-0 ${p.marginPct >= 70 ? 'bg-green-100 text-green-700' : p.marginPct >= 40 ? 'bg-amber-100 text-amber-700' : 'bg-red-100 text-red-700'}`}>
                               {p.marginPct}%
                             </Badge>
+                            <Badge className={`text-[8px] px-1 py-0 ${p.opportunityScore >= 60 ? 'bg-emerald-100 text-emerald-700' : p.opportunityScore >= 30 ? 'bg-amber-100 text-amber-700' : 'bg-red-100 text-red-700'}`}>
+                              AI:{p.opportunityScore}
+                            </Badge>
+                            <Badge className={`text-[8px] px-1 py-0 ${
+                              p.aiAction === 'Scale' ? 'bg-blue-100 text-blue-700' :
+                              p.aiAction === 'Negotiate' ? 'bg-orange-100 text-orange-700' :
+                              p.aiAction === 'Re-engage' ? 'bg-purple-100 text-purple-700' :
+                              p.aiAction === 'High Risk' ? 'bg-red-100 text-red-700' :
+                              'bg-gray-100 text-gray-600'
+                            }`}>{p.aiAction}</Badge>
                           </div>
                         </div>
-                        <div className="flex gap-3 text-[10px] text-muted-foreground mt-0.5">
-                          <span>Comm: ${Number(p.commission).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                          <span className="text-red-500">Sub: ${Number(p.subAgentPaid).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                        <div className="flex gap-2 text-[10px] text-muted-foreground mt-0.5">
                           <span>{p.studentCount} students</span>
+                          <span>Avg: ${Number(p.avgCommPerStudent).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</span>
+                          <span>Comm: ${Number(p.commission).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</span>
+                          {p.subAgentPaid > 0 && <span className="text-red-500">Sub: ${Number(p.subAgentPaid).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</span>}
                         </div>
                       </div>
                     ))}
@@ -1266,30 +1256,43 @@ function DashboardView({ dashboard, year, intakeFilter, onIntakeChange, provider
 
               {insights.byAgent && insights.byAgent.length > 0 && (
                 <div>
-                  <h4 className="text-xs font-medium text-muted-foreground mb-1.5">Margin by Agent</h4>
-                  <div className="space-y-1 max-h-48 overflow-y-auto">
+                  <h4 className="text-xs font-medium text-muted-foreground mb-1.5 flex items-center gap-1"><Users className="h-3 w-3" /> Agent Intelligence</h4>
+                  <div className="space-y-1 max-h-64 overflow-y-auto">
                     {insights.byAgent.map((a: any) => (
                       <div key={a.agent} className="text-xs bg-white dark:bg-gray-900 rounded px-2.5 py-1.5 border" data-testid={`insight-agent-${a.agent}`}>
-                        <div className="flex items-center justify-between">
-                          <span className="truncate max-w-[160px] font-medium">{a.agent}</span>
-                          <div className="flex items-center gap-1.5">
-                            <span className={`font-mono font-bold ${a.margin >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
-                              ${Number(a.margin).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        <div className="flex items-center justify-between gap-1">
+                          <span className="truncate max-w-[120px] font-medium">{a.agent}</span>
+                          <div className="flex items-center gap-1 shrink-0">
+                            {a.trend !== null && a.trend !== undefined && (
+                              <span className={`text-[9px] ${a.trend > 0 ? 'text-green-600' : 'text-red-500'}`}>
+                                {a.trend > 0 ? '↑' : '↓'}{Math.abs(a.trend)}%
+                              </span>
+                            )}
+                            <span className={`font-mono font-bold text-[11px] ${a.margin >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                              ${Number(a.margin).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
                             </span>
                             {a.subAgentPaid > 0 && (
-                              <Badge className={`text-[9px] px-1 py-0 ${a.marginPct >= 70 ? 'bg-green-100 text-green-700' : a.marginPct >= 40 ? 'bg-amber-100 text-amber-700' : 'bg-red-100 text-red-700'}`}>
+                              <Badge className={`text-[8px] px-1 py-0 ${a.marginPct >= 70 ? 'bg-green-100 text-green-700' : a.marginPct >= 40 ? 'bg-amber-100 text-amber-700' : 'bg-red-100 text-red-700'}`}>
                                 {a.marginPct}%
                               </Badge>
                             )}
-                            {a.subAgentStudents === 0 && (
-                              <Badge className="text-[9px] px-1 py-0 bg-emerald-100 text-emerald-700">Direct</Badge>
-                            )}
+                            <Badge className={`text-[8px] px-1 py-0 ${a.opportunityScore >= 60 ? 'bg-emerald-100 text-emerald-700' : a.opportunityScore >= 30 ? 'bg-amber-100 text-amber-700' : 'bg-red-100 text-red-700'}`}>
+                              AI:{a.opportunityScore}
+                            </Badge>
+                            <Badge className={`text-[8px] px-1 py-0 ${
+                              a.aiAction === 'Scale' ? 'bg-blue-100 text-blue-700' :
+                              a.aiAction === 'Negotiate' ? 'bg-orange-100 text-orange-700' :
+                              a.aiAction === 'Re-engage' ? 'bg-purple-100 text-purple-700' :
+                              a.aiAction === 'High Risk' ? 'bg-red-100 text-red-700' :
+                              'bg-gray-100 text-gray-600'
+                            }`}>{a.aiAction}</Badge>
                           </div>
                         </div>
-                        <div className="flex gap-3 text-[10px] text-muted-foreground mt-0.5">
-                          <span>Comm: ${Number(a.commission).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                          {a.subAgentPaid > 0 && <span className="text-red-500">Sub: ${Number(a.subAgentPaid).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>}
+                        <div className="flex gap-2 text-[10px] text-muted-foreground mt-0.5">
                           <span>{a.studentCount} students</span>
+                          <span>Avg: ${Number(a.avgCommPerStudent).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</span>
+                          <span>Comm: ${Number(a.commission).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</span>
+                          {a.subAgentPaid > 0 && <span className="text-red-500">Sub: ${Number(a.subAgentPaid).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</span>}
                         </div>
                       </div>
                     ))}
@@ -1297,6 +1300,125 @@ function DashboardView({ dashboard, year, intakeFilter, onIntakeChange, provider
                 </div>
               )}
             </div>
+
+            {insights.agentProviderPairs && insights.agentProviderPairs.length > 0 && (
+              <div className="mb-4">
+                <h4 className="text-xs font-medium text-muted-foreground mb-1.5 flex items-center gap-1"><TrendingUp className="h-3 w-3" /> Agent–Provider Pair Optimization</h4>
+                <div className="rounded-lg border overflow-hidden">
+                  <table className="w-full text-xs">
+                    <thead><tr className="bg-muted/50 text-left">
+                      <th className="px-2.5 py-1.5 font-medium text-muted-foreground">Agent</th>
+                      <th className="px-2.5 py-1.5 font-medium text-muted-foreground">Provider</th>
+                      <th className="px-2.5 py-1.5 font-medium text-muted-foreground text-right">Students</th>
+                      <th className="px-2.5 py-1.5 font-medium text-muted-foreground text-right">Commission</th>
+                      <th className="px-2.5 py-1.5 font-medium text-muted-foreground text-right">Margin</th>
+                      <th className="px-2.5 py-1.5 font-medium text-muted-foreground text-right">Margin%</th>
+                      <th className="px-2.5 py-1.5 font-medium text-muted-foreground text-right">Avg/Student</th>
+                    </tr></thead>
+                    <tbody>
+                      {insights.agentProviderPairs.slice(0, 15).map((ap: any, i: number) => (
+                        <tr key={i} className="border-t" data-testid={`ap-pair-${i}`}>
+                          <td className="px-2.5 py-1.5 font-medium truncate max-w-[120px]">{ap.agent}</td>
+                          <td className="px-2.5 py-1.5 truncate max-w-[120px]">{ap.provider}</td>
+                          <td className="px-2.5 py-1.5 text-right">{ap.studentCount}</td>
+                          <td className="px-2.5 py-1.5 text-right font-mono">${Number(ap.commission).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</td>
+                          <td className={`px-2.5 py-1.5 text-right font-mono font-bold ${ap.margin >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>${Number(ap.margin).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</td>
+                          <td className="px-2.5 py-1.5 text-right">
+                            <Badge className={`text-[8px] px-1 py-0 ${ap.marginPct >= 70 ? 'bg-green-100 text-green-700' : ap.marginPct >= 40 ? 'bg-amber-100 text-amber-700' : 'bg-red-100 text-red-700'}`}>{ap.marginPct}%</Badge>
+                          </td>
+                          <td className="px-2.5 py-1.5 text-right font-mono">${Number(ap.avgCommPerStudent).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
+              {insights.leakageAlerts && insights.leakageAlerts.length > 0 && (
+                <div>
+                  <h4 className="text-xs font-medium text-red-600 mb-1.5 flex items-center gap-1"><Shield className="h-3 w-3" /> Margin Leakage Alerts</h4>
+                  <div className="space-y-1.5 max-h-56 overflow-y-auto">
+                    {insights.leakageAlerts.map((l: any, i: number) => (
+                      <div key={i} className="text-xs bg-red-50 dark:bg-red-950/20 rounded-lg px-3 py-2 border border-red-200 dark:border-red-800" data-testid={`leakage-${i}`}>
+                        <div className="flex items-center justify-between mb-0.5">
+                          <span className="font-semibold">{l.entity}</span>
+                          <Badge className="text-[8px] px-1 py-0 bg-red-100 text-red-700">-${Number(l.estimatedLoss).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</Badge>
+                        </div>
+                        <p className="text-muted-foreground">{l.issue}</p>
+                        <p className="text-red-700 dark:text-red-400 mt-0.5 font-medium">{l.action}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {insights.negotiationOpps && insights.negotiationOpps.length > 0 && (
+                <div>
+                  <h4 className="text-xs font-medium text-orange-600 mb-1.5 flex items-center gap-1"><DollarSign className="h-3 w-3" /> Negotiation Opportunities</h4>
+                  <div className="space-y-1.5 max-h-56 overflow-y-auto">
+                    {insights.negotiationOpps.map((n: any, i: number) => (
+                      <div key={i} className="text-xs bg-orange-50 dark:bg-orange-950/20 rounded-lg px-3 py-2 border border-orange-200 dark:border-orange-800" data-testid={`negotiation-${i}`}>
+                        <div className="flex items-center justify-between mb-0.5">
+                          <span className="font-semibold">{n.provider}</span>
+                          <span className="text-[10px] text-muted-foreground">{n.studentCount} students</span>
+                        </div>
+                        <p className="text-muted-foreground">Current avg: ${Number(n.currentAvg).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}/student vs benchmark ${Number(n.benchmarkAvg).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                        <div className="flex gap-3 mt-1">
+                          <span className="text-orange-700 dark:text-orange-400 font-medium">+5% rate → +${Number(n.uplift5pct).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</span>
+                          <span className="text-orange-700 dark:text-orange-400 font-medium">+10% rate → +${Number(n.uplift10pct).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {insights.reallocationSuggestions && insights.reallocationSuggestions.length > 0 && (
+              <div className="mb-4">
+                <h4 className="text-xs font-medium text-purple-600 mb-1.5 flex items-center gap-1"><ExternalLink className="h-3 w-3" /> Agent Reallocation Suggestions</h4>
+                <div className="space-y-1.5">
+                  {insights.reallocationSuggestions.map((r: any, i: number) => (
+                    <div key={i} className="text-xs bg-purple-50 dark:bg-purple-950/20 rounded-lg px-3 py-2 border border-purple-200 dark:border-purple-800" data-testid={`reallocation-${i}`}>
+                      <div className="flex items-center gap-2">
+                        <span className="font-semibold">{r.agent}</span>
+                        <span className="text-muted-foreground">{r.fromProvider} ({r.fromMarginPct}%)</span>
+                        <span className="text-purple-600">→</span>
+                        <span className="font-medium text-purple-700 dark:text-purple-400">{r.toProvider} ({r.toMarginPct}%)</span>
+                        <Badge className="text-[8px] px-1 py-0 bg-purple-100 text-purple-700 ml-auto">+${Number(r.potentialGain).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</Badge>
+                      </div>
+                      <p className="text-muted-foreground mt-0.5">Shifting {r.studentsToShift} students could improve margin by ${Number(r.potentialGain).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {insights.intakeIntelligence && insights.intakeIntelligence.length > 0 && (
+              <div className="mb-4">
+                <h4 className="text-xs font-medium text-muted-foreground mb-1.5 flex items-center gap-1"><Clock className="h-3 w-3" /> Intake Intelligence</h4>
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
+                  {insights.intakeIntelligence.map((t: any) => (
+                    <div key={t.term} className="text-xs bg-white dark:bg-gray-900 rounded-lg p-2.5 border" data-testid={`intake-${t.term}`}>
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="font-semibold">{t.term}</span>
+                        <Badge className={`text-[8px] px-1 py-0 ${t.marginPct >= 60 ? 'bg-green-100 text-green-700' : t.marginPct >= 30 ? 'bg-amber-100 text-amber-700' : t.studentCount === 0 ? 'bg-gray-100 text-gray-500' : 'bg-red-100 text-red-700'}`}>
+                          {t.studentCount === 0 ? 'Empty' : `${t.marginPct}%`}
+                        </Badge>
+                      </div>
+                      <div className="space-y-0.5 text-[10px] text-muted-foreground">
+                        <div className="flex justify-between"><span>Students</span><span className="font-medium">{t.studentCount}</span></div>
+                        <div className="flex justify-between"><span>Commission</span><span className="font-medium font-mono">${Number(t.commission).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</span></div>
+                        <div className="flex justify-between"><span>Margin</span><span className={`font-medium font-mono ${t.margin >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>${Number(t.margin).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</span></div>
+                        {t.studentCount > 0 && <div className="flex justify-between"><span>Avg/Student</span><span className="font-medium font-mono">${Number(t.avgPerStudent).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</span></div>}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </CardContent>
         </Card>
       )}
