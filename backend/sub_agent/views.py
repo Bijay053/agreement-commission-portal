@@ -571,7 +571,9 @@ class SubAgentPredictionView(APIView):
             target_year = int(year)
             all_terms = list(CommissionTerm.objects.all().order_by('year', 'sort_order'))
             target_terms = [t for t in all_terms if t.year == target_year]
-            past_years = sorted(set(t.year for t in all_terms if t.year < target_year))
+            all_past_years = sorted(set(t.year for t in all_terms if t.year < target_year))
+            past_years = all_past_years[-5:] if len(all_past_years) > 5 else all_past_years
+            all_terms = [t for t in all_terms if t.year in past_years or t.year == target_year]
 
             if not past_years:
                 return Response({'prediction': None, 'message': 'No historical data available'})
