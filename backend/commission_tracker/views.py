@@ -1054,7 +1054,7 @@ class CommissionInsightsView(APIView):
                     continue
                 prov = (s.provider or 'Unknown').strip()
                 agent = (s.agent_name or 'Unknown').strip()
-                comm = float(e.commission_amount or 0)
+                comm = float(e.commission_amount or 0) + float(e.bonus or 0)
                 total_with_gst = float(e.total_amount or 0)
 
                 if prov not in provider_data:
@@ -1138,7 +1138,7 @@ class CommissionInsightsView(APIView):
                 if prev_excluded:
                     prev_entries_qs = prev_entries_qs.exclude(commission_student_id__in=prev_excluded)
                 prev_entries_list = list(prev_entries_qs)
-                prev_total = sum(float(e.commission_amount or 0) for e in prev_entries_list)
+                prev_total = sum(float(e.commission_amount or 0) + float(e.bonus or 0) for e in prev_entries_list)
                 prev_student_ids = set(e.commission_student_id for e in prev_entries_list)
                 prev_students_count = len(prev_student_ids)
                 for e in prev_entries_list:
@@ -1148,7 +1148,7 @@ class CommissionInsightsView(APIView):
                     prov = (s.provider or 'Unknown').strip()
                     if prov not in prev_provider_data:
                         prev_provider_data[prov] = {'commission': 0, 'students': set()}
-                    prev_provider_data[prov]['commission'] += float(e.commission_amount or 0)
+                    prev_provider_data[prov]['commission'] += float(e.commission_amount or 0) + float(e.bonus or 0)
                     prev_provider_data[prov]['students'].add(e.commission_student_id)
 
             if prev_total > 0:
