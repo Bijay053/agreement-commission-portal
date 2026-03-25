@@ -902,32 +902,27 @@ class DashboardYearView(APIView):
 
             if has_financials:
                 provider_financials = {}
+                student_provider_map = {s.id: s.provider for s in students}
                 for e in entries:
-                    try:
-                        student = CommissionStudent.objects.get(id=e.commission_student_id)
-                        prov = student.provider
-                    except CommissionStudent.DoesNotExist:
-                        prov = 'Unknown'
+                    prov = student_provider_map.get(e.commission_student_id, 'Unknown')
                     if prov not in provider_financials:
                         provider_financials[prov] = {'totalCommission': 0, 'totalBonus': 0, 'totalReceived': 0, 'pending': 0}
                     provider_financials[prov]['totalCommission'] += float(e.commission_amount or 0)
                     provider_financials[prov]['totalBonus'] += float(e.bonus or 0)
+                    if (e.payment_status or '').lower() == 'paid':
+                        provider_financials[prov]['totalReceived'] += float(e.total_amount or 0)
 
                 for p in by_provider:
                     fin = provider_financials.get(p['provider'], {})
                     p['totalCommission'] = round2(fin.get('totalCommission', 0))
                     p['totalBonus'] = round2(fin.get('totalBonus', 0))
-                    try:
-                        prov_students = students.filter(provider=p['provider'])
-                        p['totalReceived'] = round2(sum(float(s.total_received or 0) for s in prov_students))
-                        p['pending'] = round2(p['totalCommission'] - p['totalReceived'])
-                    except Exception:
-                        p['totalReceived'] = 0
-                        p['pending'] = 0
+                    p['totalReceived'] = round2(fin.get('totalReceived', 0))
+                    p['pending'] = round2(p['totalCommission'] - p['totalReceived'])
 
                 by_provider.sort(key=lambda x: -x.get('totalCommission', 0))
 
-            total_received = float(students.aggregate(total=Sum('total_received'))['total'] or 0)
+            paid_entries = [e for e in entries if (e.payment_status or '').lower() == 'paid']
+            total_received = sum(float(e.total_amount or 0) for e in paid_entries)
 
             result = {
                 'year': int(year),
@@ -1116,38 +1111,44 @@ class PredictionView(APIView):
                 })
 
             country_breakdown = {}
-            for e in past_entries:
-                s = students.get(e.commission_student_id)
-                if not s:
-                    continue
-                country = (s.country or 'Unknown').strip()
-                if country not in country_breakdown:
-                    country_breakdown[country] = {'avgCommission': 0, 'totalStudents': 0, 'totalCommission': 0}
-                country_breakdown[country]['totalCommission'] += float(e.commission_amount or 0)
-                country_breakdown[country]['totalStudents'] += 1
-            for c in country_breakdown:
-                if country_breakdown[c]['totalStudents'] > 0:
-                    country_breakdown[c]['avgCommission'] = round2(
-                        country_breakdown[c]['totalCommission'] / country_breakdown[c]['totalStudents']
-                    )
-                country_breakdown[c]['totalCommission'] = round2(country_breakdown[c]['totalCommission'])
-
+            provider_breakdown = {}
+            course_breakdown = {}
             level_breakdown = {}
             for e in past_entries:
                 s = students.get(e.commission_student_id)
                 if not s:
                     continue
+                country = (s.country or 'Unknown').strip()
+                provider = (s.provider or 'Unknown').strip()
+                course = (s.course_name or 'Unknown').strip()
                 level = (s.course_level or 'Unknown').strip()
+                comm = float(e.commission_amount or 0)
+
+                if country not in country_breakdown:
+                    country_breakdown[country] = {'avgCommission': 0, 'totalStudents': 0, 'totalCommission': 0}
+                country_breakdown[country]['totalCommission'] += comm
+                country_breakdown[country]['totalStudents'] += 1
+
+                if provider not in provider_breakdown:
+                    provider_breakdown[provider] = {'avgCommission': 0, 'totalStudents': 0, 'totalCommission': 0}
+                provider_breakdown[provider]['totalCommission'] += comm
+                provider_breakdown[provider]['totalStudents'] += 1
+
+                if course not in course_breakdown:
+                    course_breakdown[course] = {'avgCommission': 0, 'totalStudents': 0, 'totalCommission': 0}
+                course_breakdown[course]['totalCommission'] += comm
+                course_breakdown[course]['totalStudents'] += 1
+
                 if level not in level_breakdown:
                     level_breakdown[level] = {'avgCommission': 0, 'totalStudents': 0, 'totalCommission': 0}
-                level_breakdown[level]['totalCommission'] += float(e.commission_amount or 0)
+                level_breakdown[level]['totalCommission'] += comm
                 level_breakdown[level]['totalStudents'] += 1
-            for lv in level_breakdown:
-                if level_breakdown[lv]['totalStudents'] > 0:
-                    level_breakdown[lv]['avgCommission'] = round2(
-                        level_breakdown[lv]['totalCommission'] / level_breakdown[lv]['totalStudents']
-                    )
-                level_breakdown[lv]['totalCommission'] = round2(level_breakdown[lv]['totalCommission'])
+
+            for bd in [country_breakdown, provider_breakdown, course_breakdown, level_breakdown]:
+                for k in bd:
+                    if bd[k]['totalStudents'] > 0:
+                        bd[k]['avgCommission'] = round2(bd[k]['totalCommission'] / bd[k]['totalStudents'])
+                    bd[k]['totalCommission'] = round2(bd[k]['totalCommission'])
 
             return Response({
                 'prediction': {
@@ -1160,6 +1161,8 @@ class PredictionView(APIView):
                     'totalActualBonus': round2(total_actual_bonus),
                     'terms': term_predictions,
                     'byCountry': country_breakdown,
+                    'byProvider': provider_breakdown,
+                    'byCourse': course_breakdown,
                     'byStudyLevel': level_breakdown,
                     'studentCount': len(all_target_students),
                 },

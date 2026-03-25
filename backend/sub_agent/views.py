@@ -98,13 +98,12 @@ class SubAgentDashboardView(APIView):
             user_id = request.session.get('userId')
             masters = filter_sub_agent_by_user(masters, user_id)
 
+            year_term_entries = []
             if year:
                 terms = CommissionTerm.objects.filter(year=int(year))
                 term_names = [t.term_name for t in terms]
-                year_student_ids = set(
-                    SubAgentTermEntry.objects.filter(term_name__in=term_names)
-                    .values_list('commission_student_id', flat=True).distinct()
-                )
+                year_term_entries = list(SubAgentTermEntry.objects.filter(term_name__in=term_names))
+                year_student_ids = set(e.commission_student_id for e in year_term_entries)
                 masters = masters.filter(commission_student_id__in=year_student_ids)
 
             student_ids = [m.commission_student_id for m in masters]
@@ -114,19 +113,41 @@ class SubAgentDashboardView(APIView):
                 filtered_ids = {sid for sid, s in students.items() if s.start_intake and intake_filter.lower() in s.start_intake.lower()}
                 masters = [m for m in masters if m.commission_student_id in filtered_ids]
                 students = {sid: s for sid, s in students.items() if sid in filtered_ids}
+                if year_term_entries:
+                    year_term_entries = [e for e in year_term_entries if e.commission_student_id in filtered_ids]
 
-            if isinstance(masters, list):
-                total = len(masters)
-                total_received = sum(float(m.sic_received_total or 0) for m in masters)
-                total_paid = sum(float(m.sub_agent_paid_total or 0) for m in masters)
-                total_margin = sum(float(m.margin or 0) for m in masters)
-                overpay_count = sum(1 for m in masters if m.overpay_warning)
+            if year and year_term_entries:
+                master_ids = set(m.commission_student_id for m in (masters if isinstance(masters, list) else masters.all()))
+                relevant_entries = [e for e in year_term_entries if e.commission_student_id in master_ids]
+                total = len(master_ids)
+                total_paid = sum(float(e.total_paid or 0) for e in relevant_entries)
+                main_comm_entries = list(CommissionEntry.objects.filter(
+                    term_name__in=term_names,
+                    commission_student_id__in=master_ids
+                ))
+                total_received_from_main = sum(float(e.total_amount or 0) for e in main_comm_entries if (e.payment_status or '').lower() == 'paid')
+                total_main_commission = sum(float(e.commission_amount or 0) for e in main_comm_entries)
+                total_margin = round2(total_received_from_main - total_paid)
+                overpay_count = 0
+                for sid in master_ids:
+                    sid_main = sum(float(e.total_amount or 0) for e in main_comm_entries if e.commission_student_id == sid and (e.payment_status or '').lower() == 'paid')
+                    sid_paid = sum(float(e.total_paid or 0) for e in relevant_entries if e.commission_student_id == sid)
+                    if sid_paid > sid_main and sid_main > 0:
+                        overpay_count += 1
+                total_received = total_received_from_main
             else:
-                total = masters.count()
-                total_received = float(masters.aggregate(t=Sum('sic_received_total'))['t'] or 0)
-                total_paid = float(masters.aggregate(t=Sum('sub_agent_paid_total'))['t'] or 0)
-                total_margin = float(masters.aggregate(t=Sum('margin'))['t'] or 0)
-                overpay_count = masters.filter(overpay_warning__isnull=False).exclude(overpay_warning='').count()
+                if isinstance(masters, list):
+                    total = len(masters)
+                    total_received = sum(float(m.sic_received_total or 0) for m in masters)
+                    total_paid = sum(float(m.sub_agent_paid_total or 0) for m in masters)
+                    total_margin = sum(float(m.margin or 0) for m in masters)
+                    overpay_count = sum(1 for m in masters if m.overpay_warning)
+                else:
+                    total = masters.count()
+                    total_received = float(masters.aggregate(t=Sum('sic_received_total'))['t'] or 0)
+                    total_paid = float(masters.aggregate(t=Sum('sub_agent_paid_total'))['t'] or 0)
+                    total_margin = float(masters.aggregate(t=Sum('margin'))['t'] or 0)
+                    overpay_count = masters.filter(overpay_warning__isnull=False).exclude(overpay_warning='').count()
 
             agent_data = {}
             status_counts = {}
@@ -137,7 +158,11 @@ class SubAgentDashboardView(APIView):
                 if agent not in agent_data:
                     agent_data[agent] = {'count': 0, 'totalPaid': 0}
                 agent_data[agent]['count'] += 1
-                agent_data[agent]['totalPaid'] += float(m.sub_agent_paid_total or 0)
+                if year and year_term_entries:
+                    sid_paid = sum(float(e.total_paid or 0) for e in year_term_entries if e.commission_student_id == m.commission_student_id)
+                    agent_data[agent]['totalPaid'] += sid_paid
+                else:
+                    agent_data[agent]['totalPaid'] += float(m.sub_agent_paid_total or 0)
                 status_counts[status] = status_counts.get(status, 0) + 1
 
             by_agent = sorted([
