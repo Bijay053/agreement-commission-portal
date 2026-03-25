@@ -461,25 +461,102 @@ class SubAgentTermEntriesView(APIView):
     @require_permission("sub_agent_commission.view")
     def get(self, request, term_name):
         try:
-            entries = SubAgentTermEntry.objects.filter(term_name=term_name)
+            import re
+
+            def _parse_intake(val):
+                if not val or not val.strip():
+                    return None
+                cleaned = re.sub(r'[-_]', ' ', val.strip())
+                cleaned = re.sub(r'\s+', ' ', cleaned)
+                m = re.match(r'^[Tt](\d)\s*(\d{4})$', cleaned)
+                if m:
+                    return {'term': int(m.group(1)), 'year': int(m.group(2))}
+                m2 = re.match(r'^(\d{4})\s*[Tt](\d)$', cleaned)
+                if m2:
+                    return {'term': int(m2.group(2)), 'year': int(m2.group(1))}
+                return None
 
             term_obj = CommissionTerm.objects.filter(term_name=term_name).first()
+            page_intake = None
+            page_sort_key = 0
+            excluded_ids = set()
             if term_obj:
+                page_intake = {'term': term_obj.term_number, 'year': term_obj.year}
+                page_sort_key = term_obj.year * 10 + term_obj.term_number
                 excluded_ids = get_excluded_student_ids_for_year(term_obj.year)
-                if excluded_ids:
-                    entries = entries.exclude(commission_student_id__in=excluded_ids)
 
-            student_ids = [e.commission_student_id for e in entries]
-            students = {s.id: s for s in CommissionStudent.objects.filter(id__in=student_ids)}
+            entries_by_sid = {}
+            for e in SubAgentTermEntry.objects.filter(term_name=term_name):
+                entries_by_sid[e.commission_student_id] = e
+
+            all_master = SubAgentEntry.objects.all()
+            master_student_ids = set(m.commission_student_id for m in all_master)
+            if excluded_ids:
+                master_student_ids -= excluded_ids
+
+            students = {s.id: s for s in CommissionStudent.objects.filter(id__in=master_student_ids)}
+
+            all_sub_entries = SubAgentTermEntry.objects.filter(commission_student_id__in=master_student_ids)
+            entries_by_student = {}
+            for e in all_sub_entries:
+                entries_by_student.setdefault(e.commission_student_id, []).append(e)
+
+            all_terms = list(CommissionTerm.objects.all())
+            term_map = {t.term_name: t for t in all_terms}
+            FINAL = {'withdrawn', 'complete'}
+
             result = []
-            for e in entries:
-                d = term_entry_to_dict(e)
-                s = students.get(e.commission_student_id)
+            for sid in master_student_ids:
+                s = students.get(sid)
+                if not s:
+                    continue
+
+                student_start = _parse_intake(s.start_intake)
+                if student_start and page_intake:
+                    start_key = student_start['year'] * 10 + student_start['term']
+                    if page_sort_key < start_key:
+                        continue
+
+                current_status = (s.status or '').lower()
+                if current_status not in FINAL:
+                    pass
+                else:
+                    student_entries = entries_by_student.get(sid, [])
+                    earliest_final_key = float('inf')
+                    for se in student_entries:
+                        se_status = (se.student_status or '').lower()
+                        if se_status in FINAL:
+                            se_term = term_map.get(se.term_name)
+                            if se_term:
+                                key = se_term.year * 10 + se_term.term_number
+                                if key < earliest_final_key:
+                                    earliest_final_key = key
+                    if earliest_final_key < float('inf') and page_sort_key > earliest_final_key:
+                        continue
+
+                entry = entries_by_sid.get(sid)
+                if entry:
+                    d = term_entry_to_dict(entry)
+                else:
+                    d = {
+                        'id': 0, 'commissionStudentId': sid,
+                        'termName': term_name, 'academicYear': '',
+                        'feeNet': '0', 'mainCommission': '0',
+                        'commissionRateAuto': '0', 'commissionRateOverridePct': None,
+                        'commissionRateUsedPct': '0', 'subAgentCommission': '0',
+                        'bonusPaid': '0', 'gstPct': '0', 'gstAmount': '0',
+                        'totalPaid': '0', 'paymentStatus': 'Pending',
+                        'studentStatus': s.status or 'Under Enquiry',
+                        'rateOverrideWarning': None, 'exceedsMainWarning': None,
+                        'notes': None, 'createdAt': None, 'updatedAt': None,
+                    }
                 d['student'] = student_to_dict(s)
                 result.append(d)
             result.sort(key=_stable_sort_key, reverse=True)
             return Response(result)
         except Exception as e:
+            import traceback
+            traceback.print_exc()
             return Response({'message': str(e)}, status=500)
 
 

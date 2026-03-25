@@ -612,7 +612,7 @@ export default function SubAgentCommissionPage() {
               termName={activeTab}
               canEdit={canEdit}
               providerAgreementsMap={providerAgreementsMap}
-              onUpdate={(id, data) => updateTermEntryMutation.mutate({ termName: activeTab, id, data })}
+              onUpdate={(id, data, commissionStudentId) => updateTermEntryMutation.mutate({ termName: activeTab, id, data: { ...data, commissionStudentId } })}
             />
           )}
         </div>
@@ -1057,7 +1057,7 @@ function TermTable({ rows, termName, canEdit, onUpdate, providerAgreementsMap }:
   rows: TermRow[];
   termName: string;
   canEdit: boolean;
-  onUpdate: (id: number, data: any) => void;
+  onUpdate: (id: number, data: any, commissionStudentId?: number) => void;
   providerAgreementsMap: Record<string, number>;
 }) {
   if (rows.length === 0) {
@@ -1116,7 +1116,7 @@ function TermTable({ rows, termName, canEdit, onUpdate, providerAgreementsMap }:
             const payHighlight = PAYMENT_STATUS_BG[payStatus] || PAYMENT_STATUS_BG["Invoice Waiting"];
 
             return (
-              <tr key={row.id} style={{ backgroundColor: bgColor }} data-testid={`row-term-${row.id}`}>
+              <tr key={row.id || `placeholder-${row.commissionStudentId}`} style={{ backgroundColor: bgColor }} data-testid={`row-term-${row.id || row.commissionStudentId}`}>
                 <td className="px-2 py-1 border border-gray-200 text-xs text-center">{idx + 1}</td>
                 <td className="px-2 py-1 border border-gray-200 text-xs">{row.student.agentsicId || "-"}</td>
                 <td className="px-2 py-1 border border-gray-200 text-xs">{row.student.agentName}</td>
@@ -1127,7 +1127,7 @@ function TermTable({ rows, termName, canEdit, onUpdate, providerAgreementsMap }:
                 <td className="px-2 py-1 border border-gray-200 text-xs">{row.student.courseName || "-"}</td>
                 <EditableCell
                   value={row.academicYear || "Year 1"}
-                  onSave={(v) => onUpdate(row.id, { academicYear: v })}
+                  onSave={(v) => onUpdate(row.id, { academicYear: v }, row.commissionStudentId)}
                   type="select"
                   options={ACADEMIC_YEARS}
                   readOnly={!canEdit}
@@ -1136,7 +1136,7 @@ function TermTable({ rows, termName, canEdit, onUpdate, providerAgreementsMap }:
                 />
                 <EditableCell
                   value={String(Number(row.feeNet) || 0)}
-                  onSave={(v) => onUpdate(row.id, { feeNet: v })}
+                  onSave={(v) => onUpdate(row.id, { feeNet: v }, row.commissionStudentId)}
                   type="number"
                   readOnly={!canEdit}
                   width="80px"
@@ -1147,7 +1147,7 @@ function TermTable({ rows, termName, canEdit, onUpdate, providerAgreementsMap }:
                 <td className="px-2 py-1 border border-gray-200 text-xs text-right font-mono">{fmt(row.commissionRateAuto)}</td>
                 <EditableCell
                   value={row.commissionRateOverridePct ? String(Number(row.commissionRateOverridePct)) : ""}
-                  onSave={(v) => onUpdate(row.id, { commissionRateOverridePct: v || null })}
+                  onSave={(v) => onUpdate(row.id, { commissionRateOverridePct: v || null }, row.commissionStudentId)}
                   type="number"
                   readOnly={!canEdit}
                   width="70px"
@@ -1158,7 +1158,7 @@ function TermTable({ rows, termName, canEdit, onUpdate, providerAgreementsMap }:
                 <td className="px-2 py-1 border border-gray-200 text-xs text-right font-mono">{fmt(row.subAgentCommission)}</td>
                 <EditableCell
                   value={String(Number(row.bonusPaid) || 0)}
-                  onSave={(v) => onUpdate(row.id, { bonusPaid: v })}
+                  onSave={(v) => onUpdate(row.id, { bonusPaid: v }, row.commissionStudentId)}
                   type="number"
                   readOnly={!canEdit}
                   width="70px"
@@ -1167,7 +1167,7 @@ function TermTable({ rows, termName, canEdit, onUpdate, providerAgreementsMap }:
                 />
                 <EditableCell
                   value={String(Number(row.gstPct) || 0)}
-                  onSave={(v) => onUpdate(row.id, { gstPct: v })}
+                  onSave={(v) => onUpdate(row.id, { gstPct: v }, row.commissionStudentId)}
                   type="number"
                   readOnly={!canEdit}
                   width="50px"
@@ -1178,7 +1178,7 @@ function TermTable({ rows, termName, canEdit, onUpdate, providerAgreementsMap }:
                 <td className="px-2 py-1 border border-gray-200 text-xs text-right font-mono font-semibold">{fmt(row.totalPaid)}</td>
                 <EditableCell
                   value={payStatus}
-                  onSave={(v) => onUpdate(row.id, { paymentStatus: v })}
+                  onSave={(v) => onUpdate(row.id, { paymentStatus: v }, row.commissionStudentId)}
                   type="select"
                   options={PAYMENT_STATUSES}
                   readOnly={!canEdit}
