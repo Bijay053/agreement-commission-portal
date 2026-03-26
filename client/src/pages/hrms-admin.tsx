@@ -1733,7 +1733,7 @@ function RemoteCheckInPermissionsTab() {
                 <SelectTrigger data-testid="select-employee"><SelectValue placeholder="Select employee" /></SelectTrigger>
                 <SelectContent>
                   {availableEmployees.map((e: any) => (
-                    <SelectItem key={e.id} value={e.id}>{e.full_name}</SelectItem>
+                    <SelectItem key={e.id} value={e.id}>{e.fullName || e.full_name || e.email}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
