@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
@@ -37,6 +36,8 @@ interface GovtTaxData {
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
+const fmt = (v: number) => v > 0 ? v.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "—";
+
 export function GovernmentRecordsTab() {
   const [filterYear, setFilterYear] = useState(String(new Date().getFullYear()));
 
@@ -55,12 +56,14 @@ export function GovernmentRecordsTab() {
   const monthly = data?.monthly || [];
   const hasData = monthly.some(m => m.employee_count > 0);
 
+  const totalGross = monthly.reduce((s, m) => s + m.total_gross, 0);
+
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-lg font-semibold">Government Tax & CIT Records</h2>
-          <p className="text-sm text-muted-foreground">Monthly breakdown of CIT, SSF, and income tax payable to government from processed payroll.</p>
+          <h2 className="text-lg font-semibold">Government Records</h2>
+          <p className="text-sm text-muted-foreground">Monthly breakdown of Income Tax, CIT, and SSF payable to government from processed payroll.</p>
         </div>
         <Select value={filterYear} onValueChange={setFilterYear}>
           <SelectTrigger className="w-24"><SelectValue /></SelectTrigger>
@@ -78,7 +81,7 @@ export function GovernmentRecordsTab() {
                 <Shield className="h-4 w-4 text-blue-500" />
                 <p className="text-xs text-muted-foreground">Total CIT</p>
               </div>
-              <p className="text-lg font-bold font-mono" data-testid="text-total-cit">{ totals.total_cit.toLocaleString()}</p>
+              <p className="text-lg font-bold font-mono" data-testid="text-total-cit">{totals.total_cit.toLocaleString()}</p>
             </CardContent>
           </Card>
           <Card>
@@ -87,7 +90,7 @@ export function GovernmentRecordsTab() {
                 <Wallet className="h-4 w-4 text-green-500" />
                 <p className="text-xs text-muted-foreground">SSF (Employee)</p>
               </div>
-              <p className="text-lg font-bold font-mono" data-testid="text-total-ssf-emp">{ totals.total_ssf_employee.toLocaleString()}</p>
+              <p className="text-lg font-bold font-mono" data-testid="text-total-ssf-emp">{totals.total_ssf_employee.toLocaleString()}</p>
             </CardContent>
           </Card>
           <Card>
@@ -96,7 +99,7 @@ export function GovernmentRecordsTab() {
                 <Wallet className="h-4 w-4 text-purple-500" />
                 <p className="text-xs text-muted-foreground">SSF (Employer)</p>
               </div>
-              <p className="text-lg font-bold font-mono" data-testid="text-total-ssf-empr">{ totals.total_ssf_employer.toLocaleString()}</p>
+              <p className="text-lg font-bold font-mono" data-testid="text-total-ssf-empr">{totals.total_ssf_employer.toLocaleString()}</p>
             </CardContent>
           </Card>
           <Card>
@@ -105,7 +108,7 @@ export function GovernmentRecordsTab() {
                 <TrendingUp className="h-4 w-4 text-orange-500" />
                 <p className="text-xs text-muted-foreground">Income Tax</p>
               </div>
-              <p className="text-lg font-bold font-mono" data-testid="text-total-tax">{ totals.total_tax.toLocaleString()}</p>
+              <p className="text-lg font-bold font-mono" data-testid="text-total-tax">{totals.total_tax.toLocaleString()}</p>
             </CardContent>
           </Card>
           <Card className="border-primary/30 bg-primary/5">
@@ -114,68 +117,110 @@ export function GovernmentRecordsTab() {
                 <Landmark className="h-4 w-4 text-primary" />
                 <p className="text-xs text-muted-foreground font-medium">Total Payable to Govt</p>
               </div>
-              <p className="text-xl font-bold font-mono text-primary" data-testid="text-total-govt">{ totals.total_payable_to_govt.toLocaleString()}</p>
+              <p className="text-xl font-bold font-mono text-primary" data-testid="text-total-govt">{totals.total_payable_to_govt.toLocaleString()}</p>
             </CardContent>
           </Card>
         </div>
       )}
 
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>Month</TableHead>
-            <TableHead className="text-center">Employees</TableHead>
-            <TableHead className="text-right">Gross Salary</TableHead>
-            <TableHead className="text-right">CIT</TableHead>
-            <TableHead className="text-right">SSF (Employee)</TableHead>
-            <TableHead className="text-right">SSF (Employer)</TableHead>
-            <TableHead className="text-right">Income Tax</TableHead>
-            <TableHead className="text-right font-semibold">Total to Govt</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {monthly.map(m => (
-            <TableRow key={m.month} className={m.employee_count === 0 ? "opacity-40" : ""} data-testid={`row-govt-${m.month}`}>
-              <TableCell className="font-medium">{MONTHS[m.month - 1]} {m.year}</TableCell>
-              <TableCell className="text-center">{m.employee_count || "—"}</TableCell>
-              <TableCell className="text-right font-mono text-sm">{m.total_gross > 0 ? `${m.total_gross.toLocaleString()}` : "—"}</TableCell>
-              <TableCell className="text-right font-mono text-sm">{m.total_cit > 0 ? `${m.total_cit.toLocaleString()}` : "—"}</TableCell>
-              <TableCell className="text-right font-mono text-sm">{m.total_ssf_employee > 0 ? `${m.total_ssf_employee.toLocaleString()}` : "—"}</TableCell>
-              <TableCell className="text-right font-mono text-sm">{m.total_ssf_employer > 0 ? `${m.total_ssf_employer.toLocaleString()}` : "—"}</TableCell>
-              <TableCell className="text-right font-mono text-sm">{m.total_tax > 0 ? `${m.total_tax.toLocaleString()}` : "—"}</TableCell>
-              <TableCell className="text-right font-mono text-sm font-semibold">
-                {m.total_payable_to_govt > 0 ? (
-                  <span className="text-primary">{ m.total_payable_to_govt.toLocaleString()}</span>
-                ) : "—"}
-              </TableCell>
-            </TableRow>
-          ))}
-          {!hasData && (
-            <TableRow>
-              <TableCell colSpan={8} className="text-center text-muted-foreground py-8">
-                No payroll data for {filterYear}. Process payroll runs to see government tax records.
-              </TableCell>
-            </TableRow>
-          )}
-        </TableBody>
-      </Table>
-
-      {hasData && totals && (
+      <div>
+        <div className="flex items-center gap-2 mb-3">
+          <TrendingUp className="h-4 w-4 text-orange-500" />
+          <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">Income Tax Records</h3>
+        </div>
         <Table>
-          <TableBody>
-            <TableRow className="bg-muted/50 font-semibold">
-              <TableCell className="font-bold">Annual Totals {filterYear}</TableCell>
-              <TableCell></TableCell>
-              <TableCell></TableCell>
-              <TableCell className="text-right font-mono">{ totals.total_cit.toLocaleString()}</TableCell>
-              <TableCell className="text-right font-mono">{ totals.total_ssf_employee.toLocaleString()}</TableCell>
-              <TableCell className="text-right font-mono">{ totals.total_ssf_employer.toLocaleString()}</TableCell>
-              <TableCell className="text-right font-mono">{ totals.total_tax.toLocaleString()}</TableCell>
-              <TableCell className="text-right font-mono text-primary text-lg">{ totals.total_payable_to_govt.toLocaleString()}</TableCell>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Month</TableHead>
+              <TableHead className="text-center">Employees</TableHead>
+              <TableHead className="text-right">Gross Salary</TableHead>
+              <TableHead className="text-right">Income Tax</TableHead>
             </TableRow>
+          </TableHeader>
+          <TableBody>
+            {monthly.map(m => (
+              <TableRow key={m.month} className={m.employee_count === 0 ? "opacity-40" : ""} data-testid={`row-tax-${m.month}`}>
+                <TableCell className="font-medium">{MONTHS[m.month - 1]} {m.year}</TableCell>
+                <TableCell className="text-center">{m.employee_count || "—"}</TableCell>
+                <TableCell className="text-right font-mono text-sm">{fmt(m.total_gross)}</TableCell>
+                <TableCell className="text-right font-mono text-sm font-semibold">
+                  {m.total_tax > 0 ? <span className="text-orange-600">{fmt(m.total_tax)}</span> : "—"}
+                </TableCell>
+              </TableRow>
+            ))}
+            {hasData && totals && (
+              <TableRow className="bg-muted/50 font-semibold border-t-2">
+                <TableCell className="font-bold">Annual Total</TableCell>
+                <TableCell></TableCell>
+                <TableCell className="text-right font-mono">{fmt(totalGross)}</TableCell>
+                <TableCell className="text-right font-mono text-orange-600">{fmt(totals.total_tax)}</TableCell>
+              </TableRow>
+            )}
+            {!hasData && (
+              <TableRow>
+                <TableCell colSpan={4} className="text-center text-muted-foreground py-8">
+                  No payroll data for {filterYear}. Process payroll runs to see income tax records.
+                </TableCell>
+              </TableRow>
+            )}
           </TableBody>
         </Table>
-      )}
+      </div>
+
+      <div>
+        <div className="flex items-center gap-2 mb-3">
+          <Shield className="h-4 w-4 text-blue-500" />
+          <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">CIT & SSF Records</h3>
+        </div>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Month</TableHead>
+              <TableHead className="text-center">Employees</TableHead>
+              <TableHead className="text-right">CIT</TableHead>
+              <TableHead className="text-right">SSF (Employee)</TableHead>
+              <TableHead className="text-right">SSF (Employer)</TableHead>
+              <TableHead className="text-right font-semibold">Total CIT + SSF</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {monthly.map(m => {
+              const subtotal = m.total_cit + m.total_ssf_employee + m.total_ssf_employer;
+              return (
+                <TableRow key={m.month} className={m.employee_count === 0 ? "opacity-40" : ""} data-testid={`row-cit-${m.month}`}>
+                  <TableCell className="font-medium">{MONTHS[m.month - 1]} {m.year}</TableCell>
+                  <TableCell className="text-center">{m.employee_count || "—"}</TableCell>
+                  <TableCell className="text-right font-mono text-sm">{fmt(m.total_cit)}</TableCell>
+                  <TableCell className="text-right font-mono text-sm">{fmt(m.total_ssf_employee)}</TableCell>
+                  <TableCell className="text-right font-mono text-sm">{fmt(m.total_ssf_employer)}</TableCell>
+                  <TableCell className="text-right font-mono text-sm font-semibold">
+                    {subtotal > 0 ? <span className="text-blue-600">{fmt(subtotal)}</span> : "—"}
+                  </TableCell>
+                </TableRow>
+              );
+            })}
+            {hasData && totals && (
+              <TableRow className="bg-muted/50 font-semibold border-t-2">
+                <TableCell className="font-bold">Annual Total</TableCell>
+                <TableCell></TableCell>
+                <TableCell className="text-right font-mono">{fmt(totals.total_cit)}</TableCell>
+                <TableCell className="text-right font-mono">{fmt(totals.total_ssf_employee)}</TableCell>
+                <TableCell className="text-right font-mono">{fmt(totals.total_ssf_employer)}</TableCell>
+                <TableCell className="text-right font-mono text-blue-600">
+                  {fmt(totals.total_cit + totals.total_ssf_employee + totals.total_ssf_employer)}
+                </TableCell>
+              </TableRow>
+            )}
+            {!hasData && (
+              <TableRow>
+                <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
+                  No payroll data for {filterYear}. Process payroll runs to see CIT & SSF records.
+                </TableCell>
+              </TableRow>
+            )}
+          </TableBody>
+        </Table>
+      </div>
     </div>
   );
 }
