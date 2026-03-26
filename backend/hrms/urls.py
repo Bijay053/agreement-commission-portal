@@ -29,11 +29,12 @@ urlpatterns = [
     path('hrms/leave-requests/<uuid:lr_id>/reject', views.LeaveRequestRejectView.as_view()),
 
     path('hrms/attendance', views.AttendanceListView.as_view()),
-    path('hrms/attendance/<uuid:att_id>', views.AttendanceDetailView.as_view()),
     path('hrms/attendance/online-checkin', views.OnlineCheckInView.as_view()),
     path('hrms/attendance/online-checkout', views.OnlineCheckOutView.as_view()),
     path('hrms/attendance/device-sync', views.DeviceSyncView.as_view()),
     path('hrms/attendance/dashboard', views.AttendanceDashboardView.as_view()),
+    path('hrms/attendance/grid', views.AttendanceGridView.as_view()),
+    path('hrms/attendance/<uuid:att_id>', views.AttendanceDetailView.as_view()),
 
     path('hrms/device-mappings', views.DeviceMappingListView.as_view()),
     path('hrms/device-mappings/<uuid:dm_id>', views.DeviceMappingDetailView.as_view()),

@@ -26,6 +26,7 @@ import {
   Plus, Pencil, Trash2, Check, X, Eye, MapPin, Camera,
   Bell, Settings, Briefcase, UserCheck, CalendarDays,
   Gift, Receipt, Banknote, UserCog, Landmark, Calculator,
+  ChevronLeft, ChevronRight, Save,
 } from "lucide-react";
 import { StaffProfilesTab } from "./hrms-staff-profiles";
 import { BonusesTab } from "./hrms-bonuses";
@@ -77,11 +78,6 @@ interface LeaveRequest {
   created_at: string | null;
 }
 
-interface AttendanceDashboard {
-  date: string; total_employees: number; present_count: number;
-  absent_count: number; on_leave_count: number; late_count: number;
-  present: any[]; absent: any[]; on_leave: any[]; late: any[];
-}
 
 interface SalaryStructure {
   id: string; employee_id: string; employee_name: string | null;
@@ -472,112 +468,248 @@ function LeaveRequestsTab() {
 }
 
 function AttendanceTab() {
-  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split("T")[0]);
+  const { toast } = useToast();
+  const [viewMode, setViewMode] = useState<"daily" | "weekly" | "monthly">("monthly");
+  const [currentDate, setCurrentDate] = useState(new Date().toISOString().split("T")[0]);
+  const [editingCell, setEditingCell] = useState<{ empId: string; day: string } | null>(null);
+  const [editForm, setEditForm] = useState({ status: "present", check_in: "", check_out: "", notes: "" });
 
-  const { data: dashboard, isLoading } = useQuery<AttendanceDashboard>({
-    queryKey: ["/api/hrms/attendance/dashboard", selectedDate],
+  const { data: grid, isLoading } = useQuery<any>({
+    queryKey: ["/api/hrms/attendance/grid", viewMode, currentDate],
     queryFn: async () => {
-      const res = await fetch(`/api/hrms/attendance/dashboard?date=${selectedDate}`, { credentials: "include" });
+      const res = await fetch(`/api/hrms/attendance/grid?mode=${viewMode}&date=${currentDate}`, { credentials: "include" });
       if (!res.ok) throw new Error("Failed to fetch");
       return res.json();
     },
   });
 
+  const saveMutation = useMutation({
+    mutationFn: async (payload: any) => {
+      const res = await apiRequest("POST", "/api/hrms/attendance", payload);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.refetchQueries({ queryKey: ["/api/hrms/attendance/grid"] });
+      setEditingCell(null);
+      toast({ title: "Attendance updated" });
+    },
+    onError: () => toast({ title: "Failed to save", variant: "destructive" }),
+  });
+
+  const navigate = (dir: number) => {
+    const d = new Date(currentDate);
+    if (viewMode === "daily") d.setDate(d.getDate() + dir);
+    else if (viewMode === "weekly") d.setDate(d.getDate() + dir * 7);
+    else d.setMonth(d.getMonth() + dir);
+    setCurrentDate(d.toISOString().split("T")[0]);
+  };
+
+  const openEdit = (empId: string, day: string, existing: any) => {
+    setEditingCell({ empId, day });
+    setEditForm({
+      status: existing?.status || "present",
+      check_in: existing?.check_in ? existing.check_in.substring(0, 5) : "",
+      check_out: existing?.check_out ? existing.check_out.substring(0, 5) : "",
+      notes: existing?.notes || "",
+    });
+  };
+
+  const saveEdit = () => {
+    if (!editingCell) return;
+    saveMutation.mutate({
+      employee_id: editingCell.empId,
+      date: editingCell.day,
+      status: editForm.status,
+      check_in: editForm.check_in ? `${editingCell.day}T${editForm.check_in}:00` : null,
+      check_out: editForm.check_out ? `${editingCell.day}T${editForm.check_out}:00` : null,
+      check_in_method: "manual",
+      check_out_method: "manual",
+      notes: editForm.notes,
+    });
+  };
+
+  const statusColors: Record<string, string> = {
+    present: "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400",
+    absent: "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400",
+    on_leave: "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400",
+    half_day: "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400",
+  };
+
+  const statusLabel = (s: string) => ({ present: "P", absent: "A", on_leave: "L", half_day: "H" }[s] || "-");
+
+  const formatDay = (d: string) => {
+    const dt = new Date(d + "T00:00:00");
+    const dayNum = dt.getDate();
+    const dayName = dt.toLocaleDateString("en", { weekday: "short" });
+    const isSun = dt.getDay() === 0;
+    const isSat = dt.getDay() === 6;
+    return { dayNum, dayName, isSun, isSat, isWeekend: isSun || isSat };
+  };
+
+  const periodLabel = () => {
+    if (!grid) return "";
+    if (viewMode === "daily") return new Date(grid.date_from + "T00:00:00").toLocaleDateString("en", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
+    if (viewMode === "weekly") {
+      const f = new Date(grid.date_from + "T00:00:00");
+      const t = new Date(grid.date_to + "T00:00:00");
+      return `${f.toLocaleDateString("en", { month: "short", day: "numeric" })} - ${t.toLocaleDateString("en", { month: "short", day: "numeric", year: "numeric" })}`;
+    }
+    return new Date(grid.date_from + "T00:00:00").toLocaleDateString("en", { year: "numeric", month: "long" });
+  };
+
+  const totalSummary = grid?.employees?.reduce(
+    (acc: any, emp: any) => ({
+      present: acc.present + emp.summary.present,
+      absent: acc.absent + emp.summary.absent,
+      on_leave: acc.on_leave + emp.summary.on_leave,
+      late: acc.late + emp.summary.late,
+    }),
+    { present: 0, absent: 0, on_leave: 0, late: 0 }
+  ) || { present: 0, absent: 0, on_leave: 0, late: 0 };
+
   return (
     <div className="space-y-4">
-      <div className="flex justify-between items-center">
-        <h3 className="text-lg font-semibold">Attendance Dashboard</h3>
-        <Input type="date" value={selectedDate} onChange={e => setSelectedDate(e.target.value)} className="w-auto" data-testid="input-att-date" />
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h3 className="text-lg font-semibold" data-testid="text-att-title">Attendance</h3>
+        <div className="flex items-center gap-2">
+          <div className="flex border rounded-md overflow-hidden">
+            {(["daily", "weekly", "monthly"] as const).map(m => (
+              <button key={m} onClick={() => setViewMode(m)} data-testid={`btn-mode-${m}`}
+                className={`px-3 py-1.5 text-xs font-medium transition-colors ${viewMode === m ? "bg-primary text-primary-foreground" : "hover:bg-muted"}`}>{m.charAt(0).toUpperCase() + m.slice(1)}</button>
+            ))}
+          </div>
+          <div className="flex items-center gap-1">
+            <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => navigate(-1)} data-testid="btn-prev"><ChevronLeft className="h-4 w-4" /></Button>
+            <span className="text-sm font-medium min-w-[160px] text-center">{periodLabel()}</span>
+            <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => navigate(1)} data-testid="btn-next"><ChevronRight className="h-4 w-4" /></Button>
+          </div>
+          <Input type="date" value={currentDate} onChange={e => setCurrentDate(e.target.value)} className="w-auto h-8 text-xs" data-testid="input-att-date" />
+        </div>
       </div>
 
-      {isLoading ? <Skeleton className="h-40 w-full" /> : dashboard && (
-        <>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <Card>
-              <CardContent className="pt-4">
-                <div className="text-2xl font-bold text-green-600" data-testid="text-present-count">{dashboard.present_count}</div>
-                <p className="text-sm text-muted-foreground">Present</p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="pt-4">
-                <div className="text-2xl font-bold text-red-600" data-testid="text-absent-count">{dashboard.absent_count}</div>
-                <p className="text-sm text-muted-foreground">Absent</p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="pt-4">
-                <div className="text-2xl font-bold text-blue-600" data-testid="text-leave-count">{dashboard.on_leave_count}</div>
-                <p className="text-sm text-muted-foreground">On Leave</p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="pt-4">
-                <div className="text-2xl font-bold text-amber-600" data-testid="text-late-count">{dashboard.late_count}</div>
-                <p className="text-sm text-muted-foreground">Late</p>
-              </CardContent>
-            </Card>
-          </div>
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <Card><CardContent className="pt-3 pb-3"><div className="text-xl font-bold text-green-600" data-testid="text-present-count">{totalSummary.present}</div><p className="text-xs text-muted-foreground">Present</p></CardContent></Card>
+        <Card><CardContent className="pt-3 pb-3"><div className="text-xl font-bold text-red-600" data-testid="text-absent-count">{totalSummary.absent}</div><p className="text-xs text-muted-foreground">Absent</p></CardContent></Card>
+        <Card><CardContent className="pt-3 pb-3"><div className="text-xl font-bold text-blue-600" data-testid="text-leave-count">{totalSummary.on_leave}</div><p className="text-xs text-muted-foreground">On Leave</p></CardContent></Card>
+        <Card><CardContent className="pt-3 pb-3"><div className="text-xl font-bold text-amber-600" data-testid="text-late-count">{totalSummary.late}</div><p className="text-xs text-muted-foreground">Late</p></CardContent></Card>
+      </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <Card>
-              <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-green-600">Present ({dashboard.present.length})</CardTitle></CardHeader>
-              <CardContent>
-                <div className="space-y-2 max-h-[300px] overflow-y-auto">
-                  {dashboard.present.map((e: any) => (
-                    <div key={e.id} className="flex justify-between items-center text-sm border-b pb-1">
-                      <div>
-                        <p className="font-medium">{e.full_name}</p>
-                        <p className="text-muted-foreground text-xs">{e.department} - {e.position}</p>
-                      </div>
-                      <div className="text-right text-xs">
-                        {e.check_in && <p>In: {new Date(e.check_in).toLocaleTimeString()}</p>}
-                        {e.check_out && <p>Out: {new Date(e.check_out).toLocaleTimeString()}</p>}
-                        {e.is_late && <Badge variant="secondary" className="text-amber-600 text-xs">Late {e.late_minutes}m</Badge>}
-                      </div>
-                    </div>
+      {isLoading ? <Skeleton className="h-60 w-full" /> : grid && (
+        <Card>
+          <CardContent className="p-0">
+            <div className="overflow-auto max-h-[calc(100vh-320px)]">
+              <table className="w-full text-xs border-collapse">
+                <thead className="sticky top-0 z-10 bg-muted">
+                  <tr>
+                    <th className="text-left p-2 border-b font-medium sticky left-0 bg-muted z-20 min-w-[160px]">Employee</th>
+                    {grid.days.map((day: string) => {
+                      const { dayNum, dayName, isWeekend } = formatDay(day);
+                      return (
+                        <th key={day} className={`p-1 border-b text-center min-w-[36px] ${isWeekend ? "bg-muted/70" : ""}`}>
+                          <div className="font-medium">{dayNum}</div>
+                          <div className={`text-[10px] ${isWeekend ? "text-red-500" : "text-muted-foreground"}`}>{dayName}</div>
+                        </th>
+                      );
+                    })}
+                    <th className="p-2 border-b text-center min-w-[36px] font-medium">P</th>
+                    <th className="p-2 border-b text-center min-w-[36px] font-medium">A</th>
+                    <th className="p-2 border-b text-center min-w-[36px] font-medium">L</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {grid.employees.map((emp: any) => (
+                    <tr key={emp.employee_id} className="hover:bg-muted/30 border-b">
+                      <td className="p-2 sticky left-0 bg-background z-[5] border-r">
+                        <p className="font-medium truncate max-w-[140px]">{emp.full_name}</p>
+                        <p className="text-[10px] text-muted-foreground truncate max-w-[140px]">{emp.department || emp.position}</p>
+                      </td>
+                      {grid.days.map((day: string) => {
+                        const entry = emp.attendance[day];
+                        const { isWeekend } = formatDay(day);
+                        const isFuture = day > new Date().toISOString().split("T")[0];
+                        return (
+                          <td key={day}
+                            className={`p-0 text-center border-r cursor-pointer group ${isWeekend ? "bg-muted/30" : ""}`}
+                            onClick={() => !isFuture && openEdit(emp.employee_id, day, entry)}
+                            data-testid={`cell-${emp.employee_id}-${day}`}
+                          >
+                            {isFuture ? (
+                              <span className="text-muted-foreground">-</span>
+                            ) : entry ? (
+                              <div className="relative">
+                                <span className={`inline-block px-1 py-0.5 rounded text-[10px] font-medium ${statusColors[entry.status] || ""}`}>
+                                  {statusLabel(entry.status)}
+                                </span>
+                                {entry.is_late && <span className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 bg-amber-500 rounded-full" />}
+                                <Pencil className="h-2.5 w-2.5 absolute top-0 right-0 opacity-0 group-hover:opacity-50 text-muted-foreground" />
+                              </div>
+                            ) : (
+                              <div className="relative">
+                                <span className="text-red-400 text-[10px] font-medium">A</span>
+                                <Pencil className="h-2.5 w-2.5 absolute top-0 right-0 opacity-0 group-hover:opacity-50 text-muted-foreground" />
+                              </div>
+                            )}
+                          </td>
+                        );
+                      })}
+                      <td className="p-1 text-center font-medium text-green-600">{emp.summary.present}</td>
+                      <td className="p-1 text-center font-medium text-red-600">{emp.summary.absent}</td>
+                      <td className="p-1 text-center font-medium text-blue-600">{emp.summary.on_leave}</td>
+                    </tr>
                   ))}
-                  {dashboard.present.length === 0 && <p className="text-muted-foreground text-sm">No records</p>}
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-blue-600">On Leave ({dashboard.on_leave.length})</CardTitle></CardHeader>
-              <CardContent>
-                <div className="space-y-2 max-h-[300px] overflow-y-auto">
-                  {dashboard.on_leave.map((e: any) => (
-                    <div key={e.id} className="flex justify-between items-center text-sm border-b pb-1">
-                      <div>
-                        <p className="font-medium">{e.full_name}</p>
-                        <p className="text-muted-foreground text-xs">{e.department} - {e.position}</p>
-                      </div>
-                      {e.leave_type && <Badge variant="outline">{e.leave_type}</Badge>}
-                    </div>
-                  ))}
-                  {dashboard.on_leave.length === 0 && <p className="text-muted-foreground text-sm">No one on leave</p>}
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-
-          {dashboard.absent.length > 0 && (
-            <Card>
-              <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-red-600">Absent ({dashboard.absent.length})</CardTitle></CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-                  {dashboard.absent.map((e: any) => (
-                    <div key={e.id} className="text-sm p-2 border rounded">
-                      <p className="font-medium">{e.full_name}</p>
-                      <p className="text-muted-foreground text-xs">{e.department}</p>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          )}
-        </>
+                  {grid.employees.length === 0 && (
+                    <tr><td colSpan={grid.days.length + 4} className="text-center p-8 text-muted-foreground">No employees found</td></tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </CardContent>
+        </Card>
       )}
+
+      <Dialog open={!!editingCell} onOpenChange={open => { if (!open) setEditingCell(null); }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Edit Attendance — {editingCell?.day && new Date(editingCell.day + "T00:00:00").toLocaleDateString("en", { weekday: "short", month: "short", day: "numeric" })}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div>
+              <Label>Status</Label>
+              <Select value={editForm.status} onValueChange={v => setEditForm(f => ({ ...f, status: v }))}>
+                <SelectTrigger data-testid="select-att-status"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="present">Present</SelectItem>
+                  <SelectItem value="absent">Absent</SelectItem>
+                  <SelectItem value="on_leave">On Leave</SelectItem>
+                  <SelectItem value="half_day">Half Day</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            {editForm.status !== "absent" && editForm.status !== "on_leave" && (
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label>Check In</Label>
+                  <Input type="time" value={editForm.check_in} onChange={e => setEditForm(f => ({ ...f, check_in: e.target.value }))} data-testid="input-checkin" />
+                </div>
+                <div>
+                  <Label>Check Out</Label>
+                  <Input type="time" value={editForm.check_out} onChange={e => setEditForm(f => ({ ...f, check_out: e.target.value }))} data-testid="input-checkout" />
+                </div>
+              </div>
+            )}
+            <div>
+              <Label>Notes</Label>
+              <Input value={editForm.notes} onChange={e => setEditForm(f => ({ ...f, notes: e.target.value }))} placeholder="Optional notes" data-testid="input-att-notes" />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditingCell(null)}>Cancel</Button>
+            <Button onClick={saveEdit} disabled={saveMutation.isPending} data-testid="btn-save-att">
+              <Save className="h-4 w-4 mr-1" /> {saveMutation.isPending ? "Saving..." : "Save"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -596,8 +728,18 @@ function PayrollTab() {
   });
 
   const processMutation = useMutation({
-    mutationFn: (id: string) => apiRequest("POST", `/api/hrms/payroll-runs/${id}/process`),
-    onSuccess: () => { queryClient.refetchQueries({ queryKey: ["/api/hrms/payroll-runs"] }); toast({ title: "Payroll processed successfully" }); },
+    mutationFn: async (id: string) => {
+      const res = await apiRequest("POST", `/api/hrms/payroll-runs/${id}/process`);
+      return res.json();
+    },
+    onSuccess: (data: any) => {
+      queryClient.refetchQueries({ queryKey: ["/api/hrms/payroll-runs"] });
+      toast({
+        title: data.payslip_count > 0 ? "Payroll processed" : "No payslips generated",
+        description: data.message,
+        variant: data.payslip_count > 0 ? "default" : "destructive",
+      });
+    },
     onError: () => { toast({ title: "Failed to process payroll", variant: "destructive" }); },
   });
 

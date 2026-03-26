@@ -1286,6 +1286,110 @@ class AttendanceDashboardView(APIView):
         })
 
 
+class AttendanceGridView(APIView):
+    @require_permission('hrms.attendance.read')
+    def get(self, request):
+        view_mode = request.GET.get('mode', 'monthly')
+        target_date = request.GET.get('date', date.today().isoformat())
+        org_id = request.GET.get('organization_id')
+        dept_id = request.GET.get('department_id')
+
+        try:
+            target = date.fromisoformat(target_date)
+        except ValueError:
+            target = date.today()
+
+        if view_mode == 'daily':
+            date_from = target
+            date_to = target
+        elif view_mode == 'weekly':
+            date_from = target - timedelta(days=target.weekday())
+            date_to = date_from + timedelta(days=6)
+        else:
+            date_from = date(target.year, target.month, 1)
+            if target.month == 12:
+                date_to = date(target.year + 1, 1, 1) - timedelta(days=1)
+            else:
+                date_to = date(target.year, target.month + 1, 1) - timedelta(days=1)
+
+        employees = Employee.objects.filter(status='active').order_by('full_name')
+        if org_id:
+            employees = employees.filter(organization_id=org_id)
+        if dept_id:
+            employees = employees.filter(department_id=dept_id)
+
+        days = []
+        d = date_from
+        while d <= date_to:
+            days.append(d.isoformat())
+            d += timedelta(days=1)
+
+        emp_ids = [emp.id for emp in employees]
+        records = AttendanceRecord.objects.filter(
+            employee_id__in=emp_ids,
+            date__gte=date_from,
+            date__lte=date_to,
+        )
+        att_map = {}
+        for r in records:
+            key = f"{r.employee_id}_{r.date.isoformat()}"
+            att_map[key] = {
+                'id': str(r.id),
+                'status': r.status,
+                'check_in': r.check_in.isoformat() if r.check_in else None,
+                'check_out': r.check_out.isoformat() if r.check_out else None,
+                'is_late': r.is_late,
+                'late_minutes': r.late_minutes,
+                'check_in_method': r.check_in_method,
+                'notes': r.notes or '',
+            }
+
+        rows = []
+        for emp in employees:
+            dept_name = ''
+            if emp.department_id:
+                try:
+                    dept_name = Department.objects.get(id=emp.department_id).name
+                except Department.DoesNotExist:
+                    pass
+            attendance_data = {}
+            summary = {'present': 0, 'absent': 0, 'on_leave': 0, 'late': 0}
+            for day in days:
+                key = f"{emp.id}_{day}"
+                entry = att_map.get(key)
+                if entry:
+                    attendance_data[day] = entry
+                    if entry['status'] == 'on_leave':
+                        summary['on_leave'] += 1
+                    elif entry['status'] in ('present', 'half_day'):
+                        summary['present'] += 1
+                        if entry['is_late']:
+                            summary['late'] += 1
+                    elif entry['status'] == 'absent':
+                        summary['absent'] += 1
+                else:
+                    attendance_data[day] = None
+                    if date.fromisoformat(day) <= date.today():
+                        summary['absent'] += 1
+
+            rows.append({
+                'employee_id': str(emp.id),
+                'full_name': emp.full_name,
+                'department': dept_name,
+                'position': emp.position or '',
+                'attendance': attendance_data,
+                'summary': summary,
+            })
+
+        return Response({
+            'date_from': date_from.isoformat(),
+            'date_to': date_to.isoformat(),
+            'days': days,
+            'employees': rows,
+            'mode': view_mode,
+        })
+
+
 class DeviceMappingListView(APIView):
     @require_permission('hrms.device_mapping.read')
     def get(self, request):
@@ -1599,12 +1703,24 @@ class PayrollRunProcessView(APIView):
         total_deductions = Decimal('0')
         total_net = Decimal('0')
         total_employer = Decimal('0')
+        skipped_employees = []
 
         month_start = date(pr.year, pr.month, 1)
         if pr.month == 12:
             month_end = date(pr.year + 1, 1, 1) - timedelta(days=1)
         else:
             month_end = date(pr.year, pr.month + 1, 1) - timedelta(days=1)
+
+        if employees.count() == 0:
+            pr.status = 'completed'
+            pr.processed_at = timezone.now()
+            pr.save()
+            return Response({
+                'message': 'No active employees found in this organization. Add employees and assign them to this organization first.',
+                'payslip_count': 0,
+                'total_employees': 0,
+                'skipped_employees': [],
+            })
 
         for emp in employees:
             sal = SalaryStructure.objects.filter(
@@ -1613,6 +1729,10 @@ class PayrollRunProcessView(APIView):
             ).order_by('-effective_from').first()
 
             if not sal:
+                skipped_employees.append({
+                    'name': emp.full_name,
+                    'reason': 'No active salary structure',
+                })
                 continue
 
             basic = sal.basic_salary
@@ -1778,9 +1898,18 @@ class PayrollRunProcessView(APIView):
         pr.processed_at = timezone.now()
         pr.save()
 
+        payslip_count = pr.payslips.count()
+        msg = 'Payroll processed successfully'
+        if payslip_count == 0 and skipped_employees:
+            msg = f'Payroll processed but no payslips generated. {len(skipped_employees)} employee(s) skipped because they have no active salary structure. Please set up salary structures in Staff & Salary first.'
+        elif skipped_employees:
+            msg = f'Payroll processed. {payslip_count} payslip(s) generated. {len(skipped_employees)} employee(s) skipped (no salary structure).'
+
         return Response({
-            'message': 'Payroll processed successfully',
-            'payslip_count': pr.payslips.count(),
+            'message': msg,
+            'payslip_count': payslip_count,
+            'total_employees': employees.count(),
+            'skipped_employees': skipped_employees,
             'total_gross': float(total_gross),
             'total_net': float(total_net),
         })
