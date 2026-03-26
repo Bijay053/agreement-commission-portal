@@ -1441,6 +1441,139 @@ function HolidaysTab() {
   );
 }
 
+function NotificationSettingsTab() {
+  const { toast } = useToast();
+  const { data: orgs } = useQuery<Organization[]>({ queryKey: ["/api/hrms/organizations"] });
+  const [selectedOrg, setSelectedOrg] = useState("");
+  const [ccEmails, setCcEmails] = useState<string | null>(null);
+  const [newEmail, setNewEmail] = useState("");
+
+  const effectiveOrg = selectedOrg || orgs?.[0]?.id || "";
+
+  const { data: settings, isLoading } = useQuery<any>({
+    queryKey: ["/api/hrms/notification-settings", { organization_id: effectiveOrg }],
+    queryFn: async () => {
+      if (!effectiveOrg) return null;
+      const res = await fetch(`/api/hrms/notification-settings?organization_id=${effectiveOrg}`, { credentials: "include" });
+      if (!res.ok) return null;
+      return res.json();
+    },
+    enabled: !!effectiveOrg,
+  });
+
+  if (ccEmails === null && settings?.cc_emails !== undefined) {
+    setCcEmails(settings.cc_emails || "");
+  }
+
+  const emailList = ccEmails ? ccEmails.split(",").map((e: string) => e.trim()).filter(Boolean) : [];
+
+  const saveMutation = useMutation({
+    mutationFn: (data: any) => apiRequest("POST", "/api/hrms/notification-settings", data),
+    onSuccess: () => {
+      queryClient.refetchQueries({ queryKey: ["/api/hrms/notification-settings"] });
+      toast({ title: "CC emails updated" });
+    },
+  });
+
+  const addEmail = () => {
+    const trimmed = newEmail.trim().toLowerCase();
+    if (!trimmed) return;
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) {
+      toast({ title: "Invalid email address", variant: "destructive" });
+      return;
+    }
+    if (emailList.includes(trimmed)) {
+      toast({ title: "Email already added", variant: "destructive" });
+      return;
+    }
+    const updated = [...emailList, trimmed].join(", ");
+    setCcEmails(updated);
+    setNewEmail("");
+  };
+
+  const removeEmail = (email: string) => {
+    const updated = emailList.filter((e: string) => e !== email).join(", ");
+    setCcEmails(updated);
+  };
+
+  const handleSave = () => {
+    saveMutation.mutate({
+      organization_id: effectiveOrg,
+      cc_emails: emailList.join(", "),
+    });
+  };
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h3 className="text-lg font-semibold" data-testid="text-notification-settings-title">Notification Settings</h3>
+        <p className="text-sm text-muted-foreground">Configure CC email addresses for attendance notification emails (late arrival, early departure, missing checkout).</p>
+      </div>
+
+      <div className="max-w-xl space-y-4">
+        <div>
+          <Label>Organization</Label>
+          <Select value={effectiveOrg} onValueChange={(v) => { setSelectedOrg(v); setCcEmails(null); }}>
+            <SelectTrigger data-testid="select-notification-org"><SelectValue placeholder="Select organization" /></SelectTrigger>
+            <SelectContent>{orgs?.map(o => <SelectItem key={o.id} value={o.id}>{o.name}</SelectItem>)}</SelectContent>
+          </Select>
+        </div>
+
+        {isLoading && effectiveOrg ? (
+          <Skeleton className="h-32" />
+        ) : effectiveOrg ? (
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base flex items-center gap-2">
+                <Bell className="h-4 w-4" />
+                CC Email Addresses
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <p className="text-sm text-muted-foreground">
+                These email addresses will be CC'd on all attendance notification emails for this organization, in addition to the organization's email.
+              </p>
+
+              <div className="flex gap-2">
+                <Input
+                  type="email"
+                  placeholder="Enter email address"
+                  value={newEmail}
+                  onChange={e => setNewEmail(e.target.value)}
+                  onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); addEmail(); } }}
+                  data-testid="input-cc-email"
+                />
+                <Button onClick={addEmail} size="sm" data-testid="button-add-cc-email">
+                  <Plus className="h-4 w-4 mr-1" /> Add
+                </Button>
+              </div>
+
+              {emailList.length > 0 ? (
+                <div className="space-y-2">
+                  {emailList.map((email: string) => (
+                    <div key={email} className="flex items-center justify-between px-3 py-2 bg-muted rounded-md">
+                      <span className="text-sm" data-testid={`text-cc-email-${email}`}>{email}</span>
+                      <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-red-500 hover:text-red-700" onClick={() => removeEmail(email)} data-testid={`button-remove-cc-${email}`}>
+                        <X className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground italic py-2">No CC email addresses configured. Only the organization email will receive copies.</p>
+              )}
+
+              <Button onClick={handleSave} disabled={saveMutation.isPending} data-testid="button-save-cc-emails">
+                <Save className="h-4 w-4 mr-1" /> Save CC Emails
+              </Button>
+            </CardContent>
+          </Card>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
 const SIDEBAR_ITEMS = [
   { key: "staff-profiles", label: "Staff & Salary", icon: UserCog, group: "People", permissions: ["hrms.staff.read", "hrms.salary.read", "employee.view"] },
   { key: "attendance", label: "Attendance", icon: Clock, group: "People", permissions: ["hrms.attendance.read"] },
@@ -1457,6 +1590,7 @@ const SIDEBAR_ITEMS = [
   { key: "countries", label: "Countries", icon: Globe, group: "Settings", permissions: ["hrms.organization.read"] },
   { key: "organizations", label: "Organizations", icon: Building2, group: "Settings", permissions: ["hrms.organization.read"] },
   { key: "departments", label: "Departments", icon: Users, group: "Settings", permissions: ["hrms.department.read"] },
+  { key: "notifications", label: "Notifications", icon: Bell, group: "Settings", permissions: ["hrms.notification.read", "hrms.notification.update"] },
 ];
 
 const CONTENT_MAP: Record<string, React.ComponentType> = {
@@ -1475,6 +1609,7 @@ const CONTENT_MAP: Record<string, React.ComponentType> = {
   "govt-records": GovernmentRecordsTab,
   "countries": CountriesTab,
   "fiscal-years": FiscalYearsTab,
+  "notifications": NotificationSettingsTab,
 };
 
 export default function HRMSAdminPage() {

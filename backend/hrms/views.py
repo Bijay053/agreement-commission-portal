@@ -394,9 +394,6 @@ def get_employee_for_user(user_id):
         return None
 
 
-ATTENDANCE_CC_EMAIL = 'ishu.twayana@studyinfocentre.com'
-
-
 def _attendance_email_wrap(title, body_html):
     return f'''<!DOCTYPE html>
 <html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"></head>
@@ -421,9 +418,16 @@ def _attendance_email_wrap(title, body_html):
 
 
 def _get_attendance_cc_list(org):
-    cc_list = [ATTENDANCE_CC_EMAIL]
-    if org and org.email and org.email not in cc_list:
-        cc_list.append(org.email)
+    cc_list = []
+    if org:
+        ns = NotificationSetting.objects.filter(organization_id=org.id).first()
+        if ns and ns.cc_emails:
+            for email in ns.cc_emails.split(','):
+                email = email.strip()
+                if email and email not in cc_list:
+                    cc_list.append(email)
+        if org.email and org.email not in cc_list:
+            cc_list.append(org.email)
     return cc_list
 
 
@@ -2661,6 +2665,7 @@ class NotificationSettingView(APIView):
             'no_checkout_notify_employee': ns.no_checkout_notify_employee,
             'no_checkout_email_subject': ns.no_checkout_email_subject,
             'no_checkout_email_template': ns.no_checkout_email_template,
+            'cc_emails': ns.cc_emails,
         })
 
     @require_permission('hrms.notification.update')
