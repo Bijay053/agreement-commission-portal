@@ -1579,9 +1579,16 @@ function PayslipsTab({ showSalary, setShowSalary }: { showSalary: boolean; setSh
                   <TableCell><Badge variant="default">{p.status}</Badge></TableCell>
                   <TableCell>
                     {showSalary ? (
-                      <Button variant="ghost" size="sm" onClick={() => handleDownload(p.id)} data-testid={`button-download-payslip-${p.id}`}>
-                        <Download className="h-4 w-4" />
-                      </Button>
+                      <div className="flex gap-1">
+                        {p.view_token && (
+                          <Button variant="ghost" size="sm" onClick={() => window.open(`/api/hrms/payslips/public/${p.view_token}/pdf`, '_blank')} title="View payslip" data-testid={`button-view-payslip-${p.id}`}>
+                            <Eye className="h-4 w-4" />
+                          </Button>
+                        )}
+                        <Button variant="ghost" size="sm" onClick={() => handleDownload(p.id)} title="Download payslip" data-testid={`button-download-payslip-${p.id}`}>
+                          <Download className="h-4 w-4" />
+                        </Button>
+                      </div>
                     ) : (
                       <Lock className="h-4 w-4 text-muted-foreground" />
                     )}

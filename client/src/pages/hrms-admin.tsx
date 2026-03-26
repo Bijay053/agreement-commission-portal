@@ -1395,23 +1395,23 @@ function PayrollRunDetailView({ runId, onBack }: { runId: string; onBack: () => 
           </CardContent>
         </Card>
       ) : (
-        <div className="border rounded-lg overflow-auto">
-          <Table>
+        <div className="border rounded-lg overflow-x-auto">
+          <Table className="min-w-[1200px]">
             <TableHeader>
               <TableRow className="bg-muted/50">
-                <TableHead className="sticky left-0 bg-muted/50 z-10 min-w-[160px]">Employee</TableHead>
-                <TableHead className="text-right min-w-[100px]">Basic</TableHead>
-                <TableHead className="text-right min-w-[100px]">Gross</TableHead>
-                <TableHead className="text-right min-w-[80px]">CIT</TableHead>
-                <TableHead className="text-right min-w-[80px]">SSF</TableHead>
-                <TableHead className="text-right min-w-[80px]">Tax</TableHead>
-                <TableHead className="text-right min-w-[80px]">Bonus</TableHead>
-                <TableHead className="text-right min-w-[100px]">Unpaid Lv</TableHead>
-                <TableHead className="text-right min-w-[80px]">Advance</TableHead>
-                <TableHead className="text-right min-w-[100px]">Total Ded</TableHead>
-                <TableHead className="text-right min-w-[110px]">Net Salary</TableHead>
-                <TableHead className="text-center min-w-[70px]">Days</TableHead>
-                <TableHead className="text-center min-w-[80px]">Actions</TableHead>
+                <TableHead className="sticky left-0 bg-muted/50 z-10 w-[140px] min-w-[140px]">Employee</TableHead>
+                <TableHead className="text-right w-[85px]">Basic</TableHead>
+                <TableHead className="text-right w-[85px]">Gross</TableHead>
+                <TableHead className="text-right w-[65px]">CIT</TableHead>
+                <TableHead className="text-right w-[65px]">SSF</TableHead>
+                <TableHead className="text-right w-[65px]">Tax</TableHead>
+                <TableHead className="text-right w-[65px]">Bonus</TableHead>
+                <TableHead className="text-right w-[80px]">Unpaid Lv</TableHead>
+                <TableHead className="text-right w-[70px]">Advance</TableHead>
+                <TableHead className="text-right w-[85px]">Total Ded</TableHead>
+                <TableHead className="text-right w-[90px]">Net Salary</TableHead>
+                <TableHead className="text-center w-[55px]">Days</TableHead>
+                <TableHead className="text-center w-[70px]">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
