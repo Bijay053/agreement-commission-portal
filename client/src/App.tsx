@@ -38,6 +38,7 @@ import SignAgreementPage from "@/pages/sign-agreement";
 import SignOfferPage from "@/pages/sign-offer";
 import ProviderCommissionPage from "@/pages/provider-commission";
 import DropdownSettingsPage from "@/pages/dropdown-settings";
+import HRMSAdminPage from "@/pages/hrms-admin";
 import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 
@@ -129,6 +130,11 @@ function Router() {
       <Route path="/dropdown-settings">
         <AccessGuard permission="dropdown_settings.option.read">
           <DropdownSettingsPage />
+        </AccessGuard>
+      </Route>
+      <Route path="/hrms">
+        <AccessGuard permission="hrms.organization.read">
+          <HRMSAdminPage />
         </AccessGuard>
       </Route>
       <Route path="/account-security" component={AccountSecurityPage} />

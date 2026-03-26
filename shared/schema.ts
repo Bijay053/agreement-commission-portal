@@ -518,6 +518,27 @@ export const PERMISSION_REGISTRY = [
       { resource: "option", label: "Dropdown Options", actions: ["read", "add", "update", "delete"] },
     ],
   },
+  {
+    module: "hrms",
+    label: "HRMS",
+    resources: [
+      { resource: "organization", label: "Organizations", actions: ["read", "add", "update", "delete"] },
+      { resource: "department", label: "Departments", actions: ["read", "add", "update", "delete"] },
+      { resource: "fiscal_year", label: "Fiscal Years", actions: ["read", "add", "update", "delete"] },
+      { resource: "leave_type", label: "Leave Types", actions: ["read", "add", "update", "delete"] },
+      { resource: "leave_policy", label: "Leave Policies", actions: ["read", "add", "update", "delete"] },
+      { resource: "holiday", label: "Holidays", actions: ["read", "add", "update", "delete"] },
+      { resource: "leave_balance", label: "Leave Balances", actions: ["read", "add"] },
+      { resource: "leave_request", label: "Leave Requests", actions: ["read", "add", "update", "delete", "approve"] },
+      { resource: "attendance", label: "Attendance", actions: ["read", "add", "update"] },
+      { resource: "device_mapping", label: "Device Mappings", actions: ["read", "add", "delete"] },
+      { resource: "online_checkin", label: "Online Check-in Permissions", actions: ["read", "add", "delete"] },
+      { resource: "salary", label: "Salary Structures", actions: ["read", "add", "update"] },
+      { resource: "payroll", label: "Payroll", actions: ["read", "add", "delete", "process"] },
+      { resource: "payslip", label: "Payslips", actions: ["read"] },
+      { resource: "notification", label: "Notification Settings", actions: ["read", "update"] },
+    ],
+  },
 ] as const;
 
 export type PermissionModule = typeof PERMISSION_REGISTRY[number];
