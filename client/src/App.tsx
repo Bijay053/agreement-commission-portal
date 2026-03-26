@@ -117,9 +117,17 @@ function Router() {
           <ProviderCommissionPage />
         </AccessGuard>
       </Route>
-      <Route path="/templates" component={TemplatesPage} />
+      <Route path="/templates">
+        <AccessGuard permission="emp_template.view">
+          <TemplatesPage />
+        </AccessGuard>
+      </Route>
       <Route path="/employees/:id">
-        {(params) => <EmployeeDetailPage params={params} />}
+        {(params) => (
+          <AccessGuard permission={["employee.view", "hrms.staff.read"]}>
+            <EmployeeDetailPage params={params} />
+          </AccessGuard>
+        )}
       </Route>
       <Route path="/audit-logs">
         <AccessGuard permission="audit.view">
@@ -132,7 +140,7 @@ function Router() {
         </AccessGuard>
       </Route>
       <Route path="/hrms">
-        <AccessGuard permission={["hrms.organization.read", "hrms.attendance.read", "hrms.staff.read", "hrms.salary.read", "hrms.leave_request.read", "hrms.leave_request.approve", "hrms.leave_type.read", "hrms.holiday.read", "hrms.bonus.read", "hrms.expense.read", "hrms.advance.read", "hrms.payroll.read", "hrms.tax.read", "hrms.department.read", "employee.view"]}>
+        <AccessGuard permission={["hrms.organization.read", "hrms.attendance.read", "hrms.staff.read", "hrms.salary.read", "hrms.leave_request.read", "hrms.leave_request.approve", "hrms.leave_type.read", "hrms.holiday.read", "hrms.bonus.read", "hrms.expense.read", "hrms.advance.read", "hrms.payroll.read", "hrms.tax.read", "hrms.department.read", "hrms.fiscal_year.read", "hrms.notification.read", "hrms.notification.update", "employee.view"]}>
           <HRMSAdminPage />
         </AccessGuard>
       </Route>

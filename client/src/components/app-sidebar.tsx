@@ -47,8 +47,17 @@ export function AppSidebar() {
     { title: "Sub-Agent Commission", url: "/sub-agent-commission", icon: ArrowDownUp, show: hasPermission("sub_agent_commission.view") },
   ];
 
+  const hrmsPermissions = [
+    "hrms.organization.read", "hrms.attendance.read", "employee.view",
+    "hrms.leave_request.read", "hrms.leave_request.approve", "hrms.leave_type.read",
+    "hrms.holiday.read", "hrms.bonus.read", "hrms.expense.read", "hrms.advance.read",
+    "hrms.payroll.read", "hrms.tax.read", "hrms.department.read", "hrms.fiscal_year.read",
+    "hrms.notification.read", "hrms.notification.update", "hrms.staff.read", "hrms.salary.read",
+  ];
+  const hasAnyHrms = hrmsPermissions.some(p => hasPermission(p));
+
   const employeeNav = [
-    { title: "HRMS", url: "/hrms", icon: Briefcase, show: hasPermission("hrms.organization.read") || hasPermission("hrms.attendance.read") || hasPermission("employee.view") || hasPermission("hrms.leave_request.read") || hasPermission("hrms.leave_request.approve") || hasPermission("hrms.leave_type.read") || hasPermission("hrms.holiday.read") },
+    { title: "HRMS", url: "/hrms", icon: Briefcase, show: hasAnyHrms },
     { title: "Agreement Templates", url: "/templates?type=agreement", icon: ClipboardList, show: hasPermission("emp_template.view") },
     { title: "Offer Letter Templates", url: "/templates?type=offer_letter", icon: ClipboardList, show: hasPermission("emp_template.view") },
   ];
