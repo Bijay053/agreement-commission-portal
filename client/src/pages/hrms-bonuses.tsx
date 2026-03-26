@@ -44,8 +44,15 @@ interface Employee {
 
 const BONUS_TYPES: Record<string, string> = {
   festival: "Festival Bonus",
+  dashain: "Dashain Bonus",
   performance: "Performance Bonus",
-  yearly: "Yearly Bonus",
+  target: "Target Achievement",
+  attendance: "Attendance Bonus",
+  referral: "Referral Bonus",
+  joining: "Joining Bonus",
+  retention: "Retention Bonus",
+  commission: "Commission Incentive",
+  yearly: "Year-End Bonus",
   special: "Special Bonus",
   other: "Other",
 };

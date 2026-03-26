@@ -354,8 +354,15 @@ class Payslip(models.Model):
 
 BONUS_TYPE_CHOICES = [
     ('festival', 'Festival Bonus'),
+    ('dashain', 'Dashain Bonus'),
     ('performance', 'Performance Bonus'),
-    ('yearly', 'Yearly Bonus'),
+    ('target', 'Target Achievement Bonus'),
+    ('attendance', 'Attendance Bonus'),
+    ('referral', 'Referral Bonus'),
+    ('joining', 'Joining Bonus'),
+    ('retention', 'Retention Bonus'),
+    ('commission', 'Commission Incentive'),
+    ('yearly', 'Year-End Bonus'),
     ('special', 'Special Bonus'),
     ('other', 'Other'),
 ]
@@ -371,7 +378,7 @@ BONUS_STATUS_CHOICES = [
 class Bonus(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     employee_id = models.UUIDField()
-    bonus_type = models.CharField(max_length=24, default='other', choices=BONUS_TYPE_CHOICES)
+    bonus_type = models.CharField(max_length=32, default='other', choices=BONUS_TYPE_CHOICES)
     amount = models.DecimalField(max_digits=12, decimal_places=2)
     reason = models.TextField(null=True, blank=True)
     month = models.IntegerField()

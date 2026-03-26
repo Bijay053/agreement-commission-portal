@@ -19,8 +19,9 @@ import {
 } from "@/components/ui/table";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
-  User, DollarSign, Pencil, Building2, Shield,
+  User, DollarSign, Pencil, Building2, Shield, Plus, Eye, Search,
 } from "lucide-react";
+import { EmployeeDetailView } from "./hrms-employee-detail";
 
 interface StaffProfile {
   id: string;
@@ -75,6 +76,9 @@ export function StaffProfilesTab() {
   const { toast } = useToast();
   const [selectedStaff, setSelectedStaff] = useState<StaffProfile | null>(null);
   const [showSalaryDialog, setShowSalaryDialog] = useState(false);
+  const [showAddEmployee, setShowAddEmployee] = useState(false);
+  const [viewEmployeeId, setViewEmployeeId] = useState<string | null>(null);
+  const [searchTerm, setSearchTerm] = useState("");
   const [salaryForm, setSalaryForm] = useState({
     basic_salary: "",
     cit_type: "none",
@@ -92,8 +96,19 @@ export function StaffProfilesTab() {
   const [newDeductionName, setNewDeductionName] = useState("");
   const [newDeductionValue, setNewDeductionValue] = useState("");
 
+  const [empForm, setEmpForm] = useState({
+    full_name: "", email: "", phone: "", position: "", department: "",
+    organization_id: "", department_id: "", gender: "", marital_status: "",
+    join_date: new Date().toISOString().split("T")[0], employment_type: "full_time",
+    citizenship_no: "", pan_no: "", bank_name: "", bank_account_number: "",
+    bank_branch: "", permanent_address: "", temporary_address: "",
+    salary_amount: "", salary_currency: "NPR",
+    emergency_contact_name: "", emergency_contact_phone: "",
+  });
+
   const { data: staff, isLoading } = useQuery<StaffProfile[]>({ queryKey: ["/api/hrms/staff-profiles"] });
   const { data: orgs } = useQuery<Organization[]>({ queryKey: ["/api/hrms/organizations"] });
+  const { data: depts } = useQuery<Department[]>({ queryKey: ["/api/hrms/departments"] });
 
   const createSalaryMutation = useMutation({
     mutationFn: (data: any) => apiRequest("POST", "/api/hrms/salary-structures", data),
@@ -113,6 +128,17 @@ export function StaffProfilesTab() {
       queryClient.invalidateQueries({ queryKey: ["/api/hrms/salary-structures"] });
       setShowSalaryDialog(false);
       toast({ title: "Salary structure updated" });
+    },
+    onError: (err: any) => toast({ title: "Error", description: err.message, variant: "destructive" }),
+  });
+
+  const createEmployeeMutation = useMutation({
+    mutationFn: (data: any) => apiRequest("POST", "/api/employees", data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/hrms/staff-profiles"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/employees"] });
+      setShowAddEmployee(false);
+      toast({ title: "Employee added successfully" });
     },
     onError: (err: any) => toast({ title: "Error", description: err.message, variant: "destructive" }),
   });
@@ -183,6 +209,39 @@ export function StaffProfilesTab() {
     }
   };
 
+  const handleAddEmployee = () => {
+    if (!empForm.full_name.trim() || !empForm.email.trim()) {
+      toast({ title: "Name and email are required", variant: "destructive" });
+      return;
+    }
+    const payload: any = {
+      fullName: empForm.full_name,
+      email: empForm.email,
+    };
+    if (empForm.phone) payload.phone = empForm.phone;
+    if (empForm.position) payload.position = empForm.position;
+    if (empForm.department) payload.department = empForm.department;
+    if (empForm.organization_id) payload.organization_id = empForm.organization_id;
+    if (empForm.department_id) payload.department_id = empForm.department_id;
+    if (empForm.gender) payload.gender = empForm.gender;
+    if (empForm.marital_status) payload.marital_status = empForm.marital_status;
+    if (empForm.join_date) payload.joinDate = empForm.join_date;
+    if (empForm.employment_type) payload.employmentType = empForm.employment_type;
+    if (empForm.citizenship_no) payload.citizenshipNo = empForm.citizenship_no;
+    if (empForm.pan_no) payload.panNo = empForm.pan_no;
+    if (empForm.bank_name) payload.bankName = empForm.bank_name;
+    if (empForm.bank_account_number) payload.bankAccountNumber = empForm.bank_account_number;
+    if (empForm.bank_branch) payload.bankBranch = empForm.bank_branch;
+    if (empForm.permanent_address) payload.permanentAddress = empForm.permanent_address;
+    if (empForm.temporary_address) payload.temporaryAddress = empForm.temporary_address;
+    if (empForm.salary_amount) payload.salaryAmount = parseFloat(empForm.salary_amount);
+    if (empForm.salary_currency) payload.salaryCurrency = empForm.salary_currency;
+    if (empForm.emergency_contact_name) payload.emergencyContactName = empForm.emergency_contact_name;
+    if (empForm.emergency_contact_phone) payload.emergencyContactPhone = empForm.emergency_contact_phone;
+
+    createEmployeeMutation.mutate(payload);
+  };
+
   const addAllowance = () => {
     if (!newAllowanceName.trim()) return;
     setSalaryForm(prev => ({
@@ -225,13 +284,53 @@ export function StaffProfilesTab() {
     return basic + allTotal;
   };
 
+  if (viewEmployeeId) {
+    return <EmployeeDetailView employeeId={viewEmployeeId} onBack={() => setViewEmployeeId(null)} />;
+  }
+
   if (isLoading) return <div className="space-y-3">{Array.from({ length: 3 }).map((_, i) => <Card key={i}><CardContent className="p-4"><Skeleton className="h-16" /></CardContent></Card>)}</div>;
+
+  const filteredStaff = searchTerm
+    ? staff?.filter(s => s.full_name.toLowerCase().includes(searchTerm.toLowerCase()) || s.email.toLowerCase().includes(searchTerm.toLowerCase()) || (s.position || '').toLowerCase().includes(searchTerm.toLowerCase()))
+    : staff;
+
+  const filteredDepts = empForm.organization_id
+    ? depts?.filter(d => d.organization_id === empForm.organization_id)
+    : depts;
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold">Staff Profiles & Salary Management</h2>
-        <Badge variant="outline">{staff?.length || 0} Staff</Badge>
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div className="flex items-center gap-3">
+          <h2 className="text-lg font-semibold">Staff Profiles & Salary Management</h2>
+          <Badge variant="outline">{staff?.length || 0} Staff</Badge>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="relative">
+            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Search staff..."
+              value={searchTerm}
+              onChange={e => setSearchTerm(e.target.value)}
+              className="pl-9 w-60"
+              data-testid="input-search-staff"
+            />
+          </div>
+          <Button onClick={() => {
+            setEmpForm({
+              full_name: "", email: "", phone: "", position: "", department: "",
+              organization_id: orgs?.[0]?.id || "", department_id: "", gender: "", marital_status: "",
+              join_date: new Date().toISOString().split("T")[0], employment_type: "full_time",
+              citizenship_no: "", pan_no: "", bank_name: "", bank_account_number: "",
+              bank_branch: "", permanent_address: "", temporary_address: "",
+              salary_amount: "", salary_currency: "NPR",
+              emergency_contact_name: "", emergency_contact_phone: "",
+            });
+            setShowAddEmployee(true);
+          }} data-testid="btn-add-employee">
+            <Plus className="w-4 h-4 mr-1" /> Add Employee
+          </Button>
+        </div>
       </div>
 
       <Table>
@@ -249,8 +348,8 @@ export function StaffProfilesTab() {
           </TableRow>
         </TableHeader>
         <TableBody>
-          {staff?.map((s) => (
-            <TableRow key={s.id} data-testid={`row-staff-${s.id}`}>
+          {filteredStaff?.map((s) => (
+            <TableRow key={s.id} data-testid={`row-staff-${s.id}`} className="cursor-pointer hover:bg-muted/50" onClick={() => setViewEmployeeId(s.id)}>
               <TableCell>
                 <div className="flex items-center gap-2">
                   <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
@@ -287,17 +386,124 @@ export function StaffProfilesTab() {
                 ) : <span className="text-muted-foreground">—</span>}
               </TableCell>
               <TableCell>
-                <Button size="sm" variant="outline" onClick={() => openSalaryDialog(s)} data-testid={`btn-salary-${s.id}`}>
-                  <DollarSign className="w-3 h-3 mr-1" /> {s.salary_structure ? "Edit Salary" : "Set Salary"}
-                </Button>
+                <div className="flex gap-1" onClick={e => e.stopPropagation()}>
+                  <Button size="sm" variant="ghost" onClick={() => setViewEmployeeId(s.id)} data-testid={`btn-view-${s.id}`} title="View Details">
+                    <Eye className="w-3 h-3" />
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={() => openSalaryDialog(s)} data-testid={`btn-salary-${s.id}`}>
+                    <DollarSign className="w-3 h-3 mr-1" /> {s.salary_structure ? "Edit" : "Set"}
+                  </Button>
+                </div>
               </TableCell>
             </TableRow>
           ))}
-          {(!staff || staff.length === 0) && (
-            <TableRow><TableCell colSpan={9} className="text-center text-muted-foreground py-8">No active staff found. Add employees from the Employees page first.</TableCell></TableRow>
+          {(!filteredStaff || filteredStaff.length === 0) && (
+            <TableRow><TableCell colSpan={9} className="text-center text-muted-foreground py-8">
+              {searchTerm ? "No staff matching search." : "No active staff found. Click 'Add Employee' to onboard your first employee."}
+            </TableCell></TableRow>
           )}
         </TableBody>
       </Table>
+
+      <Dialog open={showAddEmployee} onOpenChange={setShowAddEmployee}>
+        <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader><DialogTitle>Add New Employee</DialogTitle></DialogHeader>
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div><Label>Full Name *</Label><Input value={empForm.full_name} onChange={e => setEmpForm({ ...empForm, full_name: e.target.value })} data-testid="input-emp-name" /></div>
+              <div><Label>Email *</Label><Input type="email" value={empForm.email} onChange={e => setEmpForm({ ...empForm, email: e.target.value })} data-testid="input-emp-email" /></div>
+            </div>
+            <div className="grid grid-cols-3 gap-4">
+              <div><Label>Phone</Label><Input value={empForm.phone} onChange={e => setEmpForm({ ...empForm, phone: e.target.value })} data-testid="input-emp-phone" /></div>
+              <div><Label>Position</Label><Input value={empForm.position} onChange={e => setEmpForm({ ...empForm, position: e.target.value })} data-testid="input-emp-position" /></div>
+              <div>
+                <Label>Employment Type</Label>
+                <Select value={empForm.employment_type} onValueChange={v => setEmpForm({ ...empForm, employment_type: v })}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="full_time">Full Time</SelectItem>
+                    <SelectItem value="part_time">Part Time</SelectItem>
+                    <SelectItem value="contract">Contract</SelectItem>
+                    <SelectItem value="intern">Intern</SelectItem>
+                    <SelectItem value="probation">Probation</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="grid grid-cols-3 gap-4">
+              <div>
+                <Label>Organization</Label>
+                <Select value={empForm.organization_id} onValueChange={v => setEmpForm({ ...empForm, organization_id: v, department_id: "" })}>
+                  <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
+                  <SelectContent>{orgs?.map(o => <SelectItem key={o.id} value={o.id}>{o.name}</SelectItem>)}</SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label>Department</Label>
+                <Select value={empForm.department_id} onValueChange={v => {
+                  const dept = depts?.find(d => d.id === v);
+                  setEmpForm({ ...empForm, department_id: v, department: dept?.name || "" });
+                }}>
+                  <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
+                  <SelectContent>{filteredDepts?.map(d => <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>)}</SelectContent>
+                </Select>
+              </div>
+              <div><Label>Join Date</Label><Input type="date" value={empForm.join_date} onChange={e => setEmpForm({ ...empForm, join_date: e.target.value })} data-testid="input-emp-join-date" /></div>
+            </div>
+            <div className="grid grid-cols-3 gap-4">
+              <div>
+                <Label>Gender</Label>
+                <Select value={empForm.gender} onValueChange={v => setEmpForm({ ...empForm, gender: v })}>
+                  <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="male">Male</SelectItem>
+                    <SelectItem value="female">Female</SelectItem>
+                    <SelectItem value="other">Other</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label>Marital Status</Label>
+                <Select value={empForm.marital_status} onValueChange={v => setEmpForm({ ...empForm, marital_status: v })}>
+                  <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="single">Single</SelectItem>
+                    <SelectItem value="married">Married</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label>Salary ({empForm.salary_currency})</Label>
+                <Input type="number" value={empForm.salary_amount} onChange={e => setEmpForm({ ...empForm, salary_amount: e.target.value })} data-testid="input-emp-salary" />
+              </div>
+            </div>
+            <div className="grid grid-cols-3 gap-4">
+              <div><Label>Citizenship No</Label><Input value={empForm.citizenship_no} onChange={e => setEmpForm({ ...empForm, citizenship_no: e.target.value })} /></div>
+              <div><Label>PAN Number</Label><Input value={empForm.pan_no} onChange={e => setEmpForm({ ...empForm, pan_no: e.target.value })} /></div>
+              <div><Label>Passport Number</Label></div>
+            </div>
+            <div className="grid grid-cols-3 gap-4">
+              <div><Label>Bank Name</Label><Input value={empForm.bank_name} onChange={e => setEmpForm({ ...empForm, bank_name: e.target.value })} /></div>
+              <div><Label>Account Number</Label><Input value={empForm.bank_account_number} onChange={e => setEmpForm({ ...empForm, bank_account_number: e.target.value })} /></div>
+              <div><Label>Bank Branch</Label><Input value={empForm.bank_branch} onChange={e => setEmpForm({ ...empForm, bank_branch: e.target.value })} /></div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div><Label>Emergency Contact Name</Label><Input value={empForm.emergency_contact_name} onChange={e => setEmpForm({ ...empForm, emergency_contact_name: e.target.value })} /></div>
+              <div><Label>Emergency Contact Phone</Label><Input value={empForm.emergency_contact_phone} onChange={e => setEmpForm({ ...empForm, emergency_contact_phone: e.target.value })} /></div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div><Label>Permanent Address</Label><Input value={empForm.permanent_address} onChange={e => setEmpForm({ ...empForm, permanent_address: e.target.value })} /></div>
+              <div><Label>Temporary Address</Label><Input value={empForm.temporary_address} onChange={e => setEmpForm({ ...empForm, temporary_address: e.target.value })} /></div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowAddEmployee(false)}>Cancel</Button>
+            <Button onClick={handleAddEmployee} disabled={createEmployeeMutation.isPending} data-testid="btn-save-employee">
+              {createEmployeeMutation.isPending ? "Adding..." : "Add Employee"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={showSalaryDialog} onOpenChange={setShowSalaryDialog}>
         <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">

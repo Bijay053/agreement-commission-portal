@@ -2325,6 +2325,199 @@ class StaffProfileListView(APIView):
         return Response(result)
 
 
+class Employee360View(APIView):
+    @require_permission('hrms.staff.read')
+    def get(self, request, employee_id):
+        try:
+            emp = Employee.objects.get(id=employee_id)
+        except Employee.DoesNotExist:
+            return Response({'error': 'Employee not found'}, status=404)
+
+        org_name = None
+        dept_name = None
+        if emp.organization_id:
+            try:
+                org_name = Organization.objects.get(id=emp.organization_id).name
+            except Organization.DoesNotExist:
+                pass
+        if emp.department_id:
+            try:
+                dept_name = Department.objects.get(id=emp.department_id).name
+            except Department.DoesNotExist:
+                pass
+
+        sal = SalaryStructure.objects.filter(
+            employee_id=emp.id, status='active'
+        ).order_by('-effective_from').first()
+
+        salary_data = None
+        if sal:
+            salary_data = {
+                'id': str(sal.id),
+                'basic_salary': float(sal.basic_salary),
+                'allowances': sal.allowances or {},
+                'deductions': sal.deductions or {},
+                'cit_type': sal.cit_type,
+                'cit_value': float(sal.cit_value),
+                'ssf_applicable': sal.ssf_applicable,
+                'ssf_employee_percentage': float(sal.ssf_employee_percentage),
+                'ssf_employer_percentage': float(sal.ssf_employer_percentage),
+                'tax_applicable': sal.tax_applicable,
+                'effective_from': sal.effective_from.isoformat() if sal.effective_from else None,
+            }
+
+        now = timezone.now()
+        current_month = now.month
+        current_year = now.year
+        att_records = AttendanceRecord.objects.filter(
+            employee_id=emp.id, date__month=current_month, date__year=current_year
+        )
+        att_summary = {
+            'month': current_month,
+            'year': current_year,
+            'present': att_records.filter(status='present').count(),
+            'absent': att_records.filter(status='absent').count(),
+            'late': att_records.filter(status='late').count(),
+            'half_day': att_records.filter(status='half_day').count(),
+            'on_leave': att_records.filter(status__in=['on_leave', 'paid_leave', 'unpaid_leave', 'sick_leave', 'casual_leave']).count(),
+            'total_records': att_records.count(),
+        }
+
+        leave_balances = []
+        for lb in LeaveBalance.objects.filter(employee_id=emp.id).select_related('leave_type'):
+            leave_balances.append({
+                'leave_type': lb.leave_type.name,
+                'leave_type_code': lb.leave_type.code,
+                'color': lb.leave_type.color,
+                'allocated': float(lb.allocated_days),
+                'used': float(lb.used_days),
+                'carried_forward': float(lb.carried_forward_days),
+                'remaining': float(lb.allocated_days + lb.carried_forward_days - lb.used_days),
+            })
+
+        recent_payslips = []
+        for ps in Payslip.objects.filter(employee_id=emp.id).order_by('-year', '-month')[:6]:
+            recent_payslips.append({
+                'id': str(ps.id),
+                'month': ps.month,
+                'year': ps.year,
+                'basic_salary': float(ps.basic_salary),
+                'gross_salary': float(ps.gross_salary),
+                'cit_deduction': float(ps.cit_deduction),
+                'ssf_employee_deduction': float(ps.ssf_employee_deduction),
+                'ssf_employer_contribution': float(ps.ssf_employer_contribution),
+                'tax_deduction': float(ps.tax_deduction),
+                'bonus_amount': float(ps.bonus_amount),
+                'travel_reimbursement': float(ps.travel_reimbursement),
+                'advance_deduction': float(ps.advance_deduction),
+                'unpaid_leave_deduction': float(ps.unpaid_leave_deduction),
+                'total_deductions': float(ps.total_deductions),
+                'net_salary': float(ps.net_salary),
+                'working_days': ps.working_days,
+                'present_days': ps.present_days,
+                'status': ps.status,
+            })
+
+        bonuses = []
+        for b in Bonus.objects.filter(employee_id=emp.id).order_by('-year', '-month')[:10]:
+            bonuses.append({
+                'id': str(b.id),
+                'bonus_type': b.bonus_type,
+                'amount': float(b.amount),
+                'reason': b.reason,
+                'month': b.month,
+                'year': b.year,
+                'is_taxable': b.is_taxable,
+                'status': b.status,
+            })
+
+        advances = []
+        for a in AdvancePayment.objects.filter(employee_id=emp.id).order_by('-request_date')[:10]:
+            advances.append({
+                'id': str(a.id),
+                'amount': float(a.amount),
+                'reason': a.reason,
+                'request_date': a.request_date.isoformat() if a.request_date else None,
+                'monthly_deduction': float(a.monthly_deduction),
+                'total_deducted': float(a.total_deducted),
+                'remaining_balance': float(a.remaining_balance),
+                'status': a.status,
+            })
+
+        expenses = []
+        for e in TravelExpense.objects.filter(employee_id=emp.id).order_by('-expense_date')[:10]:
+            expenses.append({
+                'id': str(e.id),
+                'category': e.category,
+                'description': e.description,
+                'amount': float(e.amount),
+                'expense_date': e.expense_date.isoformat() if e.expense_date else None,
+                'status': e.status,
+                'include_in_salary': e.include_in_salary,
+            })
+
+        active_advances_total = AdvancePayment.objects.filter(
+            employee_id=emp.id, status__in=['approved', 'active']
+        ).aggregate(total=Sum('remaining_balance'))['total'] or 0
+
+        annual_tax_paid = Payslip.objects.filter(
+            employee_id=emp.id, year=current_year
+        ).aggregate(
+            total_tax=Sum('tax_deduction'),
+            total_cit=Sum('cit_deduction'),
+            total_ssf=Sum('ssf_employee_deduction'),
+        )
+
+        return Response({
+            'employee': {
+                'id': str(emp.id),
+                'full_name': emp.full_name,
+                'email': emp.email,
+                'phone': emp.phone,
+                'position': emp.position,
+                'department': emp.department,
+                'organization_name': org_name,
+                'department_name': dept_name,
+                'organization_id': str(emp.organization_id) if emp.organization_id else None,
+                'department_id': str(emp.department_id) if emp.department_id else None,
+                'gender': emp.gender,
+                'marital_status': emp.marital_status,
+                'date_of_birth': emp.date_of_birth.isoformat() if emp.date_of_birth else None,
+                'join_date': emp.join_date.isoformat() if emp.join_date else None,
+                'employment_type': emp.employment_type,
+                'bank_name': emp.bank_name,
+                'bank_account_number': emp.bank_account_number,
+                'bank_branch': emp.bank_branch,
+                'citizenship_no': emp.citizenship_no,
+                'pan_no': emp.pan_no,
+                'passport_number': emp.passport_number,
+                'permanent_address': emp.permanent_address,
+                'temporary_address': emp.temporary_address,
+                'salary_currency': emp.salary_currency,
+                'profile_photo_url': emp.profile_photo_url,
+                'status': emp.status,
+                'probation_end_date': emp.probation_end_date.isoformat() if emp.probation_end_date else None,
+                'contract_end_date': emp.contract_end_date.isoformat() if emp.contract_end_date else None,
+                'emergency_contact_name': emp.emergency_contact_name,
+                'emergency_contact_phone': emp.emergency_contact_phone,
+            },
+            'salary_structure': salary_data,
+            'attendance_summary': att_summary,
+            'leave_balances': leave_balances,
+            'recent_payslips': recent_payslips,
+            'bonuses': bonuses,
+            'advances': advances,
+            'expenses': expenses,
+            'outstanding_advance': float(active_advances_total),
+            'tax_summary': {
+                'year': current_year,
+                'total_tax': float(annual_tax_paid['total_tax'] or 0),
+                'total_cit': float(annual_tax_paid['total_cit'] or 0),
+                'total_ssf': float(annual_tax_paid['total_ssf'] or 0),
+            },
+        })
+
+
 def serialize_tax_slab(s):
     return {
         'id': str(s.id),

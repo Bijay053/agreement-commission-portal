@@ -71,19 +71,34 @@ class EmployeeListView(APIView):
         if Employee.objects.filter(email=email).exists():
             return Response({'message': 'An employee with this email already exists'}, status=400)
 
+        org_id = data.get('organizationId') or data.get('organization_id') or None
+        dept_id = data.get('departmentId') or data.get('department_id') or None
+
         employee = Employee.objects.create(
             full_name=full_name,
             email=email,
             phone=data.get('phone', ''),
             position=data.get('position', ''),
             department=data.get('department', ''),
-            citizenship_no=data.get('citizenshipNo', ''),
-            pan_no=data.get('panNo', ''),
-            permanent_address=data.get('permanentAddress', ''),
-            passport_number=data.get('passportNumber', ''),
-            join_date=data.get('joinDate') or None,
-            salary_amount=data.get('salaryAmount') or None,
-            salary_currency=data.get('salaryCurrency', 'NPR'),
+            organization_id=org_id if org_id else None,
+            department_id=dept_id if dept_id else None,
+            gender=data.get('gender', '') or None,
+            marital_status=data.get('maritalStatus') or data.get('marital_status') or None,
+            date_of_birth=data.get('dateOfBirth') or data.get('date_of_birth') or None,
+            citizenship_no=data.get('citizenshipNo') or data.get('citizenship_no') or '',
+            pan_no=data.get('panNo') or data.get('pan_no') or '',
+            permanent_address=data.get('permanentAddress') or data.get('permanent_address') or '',
+            temporary_address=data.get('temporaryAddress') or data.get('temporary_address') or '',
+            passport_number=data.get('passportNumber') or data.get('passport_number') or '',
+            join_date=data.get('joinDate') or data.get('join_date') or None,
+            employment_type=data.get('employmentType') or data.get('employment_type') or 'full_time',
+            salary_amount=data.get('salaryAmount') or data.get('salary_amount') or None,
+            salary_currency=data.get('salaryCurrency') or data.get('salary_currency') or 'NPR',
+            bank_name=data.get('bankName') or data.get('bank_name') or '',
+            bank_account_number=data.get('bankAccountNumber') or data.get('bank_account_number') or '',
+            bank_branch=data.get('bankBranch') or data.get('bank_branch') or '',
+            emergency_contact_name=data.get('emergencyContactName') or data.get('emergency_contact_name') or '',
+            emergency_contact_phone=data.get('emergencyContactPhone') or data.get('emergency_contact_phone') or '',
             status=data.get('status', 'active'),
         )
         return Response(_serialize_employee(employee), status=201)
