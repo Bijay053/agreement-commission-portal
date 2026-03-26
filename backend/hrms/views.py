@@ -1781,7 +1781,11 @@ class PayrollRunProcessView(APIView):
                     overlap_start = max(lr.start_date, month_start)
                     overlap_end = min(lr.end_date, month_end)
                     unpaid_leave_days += (overlap_end - overlap_start).days + 1
-            unpaid_leave_days += absent_count
+
+            recorded_days = present_count + absent_count + leave_count
+            unrecorded_absent = max(0, effective_working_days - recorded_days)
+            total_absent = absent_count + unrecorded_absent
+            unpaid_leave_days += total_absent
 
             per_day_salary = gross / Decimal(str(effective_working_days))
             unpaid_leave_deduction = (per_day_salary * Decimal(str(unpaid_leave_days))).quantize(Decimal('0.01'))
@@ -1877,7 +1881,7 @@ class PayrollRunProcessView(APIView):
                     'net_salary': net,
                     'working_days': effective_working_days,
                     'present_days': present_count,
-                    'absent_days': absent_count,
+                    'absent_days': total_absent,
                     'leave_days': leave_count,
                     'late_count': late_count,
                     'early_leave_count': early_count,
@@ -2078,131 +2082,210 @@ def generate_payslip_pdf(ps, emp, org):
     from reportlab.lib.pagesizes import A4
     from reportlab.lib.units import mm
     from reportlab.lib import colors
-    from reportlab.platypus import SimpleDocTemplate, Table as RTable, TableStyle, Paragraph, Spacer
+    from reportlab.platypus import SimpleDocTemplate, Table as RTable, TableStyle, Paragraph, Spacer, HRFlowable
     from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.lib.enums import TA_CENTER, TA_RIGHT, TA_LEFT
 
     buf = io.BytesIO()
-    doc = SimpleDocTemplate(buf, pagesize=A4, leftMargin=15*mm, rightMargin=15*mm, topMargin=15*mm, bottomMargin=15*mm)
+    doc = SimpleDocTemplate(buf, pagesize=A4, leftMargin=18*mm, rightMargin=18*mm, topMargin=15*mm, bottomMargin=15*mm)
+    page_w = A4[0] - 36*mm
     styles = getSampleStyleSheet()
-    title_style = ParagraphStyle('PayslipTitle', parent=styles['Heading1'], fontSize=14, alignment=1, spaceAfter=2*mm)
-    subtitle_style = ParagraphStyle('PayslipSubtitle', parent=styles['Normal'], fontSize=9, alignment=1, spaceAfter=4*mm, textColor=colors.grey)
-    label_style = ParagraphStyle('Label', parent=styles['Normal'], fontSize=8, textColor=colors.grey)
-    value_style = ParagraphStyle('Value', parent=styles['Normal'], fontSize=9, fontName='Helvetica-Bold')
+
+    c_primary = colors.HexColor('#1e3a5f')
+    c_primary_light = colors.HexColor('#e8eef6')
+    c_accent = colors.HexColor('#2563eb')
+    c_green = colors.HexColor('#059669')
+    c_green_bg = colors.HexColor('#ecfdf5')
+    c_red = colors.HexColor('#dc2626')
+    c_red_bg = colors.HexColor('#fef2f2')
+    c_grey = colors.HexColor('#64748b')
+    c_lightgrey = colors.HexColor('#f1f5f9')
+    c_border = colors.HexColor('#e2e8f0')
+    c_white = colors.white
+
+    org_name_style = ParagraphStyle('OrgName', fontName='Helvetica-Bold', fontSize=16, textColor=c_primary, alignment=TA_CENTER, spaceAfter=1*mm)
+    org_addr_style = ParagraphStyle('OrgAddr', fontName='Helvetica', fontSize=8, textColor=c_grey, alignment=TA_CENTER, spaceAfter=1*mm)
+    slip_title_style = ParagraphStyle('SlipTitle', fontName='Helvetica-Bold', fontSize=10, textColor=c_accent, alignment=TA_CENTER, spaceAfter=0)
+    lbl_style = ParagraphStyle('Lbl', fontName='Helvetica', fontSize=7.5, textColor=c_grey, leading=10)
+    val_style = ParagraphStyle('Val', fontName='Helvetica-Bold', fontSize=8.5, textColor=colors.black, leading=11)
+    section_hdr = ParagraphStyle('SecHdr', fontName='Helvetica-Bold', fontSize=9, textColor=c_white)
+    row_lbl = ParagraphStyle('RowLbl', fontName='Helvetica', fontSize=8.5, textColor=colors.HexColor('#334155'))
+    row_val = ParagraphStyle('RowVal', fontName='Helvetica', fontSize=8.5, textColor=colors.black, alignment=TA_RIGHT)
+    row_val_bold = ParagraphStyle('RowValBold', fontName='Helvetica-Bold', fontSize=9, textColor=colors.black, alignment=TA_RIGHT)
+    net_lbl = ParagraphStyle('NetLbl', fontName='Helvetica-Bold', fontSize=11, textColor=c_primary)
+    net_val = ParagraphStyle('NetVal', fontName='Helvetica-Bold', fontSize=12, textColor=c_green, alignment=TA_RIGHT)
+    footer_style = ParagraphStyle('Footer', fontName='Helvetica-Oblique', fontSize=7, textColor=c_grey, alignment=TA_CENTER)
+
     month_names = ['January','February','March','April','May','June','July','August','September','October','November','December']
 
     elements = []
-    org_name = org.name if org else 'Company'
-    elements.append(Paragraph(org_name, title_style))
-    elements.append(Paragraph(f"Payslip for {month_names[ps.month - 1]} {ps.year}", subtitle_style))
 
-    emp_info = [
-        [Paragraph('Employee Name', label_style), Paragraph(emp.full_name, value_style),
-         Paragraph('Employee ID', label_style), Paragraph(str(emp.id)[:8], value_style)],
-        [Paragraph('Department', label_style), Paragraph(emp.department or '-', value_style),
-         Paragraph('Position', label_style), Paragraph(emp.position or '-', value_style)],
-        [Paragraph('PAN No', label_style), Paragraph(emp.pan_no or '-', value_style),
-         Paragraph('Bank', label_style), Paragraph(emp.bank_name or '-', value_style)],
-        [Paragraph('Working Days', label_style), Paragraph(str(ps.working_days), value_style),
-         Paragraph('Present Days', label_style), Paragraph(str(ps.present_days), value_style)],
+    org_name = org.name if org else 'Company'
+    org_address = getattr(org, 'address', None) or ''
+    elements.append(Paragraph(org_name, org_name_style))
+    if org_address:
+        elements.append(Paragraph(org_address, org_addr_style))
+
+    elements.append(HRFlowable(width="100%", thickness=1.5, color=c_accent, spaceAfter=2*mm, spaceBefore=2*mm))
+    elements.append(Paragraph(f"PAYSLIP &mdash; {month_names[ps.month - 1]} {ps.year}", slip_title_style))
+    elements.append(HRFlowable(width="100%", thickness=0.5, color=c_border, spaceAfter=4*mm, spaceBefore=2*mm))
+
+    bank_acct = getattr(emp, 'bank_account_no', None) or '-'
+    bank_name = getattr(emp, 'bank_name', None) or '-'
+    bank_display = f"{bank_name} — {bank_acct}" if bank_name != '-' else bank_acct
+
+    absent_days = getattr(ps, 'absent_days', 0) or 0
+    leave_days = getattr(ps, 'leave_days', 0) or 0
+
+    info_data = [
+        [Paragraph('Employee Name', lbl_style), Paragraph(emp.full_name, val_style),
+         Paragraph('Employee ID', lbl_style), Paragraph(str(emp.id)[:8], val_style)],
+        [Paragraph('Department', lbl_style), Paragraph(emp.department or '-', val_style),
+         Paragraph('Position', lbl_style), Paragraph(emp.position or '-', val_style)],
+        [Paragraph('PAN No', lbl_style), Paragraph(emp.pan_no or '-', val_style),
+         Paragraph('Bank', lbl_style), Paragraph(bank_display, val_style)],
     ]
-    emp_table = RTable(emp_info, colWidths=[80, 140, 80, 140])
-    emp_table.setStyle(TableStyle([
-        ('VALIGN', (0,0), (-1,-1), 'TOP'),
-        ('BOTTOMPADDING', (0,0), (-1,-1), 3),
+    info_tbl = RTable(info_data, colWidths=[page_w*0.18, page_w*0.32, page_w*0.18, page_w*0.32])
+    info_tbl.setStyle(TableStyle([
+        ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
         ('TOPPADDING', (0,0), (-1,-1), 3),
+        ('BOTTOMPADDING', (0,0), (-1,-1), 3),
+        ('LINEBELOW', (0,0), (-1,-1), 0.4, c_border),
     ]))
-    elements.append(emp_table)
+    elements.append(info_tbl)
+    elements.append(Spacer(1, 2*mm))
+
+    att_data = [[
+        Paragraph('Working Days', lbl_style), Paragraph(str(ps.working_days), val_style),
+        Paragraph('Present Days', lbl_style), Paragraph(str(ps.present_days), val_style),
+        Paragraph('Absent Days', lbl_style), Paragraph(str(absent_days), val_style),
+        Paragraph('Leave Days', lbl_style), Paragraph(str(leave_days), val_style),
+    ]]
+    att_tbl = RTable(att_data, colWidths=[page_w*0.11, page_w*0.14, page_w*0.11, page_w*0.14, page_w*0.11, page_w*0.14, page_w*0.11, page_w*0.14])
+    att_tbl.setStyle(TableStyle([
+        ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+        ('BACKGROUND', (0,0), (-1,-1), c_lightgrey),
+        ('TOPPADDING', (0,0), (-1,-1), 5),
+        ('BOTTOMPADDING', (0,0), (-1,-1), 5),
+        ('BOX', (0,0), (-1,-1), 0.5, c_border),
+    ]))
+    elements.append(att_tbl)
     elements.append(Spacer(1, 5*mm))
 
-    earnings = [['Earnings', '', 'Amount']]
-    earnings.append(['Basic Salary', '', f"Rs. {float(ps.basic_salary):,.2f}"])
+    earn_rows = []
+    earn_rows.append(('Basic Salary', float(ps.basic_salary)))
     allow_dict = ps.allowances or {}
     for k, v in allow_dict.items():
-        earnings.append([k.replace('_', ' ').title(), '', f"Rs. {float(v):,.2f}"])
+        earn_rows.append((k.replace('_', ' ').title(), float(v)))
     if float(ps.bonus_amount) > 0:
-        earnings.append(['Bonus', '', f"Rs. {float(ps.bonus_amount):,.2f}"])
+        earn_rows.append(('Bonus', float(ps.bonus_amount)))
     if float(ps.travel_reimbursement) > 0:
-        earnings.append(['Travel Reimbursement', '', f"Rs. {float(ps.travel_reimbursement):,.2f}"])
+        earn_rows.append(('Travel Reimbursement', float(ps.travel_reimbursement)))
     gross_val = float(ps.gross_salary) + float(ps.bonus_amount) + float(ps.travel_reimbursement)
-    earnings.append(['Total Earnings', '', f"Rs. {gross_val:,.2f}"])
 
-    deductions = [['Deductions', '', 'Amount']]
-    if float(ps.cit_deduction) > 0:
-        deductions.append(['CIT (Contribution to Insurance/Provident)', '', f"Rs. {float(ps.cit_deduction):,.2f}"])
-    if float(ps.ssf_employee_deduction) > 0:
-        deductions.append(['SSF (Employee)', '', f"Rs. {float(ps.ssf_employee_deduction):,.2f}"])
-    if float(ps.tax_deduction) > 0:
-        deductions.append(['Income Tax (TDS)', '', f"Rs. {float(ps.tax_deduction):,.2f}"])
+    ded_rows = []
     if float(ps.unpaid_leave_deduction) > 0:
-        deductions.append(['Unpaid Leave Deduction', '', f"Rs. {float(ps.unpaid_leave_deduction):,.2f}"])
+        ded_rows.append(('Absent / Unpaid Leave Deduction', float(ps.unpaid_leave_deduction)))
+    if float(ps.cit_deduction) > 0:
+        ded_rows.append(('CIT (Provident Fund)', float(ps.cit_deduction)))
+    if float(ps.ssf_employee_deduction) > 0:
+        ded_rows.append(('SSF (Employee Contribution)', float(ps.ssf_employee_deduction)))
+    if float(ps.tax_deduction) > 0:
+        ded_rows.append(('Income Tax (TDS)', float(ps.tax_deduction)))
     if float(ps.advance_deduction) > 0:
-        deductions.append(['Advance Deduction', '', f"Rs. {float(ps.advance_deduction):,.2f}"])
+        ded_rows.append(('Advance Deduction', float(ps.advance_deduction)))
     other_ded = ps.other_deductions or {}
     for k, v in other_ded.items():
-        deductions.append([k.replace('_', ' ').title(), '', f"Rs. {float(v):,.2f}"])
-    deductions.append(['Total Deductions', '', f"Rs. {float(ps.total_deductions):,.2f}"])
+        ded_rows.append((k.replace('_', ' ').title(), float(v)))
 
-    col_w = [200, 60, 120]
-    e_table = RTable(earnings, colWidths=col_w)
-    e_table.setStyle(TableStyle([
-        ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
-        ('FONTSIZE', (0,0), (-1,-1), 9),
-        ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#f0f4f8')),
-        ('LINEBELOW', (0,0), (-1,0), 1, colors.HexColor('#cbd5e1')),
-        ('LINEBELOW', (0,-1), (-1,-1), 1.5, colors.HexColor('#334155')),
-        ('FONTNAME', (0,-1), (-1,-1), 'Helvetica-Bold'),
+    max_rows = max(len(earn_rows), len(ded_rows))
+
+    half_w = page_w * 0.48
+    gap_w = page_w * 0.04
+    col_name_w = half_w * 0.65
+    col_amt_w = half_w * 0.35
+
+    combined_data = []
+    hdr = [
+        Paragraph('Earnings', section_hdr), Paragraph('Amount', ParagraphStyle('SA', fontName='Helvetica-Bold', fontSize=9, textColor=c_white, alignment=TA_RIGHT)),
+        '',
+        Paragraph('Deductions', section_hdr), Paragraph('Amount', ParagraphStyle('SA2', fontName='Helvetica-Bold', fontSize=9, textColor=c_white, alignment=TA_RIGHT)),
+    ]
+    combined_data.append(hdr)
+
+    for i in range(max_rows):
+        row = []
+        if i < len(earn_rows):
+            row.append(Paragraph(earn_rows[i][0], row_lbl))
+            row.append(Paragraph(f"Rs. {earn_rows[i][1]:,.2f}", row_val))
+        else:
+            row.extend(['', ''])
+        row.append('')
+        if i < len(ded_rows):
+            row.append(Paragraph(ded_rows[i][0], row_lbl))
+            row.append(Paragraph(f"Rs. {ded_rows[i][1]:,.2f}", row_val))
+        else:
+            row.extend(['', ''])
+        combined_data.append(row)
+
+    total_row = [
+        Paragraph('Total Earnings', ParagraphStyle('TE', fontName='Helvetica-Bold', fontSize=9, textColor=c_primary)),
+        Paragraph(f"Rs. {gross_val:,.2f}", row_val_bold),
+        '',
+        Paragraph('Total Deductions', ParagraphStyle('TD', fontName='Helvetica-Bold', fontSize=9, textColor=c_red)),
+        Paragraph(f"Rs. {float(ps.total_deductions):,.2f}", ParagraphStyle('TDV', fontName='Helvetica-Bold', fontSize=9, textColor=c_red, alignment=TA_RIGHT)),
+    ]
+    combined_data.append(total_row)
+
+    combined_tbl = RTable(combined_data, colWidths=[col_name_w, col_amt_w, gap_w, col_name_w, col_amt_w])
+    style_cmds = [
+        ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
         ('TOPPADDING', (0,0), (-1,-1), 4),
         ('BOTTOMPADDING', (0,0), (-1,-1), 4),
-        ('ALIGN', (2,0), (2,-1), 'RIGHT'),
-    ]))
-    elements.append(e_table)
-    elements.append(Spacer(1, 4*mm))
+        ('BACKGROUND', (0,0), (1,0), c_accent),
+        ('BACKGROUND', (3,0), (4,0), c_red),
+        ('LINEBELOW', (0,0), (1,0), 1, c_accent),
+        ('LINEBELOW', (3,0), (4,0), 1, c_red),
+        ('LINEBELOW', (0,-1), (1,-1), 1.2, c_primary),
+        ('LINEBELOW', (3,-1), (4,-1), 1.2, c_red),
+        ('BACKGROUND', (2,0), (2,-1), c_white),
+    ]
+    for i in range(1, len(combined_data) - 1):
+        bg = c_lightgrey if i % 2 == 0 else c_white
+        style_cmds.append(('BACKGROUND', (0, i), (1, i), bg))
+        style_cmds.append(('BACKGROUND', (3, i), (4, i), bg))
+        style_cmds.append(('LINEBELOW', (0, i), (1, i), 0.3, c_border))
+        style_cmds.append(('LINEBELOW', (3, i), (4, i), 0.3, c_border))
 
-    d_table = RTable(deductions, colWidths=col_w)
-    d_table.setStyle(TableStyle([
-        ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
-        ('FONTSIZE', (0,0), (-1,-1), 9),
-        ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#fef2f2')),
-        ('LINEBELOW', (0,0), (-1,0), 1, colors.HexColor('#fca5a5')),
-        ('LINEBELOW', (0,-1), (-1,-1), 1.5, colors.HexColor('#991b1b')),
-        ('FONTNAME', (0,-1), (-1,-1), 'Helvetica-Bold'),
-        ('TEXTCOLOR', (2,-1), (2,-1), colors.HexColor('#991b1b')),
-        ('TOPPADDING', (0,0), (-1,-1), 4),
-        ('BOTTOMPADDING', (0,0), (-1,-1), 4),
-        ('ALIGN', (2,0), (2,-1), 'RIGHT'),
-    ]))
-    elements.append(d_table)
+    combined_tbl.setStyle(TableStyle(style_cmds))
+    elements.append(combined_tbl)
     elements.append(Spacer(1, 6*mm))
 
-    net_data = [['Net Salary', '', f"Rs. {float(ps.net_salary):,.2f}"]]
-    net_table = RTable(net_data, colWidths=col_w)
+    net_data = [
+        [Paragraph('Net Salary Payable', net_lbl), '', Paragraph(f"Rs. {float(ps.net_salary):,.2f}", net_val)]
+    ]
+    net_table = RTable(net_data, colWidths=[page_w*0.45, page_w*0.1, page_w*0.45])
     net_table.setStyle(TableStyle([
-        ('FONTNAME', (0,0), (-1,-1), 'Helvetica-Bold'),
-        ('FONTSIZE', (0,0), (-1,-1), 11),
-        ('BACKGROUND', (0,0), (-1,-1), colors.HexColor('#ecfdf5')),
-        ('BOX', (0,0), (-1,-1), 1, colors.HexColor('#059669')),
-        ('TEXTCOLOR', (2,0), (2,0), colors.HexColor('#059669')),
-        ('TOPPADDING', (0,0), (-1,-1), 6),
-        ('BOTTOMPADDING', (0,0), (-1,-1), 6),
-        ('ALIGN', (2,0), (2,0), 'RIGHT'),
+        ('BACKGROUND', (0,0), (-1,-1), c_green_bg),
+        ('BOX', (0,0), (-1,-1), 1.5, c_green),
+        ('TOPPADDING', (0,0), (-1,-1), 8),
+        ('BOTTOMPADDING', (0,0), (-1,-1), 8),
+        ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
     ]))
     elements.append(net_table)
-    elements.append(Spacer(1, 6*mm))
+    elements.append(Spacer(1, 4*mm))
 
     if float(ps.ssf_employer_contribution) > 0:
-        employer_data = [['Employer SSF Contribution', '', f"Rs. {float(ps.ssf_employer_contribution):,.2f}"]]
-        emp_tbl = RTable(employer_data, colWidths=col_w)
-        emp_tbl.setStyle(TableStyle([
-            ('FONTSIZE', (0,0), (-1,-1), 8),
-            ('TEXTCOLOR', (0,0), (-1,-1), colors.grey),
-            ('TOPPADDING', (0,0), (-1,-1), 2),
-            ('ALIGN', (2,0), (2,0), 'RIGHT'),
-        ]))
-        elements.append(emp_tbl)
+        employer_info_style = ParagraphStyle('EmpInfo', fontName='Helvetica', fontSize=8, textColor=c_grey, alignment=TA_CENTER)
+        elements.append(Paragraph(f"Employer SSF Contribution: Rs. {float(ps.ssf_employer_contribution):,.2f} (for employer records only, not deducted from employee)", employer_info_style))
+        elements.append(Spacer(1, 3*mm))
 
-    elements.append(Spacer(1, 10*mm))
-    disclaimer = ParagraphStyle('Disclaimer', parent=styles['Normal'], fontSize=7, textColor=colors.grey, alignment=1)
-    elements.append(Paragraph("This is a system-generated payslip. No signature is required.", disclaimer))
+    elements.append(HRFlowable(width="100%", thickness=0.5, color=c_border, spaceAfter=3*mm, spaceBefore=4*mm))
+    elements.append(Paragraph("This is a system-generated payslip. No signature is required.", footer_style))
+    elements.append(Spacer(1, 2*mm))
+    gen_date_style = ParagraphStyle('GenDate', fontName='Helvetica', fontSize=6.5, textColor=c_grey, alignment=TA_CENTER)
+    from datetime import datetime as dt_now
+    elements.append(Paragraph(f"Generated on {dt_now.now().strftime('%d %b %Y, %I:%M %p')}", gen_date_style))
 
     doc.build(elements)
     return buf.getvalue()
