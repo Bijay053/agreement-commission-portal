@@ -150,8 +150,8 @@ export function TravelExpensesTab() {
               {[2024, 2025, 2026, 2027].map(y => <SelectItem key={y} value={String(y)}>{y}</SelectItem>)}
             </SelectContent>
           </Select>
-          <Badge variant="outline">Pending: Rs {totalPending.toLocaleString()}</Badge>
-          <Badge variant="default">Approved: Rs {totalApproved.toLocaleString()}</Badge>
+          <Badge variant="outline">Pending: { totalPending.toLocaleString()}</Badge>
+          <Badge variant="default">Approved: { totalApproved.toLocaleString()}</Badge>
         </div>
         <Button onClick={() => { setForm({ employee_id: "", category: "travel", description: "", amount: "", expense_date: new Date().toISOString().split("T")[0], month: String(new Date().getMonth() + 1), year: filterYear, include_in_salary: true, receipt_url: "" }); setShowForm(true); }} data-testid="btn-add-expense">
           <Plus className="w-4 h-4 mr-1" /> Add Expense
@@ -178,7 +178,7 @@ export function TravelExpensesTab() {
               <TableCell className="text-sm">{CATEGORIES[e.category] || e.category}</TableCell>
               <TableCell className="text-sm max-w-[200px] truncate">{e.description}</TableCell>
               <TableCell className="text-sm">{e.expense_date}</TableCell>
-              <TableCell className="text-right font-mono text-sm">Rs {e.amount.toLocaleString()}</TableCell>
+              <TableCell className="text-right font-mono text-sm">{ e.amount.toLocaleString()}</TableCell>
               <TableCell>{e.include_in_salary ? <Badge variant="outline" className="text-xs">Yes</Badge> : <Badge variant="secondary" className="text-xs">No</Badge>}</TableCell>
               <TableCell><span className={`text-xs px-2 py-1 rounded-full ${STATUS_COLORS[e.status] || ""}`}>{e.status}</span></TableCell>
               <TableCell>
@@ -224,7 +224,7 @@ export function TravelExpensesTab() {
                 </Select>
               </div>
               <div>
-                <Label>Amount (Rs)</Label>
+                <Label>Amount</Label>
                 <Input type="number" value={form.amount} onChange={e => setForm({ ...form, amount: e.target.value })} data-testid="input-expense-amount" />
               </div>
             </div>

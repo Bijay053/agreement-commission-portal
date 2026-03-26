@@ -40,12 +40,13 @@ import { TravelExpensesTab } from "./hrms-expenses";
 import { AdvancePaymentsTab } from "./hrms-advances";
 import { TaxSlabsTab } from "./hrms-tax-slabs";
 import { GovernmentRecordsTab } from "./hrms-govt-records";
+import { CURRENCIES, getCurrencySymbol } from "@/lib/currencies";
 
 interface Organization {
   id: string; name: string; short_code: string; address: string | null;
   country: string | null; phone: string | null; email: string | null;
   registration_number: string | null; pan_number: string | null;
-  status: string; created_at: string | null;
+  currency: string; status: string; created_at: string | null;
 }
 
 interface Department {
@@ -105,7 +106,7 @@ function OrgTab() {
   const { toast } = useToast();
   const [showForm, setShowForm] = useState(false);
   const [editOrg, setEditOrg] = useState<Organization | null>(null);
-  const [form, setForm] = useState({ name: "", short_code: "", address: "", country: "", phone: "", email: "", registration_number: "", pan_number: "" });
+  const [form, setForm] = useState({ name: "", short_code: "", address: "", country: "", phone: "", email: "", registration_number: "", pan_number: "", currency: "NPR" });
 
   const { data: orgs, isLoading } = useQuery<Organization[]>({ queryKey: ["/api/hrms/organizations"] });
 
@@ -124,8 +125,8 @@ function OrgTab() {
     onSuccess: () => { queryClient.refetchQueries({ queryKey: ["/api/hrms/organizations"] }); toast({ title: "Organization deleted" }); },
   });
 
-  const openCreate = () => { setForm({ name: "", short_code: "", address: "", country: "", phone: "", email: "", registration_number: "", pan_number: "" }); setShowForm(true); };
-  const openEdit = (o: Organization) => { setForm({ name: o.name, short_code: o.short_code, address: o.address || "", country: o.country || "", phone: o.phone || "", email: o.email || "", registration_number: o.registration_number || "", pan_number: o.pan_number || "" }); setEditOrg(o); };
+  const openCreate = () => { setForm({ name: "", short_code: "", address: "", country: "", phone: "", email: "", registration_number: "", pan_number: "", currency: "NPR" }); setShowForm(true); };
+  const openEdit = (o: Organization) => { setForm({ name: o.name, short_code: o.short_code, address: o.address || "", country: o.country || "", phone: o.phone || "", email: o.email || "", registration_number: o.registration_number || "", pan_number: o.pan_number || "", currency: o.currency || "NPR" }); setEditOrg(o); };
 
   if (isLoading) return <Skeleton className="h-40 w-full" />;
 
@@ -148,6 +149,7 @@ function OrgTab() {
             <CardContent className="space-y-1 text-sm text-muted-foreground">
               <p>Code: <span className="font-medium text-foreground">{o.short_code}</span></p>
               {o.country && <p>Country: {o.country}</p>}
+              <p>Currency: <span className="font-medium text-foreground">{o.currency || 'NPR'}</span></p>
               {o.email && <p>Email: {o.email}</p>}
               {o.phone && <p>Phone: {o.phone}</p>}
               <div className="flex gap-2 mt-3">
@@ -167,8 +169,17 @@ function OrgTab() {
               <div><Label>Name</Label><Input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} data-testid="input-org-name" /></div>
               <div><Label>Short Code</Label><Input value={form.short_code} onChange={e => setForm({ ...form, short_code: e.target.value })} data-testid="input-org-code" /></div>
             </div>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-3 gap-3">
               <div><Label>Country</Label><Input value={form.country} onChange={e => setForm({ ...form, country: e.target.value })} data-testid="input-org-country" /></div>
+              <div>
+                <Label>Currency</Label>
+                <Select value={form.currency} onValueChange={v => setForm({ ...form, currency: v })}>
+                  <SelectTrigger data-testid="select-org-currency"><SelectValue /></SelectTrigger>
+                  <SelectContent className="max-h-60">
+                    {CURRENCIES.map(c => <SelectItem key={c.code} value={c.code}>{c.code} ({c.symbol})</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
               <div><Label>Phone</Label><Input value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} data-testid="input-org-phone" /></div>
             </div>
             <div><Label>Email</Label><Input type="email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} data-testid="input-org-email" /></div>
@@ -1054,10 +1065,10 @@ function PayrollRunDetailView({ runId, onBack }: { runId: string; onBack: () => 
 
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
         <Card><CardContent className="p-3 text-center"><p className="text-xs text-muted-foreground">Staff</p><p className="text-lg font-bold">{detail.payslips?.length || detail.payslip_count}</p></CardContent></Card>
-        <Card><CardContent className="p-3 text-center"><p className="text-xs text-muted-foreground">Gross</p><p className="text-lg font-bold font-mono">Rs. {detail.total_gross.toLocaleString()}</p></CardContent></Card>
-        <Card><CardContent className="p-3 text-center"><p className="text-xs text-muted-foreground">Deductions</p><p className="text-lg font-bold font-mono text-red-600">Rs. {detail.total_deductions.toLocaleString()}</p></CardContent></Card>
-        <Card><CardContent className="p-3 text-center"><p className="text-xs text-muted-foreground">Net Pay</p><p className="text-lg font-bold font-mono text-green-600">Rs. {detail.total_net.toLocaleString()}</p></CardContent></Card>
-        <Card><CardContent className="p-3 text-center"><p className="text-xs text-muted-foreground">Employer SSF</p><p className="text-lg font-bold font-mono">Rs. {detail.total_employer_contribution.toLocaleString()}</p></CardContent></Card>
+        <Card><CardContent className="p-3 text-center"><p className="text-xs text-muted-foreground">Gross</p><p className="text-lg font-bold font-mono">{getCurrencySymbol(detail.currency || 'NPR')} {detail.total_gross.toLocaleString()}</p></CardContent></Card>
+        <Card><CardContent className="p-3 text-center"><p className="text-xs text-muted-foreground">Deductions</p><p className="text-lg font-bold font-mono text-red-600">{getCurrencySymbol(detail.currency || 'NPR')} {detail.total_deductions.toLocaleString()}</p></CardContent></Card>
+        <Card><CardContent className="p-3 text-center"><p className="text-xs text-muted-foreground">Net Pay</p><p className="text-lg font-bold font-mono text-green-600">{getCurrencySymbol(detail.currency || 'NPR')} {detail.total_net.toLocaleString()}</p></CardContent></Card>
+        <Card><CardContent className="p-3 text-center"><p className="text-xs text-muted-foreground">Employer SSF</p><p className="text-lg font-bold font-mono">{getCurrencySymbol(detail.currency || 'NPR')} {detail.total_employer_contribution.toLocaleString()}</p></CardContent></Card>
       </div>
 
       {detail.status === 'approved' && (
@@ -1264,9 +1275,9 @@ function PayrollTab() {
                 <TableCell className="font-medium">{months[(r.month || 1) - 1]} {r.year}</TableCell>
                 <TableCell>{r.organization_name}</TableCell>
                 <TableCell className="text-center">{r.payslip_count}</TableCell>
-                <TableCell className="text-right font-mono">Rs. {r.total_gross.toLocaleString()}</TableCell>
-                <TableCell className="text-right font-mono">Rs. {r.total_deductions.toLocaleString()}</TableCell>
-                <TableCell className="text-right font-medium font-mono">Rs. {r.total_net.toLocaleString()}</TableCell>
+                <TableCell className="text-right font-mono">{getCurrencySymbol(r.currency || 'NPR')} {r.total_gross.toLocaleString()}</TableCell>
+                <TableCell className="text-right font-mono">{getCurrencySymbol(r.currency || 'NPR')} {r.total_deductions.toLocaleString()}</TableCell>
+                <TableCell className="text-right font-medium font-mono">{getCurrencySymbol(r.currency || 'NPR')} {r.total_net.toLocaleString()}</TableCell>
                 <TableCell>
                   <Badge className={PAYROLL_STATUS_COLORS[r.status] || ""} variant="outline">{r.status}</Badge>
                 </TableCell>

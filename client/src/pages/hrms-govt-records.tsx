@@ -78,7 +78,7 @@ export function GovernmentRecordsTab() {
                 <Shield className="h-4 w-4 text-blue-500" />
                 <p className="text-xs text-muted-foreground">Total CIT</p>
               </div>
-              <p className="text-lg font-bold font-mono" data-testid="text-total-cit">Rs {totals.total_cit.toLocaleString()}</p>
+              <p className="text-lg font-bold font-mono" data-testid="text-total-cit">{ totals.total_cit.toLocaleString()}</p>
             </CardContent>
           </Card>
           <Card>
@@ -87,7 +87,7 @@ export function GovernmentRecordsTab() {
                 <Wallet className="h-4 w-4 text-green-500" />
                 <p className="text-xs text-muted-foreground">SSF (Employee)</p>
               </div>
-              <p className="text-lg font-bold font-mono" data-testid="text-total-ssf-emp">Rs {totals.total_ssf_employee.toLocaleString()}</p>
+              <p className="text-lg font-bold font-mono" data-testid="text-total-ssf-emp">{ totals.total_ssf_employee.toLocaleString()}</p>
             </CardContent>
           </Card>
           <Card>
@@ -96,7 +96,7 @@ export function GovernmentRecordsTab() {
                 <Wallet className="h-4 w-4 text-purple-500" />
                 <p className="text-xs text-muted-foreground">SSF (Employer)</p>
               </div>
-              <p className="text-lg font-bold font-mono" data-testid="text-total-ssf-empr">Rs {totals.total_ssf_employer.toLocaleString()}</p>
+              <p className="text-lg font-bold font-mono" data-testid="text-total-ssf-empr">{ totals.total_ssf_employer.toLocaleString()}</p>
             </CardContent>
           </Card>
           <Card>
@@ -105,7 +105,7 @@ export function GovernmentRecordsTab() {
                 <TrendingUp className="h-4 w-4 text-orange-500" />
                 <p className="text-xs text-muted-foreground">Income Tax</p>
               </div>
-              <p className="text-lg font-bold font-mono" data-testid="text-total-tax">Rs {totals.total_tax.toLocaleString()}</p>
+              <p className="text-lg font-bold font-mono" data-testid="text-total-tax">{ totals.total_tax.toLocaleString()}</p>
             </CardContent>
           </Card>
           <Card className="border-primary/30 bg-primary/5">
@@ -114,7 +114,7 @@ export function GovernmentRecordsTab() {
                 <Landmark className="h-4 w-4 text-primary" />
                 <p className="text-xs text-muted-foreground font-medium">Total Payable to Govt</p>
               </div>
-              <p className="text-xl font-bold font-mono text-primary" data-testid="text-total-govt">Rs {totals.total_payable_to_govt.toLocaleString()}</p>
+              <p className="text-xl font-bold font-mono text-primary" data-testid="text-total-govt">{ totals.total_payable_to_govt.toLocaleString()}</p>
             </CardContent>
           </Card>
         </div>
@@ -138,14 +138,14 @@ export function GovernmentRecordsTab() {
             <TableRow key={m.month} className={m.employee_count === 0 ? "opacity-40" : ""} data-testid={`row-govt-${m.month}`}>
               <TableCell className="font-medium">{MONTHS[m.month - 1]} {m.year}</TableCell>
               <TableCell className="text-center">{m.employee_count || "—"}</TableCell>
-              <TableCell className="text-right font-mono text-sm">{m.total_gross > 0 ? `Rs ${m.total_gross.toLocaleString()}` : "—"}</TableCell>
-              <TableCell className="text-right font-mono text-sm">{m.total_cit > 0 ? `Rs ${m.total_cit.toLocaleString()}` : "—"}</TableCell>
-              <TableCell className="text-right font-mono text-sm">{m.total_ssf_employee > 0 ? `Rs ${m.total_ssf_employee.toLocaleString()}` : "—"}</TableCell>
-              <TableCell className="text-right font-mono text-sm">{m.total_ssf_employer > 0 ? `Rs ${m.total_ssf_employer.toLocaleString()}` : "—"}</TableCell>
-              <TableCell className="text-right font-mono text-sm">{m.total_tax > 0 ? `Rs ${m.total_tax.toLocaleString()}` : "—"}</TableCell>
+              <TableCell className="text-right font-mono text-sm">{m.total_gross > 0 ? `${m.total_gross.toLocaleString()}` : "—"}</TableCell>
+              <TableCell className="text-right font-mono text-sm">{m.total_cit > 0 ? `${m.total_cit.toLocaleString()}` : "—"}</TableCell>
+              <TableCell className="text-right font-mono text-sm">{m.total_ssf_employee > 0 ? `${m.total_ssf_employee.toLocaleString()}` : "—"}</TableCell>
+              <TableCell className="text-right font-mono text-sm">{m.total_ssf_employer > 0 ? `${m.total_ssf_employer.toLocaleString()}` : "—"}</TableCell>
+              <TableCell className="text-right font-mono text-sm">{m.total_tax > 0 ? `${m.total_tax.toLocaleString()}` : "—"}</TableCell>
               <TableCell className="text-right font-mono text-sm font-semibold">
                 {m.total_payable_to_govt > 0 ? (
-                  <span className="text-primary">Rs {m.total_payable_to_govt.toLocaleString()}</span>
+                  <span className="text-primary">{ m.total_payable_to_govt.toLocaleString()}</span>
                 ) : "—"}
               </TableCell>
             </TableRow>
@@ -167,11 +167,11 @@ export function GovernmentRecordsTab() {
               <TableCell className="font-bold">Annual Totals {filterYear}</TableCell>
               <TableCell></TableCell>
               <TableCell></TableCell>
-              <TableCell className="text-right font-mono">Rs {totals.total_cit.toLocaleString()}</TableCell>
-              <TableCell className="text-right font-mono">Rs {totals.total_ssf_employee.toLocaleString()}</TableCell>
-              <TableCell className="text-right font-mono">Rs {totals.total_ssf_employer.toLocaleString()}</TableCell>
-              <TableCell className="text-right font-mono">Rs {totals.total_tax.toLocaleString()}</TableCell>
-              <TableCell className="text-right font-mono text-primary text-lg">Rs {totals.total_payable_to_govt.toLocaleString()}</TableCell>
+              <TableCell className="text-right font-mono">{ totals.total_cit.toLocaleString()}</TableCell>
+              <TableCell className="text-right font-mono">{ totals.total_ssf_employee.toLocaleString()}</TableCell>
+              <TableCell className="text-right font-mono">{ totals.total_ssf_employer.toLocaleString()}</TableCell>
+              <TableCell className="text-right font-mono">{ totals.total_tax.toLocaleString()}</TableCell>
+              <TableCell className="text-right font-mono text-primary text-lg">{ totals.total_payable_to_govt.toLocaleString()}</TableCell>
             </TableRow>
           </TableBody>
         </Table>

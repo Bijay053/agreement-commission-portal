@@ -30,6 +30,7 @@ def serialize_org(org):
         'registration_number': org.registration_number,
         'pan_number': org.pan_number,
         'logo_url': org.logo_url,
+        'currency': org.currency or 'NPR',
         'status': org.status,
         'created_at': org.created_at.isoformat() if org.created_at else None,
     }
@@ -412,6 +413,7 @@ class OrganizationListView(APIView):
             registration_number=data.get('registration_number'),
             pan_number=data.get('pan_number'),
             logo_url=data.get('logo_url'),
+            currency=data.get('currency', 'NPR'),
         )
         return Response(serialize_org(org), status=201)
 
@@ -433,7 +435,7 @@ class OrganizationDetailView(APIView):
             return Response({'message': 'Organization not found'}, status=404)
         data = request.data
         for field in ['name', 'short_code', 'address', 'country', 'phone', 'email',
-                      'registration_number', 'pan_number', 'logo_url', 'status']:
+                      'registration_number', 'pan_number', 'logo_url', 'currency', 'status']:
             if field in data:
                 setattr(org, field, data[field])
         org.save()
@@ -1560,6 +1562,7 @@ class PayrollRunListView(APIView):
             'month': r.month,
             'year': r.year,
             'status': r.status,
+            'currency': r.organization.currency if r.organization else 'NPR',
             'total_gross': float(r.total_gross),
             'total_deductions': float(r.total_deductions),
             'total_net': float(r.total_net),
@@ -1606,12 +1609,19 @@ class PayrollRunDetailView(APIView):
         except PayrollRun.DoesNotExist:
             return Response({'message': 'Payroll run not found'}, status=404)
         payslips = Payslip.objects.filter(payroll_run=pr)
+        org_currency = 'NPR'
+        try:
+            org_obj = Organization.objects.get(id=pr.organization_id)
+            org_currency = org_obj.currency or 'NPR'
+        except Organization.DoesNotExist:
+            pass
         return Response({
             'id': str(pr.id),
             'organization_id': str(pr.organization_id),
             'month': pr.month,
             'year': pr.year,
             'status': pr.status,
+            'currency': org_currency,
             'total_gross': float(pr.total_gross),
             'total_deductions': float(pr.total_deductions),
             'total_net': float(pr.total_net),
@@ -2077,6 +2087,17 @@ class PayslipBulkPDFView(APIView):
         return response
 
 
+CURRENCY_SYMBOLS = {
+    'NPR': 'Rs.', 'INR': '₹', 'USD': '$', 'EUR': '€', 'GBP': '£', 'AUD': 'A$',
+    'CAD': 'C$', 'SGD': 'S$', 'AED': 'د.إ', 'SAR': 'ر.س', 'MYR': 'RM',
+    'THB': '฿', 'PHP': '₱', 'IDR': 'Rp', 'BDT': '৳', 'PKR': '₨', 'LKR': 'Rs',
+    'KRW': '₩', 'JPY': '¥', 'CNY': '¥', 'HKD': 'HK$', 'NZD': 'NZ$',
+    'ZAR': 'R', 'BRL': 'R$', 'MXN': 'Mex$', 'TRY': '₺', 'RUB': '₽',
+    'CHF': 'CHF', 'SEK': 'kr', 'NOK': 'kr', 'DKK': 'kr', 'PLN': 'zł',
+    'QAR': 'ر.ق', 'KWD': 'د.ك', 'BHD': 'BD', 'OMR': 'ر.ع.',
+}
+
+
 def generate_payslip_pdf(ps, emp, org):
     import io
     from reportlab.lib.pagesizes import A4
@@ -2117,6 +2138,9 @@ def generate_payslip_pdf(ps, emp, org):
     footer_style = ParagraphStyle('Footer', fontName='Helvetica-Oblique', fontSize=7, textColor=c_grey, alignment=TA_CENTER)
 
     month_names = ['January','February','March','April','May','June','July','August','September','October','November','December']
+
+    cur_code = getattr(org, 'currency', 'NPR') or 'NPR'
+    cur_sym = CURRENCY_SYMBOLS.get(cur_code, cur_code)
 
     elements = []
 
@@ -2217,23 +2241,23 @@ def generate_payslip_pdf(ps, emp, org):
         row = []
         if i < len(earn_rows):
             row.append(Paragraph(earn_rows[i][0], row_lbl))
-            row.append(Paragraph(f"Rs. {earn_rows[i][1]:,.2f}", row_val))
+            row.append(Paragraph(f"{cur_sym} {earn_rows[i][1]:,.2f}", row_val))
         else:
             row.extend(['', ''])
         row.append('')
         if i < len(ded_rows):
             row.append(Paragraph(ded_rows[i][0], row_lbl))
-            row.append(Paragraph(f"Rs. {ded_rows[i][1]:,.2f}", row_val))
+            row.append(Paragraph(f"{cur_sym} {ded_rows[i][1]:,.2f}", row_val))
         else:
             row.extend(['', ''])
         combined_data.append(row)
 
     total_row = [
         Paragraph('Total Earnings', ParagraphStyle('TE', fontName='Helvetica-Bold', fontSize=9, textColor=c_primary)),
-        Paragraph(f"Rs. {gross_val:,.2f}", row_val_bold),
+        Paragraph(f"{cur_sym} {gross_val:,.2f}", row_val_bold),
         '',
         Paragraph('Total Deductions', ParagraphStyle('TD', fontName='Helvetica-Bold', fontSize=9, textColor=c_red)),
-        Paragraph(f"Rs. {float(ps.total_deductions):,.2f}", ParagraphStyle('TDV', fontName='Helvetica-Bold', fontSize=9, textColor=c_red, alignment=TA_RIGHT)),
+        Paragraph(f"{cur_sym} {float(ps.total_deductions):,.2f}", ParagraphStyle('TDV', fontName='Helvetica-Bold', fontSize=9, textColor=c_red, alignment=TA_RIGHT)),
     ]
     combined_data.append(total_row)
 
@@ -2262,7 +2286,7 @@ def generate_payslip_pdf(ps, emp, org):
     elements.append(Spacer(1, 6*mm))
 
     net_data = [
-        [Paragraph('Net Salary Payable', net_lbl), '', Paragraph(f"Rs. {float(ps.net_salary):,.2f}", net_val)]
+        [Paragraph('Net Salary Payable', net_lbl), '', Paragraph(f"{cur_sym} {float(ps.net_salary):,.2f}", net_val)]
     ]
     net_table = RTable(net_data, colWidths=[page_w*0.45, page_w*0.1, page_w*0.45])
     net_table.setStyle(TableStyle([
@@ -2277,7 +2301,7 @@ def generate_payslip_pdf(ps, emp, org):
 
     if float(ps.ssf_employer_contribution) > 0:
         employer_info_style = ParagraphStyle('EmpInfo', fontName='Helvetica', fontSize=8, textColor=c_grey, alignment=TA_CENTER)
-        elements.append(Paragraph(f"Employer SSF Contribution: Rs. {float(ps.ssf_employer_contribution):,.2f} (for employer records only, not deducted from employee)", employer_info_style))
+        elements.append(Paragraph(f"Employer SSF Contribution: {cur_sym} {float(ps.ssf_employer_contribution):,.2f} (for employer records only, not deducted from employee)", employer_info_style))
         elements.append(Spacer(1, 3*mm))
 
     elements.append(HRFlowable(width="100%", thickness=0.5, color=c_border, spaceAfter=3*mm, spaceBefore=4*mm))

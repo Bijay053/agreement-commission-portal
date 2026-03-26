@@ -65,7 +65,7 @@ interface StaffProfile {
 }
 
 interface Organization {
-  id: string; name: string; short_code: string;
+  id: string; name: string; short_code: string; currency: string;
 }
 
 interface Department {
@@ -404,7 +404,7 @@ export function StaffProfilesTab() {
                 {s.salary_structure ? (
                   <div className="space-y-0.5">
                     <Badge variant={s.salary_structure.cit_type !== "none" ? "default" : "secondary"} className="text-xs">
-                      CIT: {s.salary_structure.cit_type === "percentage" ? `${s.salary_structure.cit_value}%` : s.salary_structure.cit_type === "flat" ? `Rs ${s.salary_structure.cit_value}` : "N/A"}
+                      CIT: {s.salary_structure.cit_type === "percentage" ? `${s.salary_structure.cit_value}%` : s.salary_structure.cit_type === "flat" ? `${s.salary_structure.cit_value}` : "N/A"}
                     </Badge>
                     {s.salary_structure.ssf_applicable && <Badge variant="outline" className="text-xs ml-1">SSF</Badge>}
                   </div>
@@ -466,7 +466,7 @@ export function StaffProfilesTab() {
             <div className="grid grid-cols-3 gap-4">
               <div>
                 <Label>Organization</Label>
-                <Select value={empForm.organization_id} onValueChange={v => setEmpForm({ ...empForm, organization_id: v, department_id: "" })}>
+                <Select value={empForm.organization_id} onValueChange={v => { const selOrg = orgs?.find(o => o.id === v); setEmpForm({ ...empForm, organization_id: v, department_id: "", salary_currency: selOrg?.currency || "NPR" }); }}>
                   <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
                   <SelectContent>{orgs?.map(o => <SelectItem key={o.id} value={o.id}>{o.name}</SelectItem>)}</SelectContent>
                 </Select>
@@ -566,7 +566,7 @@ export function StaffProfilesTab() {
             <div className="grid grid-cols-3 gap-4">
               <div>
                 <Label>Organization *</Label>
-                <Select value={empForm.organization_id} onValueChange={v => setEmpForm({ ...empForm, organization_id: v, department_id: "" })}>
+                <Select value={empForm.organization_id} onValueChange={v => { const selOrg = orgs?.find(o => o.id === v); setEmpForm({ ...empForm, organization_id: v, department_id: "", salary_currency: selOrg?.currency || "NPR" }); }}>
                   <SelectTrigger data-testid="edit-select-org"><SelectValue placeholder="Select organization" /></SelectTrigger>
                   <SelectContent>{orgs?.map(o => <SelectItem key={o.id} value={o.id}>{o.name}</SelectItem>)}</SelectContent>
                 </Select>

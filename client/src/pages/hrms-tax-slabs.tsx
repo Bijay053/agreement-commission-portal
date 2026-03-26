@@ -133,8 +133,8 @@ function SlabEditor({ maritalStatus, slabs, isLoading }: { maritalStatus: string
         <TableHeader>
           <TableRow>
             <TableHead className="w-12">#</TableHead>
-            <TableHead>From (NPR)</TableHead>
-            <TableHead>To (NPR)</TableHead>
+            <TableHead>From</TableHead>
+            <TableHead>To</TableHead>
             <TableHead>Rate (%)</TableHead>
             <TableHead>Tax on Slab</TableHead>
             <TableHead className="w-12"></TableHead>
@@ -179,7 +179,7 @@ function SlabEditor({ maritalStatus, slabs, isLoading }: { maritalStatus: string
                   />
                 </TableCell>
                 <TableCell className="font-mono text-sm text-muted-foreground">
-                  {upper !== null ? `Rs ${taxOnSlab.toLocaleString()}` : "Unlimited"}
+                  {upper !== null ? taxOnSlab.toLocaleString() : "Unlimited"}
                 </TableCell>
                 <TableCell>
                   <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => removeRow(idx)} disabled={rows.length <= 1}>
@@ -211,9 +211,9 @@ function SlabEditor({ maritalStatus, slabs, isLoading }: { maritalStatus: string
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm">
             {[500000, 800000, 1200000, 2500000].map(income => (
               <div key={income} className="space-y-1">
-                <p className="text-muted-foreground">Annual: Rs {income.toLocaleString()}</p>
-                <p className="font-mono font-medium">Tax: Rs {calculateSampleTax(income).toLocaleString()}</p>
-                <p className="text-xs text-muted-foreground">Monthly: Rs {Math.round(calculateSampleTax(income) / 12).toLocaleString()}</p>
+                <p className="text-muted-foreground">Annual: {income.toLocaleString()}</p>
+                <p className="font-mono font-medium">Tax: {calculateSampleTax(income).toLocaleString()}</p>
+                <p className="text-xs text-muted-foreground">Monthly: {Math.round(calculateSampleTax(income) / 12).toLocaleString()}</p>
               </div>
             ))}
           </div>

@@ -147,7 +147,7 @@ export function BonusesTab() {
               {[2024, 2025, 2026, 2027].map(y => <SelectItem key={y} value={String(y)}>{y}</SelectItem>)}
             </SelectContent>
           </Select>
-          <Badge variant="outline">Total Approved: Rs {totalApproved.toLocaleString()}</Badge>
+          <Badge variant="outline">Total Approved: { totalApproved.toLocaleString()}</Badge>
         </div>
         <Button onClick={() => { setForm({ employee_id: "", bonus_type: "other", amount: "", reason: "", month: String(new Date().getMonth() + 1), year: filterYear, is_taxable: true }); setShowForm(true); }} data-testid="btn-add-bonus">
           <Plus className="w-4 h-4 mr-1" /> Add Bonus
@@ -173,7 +173,7 @@ export function BonusesTab() {
               <TableCell className="font-medium text-sm">{b.employee_name || "Unknown"}</TableCell>
               <TableCell className="text-sm">{BONUS_TYPES[b.bonus_type] || b.bonus_type}</TableCell>
               <TableCell className="text-sm">{MONTHS[b.month - 1]} {b.year}</TableCell>
-              <TableCell className="text-right font-mono text-sm">Rs {b.amount.toLocaleString()}</TableCell>
+              <TableCell className="text-right font-mono text-sm">{ b.amount.toLocaleString()}</TableCell>
               <TableCell className="text-sm max-w-[200px] truncate">{b.reason || "—"}</TableCell>
               <TableCell>{b.is_taxable ? <Badge variant="outline" className="text-xs">Yes</Badge> : <Badge variant="secondary" className="text-xs">No</Badge>}</TableCell>
               <TableCell><span className={`text-xs px-2 py-1 rounded-full ${STATUS_COLORS[b.status] || ""}`}>{b.status}</span></TableCell>
@@ -220,7 +220,7 @@ export function BonusesTab() {
                 </Select>
               </div>
               <div>
-                <Label>Amount (Rs)</Label>
+                <Label>Amount</Label>
                 <Input type="number" value={form.amount} onChange={e => setForm({ ...form, amount: e.target.value })} data-testid="input-bonus-amount" />
               </div>
             </div>

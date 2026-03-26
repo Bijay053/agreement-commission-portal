@@ -440,7 +440,7 @@ export function EmployeeDetailView({ employeeId, onBack }: { employeeId: string;
                 <div className="flex justify-between"><span>Tax Category</span><span>{emp.marital_status === 'married' ? 'Married Slab' : 'Single Slab'}</span></div>
                 {sal && (
                   <>
-                    <div className="flex justify-between"><span>CIT</span><span>{sal.cit_type === 'none' ? 'N/A' : sal.cit_type === 'percentage' ? `${sal.cit_value}%` : `Rs ${sal.cit_value}`}</span></div>
+                    <div className="flex justify-between"><span>CIT</span><span>{sal.cit_type === 'none' ? 'N/A' : sal.cit_type === 'percentage' ? `${sal.cit_value}%` : `${sal.cit_value}`}</span></div>
                     <div className="flex justify-between"><span>SSF</span><span>{sal.ssf_applicable ? `${sal.ssf_employee_percentage}% (Emp) + ${sal.ssf_employer_percentage}% (Er)` : 'N/A'}</span></div>
                     <div className="flex justify-between"><span>Income Tax</span><span>{sal.tax_applicable ? 'Applicable' : 'N/A'}</span></div>
                   </>

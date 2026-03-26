@@ -122,7 +122,7 @@ export function AdvancePaymentsTab() {
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <h2 className="text-lg font-semibold">Advance Payment Management</h2>
-          <Badge variant="destructive">Outstanding: Rs {totalOutstanding.toLocaleString()}</Badge>
+          <Badge variant="destructive">Outstanding: { totalOutstanding.toLocaleString()}</Badge>
         </div>
         <Button onClick={() => { setForm({ employee_id: "", amount: "", reason: "", request_date: new Date().toISOString().split("T")[0], monthly_deduction: "", deduction_start_month: String(new Date().getMonth() + 2 > 12 ? 1 : new Date().getMonth() + 2), deduction_start_year: String(new Date().getMonth() + 2 > 12 ? new Date().getFullYear() + 1 : new Date().getFullYear()) }); setShowForm(true); }} data-testid="btn-add-advance">
           <Plus className="w-4 h-4 mr-1" /> Record Advance
@@ -156,12 +156,12 @@ export function AdvancePaymentsTab() {
                   </div>
                 </TableCell>
                 <TableCell className="text-sm">{a.request_date}</TableCell>
-                <TableCell className="text-right font-mono text-sm">Rs {a.amount.toLocaleString()}</TableCell>
-                <TableCell className="text-right font-mono text-sm">Rs {a.monthly_deduction.toLocaleString()}</TableCell>
+                <TableCell className="text-right font-mono text-sm">{ a.amount.toLocaleString()}</TableCell>
+                <TableCell className="text-right font-mono text-sm">{ a.monthly_deduction.toLocaleString()}</TableCell>
                 <TableCell className="text-sm">{MONTHS[a.deduction_start_month - 1]} {a.deduction_start_year}</TableCell>
-                <TableCell className="text-right font-mono text-sm">Rs {a.total_deducted.toLocaleString()}</TableCell>
+                <TableCell className="text-right font-mono text-sm">{ a.total_deducted.toLocaleString()}</TableCell>
                 <TableCell className="text-right font-mono text-sm">
-                  {a.remaining_balance > 0 ? <span className="text-red-600">Rs {a.remaining_balance.toLocaleString()}</span> : <span className="text-green-600">Rs 0</span>}
+                  {a.remaining_balance > 0 ? <span className="text-red-600">{a.remaining_balance.toLocaleString()}</span> : <span className="text-green-600">0</span>}
                 </TableCell>
                 <TableCell>
                   <div className="w-20">
@@ -207,11 +207,11 @@ export function AdvancePaymentsTab() {
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <Label>Advance Amount (Rs)</Label>
+                <Label>Advance Amount</Label>
                 <Input type="number" value={form.amount} onChange={e => setForm({ ...form, amount: e.target.value })} data-testid="input-advance-amount" />
               </div>
               <div>
-                <Label>Monthly Deduction (Rs)</Label>
+                <Label>Monthly Deduction</Label>
                 <Input type="number" value={form.monthly_deduction} onChange={e => setForm({ ...form, monthly_deduction: e.target.value })} data-testid="input-monthly-ded" />
               </div>
             </div>
@@ -219,7 +219,7 @@ export function AdvancePaymentsTab() {
               <Card className="bg-muted/50">
                 <CardContent className="p-3">
                   <p className="text-sm">
-                    Will be deducted in <strong>{installments} installments</strong> of Rs {parseFloat(form.monthly_deduction || "0").toLocaleString()}/month
+                    Will be deducted in <strong>{installments} installments</strong> of { parseFloat(form.monthly_deduction || "0").toLocaleString()}/month
                   </p>
                 </CardContent>
               </Card>

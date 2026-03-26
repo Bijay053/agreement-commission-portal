@@ -13,6 +13,7 @@ class Organization(models.Model):
     registration_number = models.CharField(max_length=64, null=True, blank=True)
     pan_number = models.CharField(max_length=64, null=True, blank=True)
     logo_url = models.URLField(null=True, blank=True)
+    currency = models.CharField(max_length=8, default='NPR')
     status = models.CharField(max_length=24, default='active')
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
