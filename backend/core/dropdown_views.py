@@ -1,11 +1,13 @@
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from core.dropdown_models import DropdownOption
+from core.permissions import require_auth, require_permission
 
 VALID_CATEGORIES = ['study_level', 'commission_basis', 'pay_event', 'commission_mode', 'agreement_type']
 
 
 class DropdownOptionsView(APIView):
+    @require_auth
     def get(self, request):
         category = request.query_params.get('category')
         if category:
@@ -20,6 +22,7 @@ class DropdownOptionsView(APIView):
 
 
 class DropdownOptionsAdminView(APIView):
+    @require_permission("security.role.manage")
     def get(self, request):
         category = request.query_params.get('category')
         if category:
@@ -31,6 +34,7 @@ class DropdownOptionsAdminView(APIView):
             'label': o.label, 'sortOrder': o.sort_order, 'isActive': o.is_active,
         } for o in options])
 
+    @require_permission("security.role.manage")
     def post(self, request):
         category = request.data.get('category')
         value = request.data.get('value', '').strip()
@@ -52,6 +56,7 @@ class DropdownOptionsAdminView(APIView):
             'label': obj.label, 'sortOrder': obj.sort_order, 'isActive': obj.is_active,
         }, status=201)
 
+    @require_permission("security.role.manage")
     def patch(self, request):
         option_id = request.data.get('id')
         if not option_id:
@@ -75,6 +80,7 @@ class DropdownOptionsAdminView(APIView):
             'label': obj.label, 'sortOrder': obj.sort_order, 'isActive': obj.is_active,
         })
 
+    @require_permission("security.role.manage")
     def delete(self, request):
         option_id = request.query_params.get('id')
         if not option_id:
