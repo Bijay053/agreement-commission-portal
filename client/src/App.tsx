@@ -13,6 +13,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { AlertTriangle } from "lucide-react";
 import NotFound from "@/pages/not-found";
 import LoginPage from "@/pages/login";
+import EmployeePortal from "@/pages/employee-portal";
 import DashboardPage from "@/pages/dashboard";
 import AgreementsListPage from "@/pages/agreements-list";
 import AgreementDetailPage from "@/pages/agreement-detail";
@@ -215,6 +216,17 @@ function AuthenticatedApp() {
         forced={true}
         onSuccess={clearPasswordExpired}
       />
+    );
+  }
+
+  const isPeoplePortal = window.location.hostname.includes("people.");
+
+  if (isPeoplePortal) {
+    return (
+      <>
+        <EmployeePortal />
+        <InactivityMonitor />
+      </>
     );
   }
 
