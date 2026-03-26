@@ -669,17 +669,23 @@ class DepartmentListView(APIView):
     @require_permission('hrms.department.add')
     def post(self, request):
         data = request.data
-        dept = Department.objects.create(
-            organization_id=data.get('organization_id'),
-            name=data.get('name', ''),
-            head_employee_id=data.get('head_employee_id'),
-            working_days_per_week=data.get('working_days_per_week', 6),
-            work_start_time=data.get('work_start_time', '10:00'),
-            work_end_time=data.get('work_end_time', '18:00'),
-            late_threshold_minutes=data.get('late_threshold_minutes', 15),
-            early_leave_threshold_minutes=data.get('early_leave_threshold_minutes', 15),
-        )
-        return Response(serialize_dept(dept), status=201)
+        try:
+            dept = Department.objects.create(
+                organization_id=data.get('organization_id'),
+                name=data.get('name', ''),
+                head_employee_id=data.get('head_employee_id'),
+                working_days_per_week=data.get('working_days_per_week', 6),
+                work_start_time=data.get('work_start_time', '10:00'),
+                work_end_time=data.get('work_end_time', '18:00'),
+                late_threshold_minutes=data.get('late_threshold_minutes', 15),
+                early_leave_threshold_minutes=data.get('early_leave_threshold_minutes', 15),
+            )
+            dept = Department.objects.select_related('organization').get(id=dept.id)
+            return Response(serialize_dept(dept), status=201)
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            return Response({'message': str(e)}, status=500)
 
 
 class DepartmentDetailView(APIView):
