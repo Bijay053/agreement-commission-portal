@@ -329,6 +329,10 @@ class Payslip(models.Model):
     ssf_employee_deduction = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     ssf_employer_contribution = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     tax_deduction = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    bonus_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    travel_reimbursement = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    advance_deduction = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    unpaid_leave_deduction = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     other_deductions = models.JSONField(default=dict)
     total_deductions = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     net_salary = models.DecimalField(max_digits=12, decimal_places=2)
@@ -346,6 +350,119 @@ class Payslip(models.Model):
         db_table = 'hrms_payslips'
         ordering = ['-year', '-month']
         unique_together = ['payroll_run', 'employee_id']
+
+
+BONUS_TYPE_CHOICES = [
+    ('festival', 'Festival Bonus'),
+    ('performance', 'Performance Bonus'),
+    ('yearly', 'Yearly Bonus'),
+    ('special', 'Special Bonus'),
+    ('other', 'Other'),
+]
+
+BONUS_STATUS_CHOICES = [
+    ('pending', 'Pending'),
+    ('approved', 'Approved'),
+    ('paid', 'Paid'),
+    ('cancelled', 'Cancelled'),
+]
+
+
+class Bonus(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    employee_id = models.UUIDField()
+    bonus_type = models.CharField(max_length=24, default='other', choices=BONUS_TYPE_CHOICES)
+    amount = models.DecimalField(max_digits=12, decimal_places=2)
+    reason = models.TextField(null=True, blank=True)
+    month = models.IntegerField()
+    year = models.IntegerField()
+    is_taxable = models.BooleanField(default=True)
+    status = models.CharField(max_length=24, default='pending', choices=BONUS_STATUS_CHOICES)
+    approved_by = models.UUIDField(null=True, blank=True)
+    approved_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'hrms_bonuses'
+        ordering = ['-year', '-month']
+
+
+EXPENSE_STATUS_CHOICES = [
+    ('pending', 'Pending'),
+    ('approved', 'Approved'),
+    ('rejected', 'Rejected'),
+    ('reimbursed', 'Reimbursed'),
+]
+
+EXPENSE_CATEGORY_CHOICES = [
+    ('travel', 'Travel'),
+    ('accommodation', 'Accommodation'),
+    ('food', 'Food & Meals'),
+    ('transport', 'Local Transport'),
+    ('client_meeting', 'Client Meeting'),
+    ('training', 'Training'),
+    ('other', 'Other'),
+]
+
+
+class TravelExpense(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    employee_id = models.UUIDField()
+    category = models.CharField(max_length=24, default='travel', choices=EXPENSE_CATEGORY_CHOICES)
+    description = models.TextField()
+    amount = models.DecimalField(max_digits=12, decimal_places=2)
+    expense_date = models.DateField()
+    receipt_url = models.URLField(null=True, blank=True)
+    month = models.IntegerField()
+    year = models.IntegerField()
+    include_in_salary = models.BooleanField(default=True)
+    status = models.CharField(max_length=24, default='pending', choices=EXPENSE_STATUS_CHOICES)
+    approved_by = models.UUIDField(null=True, blank=True)
+    approved_at = models.DateTimeField(null=True, blank=True)
+    rejection_reason = models.TextField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'hrms_travel_expenses'
+        ordering = ['-expense_date']
+
+
+ADVANCE_STATUS_CHOICES = [
+    ('pending', 'Pending'),
+    ('approved', 'Approved'),
+    ('active', 'Active (Being Deducted)'),
+    ('completed', 'Fully Repaid'),
+    ('cancelled', 'Cancelled'),
+]
+
+
+class AdvancePayment(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    employee_id = models.UUIDField()
+    amount = models.DecimalField(max_digits=12, decimal_places=2)
+    reason = models.TextField(null=True, blank=True)
+    request_date = models.DateField()
+    monthly_deduction = models.DecimalField(max_digits=12, decimal_places=2)
+    deduction_start_month = models.IntegerField()
+    deduction_start_year = models.IntegerField()
+    total_deducted = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    remaining_balance = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    status = models.CharField(max_length=24, default='pending', choices=ADVANCE_STATUS_CHOICES)
+    approved_by = models.UUIDField(null=True, blank=True)
+    approved_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'hrms_advance_payments'
+        ordering = ['-request_date']
+
+    def save(self, *args, **kwargs):
+        if not self.remaining_balance and self.amount:
+            self.remaining_balance = self.amount - self.total_deducted
+        super().save(*args, **kwargs)
 
 
 class NotificationSetting(models.Model):

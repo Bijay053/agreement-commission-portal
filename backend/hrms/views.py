@@ -14,6 +14,7 @@ from .models import (
     LeaveBalance, LeaveRequest, AttendanceRecord,
     OnlineCheckInPermission, DeviceMapping, SalaryStructure,
     PayrollRun, Payslip, NotificationSetting,
+    Bonus, TravelExpense, AdvancePayment,
 )
 
 
@@ -242,6 +243,10 @@ def serialize_payslip(ps):
         'ssf_employee_deduction': float(ps.ssf_employee_deduction),
         'ssf_employer_contribution': float(ps.ssf_employer_contribution),
         'tax_deduction': float(ps.tax_deduction),
+        'bonus_amount': float(getattr(ps, 'bonus_amount', 0) or 0),
+        'travel_reimbursement': float(getattr(ps, 'travel_reimbursement', 0) or 0),
+        'advance_deduction': float(getattr(ps, 'advance_deduction', 0) or 0),
+        'unpaid_leave_deduction': float(getattr(ps, 'unpaid_leave_deduction', 0) or 0),
         'other_deductions': ps.other_deductions,
         'total_deductions': float(ps.total_deductions),
         'net_salary': float(ps.net_salary),
@@ -252,6 +257,83 @@ def serialize_payslip(ps):
         'late_count': ps.late_count,
         'early_leave_count': ps.early_leave_count,
         'status': ps.status,
+    }
+
+
+def serialize_bonus(b):
+    emp_name = None
+    try:
+        emp = Employee.objects.get(id=b.employee_id)
+        emp_name = emp.full_name
+    except Employee.DoesNotExist:
+        pass
+    return {
+        'id': str(b.id),
+        'employee_id': str(b.employee_id),
+        'employee_name': emp_name,
+        'bonus_type': b.bonus_type,
+        'amount': float(b.amount),
+        'reason': b.reason,
+        'month': b.month,
+        'year': b.year,
+        'is_taxable': b.is_taxable,
+        'status': b.status,
+        'approved_by': str(b.approved_by) if b.approved_by else None,
+        'approved_at': b.approved_at.isoformat() if b.approved_at else None,
+        'created_at': b.created_at.isoformat() if b.created_at else None,
+    }
+
+
+def serialize_travel_expense(te):
+    emp_name = None
+    try:
+        emp = Employee.objects.get(id=te.employee_id)
+        emp_name = emp.full_name
+    except Employee.DoesNotExist:
+        pass
+    return {
+        'id': str(te.id),
+        'employee_id': str(te.employee_id),
+        'employee_name': emp_name,
+        'category': te.category,
+        'description': te.description,
+        'amount': float(te.amount),
+        'expense_date': te.expense_date.isoformat() if te.expense_date else None,
+        'receipt_url': te.receipt_url,
+        'month': te.month,
+        'year': te.year,
+        'include_in_salary': te.include_in_salary,
+        'status': te.status,
+        'approved_by': str(te.approved_by) if te.approved_by else None,
+        'approved_at': te.approved_at.isoformat() if te.approved_at else None,
+        'rejection_reason': te.rejection_reason,
+        'created_at': te.created_at.isoformat() if te.created_at else None,
+    }
+
+
+def serialize_advance_payment(ap):
+    emp_name = None
+    try:
+        emp = Employee.objects.get(id=ap.employee_id)
+        emp_name = emp.full_name
+    except Employee.DoesNotExist:
+        pass
+    return {
+        'id': str(ap.id),
+        'employee_id': str(ap.employee_id),
+        'employee_name': emp_name,
+        'amount': float(ap.amount),
+        'reason': ap.reason,
+        'request_date': ap.request_date.isoformat() if ap.request_date else None,
+        'monthly_deduction': float(ap.monthly_deduction),
+        'deduction_start_month': ap.deduction_start_month,
+        'deduction_start_year': ap.deduction_start_year,
+        'total_deducted': float(ap.total_deducted),
+        'remaining_balance': float(ap.remaining_balance),
+        'status': ap.status,
+        'approved_by': str(ap.approved_by) if ap.approved_by else None,
+        'approved_at': ap.approved_at.isoformat() if ap.approved_at else None,
+        'created_at': ap.created_at.isoformat() if ap.created_at else None,
     }
 
 
@@ -1355,6 +1437,9 @@ class SalaryStructureDetailView(APIView):
         ss.save()
         return Response(serialize_salary_structure(ss))
 
+    def patch(self, request, ss_id):
+        return self.put(request, ss_id)
+
 
 class PayrollRunListView(APIView):
     @require_permission('hrms.payroll.read')
@@ -1515,29 +1600,6 @@ class PayrollRunProcessView(APIView):
             allowances_total = sum(Decimal(str(v)) for v in sal.allowances.values()) if sal.allowances else Decimal('0')
             gross = basic + allowances_total
 
-            cit_deduction = Decimal('0')
-            if sal.cit_type == 'percentage':
-                cit_deduction = gross * sal.cit_value / 100
-            elif sal.cit_type == 'flat':
-                cit_deduction = sal.cit_value
-
-            ssf_employee = Decimal('0')
-            ssf_employer = Decimal('0')
-            if sal.ssf_applicable:
-                ssf_employee = gross * sal.ssf_employee_percentage / 100
-                ssf_employer = gross * sal.ssf_employer_percentage / 100
-
-            tax_deduction = Decimal('0')
-            if sal.tax_applicable:
-                annual_taxable = (gross - cit_deduction - ssf_employee) * 12
-                annual_tax = calculate_nepal_tax(annual_taxable, emp.marital_status or 'single')
-                tax_deduction = (annual_tax / 12).quantize(Decimal('0.01'))
-
-            other_deductions = sal.deductions or {}
-            other_ded_total = sum(Decimal(str(v)) for v in other_deductions.values()) if other_deductions else Decimal('0')
-            total_ded = cit_deduction + ssf_employee + tax_deduction + other_ded_total
-            net = gross - total_ded
-
             att_records = AttendanceRecord.objects.filter(
                 employee_id=emp.id, date__gte=month_start, date__lte=month_end
             )
@@ -1546,7 +1608,113 @@ class PayrollRunProcessView(APIView):
             leave_count = att_records.filter(status='on_leave').count()
             late_count = att_records.filter(is_late=True).count()
             early_count = att_records.filter(is_early_leave=True).count()
-            working_days = (month_end - month_start).days + 1
+
+            dept = None
+            if emp.department_id:
+                try:
+                    dept = Department.objects.get(id=emp.department_id)
+                except Department.DoesNotExist:
+                    pass
+            working_days_per_week = dept.working_days_per_week if dept else 6
+            total_calendar_days = (month_end - month_start).days + 1
+            working_days = 0
+            for d in range(total_calendar_days):
+                day = month_start + timedelta(days=d)
+                if day.weekday() < working_days_per_week:
+                    working_days += 1
+            holidays_in_month = Holiday.objects.filter(
+                organization_id=pr.organization_id,
+                date__gte=month_start,
+                date__lte=month_end,
+                is_optional=False,
+            ).count()
+            effective_working_days = max(working_days - holidays_in_month, 1)
+
+            unpaid_leave_days = 0
+            unpaid_leave_requests = LeaveRequest.objects.filter(
+                employee_id=emp.id,
+                status='approved',
+                start_date__lte=month_end,
+                end_date__gte=month_start,
+            ).select_related('leave_type')
+            for lr in unpaid_leave_requests:
+                if not lr.leave_type.is_paid:
+                    overlap_start = max(lr.start_date, month_start)
+                    overlap_end = min(lr.end_date, month_end)
+                    unpaid_leave_days += (overlap_end - overlap_start).days + 1
+            unpaid_leave_days += absent_count
+
+            per_day_salary = gross / Decimal(str(effective_working_days))
+            unpaid_leave_deduction = (per_day_salary * Decimal(str(unpaid_leave_days))).quantize(Decimal('0.01'))
+            adjusted_gross = gross - unpaid_leave_deduction
+
+            bonus_records = Bonus.objects.filter(
+                employee_id=emp.id, month=pr.month, year=pr.year,
+                status__in=['approved', 'paid'],
+            )
+            bonus_total = sum(b.amount for b in bonus_records)
+
+            expense_records = TravelExpense.objects.filter(
+                employee_id=emp.id, month=pr.month, year=pr.year,
+                status='approved', include_in_salary=True,
+            )
+            travel_total = sum(te.amount for te in expense_records)
+
+            active_advances = AdvancePayment.objects.filter(
+                employee_id=emp.id,
+                status__in=['approved', 'active'],
+            ).filter(
+                Q(deduction_start_year__lt=pr.year) |
+                Q(deduction_start_year=pr.year, deduction_start_month__lte=pr.month)
+            )
+            advance_ded = Decimal('0')
+            for adv in active_advances:
+                ded_amount = min(adv.monthly_deduction, adv.remaining_balance)
+                advance_ded += ded_amount
+                adv.total_deducted += ded_amount
+                adv.remaining_balance -= ded_amount
+                if adv.remaining_balance <= 0:
+                    adv.remaining_balance = 0
+                    adv.status = 'completed'
+                else:
+                    adv.status = 'active'
+                adv.save()
+
+            cit_deduction = Decimal('0')
+            if sal.cit_type == 'percentage':
+                cit_deduction = adjusted_gross * sal.cit_value / 100
+            elif sal.cit_type == 'flat':
+                cit_deduction = sal.cit_value
+
+            ssf_employee = Decimal('0')
+            ssf_employer = Decimal('0')
+            if sal.ssf_applicable:
+                ssf_employee = adjusted_gross * sal.ssf_employee_percentage / 100
+                ssf_employer = adjusted_gross * sal.ssf_employer_percentage / 100
+
+            taxable_income = adjusted_gross + bonus_total if bonus_records.filter(is_taxable=True).exists() else adjusted_gross
+            tax_deduction = Decimal('0')
+            if sal.tax_applicable:
+                annual_taxable = (taxable_income - cit_deduction - ssf_employee) * 12
+                annual_tax = calculate_nepal_tax(annual_taxable, emp.marital_status or 'single')
+                tax_deduction = (annual_tax / 12).quantize(Decimal('0.01'))
+
+            other_deductions = sal.deductions or {}
+            other_ded_total = sum(Decimal(str(v)) for v in other_deductions.values()) if other_deductions else Decimal('0')
+
+            total_ded = (cit_deduction + ssf_employee + tax_deduction +
+                        other_ded_total + unpaid_leave_deduction + advance_ded)
+            net = adjusted_gross + bonus_total + travel_total - (
+                cit_deduction + ssf_employee + tax_deduction + other_ded_total + advance_ded
+            )
+
+            for br in bonus_records:
+                if br.status == 'approved':
+                    br.status = 'paid'
+                    br.save()
+            for te in expense_records:
+                te.status = 'reimbursed'
+                te.save()
 
             Payslip.objects.update_or_create(
                 payroll_run=pr,
@@ -1561,10 +1729,14 @@ class PayrollRunProcessView(APIView):
                     'ssf_employee_deduction': ssf_employee,
                     'ssf_employer_contribution': ssf_employer,
                     'tax_deduction': tax_deduction,
+                    'bonus_amount': bonus_total,
+                    'travel_reimbursement': travel_total,
+                    'advance_deduction': advance_ded,
+                    'unpaid_leave_deduction': unpaid_leave_deduction,
                     'other_deductions': other_deductions,
                     'total_deductions': total_ded,
                     'net_salary': net,
-                    'working_days': working_days,
+                    'working_days': effective_working_days,
                     'present_days': present_count,
                     'absent_days': absent_count,
                     'leave_days': leave_count,
@@ -1840,3 +2012,295 @@ class MyPayslipsView(APIView):
         if year:
             payslips = payslips.filter(year=year)
         return Response([serialize_payslip(ps) for ps in payslips])
+
+
+class BonusListView(APIView):
+    @require_permission('hrms.bonus.read')
+    def get(self, request):
+        qs = Bonus.objects.all()
+        emp = request.GET.get('employee_id')
+        if emp:
+            qs = qs.filter(employee_id=emp)
+        month = request.GET.get('month')
+        year = request.GET.get('year')
+        if month:
+            qs = qs.filter(month=month)
+        if year:
+            qs = qs.filter(year=year)
+        status = request.GET.get('status')
+        if status:
+            qs = qs.filter(status=status)
+        return Response([serialize_bonus(b) for b in qs])
+
+    @require_permission('hrms.bonus.add')
+    def post(self, request):
+        data = request.data
+        try:
+            emp = Employee.objects.get(id=data.get('employee_id'))
+        except Employee.DoesNotExist:
+            return Response({'message': 'Employee not found'}, status=404)
+        b = Bonus.objects.create(
+            employee_id=emp.id,
+            bonus_type=data.get('bonus_type', 'other'),
+            amount=Decimal(str(data.get('amount', 0))),
+            reason=data.get('reason'),
+            month=int(data.get('month')),
+            year=int(data.get('year')),
+            is_taxable=data.get('is_taxable', True),
+            status=data.get('status', 'pending'),
+        )
+        return Response(serialize_bonus(b), status=201)
+
+
+class BonusDetailView(APIView):
+    @require_permission('hrms.bonus.update')
+    def patch(self, request, bonus_id):
+        try:
+            b = Bonus.objects.get(id=bonus_id)
+        except Bonus.DoesNotExist:
+            return Response({'message': 'Bonus not found'}, status=404)
+        data = request.data
+        for field in ['bonus_type', 'reason', 'is_taxable', 'status']:
+            if field in data:
+                setattr(b, field, data[field])
+        if 'amount' in data:
+            b.amount = Decimal(str(data['amount']))
+        if 'month' in data:
+            b.month = int(data['month'])
+        if 'year' in data:
+            b.year = int(data['year'])
+        if data.get('status') == 'approved':
+            b.approved_by = request.session.get('userId')
+            b.approved_at = timezone.now()
+        b.save()
+        return Response(serialize_bonus(b))
+
+    @require_permission('hrms.bonus.delete')
+    def delete(self, request, bonus_id):
+        try:
+            b = Bonus.objects.get(id=bonus_id)
+        except Bonus.DoesNotExist:
+            return Response({'message': 'Bonus not found'}, status=404)
+        b.delete()
+        return Response({'message': 'Bonus deleted'})
+
+
+class TravelExpenseListView(APIView):
+    @require_permission('hrms.expense.read')
+    def get(self, request):
+        qs = TravelExpense.objects.all()
+        emp = request.GET.get('employee_id')
+        if emp:
+            qs = qs.filter(employee_id=emp)
+        month = request.GET.get('month')
+        year = request.GET.get('year')
+        if month:
+            qs = qs.filter(month=month)
+        if year:
+            qs = qs.filter(year=year)
+        status = request.GET.get('status')
+        if status:
+            qs = qs.filter(status=status)
+        return Response([serialize_travel_expense(te) for te in qs])
+
+    @require_permission('hrms.expense.add')
+    def post(self, request):
+        data = request.data
+        try:
+            emp = Employee.objects.get(id=data.get('employee_id'))
+        except Employee.DoesNotExist:
+            return Response({'message': 'Employee not found'}, status=404)
+        exp_date = date.fromisoformat(data['expense_date']) if data.get('expense_date') else date.today()
+        te = TravelExpense.objects.create(
+            employee_id=emp.id,
+            category=data.get('category', 'travel'),
+            description=data.get('description', ''),
+            amount=Decimal(str(data.get('amount', 0))),
+            expense_date=exp_date,
+            receipt_url=data.get('receipt_url'),
+            month=int(data.get('month', exp_date.month)),
+            year=int(data.get('year', exp_date.year)),
+            include_in_salary=data.get('include_in_salary', True),
+            status=data.get('status', 'pending'),
+        )
+        return Response(serialize_travel_expense(te), status=201)
+
+
+class TravelExpenseDetailView(APIView):
+    @require_permission('hrms.expense.update')
+    def patch(self, request, expense_id):
+        try:
+            te = TravelExpense.objects.get(id=expense_id)
+        except TravelExpense.DoesNotExist:
+            return Response({'message': 'Travel expense not found'}, status=404)
+        data = request.data
+        for field in ['category', 'description', 'receipt_url', 'include_in_salary', 'status', 'rejection_reason']:
+            if field in data:
+                setattr(te, field, data[field])
+        if 'amount' in data:
+            te.amount = Decimal(str(data['amount']))
+        if 'expense_date' in data:
+            te.expense_date = date.fromisoformat(data['expense_date'])
+        if 'month' in data:
+            te.month = int(data['month'])
+        if 'year' in data:
+            te.year = int(data['year'])
+        if data.get('status') == 'approved':
+            te.approved_by = request.session.get('userId')
+            te.approved_at = timezone.now()
+        te.save()
+        return Response(serialize_travel_expense(te))
+
+    @require_permission('hrms.expense.delete')
+    def delete(self, request, expense_id):
+        try:
+            te = TravelExpense.objects.get(id=expense_id)
+        except TravelExpense.DoesNotExist:
+            return Response({'message': 'Travel expense not found'}, status=404)
+        te.delete()
+        return Response({'message': 'Travel expense deleted'})
+
+
+class AdvancePaymentListView(APIView):
+    @require_permission('hrms.advance.read')
+    def get(self, request):
+        qs = AdvancePayment.objects.all()
+        emp = request.GET.get('employee_id')
+        if emp:
+            qs = qs.filter(employee_id=emp)
+        status = request.GET.get('status')
+        if status:
+            qs = qs.filter(status=status)
+        return Response([serialize_advance_payment(ap) for ap in qs])
+
+    @require_permission('hrms.advance.add')
+    def post(self, request):
+        data = request.data
+        try:
+            emp = Employee.objects.get(id=data.get('employee_id'))
+        except Employee.DoesNotExist:
+            return Response({'message': 'Employee not found'}, status=404)
+        amount = Decimal(str(data.get('amount', 0)))
+        monthly_ded = Decimal(str(data.get('monthly_deduction', 0)))
+        if monthly_ded <= 0:
+            return Response({'message': 'Monthly deduction must be greater than 0'}, status=400)
+        ap = AdvancePayment.objects.create(
+            employee_id=emp.id,
+            amount=amount,
+            reason=data.get('reason'),
+            request_date=date.fromisoformat(data['request_date']) if data.get('request_date') else date.today(),
+            monthly_deduction=monthly_ded,
+            deduction_start_month=int(data.get('deduction_start_month', date.today().month)),
+            deduction_start_year=int(data.get('deduction_start_year', date.today().year)),
+            remaining_balance=amount,
+            status=data.get('status', 'pending'),
+        )
+        return Response(serialize_advance_payment(ap), status=201)
+
+
+class AdvancePaymentDetailView(APIView):
+    @require_permission('hrms.advance.update')
+    def patch(self, request, advance_id):
+        try:
+            ap = AdvancePayment.objects.get(id=advance_id)
+        except AdvancePayment.DoesNotExist:
+            return Response({'message': 'Advance payment not found'}, status=404)
+        data = request.data
+        for field in ['reason', 'status']:
+            if field in data:
+                setattr(ap, field, data[field])
+        if 'monthly_deduction' in data:
+            ap.monthly_deduction = Decimal(str(data['monthly_deduction']))
+        if data.get('status') == 'approved':
+            ap.approved_by = request.session.get('userId')
+            ap.approved_at = timezone.now()
+            ap.status = 'approved'
+        if data.get('status') == 'active':
+            ap.status = 'active'
+        ap.save()
+        return Response(serialize_advance_payment(ap))
+
+    @require_permission('hrms.advance.delete')
+    def delete(self, request, advance_id):
+        try:
+            ap = AdvancePayment.objects.get(id=advance_id)
+        except AdvancePayment.DoesNotExist:
+            return Response({'message': 'Advance payment not found'}, status=404)
+        ap.delete()
+        return Response({'message': 'Advance payment deleted'})
+
+
+class StaffProfileListView(APIView):
+    @require_permission('hrms.staff.read')
+    def get(self, request):
+        org = request.GET.get('organization_id')
+        dept = request.GET.get('department_id')
+        qs = Employee.objects.filter(status='active')
+        if org:
+            qs = qs.filter(organization_id=org)
+        if dept:
+            qs = qs.filter(department_id=dept)
+        result = []
+        for emp in qs:
+            sal = SalaryStructure.objects.filter(
+                employee_id=emp.id, status='active'
+            ).order_by('-effective_from').first()
+            org_name = None
+            dept_name = None
+            if emp.organization_id:
+                try:
+                    org_obj = Organization.objects.get(id=emp.organization_id)
+                    org_name = org_obj.name
+                except Organization.DoesNotExist:
+                    pass
+            if emp.department_id:
+                try:
+                    dept_obj = Department.objects.get(id=emp.department_id)
+                    dept_name = dept_obj.name
+                except Department.DoesNotExist:
+                    pass
+            active_advances = AdvancePayment.objects.filter(
+                employee_id=emp.id, status__in=['approved', 'active']
+            ).aggregate(total=Sum('remaining_balance'))['total'] or 0
+
+            result.append({
+                'id': str(emp.id),
+                'full_name': emp.full_name,
+                'email': emp.email,
+                'phone': emp.phone,
+                'position': emp.position,
+                'department': emp.department,
+                'organization_id': str(emp.organization_id) if emp.organization_id else None,
+                'organization_name': org_name,
+                'department_id': str(emp.department_id) if emp.department_id else None,
+                'department_name': dept_name,
+                'gender': emp.gender,
+                'marital_status': emp.marital_status,
+                'date_of_birth': emp.date_of_birth.isoformat() if emp.date_of_birth else None,
+                'join_date': emp.join_date.isoformat() if emp.join_date else None,
+                'employment_type': emp.employment_type,
+                'bank_name': emp.bank_name,
+                'bank_account_number': emp.bank_account_number,
+                'bank_branch': emp.bank_branch,
+                'citizenship_no': emp.citizenship_no,
+                'pan_no': emp.pan_no,
+                'salary_amount': float(emp.salary_amount) if emp.salary_amount else None,
+                'salary_currency': emp.salary_currency,
+                'profile_photo_url': emp.profile_photo_url,
+                'status': emp.status,
+                'salary_structure': {
+                    'id': str(sal.id),
+                    'basic_salary': float(sal.basic_salary),
+                    'allowances': sal.allowances or {},
+                    'deductions': sal.deductions or {},
+                    'cit_type': sal.cit_type,
+                    'cit_value': float(sal.cit_value),
+                    'ssf_applicable': sal.ssf_applicable,
+                    'ssf_employee_percentage': float(sal.ssf_employee_percentage),
+                    'ssf_employer_percentage': float(sal.ssf_employer_percentage),
+                    'tax_applicable': sal.tax_applicable,
+                    'effective_from': sal.effective_from.isoformat() if sal.effective_from else None,
+                } if sal else None,
+                'outstanding_advance': float(active_advances),
+            })
+        return Response(result)

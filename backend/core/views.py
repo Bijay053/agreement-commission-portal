@@ -157,6 +157,10 @@ PERMISSION_REGISTRY = [
             {"resource": "payroll", "label": "Payroll", "actions": ["read", "add", "delete", "process"]},
             {"resource": "payslip", "label": "Payslips", "actions": ["read"]},
             {"resource": "notification", "label": "Notification Settings", "actions": ["read", "update"]},
+            {"resource": "staff", "label": "Staff Profiles", "actions": ["read"]},
+            {"resource": "bonus", "label": "Bonuses", "actions": ["read", "add", "update", "delete"]},
+            {"resource": "expense", "label": "Travel Expenses", "actions": ["read", "add", "update", "delete"]},
+            {"resource": "advance", "label": "Advance Payments", "actions": ["read", "add", "update", "delete"]},
         ],
     },
 ]

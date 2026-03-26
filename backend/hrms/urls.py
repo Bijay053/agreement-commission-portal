@@ -52,6 +52,17 @@ urlpatterns = [
 
     path('hrms/notification-settings', views.NotificationSettingView.as_view()),
 
+    path('hrms/staff-profiles', views.StaffProfileListView.as_view()),
+
+    path('hrms/bonuses', views.BonusListView.as_view()),
+    path('hrms/bonuses/<uuid:bonus_id>', views.BonusDetailView.as_view()),
+
+    path('hrms/travel-expenses', views.TravelExpenseListView.as_view()),
+    path('hrms/travel-expenses/<uuid:expense_id>', views.TravelExpenseDetailView.as_view()),
+
+    path('hrms/advance-payments', views.AdvancePaymentListView.as_view()),
+    path('hrms/advance-payments/<uuid:advance_id>', views.AdvancePaymentDetailView.as_view()),
+
     path('hrms/my/profile', views.MyProfileView.as_view()),
     path('hrms/my/attendance', views.MyAttendanceView.as_view()),
     path('hrms/my/leave-balance', views.MyLeaveBalanceView.as_view()),

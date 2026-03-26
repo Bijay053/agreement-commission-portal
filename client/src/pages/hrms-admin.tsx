@@ -25,7 +25,12 @@ import {
   Building2, Users, Calendar, TreePalm, Clock, DollarSign,
   Plus, Pencil, Trash2, Check, X, Eye, MapPin, Camera,
   Bell, Settings, Briefcase, UserCheck, CalendarDays,
+  Gift, Receipt, Banknote, UserCog,
 } from "lucide-react";
+import { StaffProfilesTab } from "./hrms-staff-profiles";
+import { BonusesTab } from "./hrms-bonuses";
+import { TravelExpensesTab } from "./hrms-expenses";
+import { AdvancePaymentsTab } from "./hrms-advances";
 
 interface Organization {
   id: string; name: string; short_code: string; address: string | null;
@@ -758,22 +763,30 @@ export default function HRMSAdminPage() {
       </div>
 
       <Tabs defaultValue="attendance" className="w-full">
-        <TabsList className="grid w-full grid-cols-7">
+        <TabsList className="flex w-full overflow-x-auto">
           <TabsTrigger value="attendance" data-testid="tab-attendance"><Clock className="h-4 w-4 mr-1" /> Attendance</TabsTrigger>
+          <TabsTrigger value="staff-profiles" data-testid="tab-staff-profiles"><UserCog className="h-4 w-4 mr-1" /> Staff & Salary</TabsTrigger>
           <TabsTrigger value="organizations" data-testid="tab-orgs"><Building2 className="h-4 w-4 mr-1" /> Organizations</TabsTrigger>
           <TabsTrigger value="departments" data-testid="tab-depts"><Users className="h-4 w-4 mr-1" /> Departments</TabsTrigger>
           <TabsTrigger value="leave-types" data-testid="tab-leave-types"><TreePalm className="h-4 w-4 mr-1" /> Leave Types</TabsTrigger>
           <TabsTrigger value="leave-requests" data-testid="tab-leave-requests"><CalendarDays className="h-4 w-4 mr-1" /> Leave Requests</TabsTrigger>
           <TabsTrigger value="holidays" data-testid="tab-holidays"><Calendar className="h-4 w-4 mr-1" /> Holidays</TabsTrigger>
+          <TabsTrigger value="bonuses" data-testid="tab-bonuses"><Gift className="h-4 w-4 mr-1" /> Bonuses</TabsTrigger>
+          <TabsTrigger value="expenses" data-testid="tab-expenses"><Receipt className="h-4 w-4 mr-1" /> Expenses</TabsTrigger>
+          <TabsTrigger value="advances" data-testid="tab-advances"><Banknote className="h-4 w-4 mr-1" /> Advances</TabsTrigger>
           <TabsTrigger value="payroll" data-testid="tab-payroll"><DollarSign className="h-4 w-4 mr-1" /> Payroll</TabsTrigger>
         </TabsList>
 
         <TabsContent value="attendance"><AttendanceTab /></TabsContent>
+        <TabsContent value="staff-profiles"><StaffProfilesTab /></TabsContent>
         <TabsContent value="organizations"><OrgTab /></TabsContent>
         <TabsContent value="departments"><DeptTab /></TabsContent>
         <TabsContent value="leave-types"><LeaveTypesTab /></TabsContent>
         <TabsContent value="leave-requests"><LeaveRequestsTab /></TabsContent>
         <TabsContent value="holidays"><HolidaysTab /></TabsContent>
+        <TabsContent value="bonuses"><BonusesTab /></TabsContent>
+        <TabsContent value="expenses"><TravelExpensesTab /></TabsContent>
+        <TabsContent value="advances"><AdvancePaymentsTab /></TabsContent>
         <TabsContent value="payroll"><PayrollTab /></TabsContent>
       </Tabs>
     </div>
