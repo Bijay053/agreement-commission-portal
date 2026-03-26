@@ -90,13 +90,20 @@ def serialize_dept(dept):
     }
 
 
+def _safe_date_str(val):
+    if val is None:
+        return None
+    if hasattr(val, 'isoformat'):
+        return val.isoformat()
+    return str(val)
+
 def serialize_fiscal_year(fy):
     return {
         'id': str(fy.id),
         'organization_id': str(fy.organization_id),
         'name': fy.name,
-        'start_date': fy.start_date.isoformat() if fy.start_date else None,
-        'end_date': fy.end_date.isoformat() if fy.end_date else None,
+        'start_date': _safe_date_str(fy.start_date),
+        'end_date': _safe_date_str(fy.end_date),
         'is_current': fy.is_current,
     }
 
