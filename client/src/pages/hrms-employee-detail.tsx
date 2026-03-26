@@ -1,19 +1,27 @@
-import { useQuery } from "@tanstack/react-query";
+import { useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
+} from "@/components/ui/dialog";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
 import {
   User, DollarSign, Calendar, Clock, Gift, Banknote, Receipt,
   ArrowLeft, Building2, Phone, Mail, MapPin, CreditCard, Shield,
-  FileText, TrendingUp, ExternalLink, Download,
+  FileText, TrendingUp, ExternalLink, Download, Eye, EyeOff, Lock,
+  Copy, Check, Link2,
 } from "lucide-react";
 import { useLocation } from "wouter";
 import { useAuth } from "@/lib/auth";
+import { apiRequest } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
@@ -73,6 +81,7 @@ interface Employee360Data {
     travel_reimbursement: number; advance_deduction: number;
     unpaid_leave_deduction: number; total_deductions: number;
     net_salary: number; working_days: number; present_days: number; status: string;
+    view_token?: string;
   }>;
   bonuses: Array<{
     id: string; bonus_type: string; amount: number; reason: string | null;
@@ -89,11 +98,13 @@ interface Employee360Data {
   }>;
   outstanding_advance: number;
   tax_summary: { year: number; total_tax: number; total_cit: number; total_ssf: number };
+  confidential_unlocked?: boolean;
 }
 
 export function EmployeeDetailView({ employeeId, onBack }: { employeeId: string; onBack: () => void }) {
   const [, navigate] = useLocation();
   const { hasPermission } = useAuth();
+  const { toast } = useToast();
   const canViewSalary = hasPermission("hrms.salary.read");
   const canViewPayroll = hasPermission("hrms.payroll.read") || hasPermission("hrms.payslip.read");
   const canViewBonus = hasPermission("hrms.bonus.read");
@@ -101,6 +112,59 @@ export function EmployeeDetailView({ employeeId, onBack }: { employeeId: string;
   const canViewExpense = hasPermission("hrms.expense.read");
   const canViewTax = hasPermission("hrms.tax.read");
   const canViewFinancials = canViewSalary || canViewPayroll || canViewBonus || canViewAdvance || canViewTax;
+  const queryClient = useQueryClient();
+
+  const [otpDialogOpen, setOtpDialogOpen] = useState(false);
+  const [otpStep, setOtpStep] = useState<"idle" | "sending" | "sent" | "verifying">("idle");
+  const [otpCode, setOtpCode] = useState("");
+  const [otpError, setOtpError] = useState("");
+  const [otpMaskedEmail, setOtpMaskedEmail] = useState("");
+  const [copiedToken, setCopiedToken] = useState<string | null>(null);
+
+  const handleSendOtp = async () => {
+    setOtpStep("sending");
+    setOtpError("");
+    try {
+      const res = await apiRequest("POST", "/api/hrms/confidential/send-otp");
+      const data = await res.json();
+      setOtpMaskedEmail(data.maskedEmail || "");
+      setOtpStep("sent");
+    } catch (err: any) {
+      const msg = err?.message || "Failed to send OTP";
+      try { const parsed = JSON.parse(msg); setOtpError(parsed.message || msg); } catch { setOtpError(msg); }
+      setOtpStep("idle");
+    }
+  };
+
+  const handleVerifyOtp = async () => {
+    if (otpCode.length !== 6) { setOtpError("Enter 6-digit code"); return; }
+    setOtpStep("verifying");
+    setOtpError("");
+    try {
+      const res = await apiRequest("POST", "/api/hrms/confidential/verify-otp", { code: otpCode });
+      const result = await res.json();
+      if (result.unlocked) {
+        setOtpDialogOpen(false);
+        setOtpCode("");
+        setOtpStep("idle");
+        queryClient.invalidateQueries({ queryKey: ["/api/hrms/employee-360", employeeId] });
+        toast({ title: "Access Granted", description: "Confidential data is now visible for this session." });
+      }
+    } catch (err: any) {
+      const msg = err?.message || "Verification failed";
+      try { const parsed = JSON.parse(msg); setOtpError(parsed.message || msg); } catch { setOtpError(msg); }
+      setOtpStep("sent");
+    }
+  };
+
+  const handleCopyPublicLink = (token: string) => {
+    const url = `${window.location.origin}/api/hrms/payslips/public/${token}/pdf`;
+    navigator.clipboard.writeText(url);
+    setCopiedToken(token);
+    toast({ title: "Link Copied", description: "Public payslip link copied to clipboard." });
+    setTimeout(() => setCopiedToken(null), 2000);
+  };
+
   const { data, isLoading } = useQuery<Employee360Data>({
     queryKey: ["/api/hrms/employee-360", employeeId],
     queryFn: async () => {
@@ -173,7 +237,16 @@ export function EmployeeDetailView({ employeeId, onBack }: { employeeId: string;
           <Card>
             <CardContent className="p-3 text-center">
               <p className="text-xs text-muted-foreground">Gross Salary</p>
-              <p className="text-lg font-bold font-mono" data-testid="text-gross-salary">{emp.salary_currency} {gross.toLocaleString()}</p>
+              {data?.confidential_unlocked ? (
+                <p className="text-lg font-bold font-mono" data-testid="text-gross-salary">{emp.salary_currency} {gross.toLocaleString()}</p>
+              ) : (
+                <div className="flex items-center justify-center gap-1.5">
+                  <span className="text-lg font-bold font-mono text-muted-foreground" data-testid="text-gross-salary-masked">****</span>
+                  <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => { setOtpDialogOpen(true); handleSendOtp(); }} data-testid="btn-reveal-salary">
+                    <Eye className="w-3.5 h-3.5 text-muted-foreground" />
+                  </Button>
+                </div>
+              )}
             </CardContent>
           </Card>
         )}
@@ -188,9 +261,18 @@ export function EmployeeDetailView({ employeeId, onBack }: { employeeId: string;
           <Card>
             <CardContent className="p-3 text-center">
               <p className="text-xs text-muted-foreground">Outstanding Advance</p>
-              <p className={`text-lg font-bold font-mono ${data.outstanding_advance > 0 ? 'text-red-600' : ''}`} data-testid="text-advance-due">
-                {emp.salary_currency} {data.outstanding_advance.toLocaleString()}
-              </p>
+              {data?.confidential_unlocked ? (
+                <p className={`text-lg font-bold font-mono ${data.outstanding_advance > 0 ? 'text-red-600' : ''}`} data-testid="text-advance-due">
+                  {emp.salary_currency} {data.outstanding_advance.toLocaleString()}
+                </p>
+              ) : (
+                <div className="flex items-center justify-center gap-1.5">
+                  <span className="text-lg font-bold font-mono text-muted-foreground" data-testid="text-advance-due-masked">****</span>
+                  <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => { setOtpDialogOpen(true); handleSendOtp(); }} data-testid="btn-reveal-advance">
+                    <Eye className="w-3.5 h-3.5 text-muted-foreground" />
+                  </Button>
+                </div>
+              )}
             </CardContent>
           </Card>
         )}
@@ -220,7 +302,17 @@ export function EmployeeDetailView({ employeeId, onBack }: { employeeId: string;
         </TabsList>
 
         {canViewSalary && <TabsContent value="salary">
-          {sal ? (
+          {!data?.confidential_unlocked ? (
+            <Card>
+              <CardContent className="p-8 text-center space-y-3">
+                <Lock className="w-10 h-10 mx-auto text-muted-foreground/50" />
+                <p className="text-muted-foreground">Salary details are protected. Verify your identity to view.</p>
+                <Button onClick={() => { setOtpDialogOpen(true); handleSendOtp(); }} data-testid="btn-unlock-salary">
+                  <Eye className="w-4 h-4 mr-2" /> Verify with OTP to View
+                </Button>
+              </CardContent>
+            </Card>
+          ) : sal ? (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <Card>
                 <CardHeader className="p-4 pb-2"><CardTitle className="text-sm">Earnings</CardTitle></CardHeader>
@@ -336,6 +428,7 @@ export function EmployeeDetailView({ employeeId, onBack }: { employeeId: string;
                   <TableHead>Days</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead className="text-center">PDF</TableHead>
+                  <TableHead className="text-center">Share</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -355,6 +448,13 @@ export function EmployeeDetailView({ employeeId, onBack }: { employeeId: string;
                       <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => window.open(`/api/hrms/payslips/${ps.id}/pdf`, '_blank')} data-testid={`btn-dl-payslip-${ps.id}`}>
                         <Download className="w-3.5 h-3.5" />
                       </Button>
+                    </TableCell>
+                    <TableCell className="text-center">
+                      {ps.view_token && (
+                        <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => handleCopyPublicLink(ps.view_token!)} data-testid={`btn-share-payslip-${ps.id}`} title="Copy public view link">
+                          {copiedToken === ps.view_token ? <Check className="w-3.5 h-3.5 text-green-600" /> : <Link2 className="w-3.5 h-3.5" />}
+                        </Button>
+                      )}
                     </TableCell>
                   </TableRow>
                 ))}
@@ -538,6 +638,46 @@ export function EmployeeDetailView({ employeeId, onBack }: { employeeId: string;
           </div>
         </TabsContent>
       </Tabs>
+
+      <Dialog open={otpDialogOpen} onOpenChange={(open) => { setOtpDialogOpen(open); if (!open) { setOtpCode(""); setOtpError(""); setOtpStep("idle"); } }}>
+        <DialogContent className="sm:max-w-[400px]" data-testid="otp-confidential-dialog">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2"><Lock className="w-5 h-5" /> Identity Verification</DialogTitle>
+            <DialogDescription>
+              {otpStep === "idle" || otpStep === "sending"
+                ? "A verification code will be sent to your email to unlock confidential data."
+                : `Enter the 6-digit code sent to ${otpMaskedEmail}`}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 pt-2">
+            {(otpStep === "idle" || otpStep === "sending") && (
+              <Button onClick={handleSendOtp} disabled={otpStep === "sending"} className="w-full" data-testid="btn-send-otp-confidential">
+                {otpStep === "sending" ? "Sending..." : "Send Verification Code"}
+              </Button>
+            )}
+            {(otpStep === "sent" || otpStep === "verifying") && (
+              <>
+                <Input
+                  placeholder="Enter 6-digit code"
+                  value={otpCode}
+                  onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                  className="text-center text-2xl tracking-[0.5em] font-mono"
+                  autoFocus
+                  data-testid="input-otp-confidential"
+                  onKeyDown={(e) => { if (e.key === "Enter") handleVerifyOtp(); }}
+                />
+                <Button onClick={handleVerifyOtp} disabled={otpStep === "verifying" || otpCode.length !== 6} className="w-full" data-testid="btn-verify-otp-confidential">
+                  {otpStep === "verifying" ? "Verifying..." : "Verify & Unlock"}
+                </Button>
+                <Button variant="link" size="sm" className="w-full text-xs" onClick={handleSendOtp} data-testid="btn-resend-otp-confidential">
+                  Resend Code
+                </Button>
+              </>
+            )}
+            {otpError && <p className="text-sm text-red-600 text-center" data-testid="text-otp-error">{otpError}</p>}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -85,4 +85,9 @@ urlpatterns = [
     path('hrms/my/leave-requests', views.MyLeaveRequestsView.as_view()),
     path('hrms/my/payslips', views.MyPayslipsView.as_view()),
     path('hrms/my/payslips/<uuid:ps_id>/pdf', views.MyPayslipPDFView.as_view()),
+
+    path('hrms/payslips/public/<str:token>/pdf', views.PublicPayslipPDFView.as_view()),
+
+    path('hrms/confidential/send-otp', views.ConfidentialOTPSendView.as_view()),
+    path('hrms/confidential/verify-otp', views.ConfidentialOTPVerifyView.as_view()),
 ]

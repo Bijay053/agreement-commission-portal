@@ -1,4 +1,5 @@
 import uuid
+import secrets
 from django.db import models
 
 
@@ -349,6 +350,7 @@ class Payslip(models.Model):
     late_count = models.IntegerField(default=0)
     early_leave_count = models.IntegerField(default=0)
     status = models.CharField(max_length=24, default='draft')
+    view_token = models.CharField(max_length=64, unique=True, null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -356,6 +358,11 @@ class Payslip(models.Model):
         db_table = 'hrms_payslips'
         ordering = ['-year', '-month']
         unique_together = ['payroll_run', 'employee_id']
+
+    def save(self, *args, **kwargs):
+        if not self.view_token:
+            self.view_token = secrets.token_urlsafe(32)
+        super().save(*args, **kwargs)
 
 
 BONUS_TYPE_CHOICES = [

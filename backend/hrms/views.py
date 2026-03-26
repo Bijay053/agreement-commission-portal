@@ -1,6 +1,9 @@
 import os
+import secrets
+import hashlib
 from datetime import datetime, date, timedelta
 from decimal import Decimal
+from django.conf import settings
 from django.utils import timezone
 from django.db.models import Q, Sum
 from rest_framework.views import APIView
@@ -303,6 +306,7 @@ def serialize_payslip(ps):
         'late_count': ps.late_count,
         'early_leave_count': ps.early_leave_count,
         'status': ps.status,
+        'view_token': ps.view_token,
     }
 
 
@@ -3069,6 +3073,16 @@ class Employee360View(APIView):
         can_expense = 'hrms.expense.read' in user_perms
         can_tax = 'hrms.tax.read' in user_perms
 
+        confidential_unlocked = False
+        unlock_ts = request.session.get('confidential_unlocked_at')
+        if unlock_ts:
+            try:
+                unlock_time = datetime.fromisoformat(unlock_ts)
+                if (timezone.now() - unlock_time).total_seconds() < 300:
+                    confidential_unlocked = True
+            except (ValueError, TypeError):
+                pass
+
         org_name = None
         dept_name = None
         org_reg_label = 'Registration No.'
@@ -3088,7 +3102,7 @@ class Employee360View(APIView):
                 pass
 
         salary_data = None
-        if can_salary:
+        if can_salary and confidential_unlocked:
             sal = SalaryStructure.objects.filter(
                 employee_id=emp.id, status='active'
             ).order_by('-effective_from').first()
@@ -3158,6 +3172,7 @@ class Employee360View(APIView):
                     'working_days': ps.working_days,
                     'present_days': ps.present_days,
                     'status': ps.status,
+                    'view_token': ps.view_token,
                 })
 
         bonuses = []
@@ -3176,7 +3191,7 @@ class Employee360View(APIView):
 
         advances = []
         active_advances_total = 0
-        if can_advance:
+        if can_advance and confidential_unlocked:
             for a in AdvancePayment.objects.filter(employee_id=emp.id).order_by('-request_date')[:10]:
                 advances.append({
                     'id': str(a.id),
@@ -3270,6 +3285,7 @@ class Employee360View(APIView):
             'expenses': expenses,
             'outstanding_advance': float(active_advances_total),
             'tax_summary': tax_summary,
+            'confidential_unlocked': confidential_unlocked,
         })
 
 
@@ -3507,3 +3523,110 @@ class CountryTaxLabelDetailView(APIView):
             return Response({'message': 'Not found'}, status=404)
         c.delete()
         return Response({'message': 'Deleted'})
+
+
+class PublicPayslipPDFView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def get(self, request, token):
+        try:
+            ps = Payslip.objects.get(view_token=token, status__in=['completed', 'paid', 'approved'])
+        except Payslip.DoesNotExist:
+            return Response({'message': 'Payslip not found or link expired'}, status=404)
+        try:
+            emp = Employee.objects.get(id=ps.employee_id)
+        except Employee.DoesNotExist:
+            return Response({'message': 'Employee not found'}, status=404)
+        pr = ps.payroll_run
+        org = pr.organization if pr else None
+        pdf_bytes = generate_payslip_pdf(ps, emp, org)
+        from django.http import HttpResponse
+        month_name = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][ps.month - 1]
+        filename = f"Payslip_{emp.full_name.replace(' ', '_')}_{month_name}_{ps.year}.pdf"
+        response = HttpResponse(pdf_bytes, content_type='application/pdf')
+        response['Content-Disposition'] = f'inline; filename="{filename}"'
+        return response
+
+
+class ConfidentialOTPSendView(APIView):
+    @require_auth
+    def post(self, request):
+        from accounts.models import User, LoginVerificationCode
+        from accounts.views import send_otp_email
+        user_id = request.session.get('userId')
+        if not user_id:
+            return Response({'message': 'Not authenticated'}, status=401)
+        try:
+            user = User.objects.get(id=user_id)
+        except User.DoesNotExist:
+            return Response({'message': 'User not found'}, status=404)
+
+        otp_code = secrets.randbelow(900000) + 100000
+        otp_str = str(otp_code)
+        code_hash = hashlib.sha256(otp_str.encode()).hexdigest()
+        expires_at = timezone.now() + timedelta(minutes=5)
+
+        LoginVerificationCode.objects.filter(
+            user_id=user_id, status='pending'
+        ).update(status='expired')
+
+        LoginVerificationCode.objects.create(
+            user_id=user_id,
+            code_hash=code_hash,
+            expires_at=expires_at,
+            status='pending',
+        )
+
+        try:
+            send_otp_email(user.email, otp_str)
+        except Exception as e:
+            print(f'[OTP-Confidential] Email send failed: {e}')
+            return Response({'message': 'Failed to send OTP email'}, status=500)
+
+        masked_email = user.email[:2] + '***@' + user.email.split('@')[1] if '@' in user.email else '***'
+        return Response({
+            'message': 'OTP sent successfully',
+            'maskedEmail': masked_email,
+        })
+
+
+class ConfidentialOTPVerifyView(APIView):
+    @require_auth
+    def post(self, request):
+        from accounts.models import LoginVerificationCode
+        user_id = request.session.get('userId')
+        if not user_id:
+            return Response({'message': 'Not authenticated'}, status=401)
+
+        code = (request.data.get('code') or '').strip()
+        if not code or len(code) != 6:
+            return Response({'message': 'Invalid OTP format'}, status=400)
+
+        code_hash = hashlib.sha256(code.encode()).hexdigest()
+        try:
+            otp_record = LoginVerificationCode.objects.filter(
+                user_id=user_id, status='pending',
+                expires_at__gt=timezone.now(),
+            ).latest('created_at')
+        except LoginVerificationCode.DoesNotExist:
+            return Response({'message': 'No valid OTP found. Please request a new one.'}, status=400)
+
+        if otp_record.attempts >= 5:
+            otp_record.status = 'expired'
+            otp_record.save(update_fields=['status'])
+            return Response({'message': 'Too many attempts. Please request a new OTP.'}, status=429)
+
+        otp_record.attempts += 1
+        otp_record.save(update_fields=['attempts'])
+
+        if otp_record.code_hash != code_hash:
+            remaining = 5 - otp_record.attempts
+            return Response({'message': f'Invalid OTP. {remaining} attempts remaining.'}, status=400)
+
+        otp_record.status = 'used'
+        otp_record.used_at = timezone.now()
+        otp_record.save(update_fields=['status', 'used_at'])
+
+        request.session['confidential_unlocked_at'] = timezone.now().isoformat()
+        return Response({'message': 'Verified successfully', 'unlocked': True})
