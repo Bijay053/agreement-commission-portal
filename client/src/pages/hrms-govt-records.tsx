@@ -51,7 +51,10 @@ const MONTHS = ["January", "February", "March", "April", "May", "June", "July", 
 const fmt = (v: number) => v > 0 ? v.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "—";
 
 export function GovernmentRecordsTab() {
+  const currentMonth = new Date().getMonth() + 1;
   const [filterYear, setFilterYear] = useState(String(new Date().getFullYear()));
+  const [filterMonth, setFilterMonth] = useState(String(currentMonth));
+  const [recordType, setRecordType] = useState("tax");
 
   const { data, isLoading } = useQuery<GovtTaxData>({
     queryKey: ["/api/hrms/government-tax-records", { year: filterYear }],
@@ -68,12 +71,20 @@ export function GovernmentRecordsTab() {
   const monthly = data?.monthly || [];
   const hasData = monthly.some(m => m.employee_count > 0);
   const hasSSF = monthly.some(m => m.total_ssf_employee > 0 || m.total_ssf_employer > 0);
-  const hasCIT = monthly.some(m => m.total_cit > 0);
-  const monthsWithData = monthly.filter(m => m.employee_count > 0);
+
+  const selectedMonth = monthly.find(m => m.month === parseInt(filterMonth));
+
+  const typeOptions: { value: string; label: string; icon: JSX.Element }[] = [
+    { value: "tax", label: "Income Tax", icon: <TrendingUp className="h-4 w-4 text-orange-500" /> },
+    { value: "cit", label: "CIT", icon: <Shield className="h-4 w-4 text-blue-500" /> },
+  ];
+  if (hasSSF) {
+    typeOptions.push({ value: "ssf", label: "SSF", icon: <Wallet className="h-4 w-4 text-green-500" /> });
+  }
 
   const summaryCards = [];
   if (totals && hasData) {
-    if (hasCIT) summaryCards.push({ icon: <Shield className="h-4 w-4 text-blue-500" />, label: "Total CIT", value: totals.total_cit, testId: "text-total-cit" });
+    summaryCards.push({ icon: <Shield className="h-4 w-4 text-blue-500" />, label: "Total CIT", value: totals.total_cit, testId: "text-total-cit" });
     if (hasSSF) {
       summaryCards.push({ icon: <Wallet className="h-4 w-4 text-green-500" />, label: "SSF (Employee)", value: totals.total_ssf_employee, testId: "text-total-ssf-emp" });
       summaryCards.push({ icon: <Wallet className="h-4 w-4 text-purple-500" />, label: "SSF (Employer)", value: totals.total_ssf_employer, testId: "text-total-ssf-empr" });
@@ -88,10 +99,26 @@ export function GovernmentRecordsTab() {
           <h2 className="text-lg font-semibold">Government Records</h2>
           <p className="text-sm text-muted-foreground">Monthly staff-level breakdown of Income Tax, CIT, and SSF payable to government.</p>
         </div>
+      </div>
+
+      <div className="flex items-center gap-3 flex-wrap">
         <Select value={filterYear} onValueChange={setFilterYear}>
-          <SelectTrigger className="w-24"><SelectValue /></SelectTrigger>
+          <SelectTrigger className="w-24" data-testid="select-year"><SelectValue /></SelectTrigger>
           <SelectContent>
             {[2024, 2025, 2026, 2027].map(y => <SelectItem key={y} value={String(y)}>{y}</SelectItem>)}
+          </SelectContent>
+        </Select>
+        <Select value={filterMonth} onValueChange={setFilterMonth}>
+          <SelectTrigger className="w-40" data-testid="select-month"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Months</SelectItem>
+            {MONTHS.map((m, i) => <SelectItem key={i + 1} value={String(i + 1)}>{m}</SelectItem>)}
+          </SelectContent>
+        </Select>
+        <Select value={recordType} onValueChange={setRecordType}>
+          <SelectTrigger className="w-36" data-testid="select-record-type"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            {typeOptions.map(t => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
           </SelectContent>
         </Select>
       </div>
@@ -127,177 +154,193 @@ export function GovernmentRecordsTab() {
         </div>
       )}
 
-      {/* Income Tax — one table per month */}
-      {monthsWithData.length > 0 && (
-        <div className="space-y-5">
-          <div className="flex items-center gap-2">
-            <TrendingUp className="h-4 w-4 text-orange-500" />
-            <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">Income Tax Records</h3>
-          </div>
-          {monthsWithData.map(m => (
-            <div key={`tax-${m.month}`} className="border rounded-lg overflow-hidden" data-testid={`section-tax-${m.month}`}>
-              <div className="bg-muted/40 px-4 py-2 flex items-center justify-between border-b">
-                <span className="font-semibold text-sm">{MONTHS[m.month - 1]} {m.year}</span>
-                <span className="text-xs text-muted-foreground">{m.employee_count} staff</span>
-              </div>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Employee</TableHead>
-                    <TableHead className="text-right">Gross Salary</TableHead>
-                    <TableHead className="text-right">Income Tax</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {m.staff.map((s, idx) => (
-                    <TableRow key={`${s.employee_id}-${idx}`}>
-                      <TableCell className="text-sm">{s.employee_name}</TableCell>
-                      <TableCell className="text-right font-mono text-sm">{fmt(s.gross_salary)}</TableCell>
-                      <TableCell className="text-right font-mono text-sm">
-                        {s.tax > 0 ? <span className="text-orange-600 font-medium">{fmt(s.tax)}</span> : "—"}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                  <TableRow className="bg-muted/30 font-semibold">
-                    <TableCell className="font-bold text-sm">Total</TableCell>
-                    <TableCell className="text-right font-mono text-sm">{fmt(m.total_gross)}</TableCell>
-                    <TableCell className="text-right font-mono text-sm text-orange-600">{fmt(m.total_tax)}</TableCell>
-                  </TableRow>
-                </TableBody>
-              </Table>
-            </div>
-          ))}
-          {totals && monthsWithData.length > 1 && (
-            <div className="border rounded-lg overflow-hidden border-orange-200 bg-orange-50/30">
-              <Table>
-                <TableBody>
-                  <TableRow className="font-bold">
-                    <TableCell className="text-sm">Annual Total ({filterYear})</TableCell>
-                    <TableCell className="text-right font-mono">{fmt(monthly.reduce((s, m) => s + m.total_gross, 0))}</TableCell>
-                    <TableCell className="text-right font-mono text-orange-600 text-base">{fmt(totals.total_tax)}</TableCell>
-                  </TableRow>
-                </TableBody>
-              </Table>
-            </div>
-          )}
-        </div>
-      )}
+      {hasData && (() => {
+        const monthsToShow = filterMonth === "all"
+          ? monthly.filter(m => m.employee_count > 0)
+          : selectedMonth && selectedMonth.employee_count > 0
+            ? [selectedMonth]
+            : [];
 
-      {/* CIT — one table per month */}
-      {(hasCIT && monthsWithData.length > 0) && (
-        <div className="space-y-5">
-          <div className="flex items-center gap-2">
-            <Shield className="h-4 w-4 text-blue-500" />
-            <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">CIT Records</h3>
-          </div>
-          {monthsWithData.map(m => (
-            <div key={`cit-${m.month}`} className="border rounded-lg overflow-hidden" data-testid={`section-cit-${m.month}`}>
-              <div className="bg-muted/40 px-4 py-2 flex items-center justify-between border-b">
-                <span className="font-semibold text-sm">{MONTHS[m.month - 1]} {m.year}</span>
-                <span className="text-xs text-muted-foreground">{m.employee_count} staff</span>
-              </div>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Employee</TableHead>
-                    <TableHead className="text-right">CIT Amount</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {m.staff.map((s, idx) => (
-                    <TableRow key={`${s.employee_id}-${idx}`}>
-                      <TableCell className="text-sm">{s.employee_name}</TableCell>
-                      <TableCell className="text-right font-mono text-sm">
-                        {s.cit > 0 ? <span className="text-blue-600 font-medium">{fmt(s.cit)}</span> : "—"}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                  <TableRow className="bg-muted/30 font-semibold">
-                    <TableCell className="font-bold text-sm">Total</TableCell>
-                    <TableCell className="text-right font-mono text-sm text-blue-600">{fmt(m.total_cit)}</TableCell>
-                  </TableRow>
-                </TableBody>
-              </Table>
+        if (monthsToShow.length === 0 && filterMonth !== "all") {
+          return (
+            <div className="text-center text-muted-foreground py-12 border rounded-md">
+              No payroll data for {MONTHS[parseInt(filterMonth) - 1]} {filterYear}.
             </div>
-          ))}
-          {totals && monthsWithData.length > 1 && (
-            <div className="border rounded-lg overflow-hidden border-blue-200 bg-blue-50/30">
-              <Table>
-                <TableBody>
-                  <TableRow className="font-bold">
-                    <TableCell className="text-sm">Annual Total ({filterYear})</TableCell>
-                    <TableCell className="text-right font-mono text-blue-600 text-base">{fmt(totals.total_cit)}</TableCell>
-                  </TableRow>
-                </TableBody>
-              </Table>
-            </div>
-          )}
-        </div>
-      )}
+          );
+        }
 
-      {/* SSF — one table per month, only if SSF data exists */}
-      {hasSSF && monthsWithData.length > 0 && (
-        <div className="space-y-5">
-          <div className="flex items-center gap-2">
-            <Wallet className="h-4 w-4 text-green-500" />
-            <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">SSF Records</h3>
-          </div>
-          {monthsWithData.map(m => {
-            const monthSsfTotal = m.total_ssf_employee + m.total_ssf_employer;
-            if (monthSsfTotal === 0) return null;
-            return (
-              <div key={`ssf-${m.month}`} className="border rounded-lg overflow-hidden" data-testid={`section-ssf-${m.month}`}>
-                <div className="bg-muted/40 px-4 py-2 flex items-center justify-between border-b">
-                  <span className="font-semibold text-sm">{MONTHS[m.month - 1]} {m.year}</span>
-                  <span className="text-xs text-muted-foreground">{m.employee_count} staff</span>
+        return (
+          <div className="space-y-5">
+            {recordType === "tax" && (
+              <>
+                <div className="flex items-center gap-2">
+                  <TrendingUp className="h-4 w-4 text-orange-500" />
+                  <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">Income Tax Records</h3>
                 </div>
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Employee</TableHead>
-                      <TableHead className="text-right">SSF (Employee)</TableHead>
-                      <TableHead className="text-right">SSF (Employer)</TableHead>
-                      <TableHead className="text-right font-semibold">Total SSF</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {m.staff.filter(s => s.ssf_employee > 0 || s.ssf_employer > 0).map((s, idx) => (
-                      <TableRow key={`${s.employee_id}-${idx}`}>
-                        <TableCell className="text-sm">{s.employee_name}</TableCell>
-                        <TableCell className="text-right font-mono text-sm">{fmt(s.ssf_employee)}</TableCell>
-                        <TableCell className="text-right font-mono text-sm">{fmt(s.ssf_employer)}</TableCell>
-                        <TableCell className="text-right font-mono text-sm">
-                          <span className="text-green-600 font-medium">{fmt(s.ssf_employee + s.ssf_employer)}</span>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                    <TableRow className="bg-muted/30 font-semibold">
-                      <TableCell className="font-bold text-sm">Total</TableCell>
-                      <TableCell className="text-right font-mono text-sm">{fmt(m.total_ssf_employee)}</TableCell>
-                      <TableCell className="text-right font-mono text-sm">{fmt(m.total_ssf_employer)}</TableCell>
-                      <TableCell className="text-right font-mono text-sm text-green-600">{fmt(monthSsfTotal)}</TableCell>
-                    </TableRow>
-                  </TableBody>
-                </Table>
-              </div>
-            );
-          })}
-          {totals && (
-            <div className="border rounded-lg overflow-hidden border-green-200 bg-green-50/30">
-              <Table>
-                <TableBody>
-                  <TableRow className="font-bold">
-                    <TableCell className="text-sm">Annual Total ({filterYear})</TableCell>
-                    <TableCell className="text-right font-mono">{fmt(totals.total_ssf_employee)}</TableCell>
-                    <TableCell className="text-right font-mono">{fmt(totals.total_ssf_employer)}</TableCell>
-                    <TableCell className="text-right font-mono text-green-600 text-base">{fmt(totals.total_ssf_employee + totals.total_ssf_employer)}</TableCell>
-                  </TableRow>
-                </TableBody>
-              </Table>
-            </div>
-          )}
-        </div>
-      )}
+                {monthsToShow.map(m => (
+                  <div key={`tax-${m.month}`} className="border rounded-lg overflow-hidden" data-testid={`section-tax-${m.month}`}>
+                    <div className="bg-muted/40 px-4 py-2 flex items-center justify-between border-b">
+                      <span className="font-semibold text-sm">{MONTHS[m.month - 1]} {m.year}</span>
+                      <span className="text-xs text-muted-foreground">{m.employee_count} staff</span>
+                    </div>
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Employee</TableHead>
+                          <TableHead className="text-right">Gross Salary</TableHead>
+                          <TableHead className="text-right">Income Tax</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {m.staff.map((s, idx) => (
+                          <TableRow key={`${s.employee_id}-${idx}`}>
+                            <TableCell className="text-sm">{s.employee_name}</TableCell>
+                            <TableCell className="text-right font-mono text-sm">{fmt(s.gross_salary)}</TableCell>
+                            <TableCell className="text-right font-mono text-sm">
+                              {s.tax > 0 ? <span className="text-orange-600 font-medium">{fmt(s.tax)}</span> : "—"}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                        <TableRow className="bg-muted/30 font-semibold">
+                          <TableCell className="font-bold text-sm">Total</TableCell>
+                          <TableCell className="text-right font-mono text-sm">{fmt(m.total_gross)}</TableCell>
+                          <TableCell className="text-right font-mono text-sm text-orange-600">{fmt(m.total_tax)}</TableCell>
+                        </TableRow>
+                      </TableBody>
+                    </Table>
+                  </div>
+                ))}
+                {filterMonth === "all" && totals && monthsToShow.length > 1 && (
+                  <div className="border rounded-lg overflow-hidden border-orange-200 bg-orange-50/30">
+                    <Table>
+                      <TableBody>
+                        <TableRow className="font-bold">
+                          <TableCell className="text-sm">Annual Total ({filterYear})</TableCell>
+                          <TableCell className="text-right font-mono">{fmt(monthly.reduce((s, m) => s + m.total_gross, 0))}</TableCell>
+                          <TableCell className="text-right font-mono text-orange-600 text-base">{fmt(totals.total_tax)}</TableCell>
+                        </TableRow>
+                      </TableBody>
+                    </Table>
+                  </div>
+                )}
+              </>
+            )}
+
+            {recordType === "cit" && (
+              <>
+                <div className="flex items-center gap-2">
+                  <Shield className="h-4 w-4 text-blue-500" />
+                  <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">CIT Records</h3>
+                </div>
+                {monthsToShow.map(m => (
+                  <div key={`cit-${m.month}`} className="border rounded-lg overflow-hidden" data-testid={`section-cit-${m.month}`}>
+                    <div className="bg-muted/40 px-4 py-2 flex items-center justify-between border-b">
+                      <span className="font-semibold text-sm">{MONTHS[m.month - 1]} {m.year}</span>
+                      <span className="text-xs text-muted-foreground">{m.employee_count} staff</span>
+                    </div>
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Employee</TableHead>
+                          <TableHead className="text-right">CIT Amount</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {m.staff.map((s, idx) => (
+                          <TableRow key={`${s.employee_id}-${idx}`}>
+                            <TableCell className="text-sm">{s.employee_name}</TableCell>
+                            <TableCell className="text-right font-mono text-sm">
+                              {s.cit > 0 ? <span className="text-blue-600 font-medium">{fmt(s.cit)}</span> : "—"}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                        <TableRow className="bg-muted/30 font-semibold">
+                          <TableCell className="font-bold text-sm">Total</TableCell>
+                          <TableCell className="text-right font-mono text-sm text-blue-600">{fmt(m.total_cit)}</TableCell>
+                        </TableRow>
+                      </TableBody>
+                    </Table>
+                  </div>
+                ))}
+                {filterMonth === "all" && totals && monthsToShow.length > 1 && (
+                  <div className="border rounded-lg overflow-hidden border-blue-200 bg-blue-50/30">
+                    <Table>
+                      <TableBody>
+                        <TableRow className="font-bold">
+                          <TableCell className="text-sm">Annual Total ({filterYear})</TableCell>
+                          <TableCell className="text-right font-mono text-blue-600 text-base">{fmt(totals.total_cit)}</TableCell>
+                        </TableRow>
+                      </TableBody>
+                    </Table>
+                  </div>
+                )}
+              </>
+            )}
+
+            {recordType === "ssf" && hasSSF && (
+              <>
+                <div className="flex items-center gap-2">
+                  <Wallet className="h-4 w-4 text-green-500" />
+                  <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">SSF Records</h3>
+                </div>
+                {monthsToShow.filter(m => m.total_ssf_employee > 0 || m.total_ssf_employer > 0).map(m => {
+                  const monthSsfTotal = m.total_ssf_employee + m.total_ssf_employer;
+                  return (
+                    <div key={`ssf-${m.month}`} className="border rounded-lg overflow-hidden" data-testid={`section-ssf-${m.month}`}>
+                      <div className="bg-muted/40 px-4 py-2 flex items-center justify-between border-b">
+                        <span className="font-semibold text-sm">{MONTHS[m.month - 1]} {m.year}</span>
+                        <span className="text-xs text-muted-foreground">{m.employee_count} staff</span>
+                      </div>
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Employee</TableHead>
+                            <TableHead className="text-right">SSF (Employee)</TableHead>
+                            <TableHead className="text-right">SSF (Employer)</TableHead>
+                            <TableHead className="text-right font-semibold">Total SSF</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {m.staff.filter(s => s.ssf_employee > 0 || s.ssf_employer > 0).map((s, idx) => (
+                            <TableRow key={`${s.employee_id}-${idx}`}>
+                              <TableCell className="text-sm">{s.employee_name}</TableCell>
+                              <TableCell className="text-right font-mono text-sm">{fmt(s.ssf_employee)}</TableCell>
+                              <TableCell className="text-right font-mono text-sm">{fmt(s.ssf_employer)}</TableCell>
+                              <TableCell className="text-right font-mono text-sm">
+                                <span className="text-green-600 font-medium">{fmt(s.ssf_employee + s.ssf_employer)}</span>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                          <TableRow className="bg-muted/30 font-semibold">
+                            <TableCell className="font-bold text-sm">Total</TableCell>
+                            <TableCell className="text-right font-mono text-sm">{fmt(m.total_ssf_employee)}</TableCell>
+                            <TableCell className="text-right font-mono text-sm">{fmt(m.total_ssf_employer)}</TableCell>
+                            <TableCell className="text-right font-mono text-sm text-green-600">{fmt(monthSsfTotal)}</TableCell>
+                          </TableRow>
+                        </TableBody>
+                      </Table>
+                    </div>
+                  );
+                })}
+                {filterMonth === "all" && totals && (
+                  <div className="border rounded-lg overflow-hidden border-green-200 bg-green-50/30">
+                    <Table>
+                      <TableBody>
+                        <TableRow className="font-bold">
+                          <TableCell className="text-sm">Annual Total ({filterYear})</TableCell>
+                          <TableCell className="text-right font-mono">{fmt(totals.total_ssf_employee)}</TableCell>
+                          <TableCell className="text-right font-mono">{fmt(totals.total_ssf_employer)}</TableCell>
+                          <TableCell className="text-right font-mono text-green-600 text-base">{fmt(totals.total_ssf_employee + totals.total_ssf_employer)}</TableCell>
+                        </TableRow>
+                      </TableBody>
+                    </Table>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        );
+      })()}
     </div>
   );
 }
