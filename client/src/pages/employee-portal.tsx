@@ -22,7 +22,7 @@ import {
   User, Clock, Calendar, FileText, LogOut, Shield, ChevronLeft, ChevronRight,
   CheckCircle, XCircle, AlertCircle, Download, Briefcase,
   Camera, MapPin, Loader2, RefreshCw, Paperclip, Upload, File,
-  DollarSign, Eye, EyeOff, Building2,
+  DollarSign, Eye, EyeOff, Building2, Gift, Banknote, Receipt,
 } from "lucide-react";
 
 type Tab = "profile" | "attendance" | "leave" | "payslips";
@@ -108,150 +108,432 @@ function ProfileTab() {
     queryKey: ["/api/hrms/my/profile"],
   });
   const [showSalary, setShowSalary] = useState(false);
+  const [profileSubTab, setProfileSubTab] = useState<string>("salary");
 
   if (isLoading) return <div className="space-y-4"><Skeleton className="h-40" /><Skeleton className="h-60" /></div>;
   if (!profile) return <div className="text-center py-12 text-muted-foreground">No employee profile found linked to your account.</div>;
 
-  const infoRows = [
-    { label: "Full Name", value: profile.full_name },
-    { label: "Email", value: profile.email },
-    { label: "Phone", value: profile.phone },
-    { label: "Organization", value: profile.organization },
-    { label: "Department", value: profile.department },
-    { label: "Position", value: profile.position },
-    { label: "Employment Type", value: profile.employment_type?.replace(/_/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase()) },
-    { label: "Join Date", value: profile.join_date },
-  ].filter(r => r.value);
-
   const currency = profile.salary_currency || profile.organization_currency || 'NPR';
   const ss = profile.salary_structure;
-  const fmtAmt = (v: number) => `${currency} ${v.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
+  const fmtAmt = (v: number) => `${currency} ${v?.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 }) || '0'}`;
+  const MONTHS = ["", "January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+  const att = profile.attendance_summary || {};
+  const taxSum = profile.tax_summary || {};
+  const empType = profile.employment_type?.replace(/_/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase());
+
+  const subTabs = [
+    { key: "salary", label: "Salary", icon: DollarSign },
+    { key: "leaves", label: "Leaves", icon: Calendar },
+    { key: "payslips", label: "Payslips", icon: FileText },
+    { key: "bonuses", label: "Bonuses", icon: Gift },
+    { key: "advances", label: "Advances", icon: Banknote },
+    { key: "expenses", label: "Expenses", icon: Receipt },
+    { key: "personal", label: "Personal", icon: User },
+  ];
 
   return (
-    <div className="max-w-2xl space-y-6">
-      <div>
-        <h2 className="text-lg font-semibold" data-testid="text-profile-title">My Profile</h2>
-        <p className="text-sm text-muted-foreground">Your employee information</p>
-      </div>
+    <div className="space-y-6">
       <Card>
         <CardContent className="p-6">
-          <div className="flex items-center gap-4 mb-6">
-            <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center text-xl font-bold text-primary">
+          <div className="flex items-start gap-4">
+            <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center text-xl font-bold text-primary shrink-0">
               {profile.full_name?.split(" ").map((n: string) => n[0]).join("").toUpperCase().slice(0, 2)}
             </div>
-            <div>
-              <h3 className="text-xl font-semibold" data-testid="text-employee-name">{profile.full_name}</h3>
-              <p className="text-sm text-muted-foreground">{profile.position || "Employee"}</p>
-              {profile.department && <Badge variant="outline" className="mt-1">{profile.department}</Badge>}
-            </div>
-          </div>
-          <div className="space-y-3">
-            {infoRows.map(row => (
-              <div key={row.label} className="flex justify-between py-2 border-b last:border-0">
-                <span className="text-sm text-muted-foreground">{row.label}</span>
-                <span className="text-sm font-medium" data-testid={`text-${row.label.toLowerCase().replace(/\s+/g, '-')}`}>{row.value}</span>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <h3 className="text-xl font-semibold" data-testid="text-employee-name">{profile.full_name}</h3>
+                <Badge variant="default" className="text-xs">{profile.status || 'active'}</Badge>
+                {empType && <Badge variant="outline" className="text-xs">{empType}</Badge>}
+                {profile.marital_status && <Badge variant="outline" className="text-xs">{profile.marital_status}</Badge>}
               </div>
-            ))}
+              <p className="text-sm text-muted-foreground mt-1">
+                {profile.position && <span>{profile.position}</span>}
+                {profile.department && <span> · {profile.department}</span>}
+                {profile.organization && <span> · {profile.organization}</span>}
+              </p>
+              <div className="flex items-center gap-4 text-xs text-muted-foreground mt-1 flex-wrap">
+                {profile.email && <span>✉ {profile.email}</span>}
+                {profile.phone && <span>☎ {profile.phone}</span>}
+                {profile.join_date && <span>📅 Joined: {profile.join_date}</span>}
+              </div>
+            </div>
           </div>
         </CardContent>
       </Card>
 
-      {(profile.salary_amount || ss) && (
-        <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-base font-semibold flex items-center gap-2" data-testid="text-salary-title">
-                <DollarSign className="h-4 w-4" /> Salary Details
-              </h3>
-              <Button variant="ghost" size="sm" onClick={() => setShowSalary(!showSalary)} data-testid="button-toggle-salary">
-                {showSalary ? <EyeOff className="h-4 w-4 mr-1" /> : <Eye className="h-4 w-4 mr-1" />}
-                {showSalary ? "Hide" : "Show"}
-              </Button>
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <Card className="bg-muted/30">
+          <CardContent className="p-4 text-center">
+            <p className="text-xs text-muted-foreground">Gross Salary</p>
+            <div className="flex items-center justify-center gap-1 mt-1">
+              {showSalary ? (
+                <p className="text-lg font-bold" data-testid="text-summary-gross">{fmtAmt(profile.gross_salary || 0)}</p>
+              ) : (
+                <p className="text-lg font-bold">****</p>
+              )}
+              <button onClick={() => setShowSalary(!showSalary)} className="text-muted-foreground hover:text-foreground" data-testid="button-toggle-salary">
+                {showSalary ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+              </button>
             </div>
-            {showSalary ? (
-              <div className="space-y-3">
-                {ss ? (
-                  <>
-                    <div className="flex justify-between py-2 border-b">
-                      <span className="text-sm text-muted-foreground">Basic Salary</span>
-                      <span className="text-sm font-medium" data-testid="text-basic-salary">{fmtAmt(ss.basic_salary)}</span>
-                    </div>
-                    {Object.keys(ss.allowances || {}).length > 0 && (
-                      <>
-                        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide pt-2">Allowances</p>
-                        {Object.entries(ss.allowances).map(([key, val]: [string, any]) => (
-                          <div key={key} className="flex justify-between py-1.5 border-b">
-                            <span className="text-sm text-muted-foreground pl-2">{key.replace(/_/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase())}</span>
-                            <span className="text-sm font-medium">{fmtAmt(Number(val))}</span>
-                          </div>
-                        ))}
-                      </>
-                    )}
-                    {Object.keys(ss.deductions || {}).length > 0 && (
-                      <>
-                        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide pt-2">Deductions</p>
-                        {Object.entries(ss.deductions).map(([key, val]: [string, any]) => (
-                          <div key={key} className="flex justify-between py-1.5 border-b">
-                            <span className="text-sm text-muted-foreground pl-2">{key.replace(/_/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase())}</span>
-                            <span className="text-sm font-medium text-red-600">- {fmtAmt(Number(val))}</span>
-                          </div>
-                        ))}
-                      </>
-                    )}
-                    <div className="flex justify-between py-2 border-t-2 border-primary/20 mt-2">
-                      <span className="text-sm font-semibold">Gross Salary</span>
-                      <span className="text-sm font-bold text-primary" data-testid="text-gross-salary">{fmtAmt(ss.gross_salary)}</span>
-                    </div>
-                    {ss.ssf_applicable && (
-                      <div className="flex justify-between py-1.5">
-                        <span className="text-sm text-muted-foreground">SSF (Employee {ss.ssf_employee_percentage}%)</span>
-                        <span className="text-sm font-medium text-red-600">- {fmtAmt(ss.basic_salary * ss.ssf_employee_percentage / 100)}</span>
-                      </div>
-                    )}
-                    {ss.cit_type !== 'none' && (
-                      <div className="flex justify-between py-1.5">
-                        <span className="text-sm text-muted-foreground">CIT ({ss.cit_type === 'percentage' ? `${ss.cit_value}%` : fmtAmt(ss.cit_value)})</span>
-                        <span className="text-sm font-medium text-red-600">
-                          - {ss.cit_type === 'percentage' ? fmtAmt(ss.basic_salary * ss.cit_value / 100) : fmtAmt(ss.cit_value)}
-                        </span>
-                      </div>
-                    )}
-                    <div className="text-xs text-muted-foreground pt-2">Effective from: {ss.effective_from}</div>
-                  </>
-                ) : (
-                  <div className="flex justify-between py-2">
-                    <span className="text-sm text-muted-foreground">Monthly Salary</span>
-                    <span className="text-sm font-bold" data-testid="text-salary-amount">{fmtAmt(profile.salary_amount)}</span>
+          </CardContent>
+        </Card>
+        <Card className="bg-muted/30">
+          <CardContent className="p-4 text-center">
+            <p className="text-xs text-muted-foreground">This Month Attendance</p>
+            <p className="text-lg font-bold mt-1" data-testid="text-summary-attendance">{att.present || 0} / {att.total_records || 0} days</p>
+          </CardContent>
+        </Card>
+        <Card className="bg-muted/30">
+          <CardContent className="p-4 text-center">
+            <p className="text-xs text-muted-foreground">Outstanding Advance</p>
+            <div className="flex items-center justify-center gap-1 mt-1">
+              {showSalary ? (
+                <p className="text-lg font-bold" data-testid="text-summary-advance">{fmtAmt(profile.outstanding_advance || 0)}</p>
+              ) : (
+                <p className="text-lg font-bold">****</p>
+              )}
+              <button onClick={() => setShowSalary(!showSalary)} className="text-muted-foreground hover:text-foreground">
+                {showSalary ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+              </button>
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="bg-muted/30">
+          <CardContent className="p-4 text-center">
+            <p className="text-xs text-muted-foreground">Tax Paid ({taxSum.year || new Date().getFullYear()})</p>
+            <p className="text-lg font-bold mt-1" data-testid="text-summary-tax">{fmtAmt(taxSum.total_tax || 0)}</p>
+          </CardContent>
+        </Card>
+      </div>
+
+      <div className="flex gap-1 border-b overflow-x-auto pb-px">
+        {subTabs.map(t => (
+          <button
+            key={t.key}
+            onClick={() => setProfileSubTab(t.key)}
+            className={`flex items-center gap-1.5 px-3 py-2 text-sm font-medium whitespace-nowrap border-b-2 transition-colors ${
+              profileSubTab === t.key ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'
+            }`}
+            data-testid={`tab-profile-${t.key}`}
+          >
+            <t.icon className="h-3.5 w-3.5" />
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {profileSubTab === "salary" && (
+        <div className="grid md:grid-cols-2 gap-4">
+          <Card>
+            <CardContent className="p-5">
+              <h4 className="font-semibold mb-3">Earnings</h4>
+              {ss ? (
+                <div className="space-y-2">
+                  <div className="flex justify-between py-1.5 border-b">
+                    <span className="text-sm text-muted-foreground">Basic Salary</span>
+                    <span className="text-sm font-medium">{showSalary ? fmtAmt(ss.basic_salary) : '****'}</span>
                   </div>
-                )}
+                  {Object.entries(ss.allowances || {}).map(([key, val]: [string, any]) => (
+                    <div key={key} className="flex justify-between py-1.5 border-b">
+                      <span className="text-sm text-muted-foreground">{key.replace(/_/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase())}</span>
+                      <span className="text-sm font-medium">{showSalary ? fmtAmt(Number(val)) : '****'}</span>
+                    </div>
+                  ))}
+                  <div className="flex justify-between py-2 border-t-2 mt-1">
+                    <span className="text-sm font-semibold">Gross Salary</span>
+                    <span className="text-sm font-bold text-primary">{showSalary ? fmtAmt(ss.gross_salary) : '****'}</span>
+                  </div>
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground">No salary structure configured</p>
+              )}
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-5">
+              <h4 className="font-semibold mb-3">Deductions & Statutory</h4>
+              {ss ? (
+                <div className="space-y-2">
+                  {ss.cit_type !== 'none' && (
+                    <div className="flex justify-between py-1.5 border-b">
+                      <span className="text-sm text-muted-foreground">CIT ({ss.cit_type === 'percentage' ? `${ss.cit_value}%` : 'Fixed'})</span>
+                      <span className="text-sm font-medium text-red-600">
+                        {showSalary ? `- ${ss.cit_type === 'percentage' ? fmtAmt(ss.basic_salary * ss.cit_value / 100) : fmtAmt(ss.cit_value)}` : '****'}
+                      </span>
+                    </div>
+                  )}
+                  {ss.ssf_applicable && (
+                    <div className="flex justify-between py-1.5 border-b">
+                      <span className="text-sm text-muted-foreground">SSF (Employee {ss.ssf_employee_percentage}%)</span>
+                      <span className="text-sm font-medium text-red-600">
+                        {showSalary ? `- ${fmtAmt(ss.basic_salary * ss.ssf_employee_percentage / 100)}` : '****'}
+                      </span>
+                    </div>
+                  )}
+                  {Object.entries(ss.deductions || {}).map(([key, val]: [string, any]) => (
+                    <div key={key} className="flex justify-between py-1.5 border-b">
+                      <span className="text-sm text-muted-foreground">{key.replace(/_/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase())}</span>
+                      <span className="text-sm font-medium text-red-600">{showSalary ? `- ${fmtAmt(Number(val))}` : '****'}</span>
+                    </div>
+                  ))}
+                  <div className="flex justify-between py-1.5">
+                    <span className="text-sm text-muted-foreground">Income Tax</span>
+                    <Badge variant={ss.tax_applicable ? "default" : "outline"} className="text-xs">{ss.tax_applicable ? 'Applicable' : 'N/A'}</Badge>
+                  </div>
+                  <p className="text-xs text-muted-foreground pt-2">Effective from: {ss.effective_from}</p>
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground">No deductions configured</p>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {profileSubTab === "leaves" && (
+        <Card>
+          <CardContent className="p-5">
+            <h4 className="font-semibold mb-3">Leave Balances</h4>
+            {(profile.leave_balances || []).length > 0 ? (
+              <div className="grid sm:grid-cols-2 gap-3">
+                {profile.leave_balances.map((lb: any) => (
+                  <div key={lb.leave_type_code} className="border rounded-lg p-3" data-testid={`leave-balance-${lb.leave_type_code}`}>
+                    <div className="flex justify-between items-center mb-2">
+                      <span className="text-sm font-medium">{lb.leave_type}</span>
+                      <Badge variant="outline" className="text-xs">{lb.remaining} remaining</Badge>
+                    </div>
+                    <div className="w-full bg-muted rounded-full h-2">
+                      <div className="bg-primary rounded-full h-2" style={{ width: `${Math.min(100, lb.allocated > 0 ? (lb.used / lb.allocated) * 100 : 0)}%` }} />
+                    </div>
+                    <div className="flex justify-between text-xs text-muted-foreground mt-1">
+                      <span>Used: {lb.used}</span>
+                      <span>Allocated: {lb.allocated}</span>
+                    </div>
+                  </div>
+                ))}
               </div>
             ) : (
-              <p className="text-sm text-muted-foreground">Click "Show" to view your salary breakdown</p>
+              <p className="text-sm text-muted-foreground">No leave balances allocated yet</p>
             )}
           </CardContent>
         </Card>
       )}
 
-      {(profile.bank_name || profile.bank_account_number) && (
+      {profileSubTab === "payslips" && (
         <Card>
-          <CardContent className="p-6">
-            <h3 className="text-base font-semibold mb-4 flex items-center gap-2" data-testid="text-bank-title">
-              <Building2 className="h-4 w-4" /> Bank Details
-            </h3>
-            <div className="space-y-3">
-              {[
-                { label: "Bank", value: profile.bank_name },
-                { label: "Account Number", value: showSalary ? profile.bank_account_number : profile.bank_account_number ? '••••' + profile.bank_account_number.slice(-4) : null },
-                { label: "Branch", value: profile.bank_branch },
-              ].filter(r => r.value).map(row => (
-                <div key={row.label} className="flex justify-between py-2 border-b last:border-0">
-                  <span className="text-sm text-muted-foreground">{row.label}</span>
-                  <span className="text-sm font-medium" data-testid={`text-bank-${row.label.toLowerCase().replace(/\s+/g, '-')}`}>{row.value}</span>
-                </div>
-              ))}
-            </div>
+          <CardContent className="p-5">
+            <h4 className="font-semibold mb-3">Recent Payslips</h4>
+            {(profile.recent_payslips || []).length > 0 ? (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Period</TableHead>
+                    <TableHead className="text-right">Gross</TableHead>
+                    <TableHead className="text-right">Deductions</TableHead>
+                    <TableHead className="text-right">Net</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead className="text-right">PDF</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {profile.recent_payslips.map((ps: any) => (
+                    <TableRow key={ps.id} data-testid={`payslip-row-${ps.id}`}>
+                      <TableCell className="text-sm">{MONTHS[ps.month]} {ps.year}</TableCell>
+                      <TableCell className="text-sm text-right">{showSalary ? fmtAmt(ps.gross_salary) : '****'}</TableCell>
+                      <TableCell className="text-sm text-right text-red-600">{showSalary ? `- ${fmtAmt(ps.total_deductions)}` : '****'}</TableCell>
+                      <TableCell className="text-sm text-right font-semibold">{showSalary ? fmtAmt(ps.net_salary) : '****'}</TableCell>
+                      <TableCell><Badge variant={ps.status === 'paid' ? 'default' : 'outline'} className="text-xs">{ps.status}</Badge></TableCell>
+                      <TableCell className="text-right">
+                        {ps.view_token && (
+                          <a href={`/api/hrms/payslips/public/${ps.view_token}/pdf`} target="_blank" rel="noreferrer">
+                            <Button variant="ghost" size="sm"><Download className="h-3.5 w-3.5" /></Button>
+                          </a>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            ) : (
+              <p className="text-sm text-muted-foreground">No payslips generated yet</p>
+            )}
           </CardContent>
         </Card>
+      )}
+
+      {profileSubTab === "bonuses" && (
+        <Card>
+          <CardContent className="p-5">
+            <h4 className="font-semibold mb-3">Bonuses</h4>
+            {(profile.bonuses || []).length > 0 ? (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Period</TableHead>
+                    <TableHead>Type</TableHead>
+                    <TableHead>Reason</TableHead>
+                    <TableHead className="text-right">Amount</TableHead>
+                    <TableHead>Status</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {profile.bonuses.map((b: any) => (
+                    <TableRow key={b.id}>
+                      <TableCell className="text-sm">{MONTHS[b.month]} {b.year}</TableCell>
+                      <TableCell className="text-sm">{b.bonus_type?.replace(/_/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase())}</TableCell>
+                      <TableCell className="text-sm text-muted-foreground">{b.reason || '—'}</TableCell>
+                      <TableCell className="text-sm text-right font-medium">{showSalary ? fmtAmt(b.amount) : '****'}</TableCell>
+                      <TableCell><Badge variant="outline" className="text-xs">{b.status}</Badge></TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            ) : (
+              <p className="text-sm text-muted-foreground">No bonuses recorded</p>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {profileSubTab === "advances" && (
+        <Card>
+          <CardContent className="p-5">
+            <h4 className="font-semibold mb-3">Advance Payments</h4>
+            {(profile.advances || []).length > 0 ? (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Date</TableHead>
+                    <TableHead>Reason</TableHead>
+                    <TableHead className="text-right">Amount</TableHead>
+                    <TableHead className="text-right">Deducted</TableHead>
+                    <TableHead className="text-right">Remaining</TableHead>
+                    <TableHead>Status</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {profile.advances.map((a: any) => (
+                    <TableRow key={a.id}>
+                      <TableCell className="text-sm">{a.request_date || '—'}</TableCell>
+                      <TableCell className="text-sm text-muted-foreground">{a.reason || '—'}</TableCell>
+                      <TableCell className="text-sm text-right">{showSalary ? fmtAmt(a.amount) : '****'}</TableCell>
+                      <TableCell className="text-sm text-right">{showSalary ? fmtAmt(a.total_deducted) : '****'}</TableCell>
+                      <TableCell className="text-sm text-right font-medium">{showSalary ? fmtAmt(a.remaining_balance) : '****'}</TableCell>
+                      <TableCell><Badge variant={a.status === 'active' ? 'default' : 'outline'} className="text-xs">{a.status}</Badge></TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            ) : (
+              <p className="text-sm text-muted-foreground">No advance payments</p>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {profileSubTab === "expenses" && (
+        <Card>
+          <CardContent className="p-5">
+            <h4 className="font-semibold mb-3">Travel Expenses</h4>
+            {(profile.expenses || []).length > 0 ? (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Date</TableHead>
+                    <TableHead>Category</TableHead>
+                    <TableHead>Description</TableHead>
+                    <TableHead className="text-right">Amount</TableHead>
+                    <TableHead>Status</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {profile.expenses.map((e: any) => (
+                    <TableRow key={e.id}>
+                      <TableCell className="text-sm">{e.expense_date || '—'}</TableCell>
+                      <TableCell className="text-sm">{e.category}</TableCell>
+                      <TableCell className="text-sm text-muted-foreground">{e.description || '—'}</TableCell>
+                      <TableCell className="text-sm text-right font-medium">{fmtAmt(e.amount)}</TableCell>
+                      <TableCell><Badge variant={e.status === 'approved' ? 'default' : 'outline'} className="text-xs">{e.status}</Badge></TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            ) : (
+              <p className="text-sm text-muted-foreground">No travel expenses recorded</p>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {profileSubTab === "personal" && (
+        <div className="grid md:grid-cols-2 gap-4">
+          <Card>
+            <CardContent className="p-5">
+              <h4 className="font-semibold mb-3">Personal Information</h4>
+              <div className="space-y-2">
+                {[
+                  { label: "Date of Birth", value: profile.date_of_birth },
+                  { label: "Gender", value: profile.gender },
+                  { label: "Country", value: profile.country },
+                  { label: "Marital Status", value: profile.marital_status },
+                  { label: "Employee ID", value: profile.employee_id_number },
+                  { label: "Citizenship No", value: profile.citizenship_no },
+                  { label: "PAN", value: profile.pan_no },
+                  { label: "Passport", value: profile.passport_number },
+                ].map(row => (
+                  <div key={row.label} className="flex justify-between py-1.5 border-b last:border-0">
+                    <span className="text-sm text-muted-foreground">{row.label}</span>
+                    <span className="text-sm font-medium">{row.value || '—'}</span>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-5">
+              <h4 className="font-semibold mb-3">Bank Details</h4>
+              <div className="space-y-2">
+                {[
+                  { label: "Bank", value: profile.bank_name },
+                  { label: "Account Number", value: showSalary ? profile.bank_account_number : profile.bank_account_number ? '••••' + profile.bank_account_number.slice(-4) : null },
+                  { label: "Branch", value: profile.bank_branch },
+                ].map(row => (
+                  <div key={row.label} className="flex justify-between py-1.5 border-b last:border-0">
+                    <span className="text-sm text-muted-foreground">{row.label}</span>
+                    <span className="text-sm font-medium">{row.value || '—'}</span>
+                  </div>
+                ))}
+              </div>
+              <h4 className="font-semibold mb-3 mt-6">Address</h4>
+              <div className="space-y-2">
+                <div className="py-1.5 border-b">
+                  <p className="text-xs text-muted-foreground">Permanent Address</p>
+                  <p className="text-sm">{profile.permanent_address || '—'}</p>
+                </div>
+                <div className="py-1.5">
+                  <p className="text-xs text-muted-foreground">Temporary Address</p>
+                  <p className="text-sm">{profile.temporary_address || '—'}</p>
+                </div>
+              </div>
+              <h4 className="font-semibold mb-3 mt-6">Employment & Emergency</h4>
+              <div className="space-y-2">
+                {[
+                  { label: "Employment Type", value: empType },
+                  { label: "Join Date", value: profile.join_date },
+                  { label: "Probation End", value: profile.probation_end_date },
+                  { label: "Contract End", value: profile.contract_end_date },
+                  { label: "Emergency Contact", value: profile.emergency_contact_name },
+                  { label: "Emergency Phone", value: profile.emergency_contact_phone },
+                ].map(row => (
+                  <div key={row.label} className="flex justify-between py-1.5 border-b last:border-0">
+                    <span className="text-sm text-muted-foreground">{row.label}</span>
+                    <span className="text-sm font-medium">{row.value || '—'}</span>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
       )}
     </div>
   );
