@@ -112,6 +112,14 @@ def serialize_fiscal_year(fy):
 
 
 def serialize_leave_type(lt):
+    dept_allocations = []
+    for da in DepartmentLeaveAllocation.objects.filter(leave_type_id=lt.id).select_related('department'):
+        dept_allocations.append({
+            'id': str(da.id),
+            'department_id': str(da.department_id),
+            'department_name': da.department.name,
+            'allocated_days': float(da.allocated_days),
+        })
     return {
         'id': str(lt.id),
         'organization_id': str(lt.organization_id),
@@ -125,6 +133,7 @@ def serialize_leave_type(lt):
         'document_required_after_days': lt.document_required_after_days,
         'color': lt.color,
         'status': lt.status,
+        'department_allocations': dept_allocations,
     }
 
 
@@ -997,6 +1006,12 @@ class LeaveBalanceAllocateView(APIView):
             return Response({'message': 'fiscal_year_id and organization_id are required'}, status=400)
 
         leave_types = LeaveType.objects.filter(organization_id=organization_id, status='active')
+
+        prev_fiscal_years = FiscalYear.objects.filter(
+            organization_id=organization_id,
+        ).exclude(id=fiscal_year_id).order_by('-end_date')
+        prev_fy = prev_fiscal_years.first()
+
         created = 0
         for emp_id in employee_ids:
             emp = Employee.objects.filter(id=emp_id).first()
@@ -1009,11 +1024,25 @@ class LeaveBalanceAllocateView(APIView):
                     if dept_alloc:
                         allocated = dept_alloc.allocated_days
 
+                carry_forward = Decimal('0')
+                if lt.is_carry_forward and prev_fy:
+                    prev_balance = LeaveBalance.objects.filter(
+                        employee_id=emp_id, leave_type=lt, fiscal_year_id=prev_fy.id,
+                    ).first()
+                    if prev_balance:
+                        remaining = prev_balance.allocated_days + prev_balance.carried_forward_days - prev_balance.used_days
+                        if remaining > 0:
+                            max_cf = lt.max_carry_forward_days if lt.max_carry_forward_days > 0 else remaining
+                            carry_forward = min(remaining, max_cf)
+
                 _, was_created = LeaveBalance.objects.get_or_create(
                     employee_id=emp_id,
                     leave_type=lt,
                     fiscal_year_id=fiscal_year_id,
-                    defaults={'allocated_days': allocated},
+                    defaults={
+                        'allocated_days': allocated,
+                        'carried_forward_days': carry_forward,
+                    },
                 )
                 if was_created:
                     created += 1
@@ -1538,7 +1567,7 @@ class AttendanceDashboardView(APIView):
             status='approved',
             start_date__lte=today,
             end_date__gte=today,
-        )
+        ).only('id', 'employee_id', 'start_date', 'end_date', 'status')
         for lr in leave_reqs:
             emp = employees.filter(id=lr.employee_id).first()
             if emp and str(emp.id) not in [o['id'] for o in on_leave]:
@@ -2073,7 +2102,11 @@ class PayrollRunProcessView(APIView):
                 status='approved',
                 start_date__lte=month_end,
                 end_date__gte=month_start,
-            ).select_related('leave_type')
+            ).select_related('leave_type').only(
+                'id', 'employee_id', 'start_date', 'end_date',
+                'days_count', 'status', 'leave_type__is_paid',
+                'leave_type__id', 'leave_type__name',
+            )
             for lr in unpaid_leave_requests:
                 if not lr.leave_type.is_paid:
                     overlap_start = max(lr.start_date, month_start)
@@ -4346,3 +4379,43 @@ class MyExpensesView(APIView):
             'receipt_url': te.receipt_url,
             'status': te.status,
         }, status=201)
+
+
+class DepartmentLeaveAllocationView(APIView):
+    @require_permission('hrms.leave_type.read')
+    def get(self, request, leave_type_id):
+        allocations = DepartmentLeaveAllocation.objects.filter(
+            leave_type_id=leave_type_id
+        ).select_related('department')
+        return Response([{
+            'id': str(a.id),
+            'department_id': str(a.department_id),
+            'department_name': a.department.name,
+            'allocated_days': float(a.allocated_days),
+        } for a in allocations])
+
+    @require_permission('hrms.leave_type.add')
+    def post(self, request, leave_type_id):
+        data = request.data
+        dept_id = data.get('department_id')
+        allocated_days = data.get('allocated_days')
+        if not dept_id or allocated_days is None:
+            return Response({'message': 'department_id and allocated_days required'}, status=400)
+
+        da, created = DepartmentLeaveAllocation.objects.update_or_create(
+            department_id=dept_id,
+            leave_type_id=leave_type_id,
+            defaults={'allocated_days': float(allocated_days)},
+        )
+        return Response({
+            'id': str(da.id),
+            'department_id': str(da.department_id),
+            'allocated_days': float(da.allocated_days),
+        }, status=201 if created else 200)
+
+    @require_permission('hrms.leave_type.delete')
+    def delete(self, request, leave_type_id):
+        alloc_id = request.data.get('allocation_id') or request.GET.get('allocation_id')
+        if alloc_id:
+            DepartmentLeaveAllocation.objects.filter(id=alloc_id, leave_type_id=leave_type_id).delete()
+        return Response({'message': 'Deleted'})

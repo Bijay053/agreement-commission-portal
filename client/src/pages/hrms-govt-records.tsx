@@ -143,7 +143,7 @@ export function GovernmentRecordsTab() {
             {typeOptions.map(t => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
           </SelectContent>
         </Select>
-        {orgs && orgs.length > 1 && (
+        {orgs && orgs.length >= 1 && (
           <Select value={filterOrg} onValueChange={setFilterOrg}>
             <SelectTrigger className="w-52" data-testid="select-organization">
               <Building2 className="h-4 w-4 mr-1 text-muted-foreground" />

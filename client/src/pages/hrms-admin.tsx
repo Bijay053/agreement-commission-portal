@@ -82,11 +82,13 @@ interface FiscalYearType {
   start_date: string | null; end_date: string | null; is_current: boolean;
 }
 
+interface DeptAllocation { id: string; department_id: string; department_name: string; allocated_days: number; }
 interface LeaveType {
   id: string; organization_id: string; name: string; code: string;
   default_days: number; is_paid: boolean; is_carry_forward: boolean;
   max_carry_forward_days: number; requires_document: boolean;
   document_required_after_days: number; color: string; status: string;
+  department_allocations?: DeptAllocation[];
 }
 
 interface Holiday {
@@ -338,8 +340,11 @@ function LeaveTypesTab() {
   const [showForm, setShowForm] = useState(false);
   const [editLT, setEditLT] = useState<LeaveType | null>(null);
   const [form, setForm] = useState({ organization_id: "", name: "", code: "", default_days: 0, is_paid: true, is_carry_forward: false, max_carry_forward_days: 0, requires_document: false, document_required_after_days: 0, color: "#3B82F6" });
+  const [deptAllocLT, setDeptAllocLT] = useState<LeaveType | null>(null);
+  const [deptAllocForm, setDeptAllocForm] = useState({ department_id: "", allocated_days: 0 });
 
   const { data: orgs } = useQuery<Organization[]>({ queryKey: ["/api/hrms/organizations"] });
+  const { data: departments } = useQuery<Department[]>({ queryKey: ["/api/hrms/departments"] });
   const { data: leaveTypes, isLoading } = useQuery<LeaveType[]>({ queryKey: ["/api/hrms/leave-types"] });
 
   const createMutation = useMutation({
@@ -355,6 +360,16 @@ function LeaveTypesTab() {
   const deleteMutation = useMutation({
     mutationFn: (id: string) => apiRequest("DELETE", `/api/hrms/leave-types/${id}`),
     onSuccess: () => { queryClient.refetchQueries({ queryKey: ["/api/hrms/leave-types"] }); toast({ title: "Leave type deleted" }); },
+  });
+
+  const addDeptAllocMutation = useMutation({
+    mutationFn: (data: any) => apiRequest("POST", `/api/hrms/leave-types/${deptAllocLT?.id}/department-allocations`, data),
+    onSuccess: () => { queryClient.refetchQueries({ queryKey: ["/api/hrms/leave-types"] }); setDeptAllocForm({ department_id: "", allocated_days: 0 }); toast({ title: "Department allocation saved" }); },
+  });
+
+  const deleteDeptAllocMutation = useMutation({
+    mutationFn: ({ ltId, allocId }: { ltId: string; allocId: string }) => apiRequest("DELETE", `/api/hrms/leave-types/${ltId}/department-allocations`, { allocation_id: allocId }),
+    onSuccess: () => { queryClient.refetchQueries({ queryKey: ["/api/hrms/leave-types"] }); toast({ title: "Department allocation removed" }); },
   });
 
   const openCreate = () => { setForm({ organization_id: orgs?.[0]?.id || "", name: "", code: "", default_days: 0, is_paid: true, is_carry_forward: false, max_carry_forward_days: 0, requires_document: false, document_required_after_days: 0, color: "#3B82F6" }); setShowForm(true); };
@@ -374,6 +389,7 @@ function LeaveTypesTab() {
             <TableHead>Name</TableHead>
             <TableHead>Code</TableHead>
             <TableHead>Default Days</TableHead>
+            <TableHead>Dept Allocations</TableHead>
             <TableHead>Paid</TableHead>
             <TableHead>Carry Forward</TableHead>
             <TableHead>Actions</TableHead>
@@ -385,11 +401,23 @@ function LeaveTypesTab() {
               <TableCell><div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full" style={{ backgroundColor: lt.color }} />{lt.name}</div></TableCell>
               <TableCell>{lt.code}</TableCell>
               <TableCell>{lt.default_days}</TableCell>
+              <TableCell>
+                {(lt.department_allocations || []).length > 0 ? (
+                  <div className="flex flex-wrap gap-1">
+                    {lt.department_allocations!.map(da => (
+                      <span key={da.id} className="inline-block px-1.5 py-0.5 rounded text-[10px] bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400">
+                        {da.department_name}: {da.allocated_days}d
+                      </span>
+                    ))}
+                  </div>
+                ) : <span className="text-xs text-muted-foreground">Default for all</span>}
+              </TableCell>
               <TableCell>{lt.is_paid ? <Check className="h-4 w-4 text-green-500" /> : <X className="h-4 w-4 text-red-500" />}</TableCell>
               <TableCell>{lt.is_carry_forward ? `Yes (max ${lt.max_carry_forward_days})` : "No"}</TableCell>
               <TableCell>
                 <div className="flex gap-1">
                   <Button variant="ghost" size="sm" onClick={() => { setForm({ organization_id: lt.organization_id, name: lt.name, code: lt.code, default_days: lt.default_days, is_paid: lt.is_paid, is_carry_forward: lt.is_carry_forward, max_carry_forward_days: lt.max_carry_forward_days, requires_document: lt.requires_document, document_required_after_days: lt.document_required_after_days, color: lt.color }); setEditLT(lt); }}><Pencil className="h-3 w-3" /></Button>
+                  <Button variant="ghost" size="sm" title="Department allocations" onClick={() => setDeptAllocLT(lt)} data-testid={`btn-dept-alloc-${lt.id}`}><Building2 className="h-3 w-3" /></Button>
                   <Button variant="ghost" size="sm" className="text-red-500" onClick={() => deleteMutation.mutate(lt.id)}><Trash2 className="h-3 w-3" /></Button>
                 </div>
               </TableCell>
@@ -430,6 +458,50 @@ function LeaveTypesTab() {
               {editLT ? "Update" : "Create"}
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!deptAllocLT} onOpenChange={(open) => { if (!open) setDeptAllocLT(null); }}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader><DialogTitle>Department Allocations — {deptAllocLT?.name}</DialogTitle></DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            Override default days ({deptAllocLT?.default_days}) for specific departments. Departments without an override use the default.
+          </p>
+          <div className="space-y-3">
+            {(deptAllocLT?.department_allocations || []).length > 0 && (
+              <div className="border rounded-lg divide-y">
+                {deptAllocLT!.department_allocations!.map(da => (
+                  <div key={da.id} className="flex items-center justify-between px-3 py-2" data-testid={`dept-alloc-${da.id}`}>
+                    <span className="text-sm font-medium">{da.department_name}</span>
+                    <div className="flex items-center gap-2">
+                      <Badge variant="outline">{da.allocated_days} days</Badge>
+                      <Button variant="ghost" size="icon" className="h-6 w-6 text-red-500" onClick={() => deleteDeptAllocMutation.mutate({ ltId: deptAllocLT!.id, allocId: da.id })}>
+                        <Trash2 className="h-3 w-3" />
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+            <div className="flex gap-2 items-end">
+              <div className="flex-1">
+                <Label className="text-xs">Department</Label>
+                <Select value={deptAllocForm.department_id} onValueChange={v => setDeptAllocForm(f => ({ ...f, department_id: v }))}>
+                  <SelectTrigger data-testid="select-dept-alloc-dept"><SelectValue placeholder="Select department" /></SelectTrigger>
+                  <SelectContent>
+                    {departments?.map(d => <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="w-24">
+                <Label className="text-xs">Days</Label>
+                <Input type="number" min="0" step="0.5" value={deptAllocForm.allocated_days} onChange={e => setDeptAllocForm(f => ({ ...f, allocated_days: parseFloat(e.target.value) || 0 }))} data-testid="input-dept-alloc-days" />
+              </div>
+              <Button size="sm" onClick={() => { if (!deptAllocForm.department_id) return; addDeptAllocMutation.mutate(deptAllocForm); }} disabled={addDeptAllocMutation.isPending || !deptAllocForm.department_id} data-testid="btn-add-dept-alloc">
+                <Plus className="h-3.5 w-3.5 mr-1" /> Add
+              </Button>
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
     </div>
