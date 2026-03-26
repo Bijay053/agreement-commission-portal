@@ -1,12 +1,20 @@
 from django.db import models
 
 
+PORTAL_ACCESS_CHOICES = [
+    ('admin', 'Admin Portal Only'),
+    ('employee', 'People Portal Only'),
+    ('both', 'Both Portals'),
+]
+
+
 class User(models.Model):
     id = models.AutoField(primary_key=True)
     email = models.CharField(max_length=255, unique=True)
     full_name = models.CharField(max_length=255)
     password_hash = models.TextField()
     is_active = models.BooleanField(default=True)
+    portal_access = models.CharField(max_length=16, default='admin', choices=PORTAL_ACCESS_CHOICES)
     password_changed_at = models.DateTimeField(null=True, blank=True)
     last_login_at = models.DateTimeField(null=True, blank=True)
     last_login_ip = models.CharField(max_length=45, null=True, blank=True)

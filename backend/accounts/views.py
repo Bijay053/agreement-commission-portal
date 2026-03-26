@@ -263,6 +263,7 @@ def user_to_dict(user):
         'email': user.email,
         'fullName': user.full_name,
         'isActive': user.is_active,
+        'portalAccess': getattr(user, 'portal_access', 'admin') or 'admin',
         'passwordChangedAt': user.password_changed_at.isoformat() if user.password_changed_at else None,
         'lastLoginAt': user.last_login_at.isoformat() if user.last_login_at else None,
         'lastLoginIp': user.last_login_ip,
@@ -370,6 +371,16 @@ class LoginView(APIView):
             if not user.is_active:
                 return Response({'message': 'Invalid email or password'}, status=401)
 
+            host = request.get_host().split(':')[0].lower()
+            portal_access = getattr(user, 'portal_access', 'admin') or 'admin'
+            is_people_portal = 'people.' in host
+            is_admin_portal = not is_people_portal
+
+            if is_admin_portal and portal_access == 'employee':
+                return Response({'message': 'You do not have access to this portal. Please use people.studyinfocentre.com'}, status=403)
+            if is_people_portal and portal_access == 'admin':
+                return Response({'message': 'You do not have access to this portal. Please use portal.studyinfocentre.com'}, status=403)
+
             if not compare_password(password, user.password_hash):
                 entry = login_attempt_tracker.get(email, {'count': 0, 'lockedUntil': 0})
                 entry['count'] += 1
@@ -476,6 +487,7 @@ class VerifyOtpView(APIView):
 
             request.session['userId'] = user.id
             request.session['userPermissions'] = perms
+            request.session['portalAccess'] = getattr(user, 'portal_access', 'admin') or 'admin'
             request.session.pop('pendingUserId', None)
             request.session.pop('otpRequired', None)
 
@@ -966,6 +978,10 @@ class UsersListView(APIView):
             if not re.search(r'[A-Z]', password) or not re.search(r'[a-z]', password) or not re.search(r'\d', password):
                 return Response({'message': 'Password must include uppercase, lowercase, and a number'}, status=400)
 
+            portal_access = request.data.get('portalAccess', 'admin')
+            if portal_access not in ('admin', 'employee', 'both'):
+                portal_access = 'admin'
+
             hashed = hash_password(password)
             user = User.objects.create(
                 email=email,
@@ -973,6 +989,7 @@ class UsersListView(APIView):
                 password_hash=hashed,
                 is_active=True,
                 force_password_change=True,
+                portal_access=portal_access,
             )
             if role_id:
                 UserRole.objects.create(user_id=user.id, role_id=role_id)
@@ -1102,6 +1119,30 @@ class UserEmailUpdateView(APIView):
                 metadata={'oldEmail': old_email, 'newEmail': email},
             )
             return Response({'message': 'User email updated'})
+        except Exception as e:
+            return Response({'message': str(e)}, status=500)
+
+
+class UserPortalAccessUpdateView(APIView):
+    @require_permission("security.user.manage")
+    def patch(self, request, user_id):
+        try:
+            portal_access = request.data.get('portalAccess', '')
+            if portal_access not in ('admin', 'employee', 'both'):
+                return Response({'message': 'portalAccess must be admin, employee, or both'}, status=400)
+            try:
+                user = User.objects.get(id=user_id)
+            except User.DoesNotExist:
+                return Response({'message': 'User not found'}, status=404)
+            old_access = user.portal_access
+            user.portal_access = portal_access
+            user.save(update_fields=['portal_access'])
+            create_audit_log(
+                user_id=request.session.get('userId'), action='USER_PORTAL_ACCESS_UPDATE',
+                entity_type='user', entity_id=user_id, ip_address=get_client_ip(request),
+                metadata={'oldAccess': old_access, 'newAccess': portal_access},
+            )
+            return Response({'message': 'Portal access updated'})
         except Exception as e:
             return Response({'message': str(e)}, status=500)
 

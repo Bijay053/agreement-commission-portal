@@ -23,6 +23,7 @@ interface UserWithRoles {
   email: string;
   fullName: string;
   isActive: boolean;
+  portalAccess: "admin" | "employee" | "both";
   createdAt: string;
   updatedAt: string;
   roles: Role[];
@@ -45,6 +46,7 @@ export default function UsersManagementPage() {
     fullName: "",
     password: "",
     roleId: "",
+    portalAccess: "admin" as "admin" | "employee" | "both",
   });
   const [showPassword, setShowPassword] = useState(false);
 
@@ -56,7 +58,7 @@ export default function UsersManagementPage() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["/api/users"] });
       setShowCreateDialog(false);
-      setCreateForm({ email: "", fullName: "", password: "", roleId: "" });
+      setCreateForm({ email: "", fullName: "", password: "", roleId: "", portalAccess: "admin" });
       toast({ title: "User created" });
     },
     onError: (err: any) => toast({ title: "Error", description: err.message, variant: "destructive" }),
@@ -67,12 +69,14 @@ export default function UsersManagementPage() {
     createMutation.mutate({
       ...createForm,
       roleId: createForm.roleId ? parseInt(createForm.roleId) : undefined,
+      portalAccess: createForm.portalAccess,
     });
   };
 
   const [editRoleIds, setEditRoleIds] = useState<number[]>([]);
   const [editFullName, setEditFullName] = useState("");
   const [editEmail, setEditEmail] = useState("");
+  const [editPortalAccess, setEditPortalAccess] = useState<"admin" | "employee" | "both">("admin");
   const [nameEditing, setNameEditing] = useState(false);
   const [emailEditing, setEmailEditing] = useState(false);
 
@@ -127,11 +131,24 @@ export default function UsersManagementPage() {
     onError: (err: any) => toast({ title: "Error", description: err.message, variant: "destructive" }),
   });
 
+  const updatePortalAccessMutation = useMutation({
+    mutationFn: async ({ userId, portalAccess }: { userId: number; portalAccess: string }) => {
+      const res = await apiRequest("PATCH", `/api/users/${userId}/portal-access`, { portalAccess });
+      return res.json();
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["/api/users"] });
+      toast({ title: "Portal access updated" });
+    },
+    onError: (err: any) => toast({ title: "Error", description: err.message, variant: "destructive" }),
+  });
+
   const openEditDialog = (user: UserWithRoles) => {
     setEditingUser(user);
     setEditRoleIds(user.roles.map(r => r.id));
     setEditFullName(user.fullName);
     setEditEmail(user.email);
+    setEditPortalAccess(user.portalAccess || "admin");
     setNameEditing(false);
     setEmailEditing(false);
   };
@@ -150,6 +167,9 @@ export default function UsersManagementPage() {
     if (editEmail.trim().toLowerCase() !== editingUser.email.toLowerCase()) {
       updateEmailMutation.mutate({ userId: editingUser.id, email: editEmail.trim() });
     }
+    if (editPortalAccess !== (editingUser.portalAccess || "admin")) {
+      updatePortalAccessMutation.mutate({ userId: editingUser.id, portalAccess: editPortalAccess });
+    }
     updateRolesMutation.mutate({ userId: editingUser.id, roleIds: editRoleIds });
   };
 
@@ -160,7 +180,7 @@ export default function UsersManagementPage() {
           <h1 className="text-2xl font-bold tracking-tight" data-testid="text-users-title">User Management</h1>
           <p className="text-sm text-muted-foreground mt-1">Manage system users and role assignments</p>
         </div>
-        <Dialog open={showCreateDialog} onOpenChange={(open) => { if (open) { setCreateForm({ fullName: "", email: "", password: "", roleId: "" }); setShowPassword(false); } setShowCreateDialog(open); }}>
+        <Dialog open={showCreateDialog} onOpenChange={(open) => { if (open) { setCreateForm({ fullName: "", email: "", password: "", roleId: "", portalAccess: "admin" }); setShowPassword(false); } setShowCreateDialog(open); }}>
           <DialogTrigger asChild>
             <Button data-testid="button-add-user">
               <Plus className="w-4 h-4 mr-2" />
@@ -199,6 +219,20 @@ export default function UsersManagementPage() {
                   searchPlaceholder="Search roles..."
                   data-testid="select-user-role"
                 />
+              </div>
+              <div>
+                <Label>Portal Access</Label>
+                <select
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  value={createForm.portalAccess}
+                  onChange={e => setCreateForm({...createForm, portalAccess: e.target.value as any})}
+                  data-testid="select-portal-access"
+                >
+                  <option value="admin">Admin Portal Only (portal.studyinfocentre.com)</option>
+                  <option value="employee">People Portal Only (people.studyinfocentre.com)</option>
+                  <option value="both">Both Portals</option>
+                </select>
+                <p className="text-xs text-muted-foreground mt-1">Controls which portal this user can log into</p>
               </div>
               <Button type="submit" className="w-full" disabled={createMutation.isPending} data-testid="button-submit-user">
                 {createMutation.isPending ? "Creating..." : "Create User"}
@@ -242,6 +276,9 @@ export default function UsersManagementPage() {
                     ) : (
                       <span className="text-xs text-muted-foreground" data-testid={`text-no-roles-${user.id}`}>No roles assigned</span>
                     )}
+                    <Badge variant="outline" className="text-xs" data-testid={`badge-portal-${user.id}`}>
+                      {user.portalAccess === "admin" ? "Admin Portal" : user.portalAccess === "employee" ? "People Portal" : "Both Portals"}
+                    </Badge>
                     <Badge variant={user.isActive ? "default" : "destructive"} data-testid={`badge-status-${user.id}`}>
                       {user.isActive ? "Active" : "Inactive"}
                     </Badge>
@@ -347,6 +384,21 @@ export default function UsersManagementPage() {
                     </Button>
                   </div>
                 </div>
+              </div>
+
+              <div className="shrink-0">
+                <Label className="mb-1 block">Portal Access</Label>
+                <select
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  value={editPortalAccess}
+                  onChange={e => setEditPortalAccess(e.target.value as any)}
+                  data-testid="select-edit-portal-access"
+                >
+                  <option value="admin">Admin Portal Only (portal.studyinfocentre.com)</option>
+                  <option value="employee">People Portal Only (people.studyinfocentre.com)</option>
+                  <option value="both">Both Portals</option>
+                </select>
+                <p className="text-xs text-muted-foreground mt-1">Controls which portal this user can log into</p>
               </div>
 
               <div className="flex-1 min-h-0 flex flex-col">

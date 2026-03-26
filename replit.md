@@ -13,6 +13,7 @@ Key architectural decisions include:
 - **Security**: Comprehensive measures like CSRF protection, security headers (HSTS, X-Frame-Options, CSP), rate limiting, malware scanning for all uploads (magic-byte validation, signature detection, ClamAV), and secure document proxying to prevent direct S3 URL exposure. Infected files are quarantined and blocked.
 - **Data Integrity**: Soft deletes are implemented for key tables, and all status transitions are tracked in a `status_history` table. Extensive audit logging captures document operations and critical actions.
 - **Permissions**: A fine-grained Role-Based Access Control (RBAC) system with specific permission codes (`agreement.view`, `document.upload`, etc.) is enforced via decorators and object-level permissions (e.g., territory-based access, sub-agent scoping) and field-level permissions.
+- **Portal Access Control**: Users have a `portal_access` field (`admin`, `employee`, or `both`) controlling which portal they can log into. `admin` = portal.studyinfocentre.com only, `employee` = people.studyinfocentre.com only, `both` = both portals. Enforced at login via `Host` header check.
 - **UI/UX**: `shadcn/ui` and Radix provide a modern, consistent interface.
 - **Feature Specifications**:
     - **Agreement Management**: CRUD operations, status tracking, alerts, and notifications.
