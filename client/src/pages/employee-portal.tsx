@@ -945,16 +945,19 @@ function RemoteCheckInDialog({
                   <span className="text-sm">Location captured</span>
                   <span className="text-xs text-muted-foreground ml-auto">{location.lat.toFixed(6)}, {location.lng.toFixed(6)}</span>
                 </div>
-                <div className="rounded-lg overflow-hidden border h-48">
-                  <iframe
-                    title="Location Map"
-                    width="100%"
-                    height="100%"
-                    style={{ border: 0 }}
-                    loading="lazy"
-                    src={`https://www.openstreetmap.org/export/embed.html?bbox=${location.lng - 0.005},${location.lat - 0.003},${location.lng + 0.005},${location.lat + 0.003}&layer=mapnik&marker=${location.lat},${location.lng}`}
-                    data-testid="map-location"
-                  />
+                <div className="rounded-lg overflow-hidden border h-48 relative" data-testid="map-location">
+                  <a href={`https://www.openstreetmap.org/?mlat=${location.lat}&mlon=${location.lng}#map=16/${location.lat}/${location.lng}`} target="_blank" rel="noreferrer" className="block w-full h-full">
+                    <img
+                      src={`https://staticmap.openstreetmap.de/staticmap.php?center=${location.lat},${location.lng}&zoom=16&size=600x200&markers=${location.lat},${location.lng},ol-marker`}
+                      alt="Location map"
+                      className="w-full h-full object-cover"
+                      onError={(e) => {
+                        const target = e.target as HTMLImageElement;
+                        target.style.display = 'none';
+                        target.parentElement!.innerHTML = `<div class="flex items-center justify-center h-full bg-muted text-sm text-muted-foreground">📍 ${location.lat.toFixed(6)}, ${location.lng.toFixed(6)} — <a href="https://www.openstreetmap.org/?mlat=${location.lat}&mlon=${location.lng}#map=16/${location.lat}/${location.lng}" target="_blank" rel="noreferrer" class="text-primary underline ml-1">View on Map</a></div>`;
+                      }}
+                    />
+                  </a>
                 </div>
               </div>
             ) : (
