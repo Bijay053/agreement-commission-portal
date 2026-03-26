@@ -1196,8 +1196,18 @@ function LeaveTab() {
   const needsCoverPerson = policy?.require_cover_person && leaveDays >= (policy?.require_cover_after_days || 1);
 
   const advanceNoticeWarning = (() => {
-    if (!leaveForm.start_date || !policy) return null;
-    const daysAhead = Math.floor((new Date(leaveForm.start_date).getTime() - new Date().getTime()) / 86400000);
+    if (!leaveForm.start_date) return null;
+    const startDate = new Date(leaveForm.start_date + "T00:00:00");
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const daysAhead = Math.floor((startDate.getTime() - today.getTime()) / 86400000);
+
+    const selectedBalance = balance?.find((b: any) => b.leave_type_id === leaveForm.leave_type_id);
+    if (selectedBalance?.min_advance_days && selectedBalance.min_advance_days > 0 && daysAhead < selectedBalance.min_advance_days) {
+      return `${selectedBalance.leave_type_name || 'This leave type'} requires at least ${selectedBalance.min_advance_days} days advance notice`;
+    }
+
+    if (!policy) return null;
     const rules: any[] = policy.advance_notice_rules || [];
     if (rules.length > 0 && leaveDays > 0) {
       const sorted = [...rules].sort((a, b) => b.min_leave_days - a.min_leave_days);
@@ -1449,7 +1459,7 @@ function LeaveTab() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => { setShowRequestForm(false); setDocumentFile(null); }}>Cancel</Button>
-            <Button onClick={submitLeave} disabled={uploading} data-testid="button-submit-leave">
+            <Button onClick={submitLeave} disabled={uploading || !!advanceNoticeWarning} data-testid="button-submit-leave">
               {uploading && <Loader2 className="h-4 w-4 animate-spin mr-1" />}
               {uploading ? "Submitting..." : "Submit"}
             </Button>

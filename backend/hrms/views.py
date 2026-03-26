@@ -158,6 +158,7 @@ def serialize_leave_type(lt):
         'is_paid': lt.is_paid,
         'is_carry_forward': lt.is_carry_forward,
         'max_carry_forward_days': float(lt.max_carry_forward_days),
+        'min_advance_days': lt.min_advance_days,
         'requires_document': lt.requires_document,
         'document_required_after_days': lt.document_required_after_days,
         'color': lt.color,
@@ -203,6 +204,7 @@ def serialize_leave_balance(lb):
         'leave_type_id': str(lb.leave_type_id),
         'leave_type_name': lb.leave_type.name if lb.leave_type else None,
         'leave_type_code': lb.leave_type.code if lb.leave_type else None,
+        'min_advance_days': lb.leave_type.min_advance_days if lb.leave_type else 0,
         'fiscal_year_id': str(lb.fiscal_year_id),
         'fiscal_year_name': lb.fiscal_year.name if lb.fiscal_year else None,
         'allocated_days': float(lb.allocated_days),
@@ -840,6 +842,9 @@ class LeaveTypeListView(APIView):
     @require_permission('hrms.leave_type.add')
     def post(self, request):
         data = request.data
+        min_adv = data.get('min_advance_days', 0)
+        if not isinstance(min_adv, int) or min_adv < 0:
+            min_adv = max(0, int(min_adv or 0))
         lt = LeaveType.objects.create(
             organization_id=data.get('organization_id'),
             name=data.get('name', ''),
@@ -848,6 +853,7 @@ class LeaveTypeListView(APIView):
             is_paid=data.get('is_paid', True),
             is_carry_forward=data.get('is_carry_forward', False),
             max_carry_forward_days=data.get('max_carry_forward_days', 0),
+            min_advance_days=min_adv,
             requires_document=data.get('requires_document', False),
             document_required_after_days=data.get('document_required_after_days', 0),
             color=data.get('color', '#3B82F6'),
@@ -871,8 +877,12 @@ class LeaveTypeDetailView(APIView):
         except LeaveType.DoesNotExist:
             return Response({'message': 'Leave type not found'}, status=404)
         data = request.data
+        if 'min_advance_days' in data:
+            min_adv = data['min_advance_days']
+            if not isinstance(min_adv, int) or min_adv < 0:
+                data['min_advance_days'] = max(0, int(min_adv or 0))
         for field in ['name', 'code', 'default_days', 'is_paid', 'is_carry_forward',
-                      'max_carry_forward_days', 'requires_document', 'document_required_after_days', 'color', 'status']:
+                      'max_carry_forward_days', 'min_advance_days', 'requires_document', 'document_required_after_days', 'color', 'status']:
             if field in data:
                 setattr(lt, field, data[field])
         lt.save()
@@ -3081,13 +3091,40 @@ class MyLeaveBalanceView(APIView):
             return Response({'message': 'No employee profile linked'}, status=404)
 
         current_fy = FiscalYear.objects.filter(is_current=True).first()
-        if not current_fy:
-            return Response([])
 
-        balances = LeaveBalance.objects.select_related('leave_type', 'fiscal_year').filter(
-            employee_id=employee.id, fiscal_year=current_fy
-        )
-        return Response([serialize_leave_balance(lb) for lb in balances])
+        result = []
+        seen_lt_ids = set()
+
+        if current_fy:
+            balances = LeaveBalance.objects.select_related('leave_type', 'fiscal_year').filter(
+                employee_id=employee.id, fiscal_year=current_fy
+            )
+            for lb in balances:
+                result.append(serialize_leave_balance(lb))
+                seen_lt_ids.add(lb.leave_type_id)
+
+        if employee.organization_id:
+            leave_types = LeaveType.objects.filter(
+                organization_id=employee.organization_id, status='active'
+            )
+            for lt in leave_types:
+                if lt.id not in seen_lt_ids:
+                    result.append({
+                        'id': str(lt.id),
+                        'employee_id': str(employee.id),
+                        'leave_type_id': str(lt.id),
+                        'leave_type_name': lt.name,
+                        'leave_type_code': lt.code,
+                        'min_advance_days': lt.min_advance_days,
+                        'fiscal_year_id': str(current_fy.id) if current_fy else None,
+                        'fiscal_year_name': current_fy.name if current_fy else None,
+                        'allocated_days': float(lt.default_days),
+                        'used_days': 0,
+                        'carried_forward_days': 0,
+                        'remaining_days': float(lt.default_days),
+                    })
+
+        return Response(result)
 
 
 class MyLeavePolicyView(APIView):
@@ -3152,10 +3189,23 @@ class MyLeaveRequestsView(APIView):
         if not all([leave_type_id, start_date, end_date]):
             return Response({'message': 'leave_type_id, start_date, end_date are required'}, status=400)
 
+        lt_filter = {'id': leave_type_id, 'status': 'active'}
+        if employee.organization_id:
+            lt_filter['organization_id'] = employee.organization_id
+        try:
+            lt_obj = LeaveType.objects.get(**lt_filter)
+        except LeaveType.DoesNotExist:
+            return Response({'message': 'Leave type not found or not available for your organization'}, status=404)
+
         start = datetime.strptime(start_date, '%Y-%m-%d').date()
         end = datetime.strptime(end_date, '%Y-%m-%d').date()
         if end < start:
             return Response({'message': 'End date cannot be before start date'}, status=400)
+
+        if lt_obj.min_advance_days > 0:
+            days_ahead_lt = (start - date.today()).days
+            if days_ahead_lt < lt_obj.min_advance_days:
+                return Response({'message': f'{lt_obj.name} requires at least {lt_obj.min_advance_days} days advance notice'}, status=400)
 
         days_count = Decimal('0.5') if is_half_day else Decimal(str((end - start).days + 1))
 

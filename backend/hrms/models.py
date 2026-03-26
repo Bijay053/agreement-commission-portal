@@ -78,6 +78,7 @@ class LeaveType(models.Model):
     is_paid = models.BooleanField(default=True)
     is_carry_forward = models.BooleanField(default=False)
     max_carry_forward_days = models.DecimalField(max_digits=5, decimal_places=1, default=0)
+    min_advance_days = models.IntegerField(default=0)
     requires_document = models.BooleanField(default=False)
     document_required_after_days = models.IntegerField(default=0)
     color = models.CharField(max_length=7, default='#3B82F6')
