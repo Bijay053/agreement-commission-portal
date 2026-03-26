@@ -32,7 +32,8 @@ import {
   Gift, Receipt, Banknote, UserCog, Landmark, Calculator,
   ChevronLeft, ChevronRight, Save, ArrowLeft, CheckCircle,
   CreditCard, RotateCcw, Loader2, AlertTriangle, FileText,
-  Download, Search, BarChart3, UserX, Timer, Globe,
+  Download, Search, BarChart3, UserX, Timer, Globe, Wifi,
+  ShieldCheck, ToggleLeft, ToggleRight,
 } from "lucide-react";
 import { StaffProfilesTab } from "./hrms-staff-profiles";
 import { BonusesTab } from "./hrms-bonuses";
@@ -1574,9 +1575,205 @@ function NotificationSettingsTab() {
   );
 }
 
+function RemoteCheckInPermissionsTab() {
+  const { toast } = useToast();
+  const [showAdd, setShowAdd] = useState(false);
+  const [selectedEmployee, setSelectedEmployee] = useState("");
+  const [requirePhoto, setRequirePhoto] = useState(true);
+  const [requireLocation, setRequireLocation] = useState(true);
+
+  const { data: permissions, isLoading } = useQuery<any[]>({
+    queryKey: ["/api/hrms/online-checkin-permissions"],
+  });
+
+  const { data: employees } = useQuery<any[]>({
+    queryKey: ["/api/employees"],
+  });
+
+  const addMutation = useMutation({
+    mutationFn: (data: any) => apiRequest("POST", "/api/hrms/online-checkin-permissions", data),
+    onSuccess: () => {
+      queryClient.refetchQueries({ queryKey: ["/api/hrms/online-checkin-permissions"] });
+      setShowAdd(false);
+      setSelectedEmployee("");
+      setRequirePhoto(true);
+      setRequireLocation(true);
+      toast({ title: "Permission granted" });
+    },
+    onError: (err: any) => toast({ title: "Failed", description: err.message, variant: "destructive" }),
+  });
+
+  const toggleMutation = useMutation({
+    mutationFn: (data: any) => apiRequest("POST", "/api/hrms/online-checkin-permissions", data),
+    onSuccess: () => {
+      queryClient.refetchQueries({ queryKey: ["/api/hrms/online-checkin-permissions"] });
+      toast({ title: "Permission updated" });
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => apiRequest("DELETE", `/api/hrms/online-checkin-permissions/${id}`),
+    onSuccess: () => {
+      queryClient.refetchQueries({ queryKey: ["/api/hrms/online-checkin-permissions"] });
+      toast({ title: "Permission revoked" });
+    },
+  });
+
+  const existingEmployeeIds = new Set((permissions || []).map((p: any) => p.employee_id));
+  const availableEmployees = (employees || []).filter((e: any) => !existingEmployeeIds.has(e.id));
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-lg font-semibold" data-testid="text-remote-checkin-title">Remote Check-In Permissions</h2>
+          <p className="text-sm text-muted-foreground">Control which employees can check in/out remotely via the HRMS Portal</p>
+        </div>
+        <Button size="sm" onClick={() => setShowAdd(true)} data-testid="button-add-permission">
+          <Plus className="h-4 w-4 mr-1" /> Grant Access
+        </Button>
+      </div>
+
+      {isLoading ? <Skeleton className="h-60" /> : (
+        <Card>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Employee</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Require Photo</TableHead>
+                <TableHead>Require Location</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {(!permissions || permissions.length === 0) ? (
+                <TableRow>
+                  <TableCell colSpan={5} className="text-center text-muted-foreground py-8">
+                    No remote check-in permissions assigned yet. Click "Grant Access" to add employees.
+                  </TableCell>
+                </TableRow>
+              ) : permissions.map((p: any) => (
+                <TableRow key={p.id} data-testid={`row-permission-${p.id}`}>
+                  <TableCell className="font-medium">{p.employee_name || p.employee_id}</TableCell>
+                  <TableCell>
+                    <button
+                      onClick={() => toggleMutation.mutate({
+                        employee_id: p.employee_id,
+                        is_allowed: !p.is_allowed,
+                        require_photo: p.require_photo,
+                        require_location: p.require_location,
+                      })}
+                      className="flex items-center gap-1.5 cursor-pointer"
+                      data-testid={`button-toggle-${p.id}`}
+                    >
+                      {p.is_allowed ? (
+                        <><ToggleRight className="h-5 w-5 text-green-600" /><span className="text-sm text-green-600 font-medium">Enabled</span></>
+                      ) : (
+                        <><ToggleLeft className="h-5 w-5 text-muted-foreground" /><span className="text-sm text-muted-foreground">Disabled</span></>
+                      )}
+                    </button>
+                  </TableCell>
+                  <TableCell>
+                    <button
+                      onClick={() => toggleMutation.mutate({
+                        employee_id: p.employee_id,
+                        is_allowed: p.is_allowed,
+                        require_photo: !p.require_photo,
+                        require_location: p.require_location,
+                      })}
+                      className="flex items-center gap-1 cursor-pointer"
+                      data-testid={`button-toggle-photo-${p.id}`}
+                    >
+                      {p.require_photo ? (
+                        <Badge variant="default" className="text-xs"><Camera className="h-3 w-3 mr-1" />Required</Badge>
+                      ) : (
+                        <Badge variant="outline" className="text-xs">Optional</Badge>
+                      )}
+                    </button>
+                  </TableCell>
+                  <TableCell>
+                    <button
+                      onClick={() => toggleMutation.mutate({
+                        employee_id: p.employee_id,
+                        is_allowed: p.is_allowed,
+                        require_photo: p.require_photo,
+                        require_location: !p.require_location,
+                      })}
+                      className="flex items-center gap-1 cursor-pointer"
+                      data-testid={`button-toggle-location-${p.id}`}
+                    >
+                      {p.require_location ? (
+                        <Badge variant="default" className="text-xs"><MapPin className="h-3 w-3 mr-1" />Required</Badge>
+                      ) : (
+                        <Badge variant="outline" className="text-xs">Optional</Badge>
+                      )}
+                    </button>
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <Button variant="ghost" size="sm" onClick={() => deleteMutation.mutate(p.id)} data-testid={`button-revoke-${p.id}`}>
+                      <Trash2 className="h-4 w-4 text-destructive" />
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </Card>
+      )}
+
+      <Dialog open={showAdd} onOpenChange={setShowAdd}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Grant Remote Check-In Access</DialogTitle></DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label>Employee</Label>
+              <Select value={selectedEmployee} onValueChange={setSelectedEmployee}>
+                <SelectTrigger data-testid="select-employee"><SelectValue placeholder="Select employee" /></SelectTrigger>
+                <SelectContent>
+                  {availableEmployees.map((e: any) => (
+                    <SelectItem key={e.id} value={e.id}>{e.full_name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex items-center gap-6">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <Checkbox checked={requirePhoto} onCheckedChange={(c) => setRequirePhoto(!!c)} data-testid="checkbox-require-photo" />
+                <span className="text-sm">Require selfie photo</span>
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <Checkbox checked={requireLocation} onCheckedChange={(c) => setRequireLocation(!!c)} data-testid="checkbox-require-location" />
+                <span className="text-sm">Require GPS location</span>
+              </label>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowAdd(false)}>Cancel</Button>
+            <Button
+              onClick={() => addMutation.mutate({
+                employee_id: selectedEmployee,
+                is_allowed: true,
+                require_photo: requirePhoto,
+                require_location: requireLocation,
+              })}
+              disabled={!selectedEmployee || addMutation.isPending}
+              data-testid="button-confirm-grant"
+            >
+              {addMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <ShieldCheck className="h-4 w-4 mr-1" />}
+              Grant Access
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
 const SIDEBAR_ITEMS = [
   { key: "staff-profiles", label: "Staff & Salary", icon: UserCog, group: "People", permissions: ["hrms.staff.read", "hrms.salary.read", "employee.view"] },
   { key: "attendance", label: "Attendance", icon: Clock, group: "People", permissions: ["hrms.attendance.read"] },
+  { key: "remote-checkin", label: "Remote Check-In", icon: Wifi, group: "People", permissions: ["hrms.attendance.read"] },
   { key: "leave-types", label: "Leave Types", icon: TreePalm, group: "Leave", permissions: ["hrms.leave_type.read"] },
   { key: "leave-requests", label: "Leave Requests", icon: CalendarDays, group: "Leave", permissions: ["hrms.leave_request.read", "hrms.leave_request.approve"] },
   { key: "holidays", label: "Holidays", icon: Calendar, group: "Leave", permissions: ["hrms.holiday.read"] },
@@ -1596,6 +1793,7 @@ const SIDEBAR_ITEMS = [
 const CONTENT_MAP: Record<string, React.ComponentType> = {
   "staff-profiles": StaffProfilesTab,
   "attendance": AttendanceTab,
+  "remote-checkin": RemoteCheckInPermissionsTab,
   "organizations": OrgTab,
   "departments": DeptTab,
   "leave-types": LeaveTypesTab,
