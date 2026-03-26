@@ -394,50 +394,169 @@ def get_employee_for_user(user_id):
         return None
 
 
+ATTENDANCE_CC_EMAIL = 'ishu.twayana@studyinfocentre.com'
+
+
+def _attendance_email_wrap(title, body_html):
+    return f'''<!DOCTYPE html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"></head>
+<body style="margin:0;padding:0;background-color:#f1f5f9;font-family:'Segoe UI',Arial,sans-serif;">
+<table width="100%" cellpadding="0" cellspacing="0" style="background-color:#f1f5f9;padding:40px 20px;">
+<tr><td align="center">
+<table width="600" cellpadding="0" cellspacing="0" style="background-color:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.08);">
+  <tr><td style="background:linear-gradient(135deg,#1e40af 0%,#3b82f6 100%);padding:28px 40px;text-align:center;">
+    <h1 style="color:#ffffff;margin:0;font-size:20px;font-weight:700;">HRMS - Attendance Alert</h1>
+    <p style="color:#bfdbfe;margin:4px 0 0;font-size:12px;">Study Info Centre</p>
+  </td></tr>
+  <tr><td style="padding:32px 40px;">
+    <h2 style="color:#1e293b;margin:0 0 16px;font-size:18px;font-weight:600;">{title}</h2>
+    {body_html}
+  </td></tr>
+  <tr><td style="background-color:#f8fafc;padding:20px 40px;border-top:1px solid #e2e8f0;text-align:center;">
+    <p style="color:#94a3b8;font-size:11px;margin:0;">&copy; {timezone.now().year} Study Info Centre. All rights reserved.</p>
+  </td></tr>
+</table>
+</td></tr></table>
+</body></html>'''
+
+
+def _get_attendance_cc_list(org):
+    cc_list = [ATTENDANCE_CC_EMAIL]
+    if org and org.email and org.email not in cc_list:
+        cc_list.append(org.email)
+    return cc_list
+
+
+def _send_attendance_email(to_email, subject, html_body, cc_list=None):
+    from django.core.mail import EmailMessage
+    msg = EmailMessage(
+        subject=subject,
+        body=html_body,
+        from_email=f'"{settings.FROM_NAME}" <{settings.DEFAULT_FROM_EMAIL}>',
+        to=[to_email],
+        cc=cc_list or [],
+    )
+    msg.content_subtype = 'html'
+    msg.send(fail_silently=True)
+
+
 def send_late_notification(employee, attendance_record, department):
-    from core.email_utils import send_email
     try:
         org = Organization.objects.get(id=employee.organization_id) if employee.organization_id else None
         if not org:
             return
-        settings = NotificationSetting.objects.filter(organization=org).first()
-        if not settings or not settings.late_arrival_notify_employee:
+        ns = NotificationSetting.objects.filter(organization=org).first()
+        if not ns or not ns.late_arrival_notify_employee:
             return
 
-        subject = settings.late_email_subject
-        body = settings.late_email_template.format(
-            employee_name=employee.full_name,
-            check_in_time=attendance_record.check_in.strftime('%I:%M %p') if attendance_record.check_in else 'N/A',
-            date=attendance_record.date.strftime('%Y-%m-%d'),
-            late_minutes=attendance_record.late_minutes,
-            start_time=department.work_start_time.strftime('%I:%M %p') if department else 'N/A',
-        )
-        send_email(employee.email, subject, body)
-    except Exception:
-        pass
+        check_in_time = attendance_record.check_in.strftime('%I:%M %p') if attendance_record.check_in else 'N/A'
+        att_date = attendance_record.date.strftime('%B %d, %Y')
+        start_time = department.work_start_time.strftime('%I:%M %p') if department else 'N/A'
+        late_mins = attendance_record.late_minutes or 0
+
+        body_html = f'''
+        <p style="color:#475569;font-size:15px;line-height:1.6;">Dear <strong>{employee.full_name}</strong>,</p>
+        <div style="background-color:#fef2f2;border-left:4px solid #ef4444;padding:16px 20px;border-radius:0 8px 8px 0;margin:16px 0;">
+          <p style="color:#991b1b;font-size:14px;margin:0;font-weight:600;">You were late today.</p>
+        </div>
+        <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#f8fafc;border-radius:8px;border:1px solid #e2e8f0;margin:16px 0;">
+          <tr><td style="padding:10px 16px;color:#64748b;font-size:14px;border-bottom:1px solid #f1f5f9;width:160px;">Date</td>
+              <td style="padding:10px 16px;font-size:14px;border-bottom:1px solid #f1f5f9;font-weight:500;">{att_date}</td></tr>
+          <tr><td style="padding:10px 16px;color:#64748b;font-size:14px;border-bottom:1px solid #f1f5f9;">Your Check-In</td>
+              <td style="padding:10px 16px;font-size:14px;border-bottom:1px solid #f1f5f9;font-weight:500;color:#ef4444;">{check_in_time}</td></tr>
+          <tr><td style="padding:10px 16px;color:#64748b;font-size:14px;border-bottom:1px solid #f1f5f9;">Office Start Time</td>
+              <td style="padding:10px 16px;font-size:14px;border-bottom:1px solid #f1f5f9;font-weight:500;">{start_time}</td></tr>
+          <tr><td style="padding:10px 16px;color:#64748b;font-size:14px;">Late By</td>
+              <td style="padding:10px 16px;font-size:14px;font-weight:600;color:#ef4444;">{late_mins} minutes</td></tr>
+        </table>
+        <p style="color:#475569;font-size:14px;line-height:1.6;">Please be punctual and ensure you arrive on time. Repeated late arrivals may be subject to review.</p>
+        <p style="color:#64748b;font-size:13px;margin-top:20px;">Regards,<br><strong>HR Department</strong><br>{org.name}</p>
+        '''
+
+        html = _attendance_email_wrap('Late Arrival Notice', body_html)
+        cc_list = _get_attendance_cc_list(org)
+        _send_attendance_email(employee.email, ns.late_email_subject, html, cc_list)
+    except Exception as e:
+        print(f'[Late Notification] Error: {e}')
 
 
 def send_early_leave_notification(employee, attendance_record, department):
-    from core.email_utils import send_email
     try:
         org = Organization.objects.get(id=employee.organization_id) if employee.organization_id else None
         if not org:
             return
-        settings = NotificationSetting.objects.filter(organization=org).first()
-        if not settings or not settings.early_leave_notify_employee:
+        ns = NotificationSetting.objects.filter(organization=org).first()
+        if not ns or not ns.early_leave_notify_employee:
             return
 
-        subject = settings.early_leave_email_subject
-        body = settings.early_leave_email_template.format(
-            employee_name=employee.full_name,
-            check_out_time=attendance_record.check_out.strftime('%I:%M %p') if attendance_record.check_out else 'N/A',
-            date=attendance_record.date.strftime('%Y-%m-%d'),
-            early_minutes=attendance_record.early_leave_minutes,
-            end_time=department.work_end_time.strftime('%I:%M %p') if department else 'N/A',
-        )
-        send_email(employee.email, subject, body)
-    except Exception:
-        pass
+        check_out_time = attendance_record.check_out.strftime('%I:%M %p') if attendance_record.check_out else 'N/A'
+        att_date = attendance_record.date.strftime('%B %d, %Y')
+        end_time = department.work_end_time.strftime('%I:%M %p') if department else 'N/A'
+        early_mins = attendance_record.early_leave_minutes or 0
+
+        body_html = f'''
+        <p style="color:#475569;font-size:15px;line-height:1.6;">Dear <strong>{employee.full_name}</strong>,</p>
+        <div style="background-color:#fff7ed;border-left:4px solid #f97316;padding:16px 20px;border-radius:0 8px 8px 0;margin:16px 0;">
+          <p style="color:#9a3412;font-size:14px;margin:0;font-weight:600;">You checked out early today.</p>
+        </div>
+        <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#f8fafc;border-radius:8px;border:1px solid #e2e8f0;margin:16px 0;">
+          <tr><td style="padding:10px 16px;color:#64748b;font-size:14px;border-bottom:1px solid #f1f5f9;width:160px;">Date</td>
+              <td style="padding:10px 16px;font-size:14px;border-bottom:1px solid #f1f5f9;font-weight:500;">{att_date}</td></tr>
+          <tr><td style="padding:10px 16px;color:#64748b;font-size:14px;border-bottom:1px solid #f1f5f9;">Your Check-Out</td>
+              <td style="padding:10px 16px;font-size:14px;border-bottom:1px solid #f1f5f9;font-weight:500;color:#f97316;">{check_out_time}</td></tr>
+          <tr><td style="padding:10px 16px;color:#64748b;font-size:14px;border-bottom:1px solid #f1f5f9;">Office End Time</td>
+              <td style="padding:10px 16px;font-size:14px;border-bottom:1px solid #f1f5f9;font-weight:500;">{end_time}</td></tr>
+          <tr><td style="padding:10px 16px;color:#64748b;font-size:14px;">Left Early By</td>
+              <td style="padding:10px 16px;font-size:14px;font-weight:600;color:#f97316;">{early_mins} minutes</td></tr>
+        </table>
+        <p style="color:#475569;font-size:14px;line-height:1.6;">Please ensure you complete your full working hours. If you had a valid reason, please inform your supervisor.</p>
+        <p style="color:#64748b;font-size:13px;margin-top:20px;">Regards,<br><strong>HR Department</strong><br>{org.name}</p>
+        '''
+
+        html = _attendance_email_wrap('Early Departure Notice', body_html)
+        cc_list = _get_attendance_cc_list(org)
+        _send_attendance_email(employee.email, ns.early_leave_email_subject, html, cc_list)
+    except Exception as e:
+        print(f'[Early Leave Notification] Error: {e}')
+
+
+def send_no_checkout_notification(employee, attendance_record, department):
+    try:
+        org = Organization.objects.get(id=employee.organization_id) if employee.organization_id else None
+        if not org:
+            return
+        ns = NotificationSetting.objects.filter(organization=org).first()
+        if not ns or not ns.no_checkout_notify_employee:
+            return
+
+        check_in_time = attendance_record.check_in.strftime('%I:%M %p') if attendance_record.check_in else 'N/A'
+        att_date = attendance_record.date.strftime('%B %d, %Y')
+        end_time = department.work_end_time.strftime('%I:%M %p') if department else 'N/A'
+
+        body_html = f'''
+        <p style="color:#475569;font-size:15px;line-height:1.6;">Dear <strong>{employee.full_name}</strong>,</p>
+        <div style="background-color:#fefce8;border-left:4px solid #eab308;padding:16px 20px;border-radius:0 8px 8px 0;margin:16px 0;">
+          <p style="color:#854d0e;font-size:14px;margin:0;font-weight:600;">You did not check out today.</p>
+        </div>
+        <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#f8fafc;border-radius:8px;border:1px solid #e2e8f0;margin:16px 0;">
+          <tr><td style="padding:10px 16px;color:#64748b;font-size:14px;border-bottom:1px solid #f1f5f9;width:160px;">Date</td>
+              <td style="padding:10px 16px;font-size:14px;border-bottom:1px solid #f1f5f9;font-weight:500;">{att_date}</td></tr>
+          <tr><td style="padding:10px 16px;color:#64748b;font-size:14px;border-bottom:1px solid #f1f5f9;">Your Check-In</td>
+              <td style="padding:10px 16px;font-size:14px;border-bottom:1px solid #f1f5f9;font-weight:500;">{check_in_time}</td></tr>
+          <tr><td style="padding:10px 16px;color:#64748b;font-size:14px;border-bottom:1px solid #f1f5f9;">Office End Time</td>
+              <td style="padding:10px 16px;font-size:14px;border-bottom:1px solid #f1f5f9;font-weight:500;">{end_time}</td></tr>
+          <tr><td style="padding:10px 16px;color:#64748b;font-size:14px;">Check-Out</td>
+              <td style="padding:10px 16px;font-size:14px;font-weight:600;color:#eab308;">Missing</td></tr>
+        </table>
+        <p style="color:#475569;font-size:14px;line-height:1.6;">Please remember to check out at the end of your working hours. Missing check-outs affect attendance records and may require manual correction.</p>
+        <p style="color:#64748b;font-size:13px;margin-top:20px;">Regards,<br><strong>HR Department</strong><br>{org.name}</p>
+        '''
+
+        html = _attendance_email_wrap('Missing Check-Out Notice', body_html)
+        cc_list = _get_attendance_cc_list(org)
+        _send_attendance_email(employee.email, ns.no_checkout_email_subject, html, cc_list)
+    except Exception as e:
+        print(f'[No Checkout Notification] Error: {e}')
 
 
 class OrganizationListView(APIView):
@@ -2539,6 +2658,9 @@ class NotificationSettingView(APIView):
             'late_email_template': ns.late_email_template,
             'early_leave_email_subject': ns.early_leave_email_subject,
             'early_leave_email_template': ns.early_leave_email_template,
+            'no_checkout_notify_employee': ns.no_checkout_notify_employee,
+            'no_checkout_email_subject': ns.no_checkout_email_subject,
+            'no_checkout_email_template': ns.no_checkout_email_template,
         })
 
     @require_permission('hrms.notification.update')

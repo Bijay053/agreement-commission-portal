@@ -499,6 +499,9 @@ class NotificationSetting(models.Model):
     late_email_template = models.TextField(default='Dear {employee_name},\n\nThis is to notify you that you checked in at {check_in_time} on {date}, which is {late_minutes} minutes after the scheduled start time of {start_time}.\n\nPlease ensure punctuality.\n\nRegards,\nHR Department')
     early_leave_email_subject = models.CharField(max_length=255, default='Early Departure Notification')
     early_leave_email_template = models.TextField(default='Dear {employee_name},\n\nThis is to notify you that you checked out at {check_out_time} on {date}, which is {early_minutes} minutes before the scheduled end time of {end_time}.\n\nPlease ensure you complete your working hours.\n\nRegards,\nHR Department')
+    no_checkout_notify_employee = models.BooleanField(default=True)
+    no_checkout_email_subject = models.CharField(max_length=255, default='Missing Check-Out Notification')
+    no_checkout_email_template = models.TextField(default='Dear {employee_name},\n\nThis is to notify you that you checked in at {check_in_time} on {date} but did not check out. Please ensure you check out at the end of your working hours.\n\nRegards,\nHR Department')
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

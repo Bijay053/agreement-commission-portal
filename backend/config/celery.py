@@ -34,6 +34,10 @@ app.conf.beat_schedule = {
         'task': 'notifications.tasks.check_password_expiry_reminders',
         'schedule': crontab(hour=7, minute=0),
     },
+    'check-missing-checkouts-daily': {
+        'task': 'hrms.tasks.check_missing_checkouts',
+        'schedule': crontab(hour=18, minute=30),
+    },
 }
 
 app.autodiscover_tasks()
