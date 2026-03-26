@@ -1326,6 +1326,33 @@ class OnlineCheckOutView(APIView):
         return Response(serialize_attendance(att))
 
 
+class AttendancePhotoUploadView(APIView):
+    @require_auth
+    def post(self, request):
+        import boto3
+        import uuid as uuid_mod
+        photo = request.FILES.get('photo')
+        if not photo:
+            return Response({'message': 'No photo provided'}, status=400)
+        ext = photo.name.rsplit('.', 1)[-1] if '.' in photo.name else 'jpg'
+        key = f'attendance-photos/{uuid_mod.uuid4()}.{ext}'
+        try:
+            s3 = boto3.client(
+                's3',
+                aws_access_key_id=settings.AWS_ACCESS_KEY_ID,
+                aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY,
+                region_name=settings.AWS_S3_REGION_NAME,
+            )
+            s3.upload_fileobj(
+                photo, settings.AWS_S3_BUCKET_NAME, key,
+                ExtraArgs={'ContentType': photo.content_type or 'image/jpeg'},
+            )
+            url = f'https://{settings.AWS_S3_BUCKET_NAME}.s3.{settings.AWS_S3_REGION_NAME}.amazonaws.com/{key}'
+            return Response({'url': url})
+        except Exception as e:
+            return Response({'message': f'Upload failed: {str(e)}'}, status=500)
+
+
 class DeviceSyncView(APIView):
     @require_permission('hrms.attendance.add')
     def post(self, request):
@@ -2732,11 +2759,33 @@ class MyAttendanceView(APIView):
         if month and year:
             records = records.filter(date__month=month, date__year=year)
 
-        online_perm = OnlineCheckInPermission.objects.filter(employee_id=employee.id, is_allowed=True).exists()
+        online_perm = OnlineCheckInPermission.objects.filter(employee_id=employee.id, is_allowed=True).first()
+        online_allowed = bool(online_perm)
+        require_photo = online_perm.require_photo if online_perm else True
+        require_location = online_perm.require_location if online_perm else True
+
+        today_record = AttendanceRecord.objects.filter(employee_id=employee.id, date=date.today()).first()
+        today_status = None
+        if today_record:
+            today_status = serialize_attendance(today_record)
+
+        summary = {}
+        filtered = records
+        present_statuses = ['present', 'half_day']
+        absent_statuses = ['absent']
+        leave_statuses = ['on_leave', 'paid_leave', 'unpaid_leave', 'sick_leave', 'casual_leave']
+        summary['present'] = filtered.filter(status__in=present_statuses).count()
+        summary['absent'] = filtered.filter(status__in=absent_statuses).count()
+        summary['late'] = filtered.filter(is_late=True).count()
+        summary['on_leave'] = filtered.filter(status__in=leave_statuses).count()
 
         return Response({
             'records': [serialize_attendance(a) for a in records[:100]],
-            'online_checkin_allowed': online_perm,
+            'summary': summary,
+            'online_checkin_allowed': online_allowed,
+            'require_photo': require_photo,
+            'require_location': require_location,
+            'today': today_status,
         })
 
 

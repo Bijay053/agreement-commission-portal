@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useAuth } from "@/lib/auth";
 import { queryClient, apiRequest } from "@/lib/queryClient";
@@ -21,6 +21,7 @@ import {
 import {
   User, Clock, Calendar, FileText, LogOut, Shield, ChevronLeft, ChevronRight,
   CheckCircle, XCircle, AlertCircle, Download, Briefcase,
+  Camera, MapPin, Loader2, RefreshCw,
 } from "lucide-react";
 
 type Tab = "profile" | "attendance" | "leave" | "payslips";
@@ -153,11 +154,13 @@ function ProfileTab() {
 }
 
 function AttendanceTab() {
+  const { toast } = useToast();
   const now = new Date();
   const [month, setMonth] = useState(String(now.getMonth() + 1));
   const [year, setYear] = useState(String(now.getFullYear()));
+  const [showCheckin, setShowCheckin] = useState(false);
 
-  const { data, isLoading } = useQuery<any>({
+  const { data, isLoading, refetch } = useQuery<any>({
     queryKey: ["/api/hrms/my/attendance", { month, year }],
     queryFn: async () => {
       const res = await fetch(`/api/hrms/my/attendance?month=${month}&year=${year}`, { credentials: "include" });
@@ -168,6 +171,13 @@ function AttendanceTab() {
 
   const records = data?.records || [];
   const summary = data?.summary || {};
+  const today = data?.today;
+  const onlineAllowed = data?.online_checkin_allowed;
+  const requirePhoto = data?.require_photo ?? true;
+  const requireLocation = data?.require_location ?? true;
+
+  const hasCheckedIn = today?.check_in;
+  const hasCheckedOut = today?.check_out;
 
   const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 
@@ -178,7 +188,18 @@ function AttendanceTab() {
           <h2 className="text-lg font-semibold" data-testid="text-attendance-title">My Attendance</h2>
           <p className="text-sm text-muted-foreground">Your attendance records</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex items-center gap-2">
+          {onlineAllowed && (
+            <Button
+              onClick={() => setShowCheckin(true)}
+              size="sm"
+              data-testid="button-remote-checkin"
+              variant={hasCheckedIn && !hasCheckedOut ? "destructive" : "default"}
+            >
+              <Clock className="h-4 w-4 mr-1" />
+              {!hasCheckedIn ? "Check In" : !hasCheckedOut ? "Check Out" : "Done Today"}
+            </Button>
+          )}
           <Select value={year} onValueChange={setYear}>
             <SelectTrigger className="w-24"><SelectValue /></SelectTrigger>
             <SelectContent>
@@ -193,6 +214,10 @@ function AttendanceTab() {
           </Select>
         </div>
       </div>
+
+      {onlineAllowed && (
+        <TodayStatusCard today={today} />
+      )}
 
       {summary && (
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -226,8 +251,8 @@ function AttendanceTab() {
                       {r.status}
                     </Badge>
                   </TableCell>
-                  <TableCell>{r.check_in || "—"}</TableCell>
-                  <TableCell>{r.check_out || "—"}</TableCell>
+                  <TableCell>{r.check_in ? new Date(r.check_in).toLocaleTimeString() : "—"}</TableCell>
+                  <TableCell>{r.check_out ? new Date(r.check_out).toLocaleTimeString() : "—"}</TableCell>
                   <TableCell>{r.is_late ? <Badge variant="destructive" className="text-xs">{r.late_minutes}m</Badge> : "—"}</TableCell>
                 </TableRow>
               ))}
@@ -235,7 +260,339 @@ function AttendanceTab() {
           </Table>
         </Card>
       )}
+
+      {showCheckin && (
+        <RemoteCheckInDialog
+          open={showCheckin}
+          onClose={() => setShowCheckin(false)}
+          isCheckOut={!!hasCheckedIn && !hasCheckedOut}
+          alreadyDone={!!hasCheckedIn && !!hasCheckedOut}
+          requirePhoto={requirePhoto}
+          requireLocation={requireLocation}
+          onSuccess={() => {
+            refetch();
+            queryClient.refetchQueries({ queryKey: ["/api/hrms/my/attendance"] });
+          }}
+        />
+      )}
     </div>
+  );
+}
+
+function TodayStatusCard({ today }: { today: any }) {
+  const nowStr = new Date().toLocaleDateString(undefined, { weekday: "long", year: "numeric", month: "long", day: "numeric" });
+  return (
+    <Card className="border-primary/20 bg-primary/5">
+      <CardContent className="p-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-sm font-medium text-muted-foreground">Today — {nowStr}</p>
+            {today ? (
+              <div className="flex items-center gap-4 mt-2">
+                <div className="flex items-center gap-1.5">
+                  <div className="w-2 h-2 rounded-full bg-green-500" />
+                  <span className="text-sm">In: {today.check_in ? new Date(today.check_in).toLocaleTimeString() : "—"}</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <div className={`w-2 h-2 rounded-full ${today.check_out ? "bg-red-500" : "bg-muted-foreground/30"}`} />
+                  <span className="text-sm">Out: {today.check_out ? new Date(today.check_out).toLocaleTimeString() : "—"}</span>
+                </div>
+                {today.is_late && (
+                  <Badge variant="destructive" className="text-xs">Late by {today.late_minutes}m</Badge>
+                )}
+                {today.work_hours > 0 && (
+                  <span className="text-sm text-muted-foreground">{today.work_hours}h worked</span>
+                )}
+              </div>
+            ) : (
+              <p className="text-sm mt-1 text-muted-foreground">Not checked in yet</p>
+            )}
+          </div>
+          <Badge variant={today?.check_in ? "default" : "outline"} className="text-xs">
+            {!today ? "Absent" : today.check_out ? "Completed" : "Checked In"}
+          </Badge>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function RemoteCheckInDialog({
+  open, onClose, isCheckOut, alreadyDone, requirePhoto, requireLocation, onSuccess,
+}: {
+  open: boolean; onClose: () => void; isCheckOut: boolean; alreadyDone: boolean;
+  requirePhoto: boolean; requireLocation: boolean; onSuccess: () => void;
+}) {
+  const { toast } = useToast();
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const [capturedPhoto, setCapturedPhoto] = useState<string | null>(null);
+  const [photoBlob, setPhotoBlob] = useState<Blob | null>(null);
+  const [location, setLocation] = useState<{ lat: number; lng: number } | null>(null);
+  const [locationError, setLocationError] = useState<string | null>(null);
+  const [locationLoading, setLocationLoading] = useState(false);
+  const [cameraActive, setCameraActive] = useState(false);
+  const [cameraError, setCameraError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+
+  const startCamera = useCallback(async () => {
+    try {
+      setCameraError(null);
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: "user", width: { ideal: 640 }, height: { ideal: 480 } },
+      });
+      streamRef.current = stream;
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        await videoRef.current.play();
+      }
+      setCameraActive(true);
+    } catch (err: any) {
+      setCameraError("Camera access denied. Please allow camera permission.");
+    }
+  }, []);
+
+  const stopCamera = useCallback(() => {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(t => t.stop());
+      streamRef.current = null;
+    }
+    setCameraActive(false);
+  }, []);
+
+  const capturePhoto = useCallback(() => {
+    if (!videoRef.current || !canvasRef.current) return;
+    const canvas = canvasRef.current;
+    const video = videoRef.current;
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    ctx.drawImage(video, 0, 0);
+    const dataUrl = canvas.toDataURL("image/jpeg", 0.8);
+    setCapturedPhoto(dataUrl);
+    canvas.toBlob(blob => {
+      if (blob) setPhotoBlob(blob);
+    }, "image/jpeg", 0.8);
+    stopCamera();
+  }, [stopCamera]);
+
+  const retakePhoto = useCallback(() => {
+    setCapturedPhoto(null);
+    setPhotoBlob(null);
+    startCamera();
+  }, [startCamera]);
+
+  const getLocation = useCallback(() => {
+    setLocationLoading(true);
+    setLocationError(null);
+    if (!navigator.geolocation) {
+      setLocationError("Geolocation not supported");
+      setLocationLoading(false);
+      return;
+    }
+    navigator.geolocation.getCurrentPosition(
+      pos => {
+        setLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+        setLocationLoading(false);
+      },
+      err => {
+        setLocationError(err.code === 1 ? "Location access denied. Please allow location permission." : "Could not get location. Please try again.");
+        setLocationLoading(false);
+      },
+      { enableHighAccuracy: true, timeout: 15000 },
+    );
+  }, []);
+
+  useEffect(() => {
+    if (open && !alreadyDone) {
+      if (requirePhoto) startCamera();
+      if (requireLocation) getLocation();
+    }
+    return () => stopCamera();
+  }, [open]);
+
+  const handleSubmit = async () => {
+    if (requirePhoto && !photoBlob) {
+      toast({ title: "Please take a selfie first", variant: "destructive" });
+      return;
+    }
+    if (requireLocation && !location) {
+      toast({ title: "Please allow location access", variant: "destructive" });
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      let photoUrl: string | undefined;
+      if (photoBlob) {
+        const formData = new FormData();
+        formData.append("photo", photoBlob, "selfie.jpg");
+        const uploadRes = await fetch("/api/hrms/attendance/photo-upload", {
+          method: "POST", body: formData, credentials: "include",
+        });
+        if (!uploadRes.ok) throw new Error("Photo upload failed");
+        const uploadData = await uploadRes.json();
+        photoUrl = uploadData.url;
+      }
+
+      const endpoint = isCheckOut ? "/api/hrms/attendance/online-checkout" : "/api/hrms/attendance/online-checkin";
+      const body: any = {};
+      if (location) body.location = { lat: location.lat, lng: location.lng };
+      if (photoUrl) body.photo_url = photoUrl;
+
+      const res = await fetch(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+        credentials: "include",
+      });
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.message || "Failed");
+      }
+
+      toast({ title: isCheckOut ? "Checked out successfully" : "Checked in successfully" });
+      onSuccess();
+      onClose();
+    } catch (err: any) {
+      toast({ title: err.message || "Something went wrong", variant: "destructive" });
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  if (alreadyDone) {
+    return (
+      <Dialog open={open} onOpenChange={onClose}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader><DialogTitle>Already Done</DialogTitle></DialogHeader>
+          <div className="text-center py-6">
+            <CheckCircle className="h-12 w-12 text-green-500 mx-auto mb-3" />
+            <p className="text-sm text-muted-foreground">You have already checked in and out today.</p>
+          </div>
+          <DialogFooter><Button onClick={onClose}>Close</Button></DialogFooter>
+        </DialogContent>
+      </Dialog>
+    );
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={() => { stopCamera(); onClose(); }}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            {isCheckOut ? <><Clock className="h-5 w-5 text-red-500" /> Remote Check Out</> : <><Clock className="h-5 w-5 text-green-500" /> Remote Check In</>}
+          </DialogTitle>
+        </DialogHeader>
+
+        <div className="space-y-4">
+          {requirePhoto && (
+            <div>
+              <Label className="text-sm font-medium flex items-center gap-1.5 mb-2">
+                <Camera className="h-4 w-4" /> Live Selfie
+              </Label>
+              {cameraError ? (
+                <div className="bg-destructive/10 rounded-lg p-4 text-center">
+                  <p className="text-sm text-destructive">{cameraError}</p>
+                  <Button variant="outline" size="sm" className="mt-2" onClick={startCamera}>
+                    <RefreshCw className="h-3 w-3 mr-1" /> Retry
+                  </Button>
+                </div>
+              ) : capturedPhoto ? (
+                <div className="relative">
+                  <img src={capturedPhoto} alt="Selfie" className="w-full rounded-lg border" data-testid="img-selfie-preview" />
+                  <Button
+                    variant="secondary" size="sm"
+                    className="absolute bottom-2 right-2"
+                    onClick={retakePhoto}
+                    data-testid="button-retake-photo"
+                  >
+                    <RefreshCw className="h-3 w-3 mr-1" /> Retake
+                  </Button>
+                </div>
+              ) : (
+                <div className="relative">
+                  <video
+                    ref={videoRef}
+                    className="w-full rounded-lg border bg-black"
+                    autoPlay playsInline muted
+                    style={{ transform: "scaleX(-1)" }}
+                    data-testid="video-camera"
+                  />
+                  {cameraActive && (
+                    <Button
+                      className="absolute bottom-3 left-1/2 -translate-x-1/2"
+                      onClick={capturePhoto}
+                      data-testid="button-capture-photo"
+                    >
+                      <Camera className="h-4 w-4 mr-1" /> Capture
+                    </Button>
+                  )}
+                </div>
+              )}
+              <canvas ref={canvasRef} className="hidden" />
+            </div>
+          )}
+
+          <div>
+            <Label className="text-sm font-medium flex items-center gap-1.5 mb-2">
+              <MapPin className="h-4 w-4" /> Your Location
+            </Label>
+            {locationLoading ? (
+              <div className="flex items-center gap-2 p-3 bg-muted/50 rounded-lg">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                <span className="text-sm">Getting your location...</span>
+              </div>
+            ) : locationError ? (
+              <div className="bg-destructive/10 rounded-lg p-3">
+                <p className="text-sm text-destructive">{locationError}</p>
+                <Button variant="outline" size="sm" className="mt-2" onClick={getLocation}>
+                  <RefreshCw className="h-3 w-3 mr-1" /> Retry
+                </Button>
+              </div>
+            ) : location ? (
+              <div className="space-y-2">
+                <div className="flex items-center gap-2 p-3 bg-green-50 dark:bg-green-950/20 rounded-lg border border-green-200 dark:border-green-900">
+                  <CheckCircle className="h-4 w-4 text-green-600" />
+                  <span className="text-sm">Location captured</span>
+                  <span className="text-xs text-muted-foreground ml-auto">{location.lat.toFixed(6)}, {location.lng.toFixed(6)}</span>
+                </div>
+                <div className="rounded-lg overflow-hidden border h-48">
+                  <iframe
+                    title="Location Map"
+                    width="100%"
+                    height="100%"
+                    style={{ border: 0 }}
+                    loading="lazy"
+                    src={`https://www.openstreetmap.org/export/embed.html?bbox=${location.lng - 0.005},${location.lat - 0.003},${location.lng + 0.005},${location.lat + 0.003}&layer=mapnik&marker=${location.lat},${location.lng}`}
+                    data-testid="map-location"
+                  />
+                </div>
+              </div>
+            ) : (
+              <Button variant="outline" size="sm" onClick={getLocation}>
+                <MapPin className="h-3 w-3 mr-1" /> Get Location
+              </Button>
+            )}
+          </div>
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={() => { stopCamera(); onClose(); }}>Cancel</Button>
+          <Button
+            onClick={handleSubmit}
+            disabled={submitting || (requirePhoto && !capturedPhoto) || (requireLocation && !location)}
+            variant={isCheckOut ? "destructive" : "default"}
+            data-testid={isCheckOut ? "button-submit-checkout" : "button-submit-checkin"}
+          >
+            {submitting ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : isCheckOut ? <LogOut className="h-4 w-4 mr-1" /> : <CheckCircle className="h-4 w-4 mr-1" />}
+            {submitting ? "Submitting..." : isCheckOut ? "Confirm Check Out" : "Confirm Check In"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
