@@ -53,6 +53,12 @@ def _serialize_employee(e):
         'bankName': e.bank_name or '',
         'bankAccountNumber': e.bank_account_number or '',
         'bankBranch': e.bank_branch or '',
+        'temporaryAddress': e.temporary_address or '',
+        'emergencyContactName': e.emergency_contact_name or '',
+        'emergencyContactPhone': e.emergency_contact_phone or '',
+        'dateOfBirth': _safe_iso(e.date_of_birth),
+        'probationEndDate': _safe_iso(e.probation_end_date),
+        'contractEndDate': _safe_iso(e.contract_end_date),
         'status': e.status,
         'createdAt': _safe_iso(e.created_at),
         'updatedAt': _safe_iso(e.updated_at),
@@ -125,6 +131,8 @@ class EmployeeListView(APIView):
             bank_branch=data.get('bankBranch') or data.get('bank_branch') or '',
             emergency_contact_name=data.get('emergencyContactName') or data.get('emergency_contact_name') or '',
             emergency_contact_phone=data.get('emergencyContactPhone') or data.get('emergency_contact_phone') or '',
+            probation_end_date=data.get('probationEndDate') or data.get('probation_end_date') or None,
+            contract_end_date=data.get('contractEndDate') or data.get('contract_end_date') or None,
             status=data.get('status', 'active'),
         )
         return Response(_serialize_employee(employee), status=201)
@@ -199,6 +207,15 @@ class EmployeeDetailView(APIView):
         emg_phone = data.get('emergencyContactPhone') or data.get('emergency_contact_phone')
         if emg_phone is not None:
             employee.emergency_contact_phone = emg_phone
+        dob = data.get('dateOfBirth') or data.get('date_of_birth')
+        if dob is not None:
+            employee.date_of_birth = dob or None
+        prob_end = data.get('probationEndDate') or data.get('probation_end_date')
+        if prob_end is not None:
+            employee.probation_end_date = prob_end or None
+        contract_end = data.get('contractEndDate') or data.get('contract_end_date')
+        if contract_end is not None:
+            employee.contract_end_date = contract_end or None
         employee.save()
         return Response(_serialize_employee(employee))
 

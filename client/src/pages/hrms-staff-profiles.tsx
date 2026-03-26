@@ -45,6 +45,14 @@ interface StaffProfile {
   bank_branch: string | null;
   citizenship_no: string | null;
   pan_no: string | null;
+  passport_number: string | null;
+  employee_id_number: string | null;
+  permanent_address: string | null;
+  temporary_address: string | null;
+  emergency_contact_name: string | null;
+  emergency_contact_phone: string | null;
+  probation_end_date: string | null;
+  contract_end_date: string | null;
   salary_amount: number | null;
   salary_currency: string;
   profile_photo_url: string | null;
@@ -115,7 +123,8 @@ export function StaffProfilesTab() {
   const [empForm, setEmpForm] = useState({
     full_name: "", email: "", phone: "", position: "", department: "",
     organization_id: "", department_id: "", gender: "", country: "", marital_status: "",
-    join_date: new Date().toISOString().split("T")[0], employment_type: "full_time",
+    date_of_birth: "", join_date: new Date().toISOString().split("T")[0], employment_type: "full_time",
+    probation_end_date: "", contract_end_date: "",
     citizenship_no: "", pan_no: "", passport_number: "", employee_id_number: "",
     bank_name: "", bank_account_number: "",
     bank_branch: "", permanent_address: "", temporary_address: "",
@@ -180,12 +189,13 @@ export function StaffProfilesTab() {
       full_name: s.full_name, email: s.email, phone: s.phone || "", position: s.position || "",
       department: s.department || "", organization_id: s.organization_id || "",
       department_id: s.department_id || "", gender: s.gender || "", country: s.country || "", marital_status: s.marital_status || "",
-      join_date: s.join_date || "", employment_type: s.employment_type || "full_time",
-      citizenship_no: s.citizenship_no || "", pan_no: s.pan_no || "",
+      date_of_birth: s.date_of_birth || "", join_date: s.join_date || "", employment_type: s.employment_type || "full_time",
+      probation_end_date: s.probation_end_date || "", contract_end_date: s.contract_end_date || "",
+      citizenship_no: s.citizenship_no || "", pan_no: s.pan_no || "", passport_number: s.passport_number || "", employee_id_number: s.employee_id_number || "",
       bank_name: s.bank_name || "", bank_account_number: s.bank_account_number || "",
-      bank_branch: s.bank_branch || "", permanent_address: "", temporary_address: "",
+      bank_branch: s.bank_branch || "", permanent_address: s.permanent_address || "", temporary_address: s.temporary_address || "",
       salary_amount: s.salary_amount ? String(s.salary_amount) : "", salary_currency: s.salary_currency || "NPR",
-      emergency_contact_name: "", emergency_contact_phone: "",
+      emergency_contact_name: s.emergency_contact_name || "", emergency_contact_phone: s.emergency_contact_phone || "",
     });
     setShowEditEmployee(true);
   };
@@ -286,6 +296,9 @@ export function StaffProfilesTab() {
     if (empForm.salary_currency) payload.salaryCurrency = empForm.salary_currency;
     if (empForm.emergency_contact_name) payload.emergencyContactName = empForm.emergency_contact_name;
     if (empForm.emergency_contact_phone) payload.emergencyContactPhone = empForm.emergency_contact_phone;
+    if (empForm.date_of_birth) payload.dateOfBirth = empForm.date_of_birth;
+    if (empForm.probation_end_date) payload.probationEndDate = empForm.probation_end_date;
+    if (empForm.contract_end_date) payload.contractEndDate = empForm.contract_end_date;
 
     createEmployeeMutation.mutate(payload);
   };
@@ -460,28 +473,52 @@ export function StaffProfilesTab() {
       <Dialog open={showAddEmployee} onOpenChange={setShowAddEmployee}>
         <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
           <DialogHeader><DialogTitle>Add New Employee</DialogTitle></DialogHeader>
-          <div className="space-y-4">
+          <div className="space-y-5">
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Personal Information</p>
             <div className="grid grid-cols-2 gap-4">
               <div><Label>Full Name *</Label><Input value={empForm.full_name} onChange={e => setEmpForm({ ...empForm, full_name: e.target.value })} data-testid="input-emp-name" /></div>
               <div><Label>Email *</Label><Input type="email" value={empForm.email} onChange={e => setEmpForm({ ...empForm, email: e.target.value })} data-testid="input-emp-email" /></div>
             </div>
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-4 gap-4">
               <div><Label>Phone</Label><Input value={empForm.phone} onChange={e => setEmpForm({ ...empForm, phone: e.target.value })} data-testid="input-emp-phone" /></div>
-              <div><Label>Position</Label><Input value={empForm.position} onChange={e => setEmpForm({ ...empForm, position: e.target.value })} data-testid="input-emp-position" /></div>
+              <div><Label>Date of Birth</Label><Input type="date" value={empForm.date_of_birth} onChange={e => setEmpForm({ ...empForm, date_of_birth: e.target.value })} data-testid="input-emp-dob" /></div>
               <div>
-                <Label>Employment Type</Label>
-                <Select value={empForm.employment_type} onValueChange={v => setEmpForm({ ...empForm, employment_type: v })}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+                <Label>Gender</Label>
+                <Select value={empForm.gender} onValueChange={v => setEmpForm({ ...empForm, gender: v })}>
+                  <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="full_time">Full Time</SelectItem>
-                    <SelectItem value="part_time">Part Time</SelectItem>
-                    <SelectItem value="contract">Contract</SelectItem>
-                    <SelectItem value="intern">Intern</SelectItem>
-                    <SelectItem value="probation">Probation</SelectItem>
+                    <SelectItem value="male">Male</SelectItem>
+                    <SelectItem value="female">Female</SelectItem>
+                    <SelectItem value="other">Other</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label>Marital Status</Label>
+                <Select value={empForm.marital_status} onValueChange={v => setEmpForm({ ...empForm, marital_status: v })}>
+                  <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="single">Single</SelectItem>
+                    <SelectItem value="married">Married</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
             </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label>Country</Label>
+                <Select value={empForm.country} onValueChange={v => setEmpForm({ ...empForm, country: v })}>
+                  <SelectTrigger><SelectValue placeholder="Select Country" /></SelectTrigger>
+                  <SelectContent>
+                    {countries.map(c => <SelectItem key={c.country} value={c.country}>{c.country}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div><Label>Position</Label><Input value={empForm.position} onChange={e => setEmpForm({ ...empForm, position: e.target.value })} data-testid="input-emp-position" /></div>
+            </div>
+
+            <hr className="border-border" />
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Employment & Emergency</p>
             <div className="grid grid-cols-3 gap-4">
               <div>
                 <Label>Organization</Label>
@@ -500,84 +537,6 @@ export function StaffProfilesTab() {
                   <SelectContent>{filteredDepts?.map(d => <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
-              <div><Label>Join Date</Label><Input type="date" value={empForm.join_date} onChange={e => setEmpForm({ ...empForm, join_date: e.target.value })} data-testid="input-emp-join-date" /></div>
-            </div>
-            <div className="grid grid-cols-4 gap-4">
-              <div>
-                <Label>Gender</Label>
-                <Select value={empForm.gender} onValueChange={v => setEmpForm({ ...empForm, gender: v })}>
-                  <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="male">Male</SelectItem>
-                    <SelectItem value="female">Female</SelectItem>
-                    <SelectItem value="other">Other</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <Label>Country</Label>
-                <Select value={empForm.country} onValueChange={v => setEmpForm({ ...empForm, country: v })}>
-                  <SelectTrigger><SelectValue placeholder="Select Country" /></SelectTrigger>
-                  <SelectContent>
-                    {countries.map(c => <SelectItem key={c.country} value={c.country}>{c.country}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <Label>Marital Status</Label>
-                <Select value={empForm.marital_status} onValueChange={v => setEmpForm({ ...empForm, marital_status: v })}>
-                  <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="single">Single</SelectItem>
-                    <SelectItem value="married">Married</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <Label>Salary ({empForm.salary_currency})</Label>
-                <Input type="number" value={empForm.salary_amount} onChange={e => setEmpForm({ ...empForm, salary_amount: e.target.value })} data-testid="input-emp-salary" />
-              </div>
-            </div>
-            <div className="grid grid-cols-4 gap-4">
-              <div><Label>Employee ID</Label><Input value={empForm.employee_id_number} onChange={e => setEmpForm({ ...empForm, employee_id_number: e.target.value })} placeholder="ZKT Device ID" data-testid="input-emp-id-number" /></div>
-              <div><Label>Citizenship No</Label><Input value={empForm.citizenship_no} onChange={e => setEmpForm({ ...empForm, citizenship_no: e.target.value })} /></div>
-              <div><Label>{getTaxIdLabelFromList(countries, empForm.country)}</Label><Input value={empForm.pan_no} onChange={e => setEmpForm({ ...empForm, pan_no: e.target.value })} /></div>
-              <div><Label>Passport Number</Label><Input value={empForm.passport_number} onChange={e => setEmpForm({ ...empForm, passport_number: e.target.value })} data-testid="input-emp-passport" /></div>
-            </div>
-            <div className="grid grid-cols-3 gap-4">
-              <div><Label>Bank Name</Label><Input value={empForm.bank_name} onChange={e => setEmpForm({ ...empForm, bank_name: e.target.value })} /></div>
-              <div><Label>Account Number</Label><Input value={empForm.bank_account_number} onChange={e => setEmpForm({ ...empForm, bank_account_number: e.target.value })} /></div>
-              <div><Label>Bank Branch</Label><Input value={empForm.bank_branch} onChange={e => setEmpForm({ ...empForm, bank_branch: e.target.value })} /></div>
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div><Label>Emergency Contact Name</Label><Input value={empForm.emergency_contact_name} onChange={e => setEmpForm({ ...empForm, emergency_contact_name: e.target.value })} /></div>
-              <div><Label>Emergency Contact Phone</Label><Input value={empForm.emergency_contact_phone} onChange={e => setEmpForm({ ...empForm, emergency_contact_phone: e.target.value })} /></div>
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div><Label>Permanent Address</Label><Input value={empForm.permanent_address} onChange={e => setEmpForm({ ...empForm, permanent_address: e.target.value })} /></div>
-              <div><Label>Temporary Address</Label><Input value={empForm.temporary_address} onChange={e => setEmpForm({ ...empForm, temporary_address: e.target.value })} /></div>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowAddEmployee(false)}>Cancel</Button>
-            <Button onClick={handleAddEmployee} disabled={createEmployeeMutation.isPending} data-testid="btn-save-employee">
-              {createEmployeeMutation.isPending ? "Adding..." : "Add Employee"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={showEditEmployee} onOpenChange={(open) => { if (!open) { setShowEditEmployee(false); setEditingEmployee(null); } }}>
-        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
-          <DialogHeader><DialogTitle>Edit Employee — {editingEmployee?.full_name}</DialogTitle></DialogHeader>
-          <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div><Label>Full Name *</Label><Input value={empForm.full_name} onChange={e => setEmpForm({ ...empForm, full_name: e.target.value })} /></div>
-              <div><Label>Email *</Label><Input type="email" value={empForm.email} onChange={e => setEmpForm({ ...empForm, email: e.target.value })} /></div>
-            </div>
-            <div className="grid grid-cols-3 gap-4">
-              <div><Label>Phone</Label><Input value={empForm.phone} onChange={e => setEmpForm({ ...empForm, phone: e.target.value })} /></div>
-              <div><Label>Position</Label><Input value={empForm.position} onChange={e => setEmpForm({ ...empForm, position: e.target.value })} /></div>
               <div>
                 <Label>Employment Type</Label>
                 <Select value={empForm.employment_type} onValueChange={v => setEmpForm({ ...empForm, employment_type: v })}>
@@ -592,6 +551,107 @@ export function StaffProfilesTab() {
                 </Select>
               </div>
             </div>
+            <div className="grid grid-cols-3 gap-4">
+              <div><Label>Join Date</Label><Input type="date" value={empForm.join_date} onChange={e => setEmpForm({ ...empForm, join_date: e.target.value })} data-testid="input-emp-join-date" /></div>
+              <div><Label>Probation End</Label><Input type="date" value={empForm.probation_end_date} onChange={e => setEmpForm({ ...empForm, probation_end_date: e.target.value })} data-testid="input-emp-probation-end" /></div>
+              <div><Label>Contract End</Label><Input type="date" value={empForm.contract_end_date} onChange={e => setEmpForm({ ...empForm, contract_end_date: e.target.value })} data-testid="input-emp-contract-end" /></div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div><Label>Emergency Contact Name</Label><Input value={empForm.emergency_contact_name} onChange={e => setEmpForm({ ...empForm, emergency_contact_name: e.target.value })} data-testid="input-emp-emergency-name" /></div>
+              <div><Label>Emergency Contact Phone</Label><Input value={empForm.emergency_contact_phone} onChange={e => setEmpForm({ ...empForm, emergency_contact_phone: e.target.value })} data-testid="input-emp-emergency-phone" /></div>
+            </div>
+
+            <hr className="border-border" />
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Identity & Documents</p>
+            <div className="grid grid-cols-4 gap-4">
+              <div><Label>Employee ID</Label><Input value={empForm.employee_id_number} onChange={e => setEmpForm({ ...empForm, employee_id_number: e.target.value })} placeholder="ZKT Device ID" data-testid="input-emp-id-number" /></div>
+              <div><Label>Citizenship No</Label><Input value={empForm.citizenship_no} onChange={e => setEmpForm({ ...empForm, citizenship_no: e.target.value })} /></div>
+              <div><Label>{getTaxIdLabelFromList(countries, empForm.country)}</Label><Input value={empForm.pan_no} onChange={e => setEmpForm({ ...empForm, pan_no: e.target.value })} /></div>
+              <div><Label>Passport Number</Label><Input value={empForm.passport_number} onChange={e => setEmpForm({ ...empForm, passport_number: e.target.value })} data-testid="input-emp-passport" /></div>
+            </div>
+
+            <hr className="border-border" />
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Bank Details</p>
+            <div className="grid grid-cols-3 gap-4">
+              <div><Label>Bank Name</Label><Input value={empForm.bank_name} onChange={e => setEmpForm({ ...empForm, bank_name: e.target.value })} data-testid="input-emp-bank-name" /></div>
+              <div><Label>Account Number</Label><Input value={empForm.bank_account_number} onChange={e => setEmpForm({ ...empForm, bank_account_number: e.target.value })} data-testid="input-emp-bank-account" /></div>
+              <div><Label>Bank Branch</Label><Input value={empForm.bank_branch} onChange={e => setEmpForm({ ...empForm, bank_branch: e.target.value })} data-testid="input-emp-bank-branch" /></div>
+            </div>
+
+            <hr className="border-border" />
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Address</p>
+            <div className="grid grid-cols-2 gap-4">
+              <div><Label>Permanent Address</Label><Input value={empForm.permanent_address} onChange={e => setEmpForm({ ...empForm, permanent_address: e.target.value })} data-testid="input-emp-perm-address" /></div>
+              <div><Label>Temporary Address</Label><Input value={empForm.temporary_address} onChange={e => setEmpForm({ ...empForm, temporary_address: e.target.value })} data-testid="input-emp-temp-address" /></div>
+            </div>
+
+            <hr className="border-border" />
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Salary</p>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label>Salary ({empForm.salary_currency})</Label>
+                <Input type="number" value={empForm.salary_amount} onChange={e => setEmpForm({ ...empForm, salary_amount: e.target.value })} data-testid="input-emp-salary" />
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowAddEmployee(false)}>Cancel</Button>
+            <Button onClick={handleAddEmployee} disabled={createEmployeeMutation.isPending} data-testid="btn-save-employee">
+              {createEmployeeMutation.isPending ? "Adding..." : "Add Employee"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showEditEmployee} onOpenChange={(open) => { if (!open) { setShowEditEmployee(false); setEditingEmployee(null); } }}>
+        <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader><DialogTitle>Edit Employee — {editingEmployee?.full_name}</DialogTitle></DialogHeader>
+          <div className="space-y-5">
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Personal Information</p>
+            <div className="grid grid-cols-2 gap-4">
+              <div><Label>Full Name *</Label><Input value={empForm.full_name} onChange={e => setEmpForm({ ...empForm, full_name: e.target.value })} /></div>
+              <div><Label>Email *</Label><Input type="email" value={empForm.email} onChange={e => setEmpForm({ ...empForm, email: e.target.value })} /></div>
+            </div>
+            <div className="grid grid-cols-4 gap-4">
+              <div><Label>Phone</Label><Input value={empForm.phone} onChange={e => setEmpForm({ ...empForm, phone: e.target.value })} /></div>
+              <div><Label>Date of Birth</Label><Input type="date" value={empForm.date_of_birth} onChange={e => setEmpForm({ ...empForm, date_of_birth: e.target.value })} /></div>
+              <div>
+                <Label>Gender</Label>
+                <Select value={empForm.gender} onValueChange={v => setEmpForm({ ...empForm, gender: v })}>
+                  <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="male">Male</SelectItem>
+                    <SelectItem value="female">Female</SelectItem>
+                    <SelectItem value="other">Other</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label>Marital Status</Label>
+                <Select value={empForm.marital_status} onValueChange={v => setEmpForm({ ...empForm, marital_status: v })}>
+                  <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="single">Single</SelectItem>
+                    <SelectItem value="married">Married</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label>Country</Label>
+                <Select value={empForm.country} onValueChange={v => setEmpForm({ ...empForm, country: v })}>
+                  <SelectTrigger><SelectValue placeholder="Select Country" /></SelectTrigger>
+                  <SelectContent>
+                    {countries.map(c => <SelectItem key={c.country} value={c.country}>{c.country}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div><Label>Position</Label><Input value={empForm.position} onChange={e => setEmpForm({ ...empForm, position: e.target.value })} /></div>
+            </div>
+
+            <hr className="border-border" />
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Employment & Emergency</p>
             <div className="grid grid-cols-3 gap-4">
               <div>
                 <Label>Organization *</Label>
@@ -610,40 +670,52 @@ export function StaffProfilesTab() {
                   <SelectContent>{filteredDepts?.map(d => <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
-              <div><Label>Join Date</Label><Input type="date" value={empForm.join_date} onChange={e => setEmpForm({ ...empForm, join_date: e.target.value })} /></div>
+              <div>
+                <Label>Employment Type</Label>
+                <Select value={empForm.employment_type} onValueChange={v => setEmpForm({ ...empForm, employment_type: v })}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="full_time">Full Time</SelectItem>
+                    <SelectItem value="part_time">Part Time</SelectItem>
+                    <SelectItem value="contract">Contract</SelectItem>
+                    <SelectItem value="intern">Intern</SelectItem>
+                    <SelectItem value="probation">Probation</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
+            <div className="grid grid-cols-3 gap-4">
+              <div><Label>Join Date</Label><Input type="date" value={empForm.join_date} onChange={e => setEmpForm({ ...empForm, join_date: e.target.value })} /></div>
+              <div><Label>Probation End</Label><Input type="date" value={empForm.probation_end_date} onChange={e => setEmpForm({ ...empForm, probation_end_date: e.target.value })} /></div>
+              <div><Label>Contract End</Label><Input type="date" value={empForm.contract_end_date} onChange={e => setEmpForm({ ...empForm, contract_end_date: e.target.value })} /></div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div><Label>Emergency Contact Name</Label><Input value={empForm.emergency_contact_name} onChange={e => setEmpForm({ ...empForm, emergency_contact_name: e.target.value })} /></div>
+              <div><Label>Emergency Contact Phone</Label><Input value={empForm.emergency_contact_phone} onChange={e => setEmpForm({ ...empForm, emergency_contact_phone: e.target.value })} /></div>
+            </div>
+
+            <hr className="border-border" />
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Identity & Documents</p>
             <div className="grid grid-cols-4 gap-4">
-              <div>
-                <Label>Gender</Label>
-                <Select value={empForm.gender} onValueChange={v => setEmpForm({ ...empForm, gender: v })}>
-                  <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="male">Male</SelectItem>
-                    <SelectItem value="female">Female</SelectItem>
-                    <SelectItem value="other">Other</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <Label>Country</Label>
-                <Select value={empForm.country} onValueChange={v => setEmpForm({ ...empForm, country: v })}>
-                  <SelectTrigger><SelectValue placeholder="Select Country" /></SelectTrigger>
-                  <SelectContent>
-                    {countries.map(c => <SelectItem key={c.country} value={c.country}>{c.country}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <Label>Marital Status</Label>
-                <Select value={empForm.marital_status} onValueChange={v => setEmpForm({ ...empForm, marital_status: v })}>
-                  <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="single">Single</SelectItem>
-                    <SelectItem value="married">Married</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+              <div><Label>Employee ID</Label><Input value={empForm.employee_id_number} onChange={e => setEmpForm({ ...empForm, employee_id_number: e.target.value })} placeholder="ZKT Device ID" /></div>
+              <div><Label>Citizenship No</Label><Input value={empForm.citizenship_no} onChange={e => setEmpForm({ ...empForm, citizenship_no: e.target.value })} /></div>
               <div><Label>{getTaxIdLabelFromList(countries, empForm.country)}</Label><Input value={empForm.pan_no} onChange={e => setEmpForm({ ...empForm, pan_no: e.target.value })} /></div>
+              <div><Label>Passport Number</Label><Input value={empForm.passport_number} onChange={e => setEmpForm({ ...empForm, passport_number: e.target.value })} /></div>
+            </div>
+
+            <hr className="border-border" />
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Bank Details</p>
+            <div className="grid grid-cols-3 gap-4">
+              <div><Label>Bank Name</Label><Input value={empForm.bank_name} onChange={e => setEmpForm({ ...empForm, bank_name: e.target.value })} /></div>
+              <div><Label>Account Number</Label><Input value={empForm.bank_account_number} onChange={e => setEmpForm({ ...empForm, bank_account_number: e.target.value })} /></div>
+              <div><Label>Bank Branch</Label><Input value={empForm.bank_branch} onChange={e => setEmpForm({ ...empForm, bank_branch: e.target.value })} /></div>
+            </div>
+
+            <hr className="border-border" />
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Address</p>
+            <div className="grid grid-cols-2 gap-4">
+              <div><Label>Permanent Address</Label><Input value={empForm.permanent_address} onChange={e => setEmpForm({ ...empForm, permanent_address: e.target.value })} /></div>
+              <div><Label>Temporary Address</Label><Input value={empForm.temporary_address} onChange={e => setEmpForm({ ...empForm, temporary_address: e.target.value })} /></div>
             </div>
           </div>
           <DialogFooter>
@@ -664,6 +736,19 @@ export function StaffProfilesTab() {
               if (empForm.join_date) payload.joinDate = empForm.join_date;
               if (empForm.employment_type) payload.employmentType = empForm.employment_type;
               if (empForm.pan_no) payload.panNo = empForm.pan_no;
+              if (empForm.citizenship_no) payload.citizenshipNo = empForm.citizenship_no;
+              if (empForm.passport_number) payload.passportNumber = empForm.passport_number;
+              if (empForm.employee_id_number) payload.employeeIdNumber = empForm.employee_id_number;
+              if (empForm.bank_name) payload.bankName = empForm.bank_name;
+              if (empForm.bank_account_number) payload.bankAccountNumber = empForm.bank_account_number;
+              if (empForm.bank_branch) payload.bankBranch = empForm.bank_branch;
+              if (empForm.permanent_address) payload.permanentAddress = empForm.permanent_address;
+              payload.temporaryAddress = empForm.temporary_address || "";
+              payload.emergencyContactName = empForm.emergency_contact_name || "";
+              payload.emergencyContactPhone = empForm.emergency_contact_phone || "";
+              payload.dateOfBirth = empForm.date_of_birth || null;
+              payload.probationEndDate = empForm.probation_end_date || null;
+              payload.contractEndDate = empForm.contract_end_date || null;
               updateEmployeeMutation.mutate({ id: editingEmployee.id, data: payload });
             }} disabled={updateEmployeeMutation.isPending} data-testid="btn-update-employee">
               {updateEmployeeMutation.isPending ? "Saving..." : "Update Employee"}
