@@ -1326,6 +1326,33 @@ class OnlineCheckOutView(APIView):
         return Response(serialize_attendance(att))
 
 
+class LeaveDocumentUploadView(APIView):
+    @require_auth
+    def post(self, request):
+        import boto3
+        import uuid as uuid_mod
+        doc = request.FILES.get('document')
+        if not doc:
+            return Response({'message': 'No document provided'}, status=400)
+        ext = doc.name.rsplit('.', 1)[-1] if '.' in doc.name else 'pdf'
+        key = f'leave-documents/{uuid_mod.uuid4()}.{ext}'
+        try:
+            s3 = boto3.client(
+                's3',
+                aws_access_key_id=settings.AWS_ACCESS_KEY_ID,
+                aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY,
+                region_name=settings.AWS_S3_REGION_NAME,
+            )
+            s3.upload_fileobj(
+                doc, settings.AWS_S3_BUCKET_NAME, key,
+                ExtraArgs={'ContentType': doc.content_type or 'application/pdf'},
+            )
+            url = f'https://{settings.AWS_S3_BUCKET_NAME}.s3.{settings.AWS_S3_REGION_NAME}.amazonaws.com/{key}'
+            return Response({'url': url, 'filename': doc.name})
+        except Exception as e:
+            return Response({'message': f'Upload failed: {str(e)}'}, status=500)
+
+
 class AttendancePhotoUploadView(APIView):
     @require_auth
     def post(self, request):

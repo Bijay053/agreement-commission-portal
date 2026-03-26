@@ -21,7 +21,7 @@ import {
 import {
   User, Clock, Calendar, FileText, LogOut, Shield, ChevronLeft, ChevronRight,
   CheckCircle, XCircle, AlertCircle, Download, Briefcase,
-  Camera, MapPin, Loader2, RefreshCw,
+  Camera, MapPin, Loader2, RefreshCw, Paperclip, Upload, File,
 } from "lucide-react";
 
 type Tab = "profile" | "attendance" | "leave" | "payslips";
@@ -600,6 +600,9 @@ function LeaveTab() {
   const { toast } = useToast();
   const [showRequestForm, setShowRequestForm] = useState(false);
   const [leaveForm, setLeaveForm] = useState({ leave_type_id: "", start_date: "", end_date: "", reason: "" });
+  const [documentFile, setDocumentFile] = useState<globalThis.File | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const { data: balance, isLoading: balLoading } = useQuery<any[]>({
     queryKey: ["/api/hrms/my/leave-balance"],
@@ -609,19 +612,44 @@ function LeaveTab() {
     queryKey: ["/api/hrms/my/leave-requests"],
   });
 
-  const submitMutation = useMutation({
-    mutationFn: (data: any) => apiRequest("POST", "/api/hrms/my/leave-requests", data),
-    onSuccess: () => {
+  const submitLeave = async () => {
+    setUploading(true);
+    try {
+      let documentUrl: string | undefined;
+      if (documentFile) {
+        const formData = new FormData();
+        formData.append("document", documentFile);
+        const uploadRes = await fetch("/api/hrms/leave-requests/upload-document", {
+          method: "POST", body: formData, credentials: "include",
+        });
+        if (!uploadRes.ok) throw new Error("Document upload failed");
+        const uploadData = await uploadRes.json();
+        documentUrl = uploadData.url;
+      }
+      const body: any = { ...leaveForm };
+      if (documentUrl) body.document_url = documentUrl;
+      const res = await fetch("/api/hrms/my/leave-requests", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+        credentials: "include",
+      });
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.message || "Failed to submit");
+      }
       queryClient.refetchQueries({ queryKey: ["/api/hrms/my/leave-requests"] });
       queryClient.refetchQueries({ queryKey: ["/api/hrms/my/leave-balance"] });
       setShowRequestForm(false);
       setLeaveForm({ leave_type_id: "", start_date: "", end_date: "", reason: "" });
+      setDocumentFile(null);
       toast({ title: "Leave request submitted" });
-    },
-    onError: (err: any) => {
+    } catch (err: any) {
       toast({ title: "Failed to submit", description: err.message, variant: "destructive" });
-    },
-  });
+    } finally {
+      setUploading(false);
+    }
+  };
 
   const statusIcon = (s: string) => {
     if (s === "approved") return <CheckCircle className="h-4 w-4 text-green-500" />;
@@ -669,11 +697,12 @@ function LeaveTab() {
                   <TableHead>To</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Reason</TableHead>
+                  <TableHead>Document</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {(!requests || requests.length === 0) ? (
-                  <TableRow><TableCell colSpan={5} className="text-center text-muted-foreground py-8">No leave requests</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={6} className="text-center text-muted-foreground py-8">No leave requests</TableCell></TableRow>
                 ) : requests.map((r: any) => (
                   <TableRow key={r.id}>
                     <TableCell className="font-medium">{r.leave_type_name || r.leave_type}</TableCell>
@@ -686,6 +715,13 @@ function LeaveTab() {
                       </div>
                     </TableCell>
                     <TableCell className="max-w-[200px] truncate">{r.reason || "—"}</TableCell>
+                    <TableCell>
+                      {r.document_url ? (
+                        <a href={r.document_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-primary hover:underline text-xs" data-testid={`link-doc-${r.id}`}>
+                          <Paperclip className="h-3 w-3" /> View
+                        </a>
+                      ) : "—"}
+                    </TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -723,10 +759,51 @@ function LeaveTab() {
               <Label>Reason</Label>
               <Textarea value={leaveForm.reason} onChange={e => setLeaveForm({ ...leaveForm, reason: e.target.value })} placeholder="Reason for leave..." data-testid="input-leave-reason" />
             </div>
+            <div>
+              <Label className="flex items-center gap-1.5 mb-2">
+                <Paperclip className="h-3.5 w-3.5" /> Evidence / Medical Report
+                <span className="text-xs text-muted-foreground font-normal ml-1">(optional)</span>
+              </Label>
+              <input
+                ref={fileInputRef}
+                type="file"
+                className="hidden"
+                accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
+                onChange={e => {
+                  const f = e.target.files?.[0];
+                  if (f) setDocumentFile(f);
+                }}
+                data-testid="input-leave-document"
+              />
+              {documentFile ? (
+                <div className="flex items-center gap-2 p-2.5 rounded-md border bg-muted/30">
+                  <File className="h-4 w-4 text-primary shrink-0" />
+                  <span className="text-sm truncate flex-1">{documentFile.name}</span>
+                  <span className="text-xs text-muted-foreground">{(documentFile.size / 1024).toFixed(0)} KB</span>
+                  <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => { setDocumentFile(null); if (fileInputRef.current) fileInputRef.current.value = ""; }}>
+                    <XCircle className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
+              ) : (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-full"
+                  onClick={() => fileInputRef.current?.click()}
+                  data-testid="button-upload-document"
+                >
+                  <Upload className="h-4 w-4 mr-1" /> Upload Document
+                </Button>
+              )}
+              <p className="text-[10px] text-muted-foreground mt-1">Accepted: PDF, JPG, PNG, DOC, DOCX</p>
+            </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowRequestForm(false)}>Cancel</Button>
-            <Button onClick={() => submitMutation.mutate(leaveForm)} disabled={submitMutation.isPending} data-testid="button-submit-leave">Submit</Button>
+            <Button variant="outline" onClick={() => { setShowRequestForm(false); setDocumentFile(null); }}>Cancel</Button>
+            <Button onClick={submitLeave} disabled={uploading} data-testid="button-submit-leave">
+              {uploading && <Loader2 className="h-4 w-4 animate-spin mr-1" />}
+              {uploading ? "Submitting..." : "Submit"}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
