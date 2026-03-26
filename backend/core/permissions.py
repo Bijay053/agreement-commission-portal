@@ -98,6 +98,10 @@ LEGACY_PERMISSION_MAP = {
     "provider_commission.edit": "provider_commission.entry.update",
     "provider_commission.delete": "provider_commission.entry.delete",
     "provider_commission.manage": "provider_commission.config.manage",
+    "dropdown_settings.view": "dropdown_settings.option.read",
+    "dropdown_settings.create": "dropdown_settings.option.add",
+    "dropdown_settings.edit": "dropdown_settings.option.update",
+    "dropdown_settings.delete": "dropdown_settings.option.delete",
 }
 
 

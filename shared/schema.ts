@@ -468,6 +468,56 @@ export const PERMISSION_REGISTRY = [
       { resource: "reminder", label: "Reminders", actions: ["read", "update"] },
     ],
   },
+  {
+    module: "employees",
+    label: "Employees",
+    resources: [
+      { resource: "employee", label: "Employees", actions: ["read", "add", "update", "delete"] },
+    ],
+  },
+  {
+    module: "emp_agreements",
+    label: "Employment Agreements",
+    resources: [
+      { resource: "agreement", label: "Employment Agreements", actions: ["read", "add", "update", "delete", "send", "upload_signed", "complete", "download", "terminate"] },
+    ],
+  },
+  {
+    module: "offer_letters",
+    label: "Offer Letters",
+    resources: [
+      { resource: "offer_letter", label: "Offer Letters", actions: ["read", "add", "update", "delete", "send", "upload_signed", "complete", "download"] },
+    ],
+  },
+  {
+    module: "emp_templates",
+    label: "Employee Templates",
+    resources: [
+      { resource: "template", label: "Agreement / Offer Templates", actions: ["read", "add", "update", "delete", "download"] },
+    ],
+  },
+  {
+    module: "emp_documents",
+    label: "Employee Documents",
+    resources: [
+      { resource: "document", label: "Employee Documents", actions: ["read", "upload", "replace", "delete", "download", "view_confidential"] },
+    ],
+  },
+  {
+    module: "provider_commission",
+    label: "Sub Agent Commission Distribution",
+    resources: [
+      { resource: "entry", label: "Commission Entries", actions: ["read", "add", "update", "delete"] },
+      { resource: "config", label: "Configuration", actions: ["manage"] },
+    ],
+  },
+  {
+    module: "dropdown_settings",
+    label: "Dropdown Settings",
+    resources: [
+      { resource: "option", label: "Dropdown Options", actions: ["read", "add", "update", "delete"] },
+    ],
+  },
 ] as const;
 
 export type PermissionModule = typeof PERMISSION_REGISTRY[number];
@@ -527,4 +577,8 @@ export const LEGACY_PERMISSION_MAP: Record<string, string> = {
   "security.country_scope.manage": "administration.country_scope.update",
   "reminders.view": "reminders.reminder.read",
   "reminders.manage": "reminders.reminder.update",
+  "dropdown_settings.view": "dropdown_settings.option.read",
+  "dropdown_settings.create": "dropdown_settings.option.add",
+  "dropdown_settings.edit": "dropdown_settings.option.update",
+  "dropdown_settings.delete": "dropdown_settings.option.delete",
 };

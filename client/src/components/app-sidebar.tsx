@@ -56,7 +56,7 @@ export function AppSidebar() {
   const adminNav = [
     { title: "Users", url: "/users", icon: Users, show: hasPermission("security.user.manage") },
     { title: "Roles", url: "/roles", icon: KeyRound, show: hasPermission("security.role.manage") },
-    { title: "Dropdown Settings", url: "/dropdown-settings", icon: SlidersHorizontal, show: hasPermission("security.role.manage") },
+    { title: "Dropdown Settings", url: "/dropdown-settings", icon: SlidersHorizontal, show: hasPermission("dropdown_settings.option.read") || hasPermission("dropdown_settings.view") },
     { title: "Audit Logs", url: "/audit-logs", icon: Shield, show: hasPermission("audit.view") },
   ];
 

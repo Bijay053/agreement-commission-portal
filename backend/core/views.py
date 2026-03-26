@@ -131,6 +131,13 @@ PERMISSION_REGISTRY = [
             {"resource": "config", "label": "Configuration", "actions": ["manage"]},
         ],
     },
+    {
+        "module": "dropdown_settings",
+        "label": "Dropdown Settings",
+        "resources": [
+            {"resource": "option", "label": "Dropdown Options", "actions": ["read", "add", "update", "delete"]},
+        ],
+    },
 ]
 
 

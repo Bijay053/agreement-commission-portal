@@ -127,7 +127,7 @@ function Router() {
         </AccessGuard>
       </Route>
       <Route path="/dropdown-settings">
-        <AccessGuard permission="security.role.manage">
+        <AccessGuard permission="dropdown_settings.option.read">
           <DropdownSettingsPage />
         </AccessGuard>
       </Route>

@@ -22,7 +22,7 @@ class DropdownOptionsView(APIView):
 
 
 class DropdownOptionsAdminView(APIView):
-    @require_permission("security.role.manage")
+    @require_permission("dropdown_settings.option.read", "dropdown_settings.view")
     def get(self, request):
         category = request.query_params.get('category')
         if category:
@@ -34,7 +34,7 @@ class DropdownOptionsAdminView(APIView):
             'label': o.label, 'sortOrder': o.sort_order, 'isActive': o.is_active,
         } for o in options])
 
-    @require_permission("security.role.manage")
+    @require_permission("dropdown_settings.option.add", "dropdown_settings.create")
     def post(self, request):
         category = request.data.get('category')
         value = request.data.get('value', '').strip()
@@ -56,7 +56,7 @@ class DropdownOptionsAdminView(APIView):
             'label': obj.label, 'sortOrder': obj.sort_order, 'isActive': obj.is_active,
         }, status=201)
 
-    @require_permission("security.role.manage")
+    @require_permission("dropdown_settings.option.update", "dropdown_settings.edit")
     def patch(self, request):
         option_id = request.data.get('id')
         if not option_id:
@@ -80,7 +80,7 @@ class DropdownOptionsAdminView(APIView):
             'label': obj.label, 'sortOrder': obj.sort_order, 'isActive': obj.is_active,
         })
 
-    @require_permission("security.role.manage")
+    @require_permission("dropdown_settings.option.delete", "dropdown_settings.delete")
     def delete(self, request):
         option_id = request.query_params.get('id')
         if not option_id:
