@@ -65,6 +65,8 @@ interface StaffProfile {
   salary_currency: string;
   profile_photo_url: string | null;
   status: string;
+  has_portal_access: boolean;
+  user_id: number | null;
   salary_structure: {
     id: string;
     basic_salary: number;
@@ -113,6 +115,10 @@ export function StaffProfilesTab() {
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("active");
   const [statusChangeTarget, setStatusChangeTarget] = useState<{ id: string; name: string; newStatus: string } | null>(null);
+  const [portalAccessTarget, setPortalAccessTarget] = useState<StaffProfile | null>(null);
+  const [portalForm, setPortalForm] = useState({ password: "", portal_access: "employee", role_id: "" });
+  const [portalAccessInfo, setPortalAccessInfo] = useState<any>(null);
+  const [loadingAccess, setLoadingAccess] = useState(false);
   const [salaryForm, setSalaryForm] = useState({
     basic_salary: "",
     cit_type: "none",
@@ -211,6 +217,60 @@ export function StaffProfilesTab() {
     },
     onError: (err: any) => toast({ title: "Error", description: err.message, variant: "destructive" }),
   });
+
+  const grantAccessMutation = useMutation({
+    mutationFn: (data: any) => apiRequest("POST", `/api/hrms/employees/${data.employee_id}/portal-access`, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/hrms/staff-profiles"] });
+      setPortalAccessTarget(null);
+      setPortalAccessInfo(null);
+      toast({ title: "Portal access granted successfully" });
+    },
+    onError: (err: any) => toast({ title: "Error", description: err.message, variant: "destructive" }),
+  });
+
+  const updateAccessMutation = useMutation({
+    mutationFn: (data: any) => apiRequest("PATCH", `/api/hrms/employees/${data.employee_id}/portal-access`, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/hrms/staff-profiles"] });
+      setPortalAccessTarget(null);
+      setPortalAccessInfo(null);
+      toast({ title: "Portal access updated" });
+    },
+    onError: (err: any) => toast({ title: "Error", description: err.message, variant: "destructive" }),
+  });
+
+  const revokeAccessMutation = useMutation({
+    mutationFn: (empId: string) => apiRequest("DELETE", `/api/hrms/employees/${empId}/portal-access`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/hrms/staff-profiles"] });
+      setPortalAccessTarget(null);
+      setPortalAccessInfo(null);
+      toast({ title: "Portal access revoked" });
+    },
+    onError: (err: any) => toast({ title: "Error", description: err.message, variant: "destructive" }),
+  });
+
+  const openPortalAccess = async (s: StaffProfile) => {
+    setPortalAccessTarget(s);
+    setPortalForm({ password: "", portal_access: "employee", role_id: "" });
+    setLoadingAccess(true);
+    try {
+      const res = await fetch(`/api/hrms/employees/${s.id}/portal-access`, { credentials: "include" });
+      if (res.ok) {
+        const data = await res.json();
+        setPortalAccessInfo(data);
+        if (data.user_info) {
+          setPortalForm({
+            password: "",
+            portal_access: data.user_info.portal_access || "employee",
+            role_id: data.user_info.roles?.[0]?.id?.toString() || "",
+          });
+        }
+      }
+    } catch (e) { /* ignore */ }
+    setLoadingAccess(false);
+  };
 
   const openEditEmployee = (s: StaffProfile) => {
     setEditingEmployee(s);
@@ -462,18 +522,23 @@ export function StaffProfilesTab() {
                 </div>
               </TableCell>
               <TableCell>
-                {(() => {
-                  const colors: Record<string, string> = {
-                    active: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400",
-                    inactive: "bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400",
-                    terminated: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400",
-                    resigned: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400",
-                    on_notice: "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400",
-                  };
-                  return <Badge className={`text-xs ${colors[s.status] || colors.inactive}`} data-testid={`badge-status-${s.id}`}>
-                    {s.status === "on_notice" ? "On Notice" : s.status.charAt(0).toUpperCase() + s.status.slice(1)}
-                  </Badge>;
-                })()}
+                <div className="flex items-center gap-1.5">
+                  {(() => {
+                    const colors: Record<string, string> = {
+                      active: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400",
+                      inactive: "bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400",
+                      terminated: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400",
+                      resigned: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400",
+                      on_notice: "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400",
+                    };
+                    return <Badge className={`text-xs ${colors[s.status] || colors.inactive}`} data-testid={`badge-status-${s.id}`}>
+                      {s.status === "on_notice" ? "On Notice" : s.status.charAt(0).toUpperCase() + s.status.slice(1)}
+                    </Badge>;
+                  })()}
+                  {s.has_portal_access ? (
+                    <Shield className="w-3.5 h-3.5 text-primary" title="Has portal access" />
+                  ) : null}
+                </div>
               </TableCell>
               <TableCell className="text-sm">{s.organization_name || "—"}</TableCell>
               <TableCell className="text-sm">{s.department_name || s.department || "—"}</TableCell>
@@ -538,6 +603,9 @@ export function StaffProfilesTab() {
                           <UserCheck className="w-3.5 h-3.5 mr-2 text-green-500" /> Reactivate
                         </DropdownMenuItem>
                       )}
+                      <DropdownMenuItem onClick={() => openPortalAccess(s)} data-testid={`btn-portal-${s.id}`}>
+                        <Shield className="w-3.5 h-3.5 mr-2 text-primary" /> {s.has_portal_access ? "Manage Access" : "Grant Portal Access"}
+                      </DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>
                 </div>
@@ -971,6 +1039,142 @@ export function StaffProfilesTab() {
               {createSalaryMutation.isPending || updateSalaryMutation.isPending ? "Saving..." : "Save Salary Structure"}
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!portalAccessTarget} onOpenChange={open => { if (!open) { setPortalAccessTarget(null); setPortalAccessInfo(null); } }}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Shield className="w-5 h-5 text-primary" />
+              {portalAccessInfo?.has_access ? "Manage Portal Access" : "Grant Portal Access"}
+            </DialogTitle>
+          </DialogHeader>
+          {loadingAccess ? (
+            <div className="space-y-3">
+              <Skeleton className="h-8 w-full" />
+              <Skeleton className="h-8 w-full" />
+            </div>
+          ) : portalAccessInfo?.has_access ? (
+            <div className="space-y-4">
+              <div className="rounded-lg border p-3 space-y-2">
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Email</span>
+                  <span className="font-medium">{portalAccessInfo.user_info?.email}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Account Status</span>
+                  <Badge className={portalAccessInfo.user_info?.is_active ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}>
+                    {portalAccessInfo.user_info?.is_active ? "Active" : "Disabled"}
+                  </Badge>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Last Login</span>
+                  <span>{portalAccessInfo.user_info?.last_login_at ? new Date(portalAccessInfo.user_info.last_login_at).toLocaleDateString("en", { month: "short", day: "numeric", year: "numeric", hour: "2-digit", minute: "2-digit" }) : "Never"}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Roles</span>
+                  <span>{portalAccessInfo.user_info?.roles?.map((r: any) => r.name).join(", ") || "No roles"}</span>
+                </div>
+              </div>
+              <div className="space-y-3">
+                <div>
+                  <Label>Portal Access Level</Label>
+                  <Select value={portalForm.portal_access} onValueChange={v => setPortalForm(f => ({ ...f, portal_access: v }))}>
+                    <SelectTrigger data-testid="select-portal-access"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="employee">People Portal Only</SelectItem>
+                      <SelectItem value="admin">Admin Portal Only</SelectItem>
+                      <SelectItem value="both">Both Portals</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label>Role</Label>
+                  <Select value={portalForm.role_id} onValueChange={v => setPortalForm(f => ({ ...f, role_id: v }))}>
+                    <SelectTrigger data-testid="select-portal-role"><SelectValue placeholder="Select role" /></SelectTrigger>
+                    <SelectContent>
+                      {portalAccessInfo.available_roles?.map((r: any) => (
+                        <SelectItem key={r.id} value={String(r.id)}>{r.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label>Reset Password (leave blank to keep current)</Label>
+                  <Input type="password" value={portalForm.password} onChange={e => setPortalForm(f => ({ ...f, password: e.target.value }))} placeholder="New password (min 8 chars)" data-testid="input-reset-password" />
+                </div>
+              </div>
+              <DialogFooter className="gap-2">
+                <Button variant="destructive" size="sm" onClick={() => { if (portalAccessTarget) revokeAccessMutation.mutate(portalAccessTarget.id); }} disabled={revokeAccessMutation.isPending} data-testid="btn-revoke-access">
+                  {revokeAccessMutation.isPending ? "Revoking..." : "Revoke Access"}
+                </Button>
+                <Button onClick={() => {
+                  if (!portalAccessTarget) return;
+                  const payload: any = { employee_id: portalAccessTarget.id, portal_access: portalForm.portal_access };
+                  if (portalForm.role_id) payload.role_id = parseInt(portalForm.role_id);
+                  if (portalForm.password) payload.reset_password = portalForm.password;
+                  updateAccessMutation.mutate(payload);
+                }} disabled={updateAccessMutation.isPending} data-testid="btn-update-access">
+                  {updateAccessMutation.isPending ? "Updating..." : "Update Access"}
+                </Button>
+              </DialogFooter>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <p className="text-sm text-muted-foreground">
+                Create a login account for <strong>{portalAccessTarget?.full_name}</strong> ({portalAccessTarget?.email}).
+                They will receive a temporary password and will be asked to change it on first login.
+              </p>
+              <div className="space-y-3">
+                <div>
+                  <Label>Temporary Password *</Label>
+                  <Input type="password" value={portalForm.password} onChange={e => setPortalForm(f => ({ ...f, password: e.target.value }))} placeholder="Min 8 characters" data-testid="input-temp-password" />
+                </div>
+                <div>
+                  <Label>Portal Access Level</Label>
+                  <Select value={portalForm.portal_access} onValueChange={v => setPortalForm(f => ({ ...f, portal_access: v }))}>
+                    <SelectTrigger data-testid="select-new-portal-access"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="employee">People Portal Only</SelectItem>
+                      <SelectItem value="admin">Admin Portal Only</SelectItem>
+                      <SelectItem value="both">Both Portals</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label>Role</Label>
+                  <Select value={portalForm.role_id} onValueChange={v => setPortalForm(f => ({ ...f, role_id: v }))}>
+                    <SelectTrigger data-testid="select-new-portal-role"><SelectValue placeholder="Select role (optional)" /></SelectTrigger>
+                    <SelectContent>
+                      {portalAccessInfo?.available_roles?.map((r: any) => (
+                        <SelectItem key={r.id} value={String(r.id)}>{r.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <DialogFooter>
+                <Button onClick={() => {
+                  if (!portalAccessTarget) return;
+                  if (!portalForm.password || portalForm.password.length < 8) {
+                    toast({ title: "Password must be at least 8 characters", variant: "destructive" });
+                    return;
+                  }
+                  const payload: any = {
+                    employee_id: portalAccessTarget.id,
+                    password: portalForm.password,
+                    portal_access: portalForm.portal_access,
+                  };
+                  if (portalForm.role_id) payload.role_id = parseInt(portalForm.role_id);
+                  grantAccessMutation.mutate(payload);
+                }} disabled={grantAccessMutation.isPending} data-testid="btn-grant-access">
+                  <Shield className="w-4 h-4 mr-1" />
+                  {grantAccessMutation.isPending ? "Granting..." : "Grant Portal Access"}
+                </Button>
+              </DialogFooter>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
 

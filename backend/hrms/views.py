@@ -3416,6 +3416,212 @@ class AdvancePaymentDetailView(APIView):
         return Response({'message': 'Advance payment deleted'})
 
 
+class EmployeePortalAccessView(APIView):
+    @require_permission('hrms.staff.write')
+    def get(self, request, employee_id):
+        try:
+            emp = Employee.objects.get(id=employee_id)
+        except Employee.DoesNotExist:
+            return Response({'error': 'Employee not found'}, status=404)
+
+        from accounts.models import User as AccountUser, Role, UserRole
+        has_access = False
+        user_info = None
+        if emp.user_id:
+            try:
+                user = AccountUser.objects.get(id=emp.user_id)
+                has_access = True
+                user_roles = UserRole.objects.filter(user_id=user.id)
+                roles = []
+                for ur in user_roles:
+                    try:
+                        r = Role.objects.get(id=ur.role_id)
+                        roles.append({'id': r.id, 'name': r.name})
+                    except Role.DoesNotExist:
+                        pass
+                user_info = {
+                    'user_id': user.id,
+                    'email': user.email,
+                    'portal_access': user.portal_access,
+                    'is_active': user.is_active,
+                    'force_password_change': user.force_password_change,
+                    'last_login_at': user.last_login_at.isoformat() if user.last_login_at else None,
+                    'roles': roles,
+                }
+            except AccountUser.DoesNotExist:
+                emp.user_id = None
+                emp.save(update_fields=['user_id'])
+
+        all_roles = list(Role.objects.all().values('id', 'name'))
+
+        return Response({
+            'employee_id': str(emp.id),
+            'employee_name': emp.full_name,
+            'employee_email': emp.email,
+            'has_access': has_access,
+            'user_info': user_info,
+            'available_roles': all_roles,
+        })
+
+    @require_permission('hrms.staff.write')
+    def post(self, request, employee_id):
+        try:
+            emp = Employee.objects.get(id=employee_id)
+        except Employee.DoesNotExist:
+            return Response({'error': 'Employee not found'}, status=404)
+
+        from accounts.models import User as AccountUser, UserRole
+        import bcrypt
+        import re
+
+        if emp.user_id:
+            try:
+                existing = AccountUser.objects.get(id=emp.user_id)
+                return Response({'error': f'Employee already has portal access (email: {existing.email})'}, status=400)
+            except AccountUser.DoesNotExist:
+                emp.user_id = None
+                emp.save(update_fields=['user_id'])
+
+        existing_user = AccountUser.objects.filter(email=emp.email).first()
+        if existing_user:
+            emp.user_id = existing_user.id
+            emp.save(update_fields=['user_id'])
+            portal_access = request.data.get('portal_access', 'employee')
+            if portal_access in ('employee', 'both', 'admin'):
+                existing_user.portal_access = portal_access
+                existing_user.save(update_fields=['portal_access'])
+            role_id = request.data.get('role_id')
+            if role_id:
+                if not UserRole.objects.filter(user_id=existing_user.id, role_id=role_id).exists():
+                    UserRole.objects.create(user_id=existing_user.id, role_id=role_id)
+            return Response({
+                'message': f'Linked existing user account for {emp.email}',
+                'user_id': existing_user.id,
+            })
+
+        password = request.data.get('password', '')
+        if not password or len(password) < 8:
+            return Response({'error': 'Password must be at least 8 characters'}, status=400)
+
+        portal_access = request.data.get('portal_access', 'employee')
+        if portal_access not in ('admin', 'employee', 'both'):
+            portal_access = 'employee'
+
+        hashed = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt(12)).decode('utf-8')
+        user = AccountUser.objects.create(
+            email=emp.email,
+            full_name=emp.full_name,
+            password_hash=hashed,
+            is_active=True,
+            force_password_change=True,
+            portal_access=portal_access,
+        )
+
+        emp.user_id = user.id
+        emp.save(update_fields=['user_id', 'updated_at'])
+
+        role_id = request.data.get('role_id')
+        if role_id:
+            UserRole.objects.create(user_id=user.id, role_id=role_id)
+
+        try:
+            from config.settings import DEFAULT_FROM_EMAIL
+            from accounts.views import send_styled_email
+            portal_url = 'https://people.studyinfocentre.com'
+            send_styled_email(
+                to_email=emp.email,
+                subject='Your People Portal Access Has Been Created',
+                body=f'''
+                <p style="color:#475569;font-size:15px;line-height:1.6;">Hello <strong>{emp.full_name}</strong>,</p>
+                <p style="color:#475569;font-size:15px;line-height:1.6;">Your portal access has been created. You can now log in using:</p>
+                <table style="width:100%;border-collapse:collapse;margin:16px 0;">
+                <tr><td style="padding:8px 12px;border:1px solid #e2e8f0;font-weight:600;width:140px;background:#f8fafc;">Email</td>
+                <td style="padding:8px 12px;border:1px solid #e2e8f0;">{emp.email}</td></tr>
+                <tr><td style="padding:8px 12px;border:1px solid #e2e8f0;font-weight:600;background:#f8fafc;">Temporary Password</td>
+                <td style="padding:8px 12px;border:1px solid #e2e8f0;">{password}</td></tr>
+                </table>
+                <p style="color:#475569;font-size:15px;line-height:1.6;">Please change your password after first login.</p>
+                <p style="text-align:center;margin:24px 0;">
+                <a href="{portal_url}" style="display:inline-block;padding:12px 32px;background:#3b82f6;color:white;text-decoration:none;border-radius:8px;font-weight:600;">Login to Portal</a>
+                </p>
+                ''',
+            )
+        except Exception:
+            pass
+
+        return Response({
+            'message': f'Portal access created for {emp.full_name}',
+            'user_id': user.id,
+        }, status=201)
+
+    @require_permission('hrms.staff.write')
+    def patch(self, request, employee_id):
+        try:
+            emp = Employee.objects.get(id=employee_id)
+        except Employee.DoesNotExist:
+            return Response({'error': 'Employee not found'}, status=404)
+
+        from accounts.models import User as AccountUser, UserRole
+        if not emp.user_id:
+            return Response({'error': 'Employee does not have portal access'}, status=400)
+
+        try:
+            user = AccountUser.objects.get(id=emp.user_id)
+        except AccountUser.DoesNotExist:
+            return Response({'error': 'Linked user account not found'}, status=404)
+
+        portal_access = request.data.get('portal_access')
+        if portal_access and portal_access in ('admin', 'employee', 'both'):
+            user.portal_access = portal_access
+            user.save(update_fields=['portal_access'])
+
+        is_active = request.data.get('is_active')
+        if is_active is not None:
+            user.is_active = bool(is_active)
+            user.save(update_fields=['is_active'])
+
+        role_id = request.data.get('role_id')
+        if role_id is not None:
+            UserRole.objects.filter(user_id=user.id).delete()
+            if role_id:
+                UserRole.objects.create(user_id=user.id, role_id=role_id)
+
+        reset_password = request.data.get('reset_password')
+        if reset_password:
+            import bcrypt
+            if len(reset_password) < 8:
+                return Response({'error': 'Password must be at least 8 characters'}, status=400)
+            hashed = bcrypt.hashpw(reset_password.encode('utf-8'), bcrypt.gensalt(12)).decode('utf-8')
+            user.password_hash = hashed
+            user.force_password_change = True
+            user.save(update_fields=['password_hash', 'force_password_change'])
+
+        return Response({'message': 'Portal access updated'})
+
+    @require_permission('hrms.staff.write')
+    def delete(self, request, employee_id):
+        try:
+            emp = Employee.objects.get(id=employee_id)
+        except Employee.DoesNotExist:
+            return Response({'error': 'Employee not found'}, status=404)
+
+        from accounts.models import User as AccountUser
+        if not emp.user_id:
+            return Response({'error': 'Employee does not have portal access'}, status=400)
+
+        try:
+            user = AccountUser.objects.get(id=emp.user_id)
+            user.is_active = False
+            user.save(update_fields=['is_active'])
+        except AccountUser.DoesNotExist:
+            pass
+
+        emp.user_id = None
+        emp.save(update_fields=['user_id', 'updated_at'])
+
+        return Response({'message': 'Portal access revoked'})
+
+
 class EmployeeStatusChangeView(APIView):
     @require_permission('hrms.staff.write')
     def patch(self, request, employee_id):
@@ -3511,6 +3717,8 @@ class StaffProfileListView(APIView):
                 'salary_currency': emp.salary_currency,
                 'profile_photo_url': emp.profile_photo_url,
                 'status': emp.status,
+                'has_portal_access': bool(emp.user_id),
+                'user_id': emp.user_id,
                 'salary_structure': {
                     'id': str(sal.id),
                     'basic_salary': float(sal.basic_salary),
