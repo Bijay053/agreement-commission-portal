@@ -574,13 +574,22 @@ class FiscalYearListView(APIView):
     @require_permission('hrms.fiscal_year.add')
     def post(self, request):
         data = request.data
+        org_id = data.get('organization_id')
+        name = (data.get('name') or '').strip()
+        start_date = data.get('start_date')
+        end_date = data.get('end_date')
+        existing = FiscalYear.objects.filter(
+            organization_id=org_id, name=name, start_date=start_date, end_date=end_date
+        )
+        if existing.exists():
+            return Response({'message': f'Fiscal year "{name}" with these dates already exists for this organization.'}, status=400)
         if data.get('is_current'):
-            FiscalYear.objects.filter(organization_id=data.get('organization_id'), is_current=True).update(is_current=False)
+            FiscalYear.objects.filter(organization_id=org_id, is_current=True).update(is_current=False)
         fy = FiscalYear.objects.create(
-            organization_id=data.get('organization_id'),
-            name=data.get('name', ''),
-            start_date=data.get('start_date'),
-            end_date=data.get('end_date'),
+            organization_id=org_id,
+            name=name,
+            start_date=start_date,
+            end_date=end_date,
             is_current=data.get('is_current', False),
         )
         return Response(serialize_fiscal_year(fy), status=201)
