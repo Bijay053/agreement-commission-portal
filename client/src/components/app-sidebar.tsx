@@ -48,7 +48,7 @@ export function AppSidebar() {
   ];
 
   const employeeNav = [
-    { title: "HRMS", url: "/hrms", icon: Briefcase, show: hasPermission("hrms.organization.read") || hasPermission("hrms.attendance.read") || hasPermission("employee.view") },
+    { title: "HRMS", url: "/hrms", icon: Briefcase, show: hasPermission("hrms.organization.read") || hasPermission("hrms.attendance.read") || hasPermission("employee.view") || hasPermission("hrms.leave_request.read") || hasPermission("hrms.leave_request.approve") || hasPermission("hrms.leave_type.read") || hasPermission("hrms.holiday.read") },
     { title: "Agreement Templates", url: "/templates?type=agreement", icon: ClipboardList, show: hasPermission("emp_template.view") },
     { title: "Offer Letter Templates", url: "/templates?type=offer_letter", icon: ClipboardList, show: hasPermission("emp_template.view") },
   ];

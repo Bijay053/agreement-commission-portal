@@ -1427,19 +1427,19 @@ function HolidaysTab() {
 }
 
 const SIDEBAR_ITEMS = [
-  { key: "staff-profiles", label: "Staff & Salary", icon: UserCog, group: "People" },
-  { key: "attendance", label: "Attendance", icon: Clock, group: "People" },
-  { key: "leave-types", label: "Leave Types", icon: TreePalm, group: "Leave" },
-  { key: "leave-requests", label: "Leave Requests", icon: CalendarDays, group: "Leave" },
-  { key: "holidays", label: "Holidays", icon: Calendar, group: "Leave" },
-  { key: "bonuses", label: "Bonuses", icon: Gift, group: "Payroll & Finance" },
-  { key: "expenses", label: "Travel Expenses", icon: Receipt, group: "Payroll & Finance" },
-  { key: "advances", label: "Advances", icon: Banknote, group: "Payroll & Finance" },
-  { key: "tax-slabs", label: "Tax Slabs", icon: Calculator, group: "Payroll & Finance" },
-  { key: "payroll", label: "Payroll", icon: DollarSign, group: "Payroll & Finance" },
-  { key: "govt-records", label: "Govt Records", icon: Landmark, group: "Payroll & Finance" },
-  { key: "organizations", label: "Organizations", icon: Building2, group: "Settings" },
-  { key: "departments", label: "Departments", icon: Users, group: "Settings" },
+  { key: "staff-profiles", label: "Staff & Salary", icon: UserCog, group: "People", permissions: ["hrms.staff.read", "hrms.salary.read", "employee.view"] },
+  { key: "attendance", label: "Attendance", icon: Clock, group: "People", permissions: ["hrms.attendance.read"] },
+  { key: "leave-types", label: "Leave Types", icon: TreePalm, group: "Leave", permissions: ["hrms.leave_type.read"] },
+  { key: "leave-requests", label: "Leave Requests", icon: CalendarDays, group: "Leave", permissions: ["hrms.leave_request.read", "hrms.leave_request.approve"] },
+  { key: "holidays", label: "Holidays", icon: Calendar, group: "Leave", permissions: ["hrms.holiday.read"] },
+  { key: "bonuses", label: "Bonuses", icon: Gift, group: "Payroll & Finance", permissions: ["hrms.bonus.read"] },
+  { key: "expenses", label: "Travel Expenses", icon: Receipt, group: "Payroll & Finance", permissions: ["hrms.expense.read"] },
+  { key: "advances", label: "Advances", icon: Banknote, group: "Payroll & Finance", permissions: ["hrms.advance.read"] },
+  { key: "tax-slabs", label: "Tax Slabs", icon: Calculator, group: "Payroll & Finance", permissions: ["hrms.tax.read"] },
+  { key: "payroll", label: "Payroll", icon: DollarSign, group: "Payroll & Finance", permissions: ["hrms.payroll.read"] },
+  { key: "govt-records", label: "Govt Records", icon: Landmark, group: "Payroll & Finance", permissions: ["hrms.payroll.read"] },
+  { key: "organizations", label: "Organizations", icon: Building2, group: "Settings", permissions: ["hrms.organization.read"] },
+  { key: "departments", label: "Departments", icon: Users, group: "Settings", permissions: ["hrms.department.read"] },
 ];
 
 const CONTENT_MAP: Record<string, React.ComponentType> = {
@@ -1459,9 +1459,15 @@ const CONTENT_MAP: Record<string, React.ComponentType> = {
 };
 
 export default function HRMSAdminPage() {
-  const [activeTab, setActiveTab] = useState("staff-profiles");
+  const { hasPermission } = useAuth();
 
-  const groups = SIDEBAR_ITEMS.reduce<Record<string, typeof SIDEBAR_ITEMS>>((acc, item) => {
+  const visibleItems = SIDEBAR_ITEMS.filter(item =>
+    item.permissions.some(p => hasPermission(p))
+  );
+
+  const [activeTab, setActiveTab] = useState(visibleItems[0]?.key || "staff-profiles");
+
+  const groups = visibleItems.reduce<Record<string, typeof SIDEBAR_ITEMS>>((acc, item) => {
     if (!acc[item.group]) acc[item.group] = [];
     acc[item.group].push(item);
     return acc;

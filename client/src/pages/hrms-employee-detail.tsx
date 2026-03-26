@@ -13,6 +13,7 @@ import {
   FileText, TrendingUp, ExternalLink, Download,
 } from "lucide-react";
 import { useLocation } from "wouter";
+import { useAuth } from "@/lib/auth";
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
@@ -109,6 +110,14 @@ interface Employee360Data {
 
 export function EmployeeDetailView({ employeeId, onBack }: { employeeId: string; onBack: () => void }) {
   const [, navigate] = useLocation();
+  const { hasPermission } = useAuth();
+  const canViewSalary = hasPermission("hrms.salary.read");
+  const canViewPayroll = hasPermission("hrms.payroll.read") || hasPermission("hrms.payslip.read");
+  const canViewBonus = hasPermission("hrms.bonus.read");
+  const canViewAdvance = hasPermission("hrms.advance.read");
+  const canViewExpense = hasPermission("hrms.expense.read");
+  const canViewTax = hasPermission("hrms.tax.read");
+  const canViewFinancials = canViewSalary || canViewPayroll || canViewBonus || canViewAdvance || canViewTax;
   const { data, isLoading } = useQuery<Employee360Data>({
     queryKey: ["/api/hrms/employee-360", employeeId],
     queryFn: async () => {
@@ -174,13 +183,15 @@ export function EmployeeDetailView({ employeeId, onBack }: { employeeId: string;
         </CardContent>
       </Card>
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <Card>
-          <CardContent className="p-3 text-center">
-            <p className="text-xs text-muted-foreground">Gross Salary</p>
-            <p className="text-lg font-bold font-mono" data-testid="text-gross-salary">{emp.salary_currency} {gross.toLocaleString()}</p>
-          </CardContent>
-        </Card>
+      <div className={`grid grid-cols-2 ${canViewFinancials ? 'md:grid-cols-4' : 'md:grid-cols-2'} gap-3`}>
+        {canViewSalary && (
+          <Card>
+            <CardContent className="p-3 text-center">
+              <p className="text-xs text-muted-foreground">Gross Salary</p>
+              <p className="text-lg font-bold font-mono" data-testid="text-gross-salary">{emp.salary_currency} {gross.toLocaleString()}</p>
+            </CardContent>
+          </Card>
+        )}
         <Card>
           <CardContent className="p-3 text-center">
             <p className="text-xs text-muted-foreground">This Month Attendance</p>
@@ -188,38 +199,42 @@ export function EmployeeDetailView({ employeeId, onBack }: { employeeId: string;
             {att.late > 0 && <p className="text-xs text-orange-500">{att.late} late</p>}
           </CardContent>
         </Card>
-        <Card>
-          <CardContent className="p-3 text-center">
-            <p className="text-xs text-muted-foreground">Outstanding Advance</p>
-            <p className={`text-lg font-bold font-mono ${data.outstanding_advance > 0 ? 'text-red-600' : ''}`} data-testid="text-advance-due">
-              {emp.salary_currency} {data.outstanding_advance.toLocaleString()}
-            </p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-3 text-center">
-            <p className="text-xs text-muted-foreground">Tax Paid ({data.tax_summary.year})</p>
-            <p className="text-lg font-bold font-mono" data-testid="text-tax-paid">
-              {emp.salary_currency} {data.tax_summary.total_tax.toLocaleString()}
-            </p>
-          </CardContent>
-        </Card>
+        {canViewAdvance && (
+          <Card>
+            <CardContent className="p-3 text-center">
+              <p className="text-xs text-muted-foreground">Outstanding Advance</p>
+              <p className={`text-lg font-bold font-mono ${data.outstanding_advance > 0 ? 'text-red-600' : ''}`} data-testid="text-advance-due">
+                {emp.salary_currency} {data.outstanding_advance.toLocaleString()}
+              </p>
+            </CardContent>
+          </Card>
+        )}
+        {canViewTax && (
+          <Card>
+            <CardContent className="p-3 text-center">
+              <p className="text-xs text-muted-foreground">Tax Paid ({data.tax_summary.year})</p>
+              <p className="text-lg font-bold font-mono" data-testid="text-tax-paid">
+                {emp.salary_currency} {data.tax_summary.total_tax.toLocaleString()}
+              </p>
+            </CardContent>
+          </Card>
+        )}
       </div>
 
-      <Tabs defaultValue="salary" className="w-full">
+      <Tabs defaultValue={canViewSalary ? "salary" : "attendance"} className="w-full">
         <TabsList className="flex w-full overflow-x-auto">
-          <TabsTrigger value="salary" data-testid="tab-360-salary"><DollarSign className="w-3 h-3 mr-1" />Salary</TabsTrigger>
+          {canViewSalary && <TabsTrigger value="salary" data-testid="tab-360-salary"><DollarSign className="w-3 h-3 mr-1" />Salary</TabsTrigger>}
           <TabsTrigger value="attendance" data-testid="tab-360-attendance"><Clock className="w-3 h-3 mr-1" />Attendance</TabsTrigger>
           <TabsTrigger value="leaves" data-testid="tab-360-leaves"><Calendar className="w-3 h-3 mr-1" />Leaves</TabsTrigger>
-          <TabsTrigger value="payslips" data-testid="tab-360-payslips"><FileText className="w-3 h-3 mr-1" />Payslips</TabsTrigger>
-          <TabsTrigger value="bonuses" data-testid="tab-360-bonuses"><Gift className="w-3 h-3 mr-1" />Bonuses</TabsTrigger>
-          <TabsTrigger value="advances" data-testid="tab-360-advances"><Banknote className="w-3 h-3 mr-1" />Advances</TabsTrigger>
-          <TabsTrigger value="expenses" data-testid="tab-360-expenses"><Receipt className="w-3 h-3 mr-1" />Expenses</TabsTrigger>
-          <TabsTrigger value="tax" data-testid="tab-360-tax"><TrendingUp className="w-3 h-3 mr-1" />Tax Profile</TabsTrigger>
+          {canViewPayroll && <TabsTrigger value="payslips" data-testid="tab-360-payslips"><FileText className="w-3 h-3 mr-1" />Payslips</TabsTrigger>}
+          {canViewBonus && <TabsTrigger value="bonuses" data-testid="tab-360-bonuses"><Gift className="w-3 h-3 mr-1" />Bonuses</TabsTrigger>}
+          {canViewAdvance && <TabsTrigger value="advances" data-testid="tab-360-advances"><Banknote className="w-3 h-3 mr-1" />Advances</TabsTrigger>}
+          {canViewExpense && <TabsTrigger value="expenses" data-testid="tab-360-expenses"><Receipt className="w-3 h-3 mr-1" />Expenses</TabsTrigger>}
+          {canViewTax && <TabsTrigger value="tax" data-testid="tab-360-tax"><TrendingUp className="w-3 h-3 mr-1" />Tax Profile</TabsTrigger>}
           <TabsTrigger value="personal" data-testid="tab-360-personal"><User className="w-3 h-3 mr-1" />Personal</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="salary">
+        {canViewSalary && <TabsContent value="salary">
           {sal ? (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <Card>
@@ -262,7 +277,7 @@ export function EmployeeDetailView({ employeeId, onBack }: { employeeId: string;
           ) : (
             <Card><CardContent className="p-8 text-center text-muted-foreground">No salary structure configured. Set up salary from the Staff & Salary tab.</CardContent></Card>
           )}
-        </TabsContent>
+        </TabsContent>}
 
         <TabsContent value="attendance">
           <Card>
@@ -320,7 +335,7 @@ export function EmployeeDetailView({ employeeId, onBack }: { employeeId: string;
           )}
         </TabsContent>
 
-        <TabsContent value="payslips">
+        {canViewPayroll && <TabsContent value="payslips">
           {data.recent_payslips.length > 0 ? (
             <Table>
               <TableHeader>
@@ -363,9 +378,9 @@ export function EmployeeDetailView({ employeeId, onBack }: { employeeId: string;
           ) : (
             <Card><CardContent className="p-8 text-center text-muted-foreground">No payslips generated yet.</CardContent></Card>
           )}
-        </TabsContent>
+        </TabsContent>}
 
-        <TabsContent value="bonuses">
+        {canViewBonus && <TabsContent value="bonuses">
           {data.bonuses.length > 0 ? (
             <Table>
               <TableHeader>
@@ -394,9 +409,9 @@ export function EmployeeDetailView({ employeeId, onBack }: { employeeId: string;
           ) : (
             <Card><CardContent className="p-8 text-center text-muted-foreground">No bonuses recorded.</CardContent></Card>
           )}
-        </TabsContent>
+        </TabsContent>}
 
-        <TabsContent value="advances">
+        {canViewAdvance && <TabsContent value="advances">
           {data.advances.length > 0 ? (
             <Table>
               <TableHeader>
@@ -427,9 +442,9 @@ export function EmployeeDetailView({ employeeId, onBack }: { employeeId: string;
           ) : (
             <Card><CardContent className="p-8 text-center text-muted-foreground">No advance payments.</CardContent></Card>
           )}
-        </TabsContent>
+        </TabsContent>}
 
-        <TabsContent value="expenses">
+        {canViewExpense && <TabsContent value="expenses">
           {data.expenses.length > 0 ? (
             <Table>
               <TableHeader>
@@ -458,9 +473,9 @@ export function EmployeeDetailView({ employeeId, onBack }: { employeeId: string;
           ) : (
             <Card><CardContent className="p-8 text-center text-muted-foreground">No travel expenses recorded.</CardContent></Card>
           )}
-        </TabsContent>
+        </TabsContent>}
 
-        <TabsContent value="tax">
+        {canViewTax && <TabsContent value="tax">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <Card>
               <CardHeader className="p-4 pb-2"><CardTitle className="text-sm">Tax Profile</CardTitle></CardHeader>
@@ -490,7 +505,7 @@ export function EmployeeDetailView({ employeeId, onBack }: { employeeId: string;
               </CardContent>
             </Card>
           </div>
-        </TabsContent>
+        </TabsContent>}
 
         <TabsContent value="personal">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
