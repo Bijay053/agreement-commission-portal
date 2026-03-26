@@ -43,6 +43,22 @@ import { GovernmentRecordsTab } from "./hrms-govt-records";
 import { CountriesTab } from "./hrms-countries";
 import { CURRENCIES, getCurrencySymbol } from "@/lib/currencies";
 
+function extractErrorMessage(err: any, fallback: string): string {
+  try {
+    const text = err?.message || "";
+    const jsonPart = text.includes("{") ? text.substring(text.indexOf("{")) : "";
+    if (jsonPart) {
+      const parsed = JSON.parse(jsonPart);
+      return parsed.message || parsed.error || fallback;
+    }
+    const colonIdx = text.indexOf(": ");
+    if (colonIdx > 0) return text.substring(colonIdx + 2) || fallback;
+    return text || fallback;
+  } catch {
+    return fallback;
+  }
+}
+
 interface Organization {
   id: string; name: string; short_code: string; address: string | null;
   country: string | null; phone: string | null; email: string | null;
@@ -918,7 +934,9 @@ function PayrollRunDetailView({ runId, onBack }: { runId: string; onBack: () => 
         variant: data.payslip_count > 0 ? "default" : "destructive",
       });
     },
-    onError: () => toast({ title: "Failed to process", variant: "destructive" }),
+    onError: (err: any) => {
+      toast({ title: extractErrorMessage(err, "Failed to process"), variant: "destructive" });
+    },
   });
 
   const approveMutation = useMutation({
@@ -930,8 +948,8 @@ function PayrollRunDetailView({ runId, onBack }: { runId: string; onBack: () => 
       queryClient.refetchQueries({ queryKey: ["/api/hrms/payroll-runs"] });
       toast({ title: data.message });
     },
-    onError: async (err: any) => {
-      try { const r = await err.json?.(); toast({ title: r?.message || "Failed", variant: "destructive" }); } catch { toast({ title: "Failed to approve", variant: "destructive" }); }
+    onError: (err: any) => {
+      toast({ title: extractErrorMessage(err, "Failed to approve"), variant: "destructive" });
     },
   });
 
@@ -944,8 +962,8 @@ function PayrollRunDetailView({ runId, onBack }: { runId: string; onBack: () => 
       queryClient.refetchQueries({ queryKey: ["/api/hrms/payroll-runs"] });
       toast({ title: data.message });
     },
-    onError: async (err: any) => {
-      try { const r = await err.json?.(); toast({ title: r?.message || "Failed", variant: "destructive" }); } catch { toast({ title: "Failed to mark paid", variant: "destructive" }); }
+    onError: (err: any) => {
+      toast({ title: extractErrorMessage(err, "Failed to mark paid"), variant: "destructive" });
     },
   });
 
@@ -956,8 +974,8 @@ function PayrollRunDetailView({ runId, onBack }: { runId: string; onBack: () => 
       toast({ title: "Payroll run deleted" });
       onBack();
     },
-    onError: async (err: any) => {
-      try { const r = await err.json?.(); toast({ title: r?.message || "Failed", variant: "destructive" }); } catch { toast({ title: "Failed to delete", variant: "destructive" }); }
+    onError: (err: any) => {
+      toast({ title: extractErrorMessage(err, "Failed to delete"), variant: "destructive" });
     },
   });
 
@@ -972,8 +990,8 @@ function PayrollRunDetailView({ runId, onBack }: { runId: string; onBack: () => 
       setEditingPayslip(null);
       toast({ title: "Payslip updated" });
     },
-    onError: async (err: any) => {
-      try { const r = await err.json?.(); toast({ title: r?.message || "Failed", variant: "destructive" }); } catch { toast({ title: "Failed to update", variant: "destructive" }); }
+    onError: (err: any) => {
+      toast({ title: extractErrorMessage(err, "Failed to update"), variant: "destructive" });
     },
   });
 
@@ -1246,13 +1264,8 @@ function PayrollTab() {
         toast({ title: "Payroll run created" });
       }
     },
-    onError: async (err: any) => {
-      try {
-        const r = await err.json?.();
-        toast({ title: r?.message || "Failed to create payroll run", variant: "destructive" });
-      } catch {
-        toast({ title: "Payroll run already exists for this period", variant: "destructive" });
-      }
+    onError: (err: any) => {
+      toast({ title: extractErrorMessage(err, "Failed to create payroll run"), variant: "destructive" });
     },
   });
 
