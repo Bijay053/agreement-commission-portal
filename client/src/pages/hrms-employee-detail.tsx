@@ -322,7 +322,7 @@ export function EmployeeDetailView({ employeeId, onBack }: { employeeId: string;
                     <TableCell className="text-sm">{ps.present_days}/{ps.working_days}</TableCell>
                     <TableCell><Badge variant={ps.status === 'completed' ? 'default' : 'secondary'} className="text-xs">{ps.status}</Badge></TableCell>
                     <TableCell className="text-center">
-                      <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => window.open(`/api/hrms/my/payslips/${ps.id}/pdf`, '_blank')} data-testid={`btn-dl-payslip-${ps.id}`}>
+                      <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => window.open(`/api/hrms/payslips/${ps.id}/pdf`, '_blank')} data-testid={`btn-dl-payslip-${ps.id}`}>
                         <Download className="w-3.5 h-3.5" />
                       </Button>
                     </TableCell>
