@@ -39,6 +39,7 @@ def _serialize_employee(e):
         'pan_label': org.pan_label if org else 'PAN No.',
         'department_id': str(e.department_id) if e.department_id else None,
         'gender': e.gender or '',
+        'country': e.country or '',
         'marital_status': e.marital_status or '',
         'employment_type': e.employment_type or 'full_time',
         'citizenshipNo': e.citizenship_no or '',
@@ -106,6 +107,7 @@ class EmployeeListView(APIView):
             organization_id=org_id if org_id else None,
             department_id=dept_id if dept_id else None,
             gender=data.get('gender', '') or None,
+            country=data.get('country', '') or None,
             marital_status=data.get('maritalStatus') or data.get('marital_status') or None,
             date_of_birth=data.get('dateOfBirth') or data.get('date_of_birth') or None,
             citizenship_no=data.get('citizenshipNo') or data.get('citizenship_no') or '',
@@ -170,6 +172,9 @@ class EmployeeDetailView(APIView):
         gender = data.get('gender')
         if gender is not None:
             employee.gender = gender
+        country = data.get('country')
+        if country is not None:
+            employee.country = country
         marital = data.get('maritalStatus') or data.get('marital_status')
         if marital is not None:
             employee.marital_status = marital

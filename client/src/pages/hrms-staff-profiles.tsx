@@ -35,6 +35,7 @@ interface StaffProfile {
   department_id: string | null;
   department_name: string | null;
   gender: string | null;
+  country: string | null;
   marital_status: string | null;
   date_of_birth: string | null;
   join_date: string | null;
@@ -73,6 +74,37 @@ interface Department {
   id: string; organization_id: string; name: string;
 }
 
+const COUNTRY_TAX_LABELS: Record<string, string> = {
+  'Nepal': 'PAN No.',
+  'Australia': 'TFN',
+  'Bangladesh': 'TIN',
+  'India': 'PAN',
+  'United Kingdom': 'NI Number',
+  'United States': 'SSN',
+  'Canada': 'SIN',
+  'New Zealand': 'IRD Number',
+  'Pakistan': 'NTN',
+  'Sri Lanka': 'TIN',
+  'Philippines': 'TIN',
+  'Malaysia': 'TIN',
+  'Singapore': 'NRIC/FIN',
+  'Japan': 'My Number',
+  'South Korea': 'RRN',
+  'Germany': 'Tax ID',
+  'France': 'NIF',
+  'UAE': 'TRN',
+  'Saudi Arabia': 'TIN',
+  'Qatar': 'QID',
+  'China': 'Tax ID',
+};
+
+const EMPLOYEE_COUNTRIES = Object.keys(COUNTRY_TAX_LABELS);
+
+function getTaxIdLabel(country?: string | null): string {
+  if (!country) return 'Tax ID No.';
+  return COUNTRY_TAX_LABELS[country] || 'Tax ID No.';
+}
+
 export function StaffProfilesTab() {
   const { toast } = useToast();
   const [selectedStaff, setSelectedStaff] = useState<StaffProfile | null>(null);
@@ -101,7 +133,7 @@ export function StaffProfilesTab() {
 
   const [empForm, setEmpForm] = useState({
     full_name: "", email: "", phone: "", position: "", department: "",
-    organization_id: "", department_id: "", gender: "", marital_status: "",
+    organization_id: "", department_id: "", gender: "", country: "", marital_status: "",
     join_date: new Date().toISOString().split("T")[0], employment_type: "full_time",
     citizenship_no: "", pan_no: "", passport_number: "", employee_id_number: "",
     bank_name: "", bank_account_number: "",
@@ -164,7 +196,7 @@ export function StaffProfilesTab() {
     setEmpForm({
       full_name: s.full_name, email: s.email, phone: s.phone || "", position: s.position || "",
       department: s.department || "", organization_id: s.organization_id || "",
-      department_id: s.department_id || "", gender: s.gender || "", marital_status: s.marital_status || "",
+      department_id: s.department_id || "", gender: s.gender || "", country: s.country || "", marital_status: s.marital_status || "",
       join_date: s.join_date || "", employment_type: s.employment_type || "full_time",
       citizenship_no: s.citizenship_no || "", pan_no: s.pan_no || "",
       bank_name: s.bank_name || "", bank_account_number: s.bank_account_number || "",
@@ -256,6 +288,7 @@ export function StaffProfilesTab() {
     if (empForm.organization_id) payload.organization_id = empForm.organization_id;
     if (empForm.department_id) payload.department_id = empForm.department_id;
     if (empForm.gender) payload.gender = empForm.gender;
+    if (empForm.country) payload.country = empForm.country;
     if (empForm.marital_status) payload.marital_status = empForm.marital_status;
     if (empForm.join_date) payload.joinDate = empForm.join_date;
     if (empForm.employment_type) payload.employmentType = empForm.employment_type;
@@ -351,7 +384,7 @@ export function StaffProfilesTab() {
           <Button onClick={() => {
             setEmpForm({
               full_name: "", email: "", phone: "", position: "", department: "",
-              organization_id: orgs?.[0]?.id || "", department_id: "", gender: "", marital_status: "",
+              organization_id: orgs?.[0]?.id || "", department_id: "", gender: "", country: "", marital_status: "",
               join_date: new Date().toISOString().split("T")[0], employment_type: "full_time",
               citizenship_no: "", pan_no: "", passport_number: "", employee_id_number: "",
               bank_name: "", bank_account_number: "",
@@ -486,7 +519,7 @@ export function StaffProfilesTab() {
               </div>
               <div><Label>Join Date</Label><Input type="date" value={empForm.join_date} onChange={e => setEmpForm({ ...empForm, join_date: e.target.value })} data-testid="input-emp-join-date" /></div>
             </div>
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-4 gap-4">
               <div>
                 <Label>Gender</Label>
                 <Select value={empForm.gender} onValueChange={v => setEmpForm({ ...empForm, gender: v })}>
@@ -495,6 +528,15 @@ export function StaffProfilesTab() {
                     <SelectItem value="male">Male</SelectItem>
                     <SelectItem value="female">Female</SelectItem>
                     <SelectItem value="other">Other</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label>Country</Label>
+                <Select value={empForm.country} onValueChange={v => setEmpForm({ ...empForm, country: v })}>
+                  <SelectTrigger><SelectValue placeholder="Select Country" /></SelectTrigger>
+                  <SelectContent>
+                    {EMPLOYEE_COUNTRIES.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
@@ -516,7 +558,7 @@ export function StaffProfilesTab() {
             <div className="grid grid-cols-4 gap-4">
               <div><Label>Employee ID</Label><Input value={empForm.employee_id_number} onChange={e => setEmpForm({ ...empForm, employee_id_number: e.target.value })} placeholder="ZKT Device ID" data-testid="input-emp-id-number" /></div>
               <div><Label>Citizenship No</Label><Input value={empForm.citizenship_no} onChange={e => setEmpForm({ ...empForm, citizenship_no: e.target.value })} /></div>
-              <div><Label>{orgs?.find(o => o.id === empForm.organization_id)?.pan_label || 'PAN Number'}</Label><Input value={empForm.pan_no} onChange={e => setEmpForm({ ...empForm, pan_no: e.target.value })} /></div>
+              <div><Label>{getTaxIdLabel(empForm.country)}</Label><Input value={empForm.pan_no} onChange={e => setEmpForm({ ...empForm, pan_no: e.target.value })} /></div>
               <div><Label>Passport Number</Label><Input value={empForm.passport_number} onChange={e => setEmpForm({ ...empForm, passport_number: e.target.value })} data-testid="input-emp-passport" /></div>
             </div>
             <div className="grid grid-cols-3 gap-4">
@@ -587,7 +629,7 @@ export function StaffProfilesTab() {
               </div>
               <div><Label>Join Date</Label><Input type="date" value={empForm.join_date} onChange={e => setEmpForm({ ...empForm, join_date: e.target.value })} /></div>
             </div>
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-4 gap-4">
               <div>
                 <Label>Gender</Label>
                 <Select value={empForm.gender} onValueChange={v => setEmpForm({ ...empForm, gender: v })}>
@@ -596,6 +638,15 @@ export function StaffProfilesTab() {
                     <SelectItem value="male">Male</SelectItem>
                     <SelectItem value="female">Female</SelectItem>
                     <SelectItem value="other">Other</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label>Country</Label>
+                <Select value={empForm.country} onValueChange={v => setEmpForm({ ...empForm, country: v })}>
+                  <SelectTrigger><SelectValue placeholder="Select Country" /></SelectTrigger>
+                  <SelectContent>
+                    {EMPLOYEE_COUNTRIES.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
@@ -609,7 +660,7 @@ export function StaffProfilesTab() {
                   </SelectContent>
                 </Select>
               </div>
-              <div><Label>{orgs?.find(o => o.id === empForm.organization_id)?.pan_label || 'PAN Number'}</Label><Input value={empForm.pan_no} onChange={e => setEmpForm({ ...empForm, pan_no: e.target.value })} /></div>
+              <div><Label>{getTaxIdLabel(empForm.country)}</Label><Input value={empForm.pan_no} onChange={e => setEmpForm({ ...empForm, pan_no: e.target.value })} /></div>
             </div>
           </div>
           <DialogFooter>
@@ -625,6 +676,7 @@ export function StaffProfilesTab() {
               payload.organization_id = empForm.organization_id || null;
               payload.department_id = empForm.department_id || null;
               if (empForm.gender) payload.gender = empForm.gender;
+              if (empForm.country) payload.country = empForm.country;
               if (empForm.marital_status) payload.marital_status = empForm.marital_status;
               if (empForm.join_date) payload.joinDate = empForm.join_date;
               if (empForm.employment_type) payload.employmentType = empForm.employment_type;

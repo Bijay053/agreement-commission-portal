@@ -26,6 +26,7 @@ class Employee(models.Model):
     user_id = models.IntegerField(null=True, blank=True, unique=True)
     date_of_birth = models.DateField(null=True, blank=True)
     gender = models.CharField(max_length=16, null=True, blank=True)
+    country = models.CharField(max_length=64, null=True, blank=True)
     marital_status = models.CharField(max_length=24, null=True, blank=True)
     emergency_contact_name = models.CharField(max_length=255, null=True, blank=True)
     emergency_contact_phone = models.CharField(max_length=32, null=True, blank=True)

@@ -18,6 +18,37 @@ from .models import (
 )
 
 
+COUNTRY_TAX_LABELS = {
+    'Nepal': 'PAN No.',
+    'Australia': 'TFN',
+    'Bangladesh': 'TIN',
+    'India': 'PAN',
+    'United Kingdom': 'NI Number',
+    'United States': 'SSN',
+    'Canada': 'SIN',
+    'New Zealand': 'IRD Number',
+    'Pakistan': 'NTN',
+    'Sri Lanka': 'TIN',
+    'Philippines': 'TIN',
+    'Malaysia': 'TIN',
+    'Singapore': 'NRIC/FIN',
+    'Japan': 'My Number',
+    'South Korea': 'RRN',
+    'Germany': 'Tax ID',
+    'France': 'NIF',
+    'UAE': 'TRN',
+    'Saudi Arabia': 'TIN',
+    'Qatar': 'QID',
+    'China': 'Tax ID',
+}
+
+
+def _get_tax_id_label(country):
+    if not country:
+        return 'Tax ID No.'
+    return COUNTRY_TAX_LABELS.get(country, 'Tax ID No.')
+
+
 def serialize_org(org):
     return {
         'id': str(org.id),
@@ -2228,7 +2259,7 @@ def generate_payslip_pdf(ps, emp, org):
          Paragraph('Position', lbl_style), Paragraph(emp.position or '-', val_style)],
         [Paragraph('Employment Type', lbl_style), Paragraph(emp_type_display, val_style),
          Paragraph('Date Joined', lbl_style), Paragraph(join_display, val_style)],
-        [Paragraph(org_pan_label_val, lbl_style), Paragraph(emp.pan_no or '-', val_style),
+        [Paragraph(_get_tax_id_label(getattr(emp, 'country', None)), lbl_style), Paragraph(emp.pan_no or '-', val_style),
          Paragraph('Citizenship No', lbl_style), Paragraph(getattr(emp, 'citizenship_no', None) or '-', val_style)],
     ]
     info_tbl = RTable(info_data, colWidths=[page_w*0.17, page_w*0.33, page_w*0.17, page_w*0.33])
@@ -2953,6 +2984,7 @@ class StaffProfileListView(APIView):
                 'department_id': str(emp.department_id) if emp.department_id else None,
                 'department_name': dept_name,
                 'gender': emp.gender,
+                'country': emp.country,
                 'marital_status': emp.marital_status,
                 'date_of_birth': emp.date_of_birth.isoformat() if emp.date_of_birth else None,
                 'join_date': emp.join_date.isoformat() if emp.join_date else None,
@@ -3147,6 +3179,7 @@ class Employee360View(APIView):
                 'organization_id': str(emp.organization_id) if emp.organization_id else None,
                 'department_id': str(emp.department_id) if emp.department_id else None,
                 'gender': emp.gender,
+                'country': emp.country,
                 'marital_status': emp.marital_status,
                 'date_of_birth': emp.date_of_birth.isoformat() if emp.date_of_birth else None,
                 'join_date': emp.join_date.isoformat() if emp.join_date else None,
