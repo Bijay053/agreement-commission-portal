@@ -40,6 +40,7 @@ EMPLOYEE_PERMISSIONS = [
     ('provider_commission.edit', 'Sub Agent Commission Distribution', 'provider_commission', 'edit', 'Edit provider commission entries'),
     ('provider_commission.delete', 'Sub Agent Commission Distribution', 'provider_commission', 'delete', 'Delete provider commission entries'),
     ('provider_commission.manage', 'Sub Agent Commission Distribution', 'provider_commission', 'manage', 'Manage sub-agent percentage config'),
+    ('hrms.staff.write', 'HRMS', 'staff', 'write', 'Create, update and manage staff profiles and portal access'),
 ]
 
 
