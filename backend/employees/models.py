@@ -37,6 +37,7 @@ class Employee(models.Model):
     permanent_address = models.TextField(null=True, blank=True)
     temporary_address = models.TextField(null=True, blank=True)
     passport_number = models.CharField(max_length=64, null=True, blank=True)
+    employee_id_number = models.CharField(max_length=32, null=True, blank=True)
     join_date = models.DateField(null=True, blank=True)
     probation_end_date = models.DateField(null=True, blank=True)
     contract_end_date = models.DateField(null=True, blank=True)

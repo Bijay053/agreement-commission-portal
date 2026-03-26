@@ -102,7 +102,8 @@ export function StaffProfilesTab() {
     full_name: "", email: "", phone: "", position: "", department: "",
     organization_id: "", department_id: "", gender: "", marital_status: "",
     join_date: new Date().toISOString().split("T")[0], employment_type: "full_time",
-    citizenship_no: "", pan_no: "", bank_name: "", bank_account_number: "",
+    citizenship_no: "", pan_no: "", passport_number: "", employee_id_number: "",
+    bank_name: "", bank_account_number: "",
     bank_branch: "", permanent_address: "", temporary_address: "",
     salary_amount: "", salary_currency: "NPR",
     emergency_contact_name: "", emergency_contact_phone: "",
@@ -351,7 +352,8 @@ export function StaffProfilesTab() {
               full_name: "", email: "", phone: "", position: "", department: "",
               organization_id: orgs?.[0]?.id || "", department_id: "", gender: "", marital_status: "",
               join_date: new Date().toISOString().split("T")[0], employment_type: "full_time",
-              citizenship_no: "", pan_no: "", bank_name: "", bank_account_number: "",
+              citizenship_no: "", pan_no: "", passport_number: "", employee_id_number: "",
+              bank_name: "", bank_account_number: "",
               bank_branch: "", permanent_address: "", temporary_address: "",
               salary_amount: "", salary_currency: "NPR",
               emergency_contact_name: "", emergency_contact_phone: "",
@@ -510,10 +512,11 @@ export function StaffProfilesTab() {
                 <Input type="number" value={empForm.salary_amount} onChange={e => setEmpForm({ ...empForm, salary_amount: e.target.value })} data-testid="input-emp-salary" />
               </div>
             </div>
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-4 gap-4">
+              <div><Label>Employee ID</Label><Input value={empForm.employee_id_number} onChange={e => setEmpForm({ ...empForm, employee_id_number: e.target.value })} placeholder="ZKT Device ID" data-testid="input-emp-id-number" /></div>
               <div><Label>Citizenship No</Label><Input value={empForm.citizenship_no} onChange={e => setEmpForm({ ...empForm, citizenship_no: e.target.value })} /></div>
               <div><Label>PAN Number</Label><Input value={empForm.pan_no} onChange={e => setEmpForm({ ...empForm, pan_no: e.target.value })} /></div>
-              <div><Label>Passport Number</Label></div>
+              <div><Label>Passport Number</Label><Input value={empForm.passport_number} onChange={e => setEmpForm({ ...empForm, passport_number: e.target.value })} data-testid="input-emp-passport" /></div>
             </div>
             <div className="grid grid-cols-3 gap-4">
               <div><Label>Bank Name</Label><Input value={empForm.bank_name} onChange={e => setEmpForm({ ...empForm, bank_name: e.target.value })} /></div>

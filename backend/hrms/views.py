@@ -3143,6 +3143,7 @@ class Employee360View(APIView):
                 'citizenship_no': emp.citizenship_no,
                 'pan_no': emp.pan_no,
                 'passport_number': emp.passport_number,
+                'employee_id_number': emp.employee_id_number,
                 'permanent_address': emp.permanent_address,
                 'temporary_address': emp.temporary_address,
                 'salary_currency': emp.salary_currency,

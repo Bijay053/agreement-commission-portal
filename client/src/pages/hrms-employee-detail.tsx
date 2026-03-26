@@ -31,7 +31,7 @@ interface Employee360Data {
     gender: string | null; marital_status: string | null; date_of_birth: string | null;
     join_date: string | null; employment_type: string; bank_name: string | null;
     bank_account_number: string | null; bank_branch: string | null;
-    citizenship_no: string | null; pan_no: string | null; passport_number: string | null;
+    citizenship_no: string | null; pan_no: string | null; passport_number: string | null; employee_id_number: string | null;
     permanent_address: string | null; temporary_address: string | null;
     salary_currency: string; profile_photo_url: string | null; status: string;
     probation_end_date: string | null; contract_end_date: string | null;
@@ -470,6 +470,7 @@ export function EmployeeDetailView({ employeeId, onBack }: { employeeId: string;
                 <div className="flex justify-between"><span>Date of Birth</span><span>{emp.date_of_birth || "—"}</span></div>
                 <div className="flex justify-between"><span>Gender</span><span className="capitalize">{emp.gender || "—"}</span></div>
                 <div className="flex justify-between"><span>Marital Status</span><span className="capitalize">{emp.marital_status || "—"}</span></div>
+                <div className="flex justify-between"><span>Employee ID</span><span className="font-mono">{emp.employee_id_number || "—"}</span></div>
                 <div className="flex justify-between"><span>Citizenship No</span><span className="font-mono">{emp.citizenship_no || "—"}</span></div>
                 <div className="flex justify-between"><span>PAN No</span><span className="font-mono">{emp.pan_no || "—"}</span></div>
                 <div className="flex justify-between"><span>Passport</span><span className="font-mono">{emp.passport_number || "—"}</span></div>
