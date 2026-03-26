@@ -288,6 +288,9 @@ class SalaryStructure(models.Model):
 PAYROLL_STATUS_CHOICES = [
     ('draft', 'Draft'),
     ('processing', 'Processing'),
+    ('processed', 'Processed'),
+    ('approved', 'Approved'),
+    ('paid', 'Paid'),
     ('completed', 'Completed'),
     ('cancelled', 'Cancelled'),
 ]

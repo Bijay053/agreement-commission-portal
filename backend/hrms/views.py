@@ -1626,8 +1626,8 @@ class PayrollRunDetailView(APIView):
             pr = PayrollRun.objects.get(id=pr_id)
         except PayrollRun.DoesNotExist:
             return Response({'message': 'Payroll run not found'}, status=404)
-        if pr.status == 'completed':
-            return Response({'message': 'Cannot delete a completed payroll run'}, status=400)
+        if pr.status == 'paid':
+            return Response({'message': 'Cannot delete a paid payroll run'}, status=400)
         pr.delete()
         return Response({'message': 'Payroll run deleted'})
 
@@ -1692,8 +1692,8 @@ class PayrollRunProcessView(APIView):
         except PayrollRun.DoesNotExist:
             return Response({'message': 'Payroll run not found'}, status=404)
 
-        if pr.status == 'completed':
-            return Response({'message': 'Payroll already processed'}, status=400)
+        if pr.status in ('approved', 'paid'):
+            return Response({'message': f'Cannot reprocess a payroll run that is already {pr.status}'}, status=400)
 
         pr.status = 'processing'
         pr.save()
@@ -1890,7 +1890,7 @@ class PayrollRunProcessView(APIView):
             total_net += net
             total_employer += ssf_employer
 
-        pr.status = 'completed'
+        pr.status = 'processed'
         pr.total_gross = total_gross
         pr.total_deductions = total_deductions
         pr.total_net = total_net
@@ -1913,6 +1913,72 @@ class PayrollRunProcessView(APIView):
             'total_gross': float(total_gross),
             'total_net': float(total_net),
         })
+
+
+class PayrollRunApproveView(APIView):
+    @require_permission('hrms.payroll.process')
+    def post(self, request, pr_id):
+        try:
+            pr = PayrollRun.objects.get(id=pr_id)
+        except PayrollRun.DoesNotExist:
+            return Response({'message': 'Payroll run not found'}, status=404)
+        if pr.status not in ('processed', 'completed'):
+            return Response({'message': f'Cannot approve a payroll run with status "{pr.status}". Must be processed first.'}, status=400)
+        pr.status = 'approved'
+        pr.save()
+        pr.payslips.update(status='approved')
+        return Response({'message': 'Payroll run approved by management', 'status': pr.status})
+
+
+class PayrollRunMarkPaidView(APIView):
+    @require_permission('hrms.payroll.process')
+    def post(self, request, pr_id):
+        try:
+            pr = PayrollRun.objects.get(id=pr_id)
+        except PayrollRun.DoesNotExist:
+            return Response({'message': 'Payroll run not found'}, status=404)
+        if pr.status != 'approved':
+            return Response({'message': f'Cannot mark as paid. Payroll must be approved first (current: {pr.status}).'}, status=400)
+        pr.status = 'paid'
+        pr.save()
+        pr.payslips.update(status='paid')
+        return Response({'message': 'Payroll marked as paid. Payslips are now visible to employees.', 'status': pr.status})
+
+
+class PayslipUpdateView(APIView):
+    @require_permission('hrms.payroll.process')
+    def put(self, request, ps_id):
+        try:
+            ps = Payslip.objects.get(id=ps_id)
+        except Payslip.DoesNotExist:
+            return Response({'message': 'Payslip not found'}, status=404)
+        pr = ps.payroll_run
+        if pr.status in ('approved', 'paid'):
+            return Response({'message': 'Cannot edit payslip after approval/payment'}, status=400)
+        data = request.data
+        editable_fields = [
+            'basic_salary', 'gross_salary', 'cit_deduction', 'ssf_employee_deduction',
+            'ssf_employer_contribution', 'tax_deduction', 'bonus_amount',
+            'travel_reimbursement', 'advance_deduction', 'unpaid_leave_deduction',
+            'total_deductions', 'net_salary',
+        ]
+        for f in editable_fields:
+            if f in data:
+                setattr(ps, f, Decimal(str(data[f])))
+        if 'allowances' in data:
+            ps.allowances = data['allowances']
+        if 'other_deductions' in data:
+            ps.other_deductions = data['other_deductions']
+        ps.save()
+
+        payslips = Payslip.objects.filter(payroll_run=pr)
+        pr.total_gross = sum(p.gross_salary for p in payslips)
+        pr.total_deductions = sum(p.total_deductions for p in payslips)
+        pr.total_net = sum(p.net_salary for p in payslips)
+        pr.total_employer_contribution = sum(p.ssf_employer_contribution for p in payslips)
+        pr.save()
+
+        return Response(serialize_payslip(ps))
 
 
 class PayslipListView(APIView):
@@ -2155,7 +2221,7 @@ class MyPayslipsView(APIView):
         if not employee:
             return Response({'message': 'No employee profile linked'}, status=404)
 
-        payslips = Payslip.objects.filter(employee_id=employee.id)
+        payslips = Payslip.objects.filter(employee_id=employee.id, status='paid')
         year = request.GET.get('year')
         if year:
             payslips = payslips.filter(year=year)

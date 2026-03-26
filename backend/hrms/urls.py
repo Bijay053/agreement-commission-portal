@@ -45,11 +45,14 @@ urlpatterns = [
     path('hrms/salary-structures/<uuid:ss_id>', views.SalaryStructureDetailView.as_view()),
 
     path('hrms/payroll-runs', views.PayrollRunListView.as_view()),
-    path('hrms/payroll-runs/<uuid:pr_id>', views.PayrollRunDetailView.as_view()),
     path('hrms/payroll-runs/<uuid:pr_id>/process', views.PayrollRunProcessView.as_view()),
+    path('hrms/payroll-runs/<uuid:pr_id>/approve', views.PayrollRunApproveView.as_view()),
+    path('hrms/payroll-runs/<uuid:pr_id>/mark-paid', views.PayrollRunMarkPaidView.as_view()),
+    path('hrms/payroll-runs/<uuid:pr_id>', views.PayrollRunDetailView.as_view()),
 
     path('hrms/payslips', views.PayslipListView.as_view()),
-    path('hrms/payslips/<uuid:ps_id>', views.PayslipDetailView.as_view()),
+    path('hrms/payslips/<uuid:ps_id>', views.PayslipUpdateView.as_view()),
+    path('hrms/payslips/detail/<uuid:ps_id>', views.PayslipDetailView.as_view()),
 
     path('hrms/notification-settings', views.NotificationSettingView.as_view()),
 

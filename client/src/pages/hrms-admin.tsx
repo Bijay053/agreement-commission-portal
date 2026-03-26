@@ -13,6 +13,10 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger,
 } from "@/components/ui/dialog";
 import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import {
@@ -26,7 +30,8 @@ import {
   Plus, Pencil, Trash2, Check, X, Eye, MapPin, Camera,
   Bell, Settings, Briefcase, UserCheck, CalendarDays,
   Gift, Receipt, Banknote, UserCog, Landmark, Calculator,
-  ChevronLeft, ChevronRight, Save,
+  ChevronLeft, ChevronRight, Save, ArrowLeft, CheckCircle,
+  CreditCard, RotateCcw, Loader2, AlertTriangle, FileText,
 } from "lucide-react";
 import { StaffProfilesTab } from "./hrms-staff-profiles";
 import { BonusesTab } from "./hrms-bonuses";
@@ -714,22 +719,50 @@ function AttendanceTab() {
   );
 }
 
-function PayrollTab() {
+interface PayrollPayslip {
+  id: string; payroll_run_id: string; employee_id: string; employee_name: string | null;
+  month: number; year: number; basic_salary: number; allowances: Record<string,number>;
+  gross_salary: number; cit_deduction: number; ssf_employee_deduction: number;
+  ssf_employer_contribution: number; tax_deduction: number; bonus_amount: number;
+  travel_reimbursement: number; advance_deduction: number; unpaid_leave_deduction: number;
+  other_deductions: Record<string,number>; total_deductions: number; net_salary: number;
+  working_days: number; present_days: number; status: string;
+}
+
+interface PayrollRunDetail extends PayrollRun {
+  notes: string | null;
+  payslips: PayrollPayslip[];
+}
+
+const PAYROLL_STATUS_COLORS: Record<string, string> = {
+  draft: "bg-slate-100 text-slate-700 border-slate-200",
+  processing: "bg-blue-100 text-blue-700 border-blue-200",
+  processed: "bg-amber-100 text-amber-700 border-amber-200",
+  approved: "bg-emerald-100 text-emerald-700 border-emerald-200",
+  paid: "bg-green-100 text-green-700 border-green-200",
+  completed: "bg-blue-100 text-blue-700 border-blue-200",
+  cancelled: "bg-red-100 text-red-700 border-red-200",
+};
+
+const MONTHS_FULL = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+
+function PayrollRunDetailView({ runId, onBack }: { runId: string; onBack: () => void }) {
   const { toast } = useToast();
-  const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState({ organization_id: "", month: new Date().getMonth() + 1, year: new Date().getFullYear() });
+  const [editingPayslip, setEditingPayslip] = useState<string | null>(null);
+  const [editValues, setEditValues] = useState<Record<string, number>>({});
 
-  const { data: orgs } = useQuery<Organization[]>({ queryKey: ["/api/hrms/organizations"] });
-  const { data: runs, isLoading } = useQuery<PayrollRun[]>({ queryKey: ["/api/hrms/payroll-runs"] });
-
-  const createMutation = useMutation({
-    mutationFn: (data: any) => apiRequest("POST", "/api/hrms/payroll-runs", data),
-    onSuccess: () => { queryClient.refetchQueries({ queryKey: ["/api/hrms/payroll-runs"] }); setShowForm(false); toast({ title: "Payroll run created" }); },
+  const { data: detail, isLoading } = useQuery<PayrollRunDetail>({
+    queryKey: ["/api/hrms/payroll-runs", runId],
+    queryFn: async () => {
+      const res = await fetch(`/api/hrms/payroll-runs/${runId}`, { credentials: "include" });
+      if (!res.ok) throw new Error("Failed");
+      return res.json();
+    },
   });
 
   const processMutation = useMutation({
-    mutationFn: async (id: string) => {
-      const res = await apiRequest("POST", `/api/hrms/payroll-runs/${id}/process`);
+    mutationFn: async () => {
+      const res = await apiRequest("POST", `/api/hrms/payroll-runs/${runId}/process`);
       return res.json();
     },
     onSuccess: (data: any) => {
@@ -740,10 +773,314 @@ function PayrollTab() {
         variant: data.payslip_count > 0 ? "default" : "destructive",
       });
     },
-    onError: () => { toast({ title: "Failed to process payroll", variant: "destructive" }); },
+    onError: () => toast({ title: "Failed to process", variant: "destructive" }),
   });
 
-  const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  const approveMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", `/api/hrms/payroll-runs/${runId}/approve`);
+      return res.json();
+    },
+    onSuccess: (data: any) => {
+      queryClient.refetchQueries({ queryKey: ["/api/hrms/payroll-runs"] });
+      toast({ title: data.message });
+    },
+    onError: async (err: any) => {
+      try { const r = await err.json?.(); toast({ title: r?.message || "Failed", variant: "destructive" }); } catch { toast({ title: "Failed to approve", variant: "destructive" }); }
+    },
+  });
+
+  const markPaidMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", `/api/hrms/payroll-runs/${runId}/mark-paid`);
+      return res.json();
+    },
+    onSuccess: (data: any) => {
+      queryClient.refetchQueries({ queryKey: ["/api/hrms/payroll-runs"] });
+      toast({ title: data.message });
+    },
+    onError: async (err: any) => {
+      try { const r = await err.json?.(); toast({ title: r?.message || "Failed", variant: "destructive" }); } catch { toast({ title: "Failed to mark paid", variant: "destructive" }); }
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: () => apiRequest("DELETE", `/api/hrms/payroll-runs/${runId}`),
+    onSuccess: () => {
+      queryClient.refetchQueries({ queryKey: ["/api/hrms/payroll-runs"] });
+      toast({ title: "Payroll run deleted" });
+      onBack();
+    },
+    onError: async (err: any) => {
+      try { const r = await err.json?.(); toast({ title: r?.message || "Failed", variant: "destructive" }); } catch { toast({ title: "Failed to delete", variant: "destructive" }); }
+    },
+  });
+
+  const updatePayslipMutation = useMutation({
+    mutationFn: async ({ psId, data }: { psId: string; data: Record<string, number> }) => {
+      const res = await apiRequest("PUT", `/api/hrms/payslips/${psId}`, data);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.refetchQueries({ queryKey: ["/api/hrms/payroll-runs", runId] });
+      queryClient.refetchQueries({ queryKey: ["/api/hrms/payroll-runs"] });
+      setEditingPayslip(null);
+      toast({ title: "Payslip updated" });
+    },
+    onError: async (err: any) => {
+      try { const r = await err.json?.(); toast({ title: r?.message || "Failed", variant: "destructive" }); } catch { toast({ title: "Failed to update", variant: "destructive" }); }
+    },
+  });
+
+  const [deleteConfirm, setDeleteConfirm] = useState(false);
+
+  if (isLoading) return (
+    <div className="space-y-4">
+      <Button variant="ghost" onClick={onBack}><ArrowLeft className="w-4 h-4 mr-2" /> Back</Button>
+      <Skeleton className="h-40" />
+    </div>
+  );
+
+  if (!detail) return <div className="text-center py-8 text-muted-foreground">Payroll run not found</div>;
+
+  const canEdit = !['approved', 'paid'].includes(detail.status);
+  const canProcess = ['draft', 'processed'].includes(detail.status);
+  const canApprove = ['processed', 'completed'].includes(detail.status);
+  const canMarkPaid = detail.status === 'approved';
+  const canDelete = detail.status !== 'paid';
+
+  const startEdit = (ps: PayrollPayslip) => {
+    setEditingPayslip(ps.id);
+    setEditValues({
+      basic_salary: ps.basic_salary,
+      gross_salary: ps.gross_salary,
+      cit_deduction: ps.cit_deduction,
+      ssf_employee_deduction: ps.ssf_employee_deduction,
+      tax_deduction: ps.tax_deduction,
+      bonus_amount: ps.bonus_amount,
+      travel_reimbursement: ps.travel_reimbursement,
+      advance_deduction: ps.advance_deduction,
+      unpaid_leave_deduction: ps.unpaid_leave_deduction,
+      total_deductions: ps.total_deductions,
+      net_salary: ps.net_salary,
+    });
+  };
+
+  const saveEdit = () => {
+    if (!editingPayslip) return;
+    updatePayslipMutation.mutate({ psId: editingPayslip, data: editValues });
+  };
+
+  const anyPending = processMutation.isPending || approveMutation.isPending || markPaidMutation.isPending || deleteMutation.isPending;
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <Button variant="ghost" onClick={onBack} data-testid="btn-back-payroll"><ArrowLeft className="w-4 h-4 mr-2" /> Back</Button>
+          <h3 className="text-lg font-semibold">{MONTHS_FULL[(detail.month || 1) - 1]} {detail.year}</h3>
+          <Badge className={PAYROLL_STATUS_COLORS[detail.status] || ""} variant="outline">{detail.status}</Badge>
+        </div>
+        <div className="flex items-center gap-2">
+          {canProcess && (
+            <Button size="sm" onClick={() => processMutation.mutate()} disabled={anyPending} data-testid="btn-process-payroll">
+              {processMutation.isPending ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <RotateCcw className="w-4 h-4 mr-1" />}
+              {detail.status === 'draft' ? 'Process' : 'Reprocess'}
+            </Button>
+          )}
+          {canApprove && (
+            <Button size="sm" variant="default" className="bg-emerald-600 hover:bg-emerald-700" onClick={() => approveMutation.mutate()} disabled={anyPending} data-testid="btn-approve-payroll">
+              {approveMutation.isPending ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <CheckCircle className="w-4 h-4 mr-1" />}
+              Approve
+            </Button>
+          )}
+          {canMarkPaid && (
+            <Button size="sm" variant="default" className="bg-green-600 hover:bg-green-700" onClick={() => markPaidMutation.mutate()} disabled={anyPending} data-testid="btn-mark-paid">
+              {markPaidMutation.isPending ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <CreditCard className="w-4 h-4 mr-1" />}
+              Mark Payment Made
+            </Button>
+          )}
+          {canDelete && (
+            <Button size="sm" variant="destructive" onClick={() => setDeleteConfirm(true)} disabled={anyPending} data-testid="btn-delete-payroll">
+              <Trash2 className="w-4 h-4 mr-1" /> Delete
+            </Button>
+          )}
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+        <Card><CardContent className="p-3 text-center"><p className="text-xs text-muted-foreground">Staff</p><p className="text-lg font-bold">{detail.payslips?.length || detail.payslip_count}</p></CardContent></Card>
+        <Card><CardContent className="p-3 text-center"><p className="text-xs text-muted-foreground">Gross</p><p className="text-lg font-bold font-mono">Rs. {detail.total_gross.toLocaleString()}</p></CardContent></Card>
+        <Card><CardContent className="p-3 text-center"><p className="text-xs text-muted-foreground">Deductions</p><p className="text-lg font-bold font-mono text-red-600">Rs. {detail.total_deductions.toLocaleString()}</p></CardContent></Card>
+        <Card><CardContent className="p-3 text-center"><p className="text-xs text-muted-foreground">Net Pay</p><p className="text-lg font-bold font-mono text-green-600">Rs. {detail.total_net.toLocaleString()}</p></CardContent></Card>
+        <Card><CardContent className="p-3 text-center"><p className="text-xs text-muted-foreground">Employer SSF</p><p className="text-lg font-bold font-mono">Rs. {detail.total_employer_contribution.toLocaleString()}</p></CardContent></Card>
+      </div>
+
+      {detail.status === 'approved' && (
+        <div className="flex items-center gap-2 p-3 bg-emerald-50 border border-emerald-200 rounded-lg text-sm text-emerald-700">
+          <CheckCircle className="w-4 h-4 shrink-0" />
+          <span>Approved by management. Click "Mark Payment Made" after salary transfer is complete. Payslips will then be visible to employees.</span>
+        </div>
+      )}
+      {detail.status === 'paid' && (
+        <div className="flex items-center gap-2 p-3 bg-green-50 border border-green-200 rounded-lg text-sm text-green-700">
+          <CreditCard className="w-4 h-4 shrink-0" />
+          <span>Payment completed. Payslips are now visible to employees in their portal.</span>
+        </div>
+      )}
+
+      {(!detail.payslips || detail.payslips.length === 0) ? (
+        <Card>
+          <CardContent className="py-12 text-center text-muted-foreground">
+            <FileText className="w-10 h-10 mx-auto mb-3 opacity-50" />
+            <p className="font-medium">No payslips generated yet</p>
+            <p className="text-sm mt-1">Click "Process" to calculate salaries for all staff</p>
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="border rounded-lg overflow-auto">
+          <Table>
+            <TableHeader>
+              <TableRow className="bg-muted/50">
+                <TableHead className="sticky left-0 bg-muted/50 z-10 min-w-[160px]">Employee</TableHead>
+                <TableHead className="text-right min-w-[100px]">Basic</TableHead>
+                <TableHead className="text-right min-w-[100px]">Gross</TableHead>
+                <TableHead className="text-right min-w-[80px]">CIT</TableHead>
+                <TableHead className="text-right min-w-[80px]">SSF</TableHead>
+                <TableHead className="text-right min-w-[80px]">Tax</TableHead>
+                <TableHead className="text-right min-w-[80px]">Bonus</TableHead>
+                <TableHead className="text-right min-w-[100px]">Unpaid Lv</TableHead>
+                <TableHead className="text-right min-w-[80px]">Advance</TableHead>
+                <TableHead className="text-right min-w-[100px]">Total Ded</TableHead>
+                <TableHead className="text-right min-w-[110px]">Net Salary</TableHead>
+                <TableHead className="text-center min-w-[70px]">Days</TableHead>
+                {canEdit && <TableHead className="text-center min-w-[80px]">Actions</TableHead>}
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {detail.payslips.map(ps => {
+                const isEditing = editingPayslip === ps.id;
+                return (
+                  <TableRow key={ps.id} className={isEditing ? "bg-blue-50/50" : ""}>
+                    <TableCell className="sticky left-0 bg-white z-10 font-medium">{ps.employee_name || "Unknown"}</TableCell>
+                    {isEditing ? (
+                      <>
+                        <TableCell className="text-right"><Input type="number" className="w-24 h-7 text-right text-xs" value={editValues.basic_salary} onChange={e => setEditValues(v => ({ ...v, basic_salary: parseFloat(e.target.value) || 0 }))} /></TableCell>
+                        <TableCell className="text-right"><Input type="number" className="w-24 h-7 text-right text-xs" value={editValues.gross_salary} onChange={e => setEditValues(v => ({ ...v, gross_salary: parseFloat(e.target.value) || 0 }))} /></TableCell>
+                        <TableCell className="text-right"><Input type="number" className="w-20 h-7 text-right text-xs" value={editValues.cit_deduction} onChange={e => setEditValues(v => ({ ...v, cit_deduction: parseFloat(e.target.value) || 0 }))} /></TableCell>
+                        <TableCell className="text-right"><Input type="number" className="w-20 h-7 text-right text-xs" value={editValues.ssf_employee_deduction} onChange={e => setEditValues(v => ({ ...v, ssf_employee_deduction: parseFloat(e.target.value) || 0 }))} /></TableCell>
+                        <TableCell className="text-right"><Input type="number" className="w-20 h-7 text-right text-xs" value={editValues.tax_deduction} onChange={e => setEditValues(v => ({ ...v, tax_deduction: parseFloat(e.target.value) || 0 }))} /></TableCell>
+                        <TableCell className="text-right"><Input type="number" className="w-20 h-7 text-right text-xs" value={editValues.bonus_amount} onChange={e => setEditValues(v => ({ ...v, bonus_amount: parseFloat(e.target.value) || 0 }))} /></TableCell>
+                        <TableCell className="text-right"><Input type="number" className="w-24 h-7 text-right text-xs" value={editValues.unpaid_leave_deduction} onChange={e => setEditValues(v => ({ ...v, unpaid_leave_deduction: parseFloat(e.target.value) || 0 }))} /></TableCell>
+                        <TableCell className="text-right"><Input type="number" className="w-20 h-7 text-right text-xs" value={editValues.advance_deduction} onChange={e => setEditValues(v => ({ ...v, advance_deduction: parseFloat(e.target.value) || 0 }))} /></TableCell>
+                        <TableCell className="text-right"><Input type="number" className="w-24 h-7 text-right text-xs" value={editValues.total_deductions} onChange={e => setEditValues(v => ({ ...v, total_deductions: parseFloat(e.target.value) || 0 }))} /></TableCell>
+                        <TableCell className="text-right"><Input type="number" className="w-28 h-7 text-right text-xs font-bold" value={editValues.net_salary} onChange={e => setEditValues(v => ({ ...v, net_salary: parseFloat(e.target.value) || 0 }))} /></TableCell>
+                        <TableCell className="text-center text-xs">{ps.present_days}/{ps.working_days}</TableCell>
+                        <TableCell className="text-center">
+                          <div className="flex gap-1 justify-center">
+                            <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-green-600" onClick={saveEdit} disabled={updatePayslipMutation.isPending}><Check className="w-3.5 h-3.5" /></Button>
+                            <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-red-500" onClick={() => setEditingPayslip(null)}><X className="w-3.5 h-3.5" /></Button>
+                          </div>
+                        </TableCell>
+                      </>
+                    ) : (
+                      <>
+                        <TableCell className="text-right font-mono text-xs">{ps.basic_salary.toLocaleString()}</TableCell>
+                        <TableCell className="text-right font-mono text-xs">{ps.gross_salary.toLocaleString()}</TableCell>
+                        <TableCell className="text-right font-mono text-xs">{ps.cit_deduction.toLocaleString()}</TableCell>
+                        <TableCell className="text-right font-mono text-xs">{ps.ssf_employee_deduction.toLocaleString()}</TableCell>
+                        <TableCell className="text-right font-mono text-xs">{ps.tax_deduction.toLocaleString()}</TableCell>
+                        <TableCell className="text-right font-mono text-xs">{ps.bonus_amount.toLocaleString()}</TableCell>
+                        <TableCell className="text-right font-mono text-xs">{ps.unpaid_leave_deduction.toLocaleString()}</TableCell>
+                        <TableCell className="text-right font-mono text-xs">{ps.advance_deduction.toLocaleString()}</TableCell>
+                        <TableCell className="text-right font-mono text-xs text-red-600">{ps.total_deductions.toLocaleString()}</TableCell>
+                        <TableCell className="text-right font-mono text-xs font-bold text-green-700">{ps.net_salary.toLocaleString()}</TableCell>
+                        <TableCell className="text-center text-xs">{ps.present_days}/{ps.working_days}</TableCell>
+                        {canEdit && (
+                          <TableCell className="text-center">
+                            <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => startEdit(ps)} data-testid={`btn-edit-payslip-${ps.id}`}><Pencil className="w-3.5 h-3.5" /></Button>
+                          </TableCell>
+                        )}
+                      </>
+                    )}
+                  </TableRow>
+                );
+              })}
+              <TableRow className="bg-muted/30 font-bold">
+                <TableCell className="sticky left-0 bg-muted/30 z-10">TOTAL ({detail.payslips.length} staff)</TableCell>
+                <TableCell className="text-right font-mono text-xs">{detail.payslips.reduce((s, p) => s + p.basic_salary, 0).toLocaleString()}</TableCell>
+                <TableCell className="text-right font-mono text-xs">{detail.payslips.reduce((s, p) => s + p.gross_salary, 0).toLocaleString()}</TableCell>
+                <TableCell className="text-right font-mono text-xs">{detail.payslips.reduce((s, p) => s + p.cit_deduction, 0).toLocaleString()}</TableCell>
+                <TableCell className="text-right font-mono text-xs">{detail.payslips.reduce((s, p) => s + p.ssf_employee_deduction, 0).toLocaleString()}</TableCell>
+                <TableCell className="text-right font-mono text-xs">{detail.payslips.reduce((s, p) => s + p.tax_deduction, 0).toLocaleString()}</TableCell>
+                <TableCell className="text-right font-mono text-xs">{detail.payslips.reduce((s, p) => s + p.bonus_amount, 0).toLocaleString()}</TableCell>
+                <TableCell className="text-right font-mono text-xs">{detail.payslips.reduce((s, p) => s + p.unpaid_leave_deduction, 0).toLocaleString()}</TableCell>
+                <TableCell className="text-right font-mono text-xs">{detail.payslips.reduce((s, p) => s + p.advance_deduction, 0).toLocaleString()}</TableCell>
+                <TableCell className="text-right font-mono text-xs text-red-600">{detail.payslips.reduce((s, p) => s + p.total_deductions, 0).toLocaleString()}</TableCell>
+                <TableCell className="text-right font-mono text-xs text-green-700">{detail.payslips.reduce((s, p) => s + p.net_salary, 0).toLocaleString()}</TableCell>
+                <TableCell></TableCell>
+                {canEdit && <TableCell></TableCell>}
+              </TableRow>
+            </TableBody>
+          </Table>
+        </div>
+      )}
+
+      <AlertDialog open={deleteConfirm} onOpenChange={setDeleteConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Payroll Run?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently delete the payroll run for {MONTHS_FULL[(detail.month || 1) - 1]} {detail.year} and all associated payslips. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction className="bg-red-600 hover:bg-red-700" onClick={() => deleteMutation.mutate()}>Delete</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </div>
+  );
+}
+
+function PayrollTab() {
+  const { toast } = useToast();
+  const [showForm, setShowForm] = useState(false);
+  const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
+  const [form, setForm] = useState({ organization_id: "", month: new Date().getMonth() + 1, year: new Date().getFullYear() });
+
+  const { data: orgs } = useQuery<Organization[]>({ queryKey: ["/api/hrms/organizations"] });
+  const { data: runs, isLoading } = useQuery<PayrollRun[]>({ queryKey: ["/api/hrms/payroll-runs"] });
+
+  const createMutation = useMutation({
+    mutationFn: (data: any) => apiRequest("POST", "/api/hrms/payroll-runs", data),
+    onSuccess: async (res: any) => {
+      queryClient.refetchQueries({ queryKey: ["/api/hrms/payroll-runs"] });
+      setShowForm(false);
+      try {
+        const result = await res.json();
+        setSelectedRunId(result.id);
+        toast({ title: "Payroll run created" });
+      } catch {
+        toast({ title: "Payroll run created" });
+      }
+    },
+    onError: async (err: any) => {
+      try {
+        const r = await err.json?.();
+        toast({ title: r?.message || "Failed to create payroll run", variant: "destructive" });
+      } catch {
+        toast({ title: "Payroll run already exists for this period", variant: "destructive" });
+      }
+    },
+  });
+
+  const months = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+
+  if (selectedRunId) {
+    return <PayrollRunDetailView runId={selectedRunId} onBack={() => setSelectedRunId(null)} />;
+  }
 
   return (
     <div className="space-y-4">
@@ -758,35 +1095,35 @@ function PayrollTab() {
             <TableRow>
               <TableHead>Period</TableHead>
               <TableHead>Organization</TableHead>
-              <TableHead>Payslips</TableHead>
-              <TableHead>Gross</TableHead>
-              <TableHead>Deductions</TableHead>
-              <TableHead>Net</TableHead>
+              <TableHead className="text-center">Payslips</TableHead>
+              <TableHead className="text-right">Gross</TableHead>
+              <TableHead className="text-right">Deductions</TableHead>
+              <TableHead className="text-right">Net</TableHead>
               <TableHead>Status</TableHead>
-              <TableHead>Actions</TableHead>
+              <TableHead className="text-center">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {runs?.map(r => (
-              <TableRow key={r.id}>
-                <TableCell className="font-medium">{months[r.month - 1]} {r.year}</TableCell>
+              <TableRow key={r.id} className="cursor-pointer hover:bg-muted/50" onClick={() => setSelectedRunId(r.id)} data-testid={`row-payroll-${r.id}`}>
+                <TableCell className="font-medium">{months[(r.month || 1) - 1]} {r.year}</TableCell>
                 <TableCell>{r.organization_name}</TableCell>
-                <TableCell>{r.payslip_count}</TableCell>
-                <TableCell>Rs. {r.total_gross.toLocaleString()}</TableCell>
-                <TableCell>Rs. {r.total_deductions.toLocaleString()}</TableCell>
-                <TableCell className="font-medium">Rs. {r.total_net.toLocaleString()}</TableCell>
-                <TableCell><Badge variant={r.status === "completed" ? "default" : r.status === "processing" ? "secondary" : "outline"}>{r.status}</Badge></TableCell>
+                <TableCell className="text-center">{r.payslip_count}</TableCell>
+                <TableCell className="text-right font-mono">Rs. {r.total_gross.toLocaleString()}</TableCell>
+                <TableCell className="text-right font-mono">Rs. {r.total_deductions.toLocaleString()}</TableCell>
+                <TableCell className="text-right font-medium font-mono">Rs. {r.total_net.toLocaleString()}</TableCell>
                 <TableCell>
-                  {r.status === "draft" && (
-                    <Button variant="default" size="sm" onClick={() => processMutation.mutate(r.id)} disabled={processMutation.isPending} data-testid={`button-process-${r.id}`}>
-                      Process
-                    </Button>
-                  )}
+                  <Badge className={PAYROLL_STATUS_COLORS[r.status] || ""} variant="outline">{r.status}</Badge>
+                </TableCell>
+                <TableCell className="text-center">
+                  <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); setSelectedRunId(r.id); }} data-testid={`btn-view-payroll-${r.id}`}>
+                    <Eye className="w-4 h-4" />
+                  </Button>
                 </TableCell>
               </TableRow>
             ))}
             {(!runs || runs.length === 0) && (
-              <TableRow><TableCell colSpan={8} className="text-center text-muted-foreground py-8">No payroll runs yet</TableCell></TableRow>
+              <TableRow><TableCell colSpan={8} className="text-center text-muted-foreground py-8">No payroll runs yet. Click "New Payroll Run" to get started.</TableCell></TableRow>
             )}
           </TableBody>
         </Table>
@@ -795,28 +1132,43 @@ function PayrollTab() {
       <Dialog open={showForm} onOpenChange={setShowForm}>
         <DialogContent>
           <DialogHeader><DialogTitle>New Payroll Run</DialogTitle></DialogHeader>
-          <div className="grid gap-3">
+          <div className="grid gap-4">
             <div>
               <Label>Organization</Label>
               <Select value={form.organization_id} onValueChange={v => setForm({ ...form, organization_id: v })}>
-                <SelectTrigger><SelectValue placeholder="Select organization" /></SelectTrigger>
+                <SelectTrigger data-testid="select-payroll-org"><SelectValue placeholder="Select organization" /></SelectTrigger>
                 <SelectContent>{orgs?.map(o => <SelectItem key={o.id} value={o.id}>{o.name}</SelectItem>)}</SelectContent>
               </Select>
             </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label>Month</Label>
-                <Select value={String(form.month)} onValueChange={v => setForm({ ...form, month: parseInt(v) })}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>{months.map((m, i) => <SelectItem key={i} value={String(i + 1)}>{m}</SelectItem>)}</SelectContent>
-                </Select>
-              </div>
-              <div><Label>Year</Label><Input type="number" value={form.year} onChange={e => setForm({ ...form, year: parseInt(e.target.value) || 2026 })} /></div>
+            <div>
+              <Label>Month</Label>
+              <Select value={String(form.month)} onValueChange={v => setForm({ ...form, month: parseInt(v) })}>
+                <SelectTrigger data-testid="select-payroll-month"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {months.map((m, i) => (
+                    <SelectItem key={i} value={String(i + 1)}>{m}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>Year</Label>
+              <Select value={String(form.year)} onValueChange={v => setForm({ ...form, year: parseInt(v) })}>
+                <SelectTrigger data-testid="select-payroll-year"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {[2024, 2025, 2026, 2027].map(y => (
+                    <SelectItem key={y} value={String(y)}>{y}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowForm(false)}>Cancel</Button>
-            <Button onClick={() => createMutation.mutate(form)} disabled={createMutation.isPending} data-testid="button-save-payroll">Create</Button>
+            <Button onClick={() => createMutation.mutate(form)} disabled={createMutation.isPending || !form.organization_id} data-testid="button-save-payroll">
+              {createMutation.isPending ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : null}
+              Create & Open
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
