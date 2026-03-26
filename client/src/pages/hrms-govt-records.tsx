@@ -8,7 +8,12 @@ import {
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
-import { Landmark, TrendingUp, Shield, Wallet } from "lucide-react";
+import { Landmark, TrendingUp, Shield, Wallet, Building2 } from "lucide-react";
+
+interface Organization {
+  id: string;
+  name: string;
+}
 
 interface StaffDetail {
   employee_id: string;
@@ -55,11 +60,16 @@ export function GovernmentRecordsTab() {
   const [filterYear, setFilterYear] = useState(String(new Date().getFullYear()));
   const [filterMonth, setFilterMonth] = useState(String(currentMonth));
   const [recordType, setRecordType] = useState("tax");
+  const [filterOrg, setFilterOrg] = useState("all");
+
+  const { data: orgs } = useQuery<Organization[]>({ queryKey: ["/api/hrms/organizations"] });
 
   const { data, isLoading } = useQuery<GovtTaxData>({
-    queryKey: ["/api/hrms/government-tax-records", { year: filterYear }],
+    queryKey: ["/api/hrms/government-tax-records", { year: filterYear, organization_id: filterOrg }],
     queryFn: async () => {
-      const res = await fetch(`/api/hrms/government-tax-records?year=${filterYear}`, { credentials: "include" });
+      const params = new URLSearchParams({ year: filterYear });
+      if (filterOrg !== "all") params.set("organization_id", filterOrg);
+      const res = await fetch(`/api/hrms/government-tax-records?${params}`, { credentials: "include" });
       if (!res.ok) throw new Error(`Failed: ${res.status}`);
       return res.json();
     },
@@ -121,6 +131,18 @@ export function GovernmentRecordsTab() {
             {typeOptions.map(t => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
           </SelectContent>
         </Select>
+        {orgs && orgs.length > 1 && (
+          <Select value={filterOrg} onValueChange={setFilterOrg}>
+            <SelectTrigger className="w-52" data-testid="select-organization">
+              <Building2 className="h-4 w-4 mr-1 text-muted-foreground" />
+              <SelectValue placeholder="All Organizations" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Organizations</SelectItem>
+              {orgs.map(o => <SelectItem key={o.id} value={o.id}>{o.name}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        )}
       </div>
 
       {summaryCards.length > 0 && totals && (
