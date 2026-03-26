@@ -3,8 +3,13 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1" />
-    <title>Agreement Portal | Study Info Centre</title>
+    <title>HRMS Portal | Study Info Centre</title>
     <meta name="description" content="University Agreement & Commission Management Portal" />
+    <script>
+      if (!window.location.hostname.includes("people.")) {
+        document.title = "Agreement Portal | Study Info Centre";
+      }
+    </script>
     <link rel="icon" type="image/x-icon" href="/favicon.ico" />
     <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
     <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png" />
