@@ -61,6 +61,7 @@ urlpatterns = [
     path('hrms/notification-settings', views.NotificationSettingView.as_view()),
 
     path('hrms/staff-profiles', views.StaffProfileListView.as_view()),
+    path('hrms/employees/<uuid:employee_id>/status', views.EmployeeStatusChangeView.as_view()),
     path('hrms/employee-360/<uuid:employee_id>', views.Employee360View.as_view()),
 
     path('hrms/bonuses', views.BonusListView.as_view()),

@@ -19,8 +19,16 @@ import {
 } from "@/components/ui/table";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
   User, DollarSign, Pencil, Building2, Shield, Plus, Eye, Search,
+  UserX, UserCheck, MoreHorizontal,
 } from "lucide-react";
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { EmployeeDetailView } from "./hrms-employee-detail";
 
 interface StaffProfile {
@@ -103,6 +111,8 @@ export function StaffProfilesTab() {
   const [editingEmployee, setEditingEmployee] = useState<StaffProfile | null>(null);
   const [viewEmployeeId, setViewEmployeeId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
+  const [statusFilter, setStatusFilter] = useState<string>("active");
+  const [statusChangeTarget, setStatusChangeTarget] = useState<{ id: string; name: string; newStatus: string } | null>(null);
   const [salaryForm, setSalaryForm] = useState({
     basic_salary: "",
     cit_type: "none",
@@ -132,7 +142,14 @@ export function StaffProfilesTab() {
     emergency_contact_name: "", emergency_contact_phone: "",
   });
 
-  const { data: staff, isLoading } = useQuery<StaffProfile[]>({ queryKey: ["/api/hrms/staff-profiles"] });
+  const { data: staff, isLoading } = useQuery<StaffProfile[]>({
+    queryKey: ["/api/hrms/staff-profiles", statusFilter],
+    queryFn: async () => {
+      const res = await fetch(`/api/hrms/staff-profiles?status=${statusFilter}`, { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to fetch");
+      return res.json();
+    },
+  });
   const { data: orgs } = useQuery<Organization[]>({ queryKey: ["/api/hrms/organizations"] });
   const { data: depts } = useQuery<Department[]>({ queryKey: ["/api/hrms/departments"] });
   const { data: countryLabels } = useQuery<CountryTaxLabelRecord[]>({ queryKey: ["/api/hrms/country-tax-labels"] });
@@ -179,6 +196,18 @@ export function StaffProfilesTab() {
       setShowEditEmployee(false);
       setEditingEmployee(null);
       toast({ title: "Employee updated" });
+    },
+    onError: (err: any) => toast({ title: "Error", description: err.message, variant: "destructive" }),
+  });
+
+  const changeStatusMutation = useMutation({
+    mutationFn: ({ id, status }: { id: string; status: string }) =>
+      apiRequest("PATCH", `/api/hrms/employees/${id}/status`, { status }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/hrms/staff-profiles"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/employees"] });
+      setStatusChangeTarget(null);
+      toast({ title: "Employee status updated" });
     },
     onError: (err: any) => toast({ title: "Error", description: err.message, variant: "destructive" }),
   });
@@ -367,6 +396,14 @@ export function StaffProfilesTab() {
           <Badge variant="outline">{staff?.length || 0} Staff</Badge>
         </div>
         <div className="flex items-center gap-2">
+          <div className="flex border rounded-md overflow-hidden">
+            {(["active", "inactive", "terminated", "resigned", "all"] as const).map(s => (
+              <button key={s} onClick={() => setStatusFilter(s)} data-testid={`btn-filter-${s}`}
+                className={`px-3 py-1.5 text-xs font-medium transition-colors ${statusFilter === s ? "bg-primary text-primary-foreground" : "hover:bg-muted"}`}>
+                {s === "all" ? "All" : s.charAt(0).toUpperCase() + s.slice(1)}
+              </button>
+            ))}
+          </div>
           <div className="relative">
             <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
             <Input
@@ -399,6 +436,7 @@ export function StaffProfilesTab() {
         <TableHeader>
           <TableRow>
             <TableHead>Employee</TableHead>
+            <TableHead>Status</TableHead>
             <TableHead>Organization</TableHead>
             <TableHead>Department</TableHead>
             <TableHead>Position</TableHead>
@@ -422,6 +460,20 @@ export function StaffProfilesTab() {
                     <p className="text-xs text-muted-foreground">{s.email}</p>
                   </div>
                 </div>
+              </TableCell>
+              <TableCell>
+                {(() => {
+                  const colors: Record<string, string> = {
+                    active: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400",
+                    inactive: "bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400",
+                    terminated: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400",
+                    resigned: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400",
+                    on_notice: "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400",
+                  };
+                  return <Badge className={`text-xs ${colors[s.status] || colors.inactive}`} data-testid={`badge-status-${s.id}`}>
+                    {s.status === "on_notice" ? "On Notice" : s.status.charAt(0).toUpperCase() + s.status.slice(1)}
+                  </Badge>;
+                })()}
               </TableCell>
               <TableCell className="text-sm">{s.organization_name || "—"}</TableCell>
               <TableCell className="text-sm">{s.department_name || s.department || "—"}</TableCell>
@@ -458,13 +510,43 @@ export function StaffProfilesTab() {
                   <Button size="sm" variant="outline" onClick={() => openSalaryDialog(s)} data-testid={`btn-salary-${s.id}`}>
                     <DollarSign className="w-3 h-3 mr-1" /> {s.salary_structure ? "Edit" : "Set"}
                   </Button>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button size="sm" variant="ghost" data-testid={`btn-more-${s.id}`}>
+                        <MoreHorizontal className="w-3 h-3" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      {s.status === "active" && (
+                        <>
+                          <DropdownMenuItem onClick={() => setStatusChangeTarget({ id: s.id, name: s.full_name, newStatus: "inactive" })} data-testid={`btn-deactivate-${s.id}`}>
+                            <UserX className="w-3.5 h-3.5 mr-2 text-gray-500" /> Deactivate
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => setStatusChangeTarget({ id: s.id, name: s.full_name, newStatus: "on_notice" })} data-testid={`btn-notice-${s.id}`}>
+                            <UserX className="w-3.5 h-3.5 mr-2 text-orange-500" /> Put on Notice
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => setStatusChangeTarget({ id: s.id, name: s.full_name, newStatus: "terminated" })} className="text-red-600" data-testid={`btn-terminate-${s.id}`}>
+                            <UserX className="w-3.5 h-3.5 mr-2" /> Terminate
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => setStatusChangeTarget({ id: s.id, name: s.full_name, newStatus: "resigned" })} data-testid={`btn-resign-${s.id}`}>
+                            <UserX className="w-3.5 h-3.5 mr-2 text-amber-500" /> Mark as Resigned
+                          </DropdownMenuItem>
+                        </>
+                      )}
+                      {s.status !== "active" && (
+                        <DropdownMenuItem onClick={() => setStatusChangeTarget({ id: s.id, name: s.full_name, newStatus: "active" })} data-testid={`btn-reactivate-${s.id}`}>
+                          <UserCheck className="w-3.5 h-3.5 mr-2 text-green-500" /> Reactivate
+                        </DropdownMenuItem>
+                      )}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 </div>
               </TableCell>
             </TableRow>
           ))}
           {(!filteredStaff || filteredStaff.length === 0) && (
-            <TableRow><TableCell colSpan={9} className="text-center text-muted-foreground py-8">
-              {searchTerm ? "No staff matching search." : "No active staff found. Click 'Add Employee' to onboard your first employee."}
+            <TableRow><TableCell colSpan={10} className="text-center text-muted-foreground py-8">
+              {searchTerm ? "No staff matching search." : statusFilter === "active" ? "No active staff found. Click 'Add Employee' to onboard your first employee." : `No ${statusFilter} employees found.`}
             </TableCell></TableRow>
           )}
         </TableBody>
@@ -891,6 +973,41 @@ export function StaffProfilesTab() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <AlertDialog open={!!statusChangeTarget} onOpenChange={open => { if (!open) setStatusChangeTarget(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {statusChangeTarget?.newStatus === "terminated" ? "Terminate Employee" :
+               statusChangeTarget?.newStatus === "inactive" ? "Deactivate Employee" :
+               statusChangeTarget?.newStatus === "resigned" ? "Mark as Resigned" :
+               statusChangeTarget?.newStatus === "on_notice" ? "Put on Notice" :
+               "Reactivate Employee"}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {statusChangeTarget?.newStatus === "terminated"
+                ? `Are you sure you want to terminate "${statusChangeTarget?.name}"? They will no longer appear in active views including attendance and payroll.`
+                : statusChangeTarget?.newStatus === "active"
+                ? `Are you sure you want to reactivate "${statusChangeTarget?.name}"? They will appear in active views again.`
+                : `Are you sure you want to change the status of "${statusChangeTarget?.name}" to ${statusChangeTarget?.newStatus}?`}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel data-testid="btn-cancel-status">Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (statusChangeTarget) {
+                  changeStatusMutation.mutate({ id: statusChangeTarget.id, status: statusChangeTarget.newStatus });
+                }
+              }}
+              className={statusChangeTarget?.newStatus === "terminated" ? "bg-red-600 hover:bg-red-700" : ""}
+              data-testid="btn-confirm-status"
+            >
+              {changeStatusMutation.isPending ? "Updating..." : "Confirm"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

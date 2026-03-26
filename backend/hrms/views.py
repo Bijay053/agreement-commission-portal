@@ -3416,12 +3416,40 @@ class AdvancePaymentDetailView(APIView):
         return Response({'message': 'Advance payment deleted'})
 
 
+class EmployeeStatusChangeView(APIView):
+    @require_permission('hrms.staff.write')
+    def patch(self, request, employee_id):
+        try:
+            emp = Employee.objects.get(id=employee_id)
+        except Employee.DoesNotExist:
+            return Response({'error': 'Employee not found'}, status=404)
+
+        new_status = request.data.get('status')
+        valid_statuses = ['active', 'inactive', 'terminated', 'resigned', 'on_notice']
+        if new_status not in valid_statuses:
+            return Response({'error': f'Invalid status. Must be one of: {", ".join(valid_statuses)}'}, status=400)
+
+        emp.status = new_status
+        emp.save(update_fields=['status', 'updated_at'])
+
+        return Response({
+            'id': str(emp.id),
+            'full_name': emp.full_name,
+            'status': emp.status,
+            'message': f'Employee status changed to {new_status}',
+        })
+
+
 class StaffProfileListView(APIView):
     @require_permission('hrms.staff.read')
     def get(self, request):
         org = request.GET.get('organization_id')
         dept = request.GET.get('department_id')
-        qs = Employee.objects.filter(status='active')
+        status_filter = request.GET.get('status', 'active')
+        if status_filter == 'all':
+            qs = Employee.objects.all()
+        else:
+            qs = Employee.objects.filter(status=status_filter)
         if org:
             qs = qs.filter(organization_id=org)
         if dept:
