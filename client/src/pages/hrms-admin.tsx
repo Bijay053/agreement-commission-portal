@@ -555,12 +555,24 @@ function AttendanceTab() {
     setCurrentDate(d.toISOString().split("T")[0]);
   };
 
+  const extractTime = (isoStr: string | null) => {
+    if (!isoStr) return "";
+    try {
+      const d = new Date(isoStr);
+      return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+    } catch {
+      const tIdx = isoStr.indexOf("T");
+      if (tIdx >= 0) return isoStr.substring(tIdx + 1, tIdx + 6);
+      return "";
+    }
+  };
+
   const openEdit = (empId: string, day: string, existing: any) => {
     setEditingCell({ empId, day });
     setEditForm({
       status: existing?.status || "present",
-      check_in: existing?.check_in ? existing.check_in.substring(0, 5) : "",
-      check_out: existing?.check_out ? existing.check_out.substring(0, 5) : "",
+      check_in: extractTime(existing?.check_in),
+      check_out: extractTime(existing?.check_out),
       notes: existing?.notes || "",
     });
   };
@@ -775,6 +787,8 @@ function AttendanceTab() {
                     <th className="p-2 border-b text-center min-w-[70px] font-medium">Method</th>
                     <th className="p-2 border-b text-center min-w-[70px] font-medium">Hours</th>
                     <th className="p-2 border-b text-center min-w-[50px] font-medium">Late</th>
+                    <th className="p-2 border-b text-center min-w-[60px] font-medium">Photos</th>
+                    <th className="p-2 border-b text-center min-w-[80px] font-medium">Location</th>
                     <th className="p-2 border-b text-center min-w-[50px] font-medium">Notes</th>
                     <th className="p-2 border-b text-center min-w-[50px] font-medium">Edit</th>
                   </tr>
@@ -810,6 +824,7 @@ function AttendanceTab() {
                         return `${h}h ${m}m`;
                       } catch { return "—"; }
                     };
+                    const loc = entry?.check_in_location;
                     return (
                       <tr key={emp.employee_id} className="hover:bg-muted/30 border-b" data-testid={`daily-row-${emp.employee_id}`}>
                         <td className="p-2 border-r">
@@ -845,6 +860,31 @@ function AttendanceTab() {
                             </span>
                           ) : "—"}
                         </td>
+                        <td className="p-2 text-center border-r">
+                          {(entry?.check_in_photo_url || entry?.check_out_photo_url) ? (
+                            <div className="flex gap-1 justify-center">
+                              {entry.check_in_photo_url && (
+                                <a href={entry.check_in_photo_url} target="_blank" rel="noreferrer" title="Check-in photo">
+                                  <img src={entry.check_in_photo_url} alt="In" className="w-7 h-7 rounded object-cover border hover:ring-2 hover:ring-primary" />
+                                </a>
+                              )}
+                              {entry.check_out_photo_url && (
+                                <a href={entry.check_out_photo_url} target="_blank" rel="noreferrer" title="Check-out photo">
+                                  <img src={entry.check_out_photo_url} alt="Out" className="w-7 h-7 rounded object-cover border hover:ring-2 hover:ring-primary" />
+                                </a>
+                              )}
+                            </div>
+                          ) : "—"}
+                        </td>
+                        <td className="p-2 text-center border-r">
+                          {loc ? (
+                            <a href={`https://www.openstreetmap.org/?mlat=${loc.lat || loc.latitude}&mlon=${loc.lng || loc.longitude}#map=16/${loc.lat || loc.latitude}/${loc.lng || loc.longitude}`}
+                              target="_blank" rel="noreferrer"
+                              className="inline-flex items-center gap-0.5 text-[10px] text-primary hover:underline" title={`${(loc.lat || loc.latitude)?.toFixed(4)}, ${(loc.lng || loc.longitude)?.toFixed(4)}`}>
+                              <MapPin className="w-3 h-3" /> Map
+                            </a>
+                          ) : "—"}
+                        </td>
                         <td className="p-2 text-center border-r text-muted-foreground truncate max-w-[100px]">
                           {entry?.notes || "—"}
                         </td>
@@ -859,7 +899,7 @@ function AttendanceTab() {
                     );
                   })}
                   {filteredEmployees.length === 0 && (
-                    <tr><td colSpan={10} className="text-center p-8 text-muted-foreground">
+                    <tr><td colSpan={12} className="text-center p-8 text-muted-foreground">
                       {searchTerm ? `No employees matching "${searchTerm}"` : "No employees found"}
                     </td></tr>
                   )}
@@ -944,40 +984,87 @@ function AttendanceTab() {
       )}
 
       <Dialog open={!!editingCell} onOpenChange={open => { if (!open) setEditingCell(null); }}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>Edit Attendance — {editingCell?.day && new Date(editingCell.day + "T00:00:00").toLocaleDateString("en", { weekday: "short", month: "short", day: "numeric" })}</DialogTitle>
           </DialogHeader>
-          <div className="space-y-3">
-            <div>
-              <Label>Status</Label>
-              <Select value={editForm.status} onValueChange={v => setEditForm(f => ({ ...f, status: v }))}>
-                <SelectTrigger data-testid="select-att-status"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="present">Present</SelectItem>
-                  <SelectItem value="absent">Absent</SelectItem>
-                  <SelectItem value="on_leave">On Leave</SelectItem>
-                  <SelectItem value="half_day">Half Day</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            {editForm.status !== "absent" && editForm.status !== "on_leave" && (
-              <div className="grid grid-cols-2 gap-3">
+          {(() => {
+            const emp = allEmployees.find((e: any) => e.employee_id === editingCell?.empId);
+            const entry = emp?.attendance[editingCell?.day || ""];
+            const loc = entry?.check_in_location;
+            return (
+              <div className="space-y-3">
+                {(entry?.check_in_photo_url || entry?.check_out_photo_url || loc) && (
+                  <div className="rounded-lg border p-3 bg-muted/30 space-y-2">
+                    <p className="text-xs font-semibold text-muted-foreground uppercase">Remote Check-In Details</p>
+                    {(entry?.check_in_photo_url || entry?.check_out_photo_url) && (
+                      <div className="flex gap-3">
+                        {entry?.check_in_photo_url && (
+                          <div className="text-center">
+                            <a href={entry.check_in_photo_url} target="_blank" rel="noreferrer">
+                              <img src={entry.check_in_photo_url} alt="Check-in" className="w-20 h-20 rounded-lg object-cover border hover:ring-2 hover:ring-primary" />
+                            </a>
+                            <p className="text-[10px] text-muted-foreground mt-1">Check-in Photo</p>
+                          </div>
+                        )}
+                        {entry?.check_out_photo_url && (
+                          <div className="text-center">
+                            <a href={entry.check_out_photo_url} target="_blank" rel="noreferrer">
+                              <img src={entry.check_out_photo_url} alt="Check-out" className="w-20 h-20 rounded-lg object-cover border hover:ring-2 hover:ring-primary" />
+                            </a>
+                            <p className="text-[10px] text-muted-foreground mt-1">Check-out Photo</p>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                    {loc && (
+                      <div className="flex items-center gap-2 text-xs">
+                        <MapPin className="w-3.5 h-3.5 text-primary" />
+                        <a href={`https://www.openstreetmap.org/?mlat=${loc.lat || loc.latitude}&mlon=${loc.lng || loc.longitude}#map=16/${loc.lat || loc.latitude}/${loc.lng || loc.longitude}`}
+                          target="_blank" rel="noreferrer" className="text-primary hover:underline">
+                          {(loc.lat || loc.latitude)?.toFixed(6)}, {(loc.lng || loc.longitude)?.toFixed(6)}
+                        </a>
+                      </div>
+                    )}
+                    {(entry?.check_in_method || entry?.check_out_method) && (
+                      <div className="flex gap-3 text-xs">
+                        {entry?.check_in_method && <span>Check-in method: <strong>{entry.check_in_method === "online" ? "Remote" : entry.check_in_method}</strong></span>}
+                        {entry?.check_out_method && <span>Check-out method: <strong>{entry.check_out_method === "online" ? "Remote" : entry.check_out_method}</strong></span>}
+                      </div>
+                    )}
+                  </div>
+                )}
                 <div>
-                  <Label>Check In</Label>
-                  <Input type="time" value={editForm.check_in} onChange={e => setEditForm(f => ({ ...f, check_in: e.target.value }))} data-testid="input-checkin" />
+                  <Label>Status</Label>
+                  <Select value={editForm.status} onValueChange={v => setEditForm(f => ({ ...f, status: v }))}>
+                    <SelectTrigger data-testid="select-att-status"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="present">Present</SelectItem>
+                      <SelectItem value="absent">Absent</SelectItem>
+                      <SelectItem value="on_leave">On Leave</SelectItem>
+                      <SelectItem value="half_day">Half Day</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
+                {editForm.status !== "absent" && editForm.status !== "on_leave" && (
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <Label>Check In</Label>
+                      <Input type="time" value={editForm.check_in} onChange={e => setEditForm(f => ({ ...f, check_in: e.target.value }))} data-testid="input-checkin" />
+                    </div>
+                    <div>
+                      <Label>Check Out</Label>
+                      <Input type="time" value={editForm.check_out} onChange={e => setEditForm(f => ({ ...f, check_out: e.target.value }))} data-testid="input-checkout" />
+                    </div>
+                  </div>
+                )}
                 <div>
-                  <Label>Check Out</Label>
-                  <Input type="time" value={editForm.check_out} onChange={e => setEditForm(f => ({ ...f, check_out: e.target.value }))} data-testid="input-checkout" />
+                  <Label>Notes</Label>
+                  <Input value={editForm.notes} onChange={e => setEditForm(f => ({ ...f, notes: e.target.value }))} placeholder="Optional notes" data-testid="input-att-notes" />
                 </div>
               </div>
-            )}
-            <div>
-              <Label>Notes</Label>
-              <Input value={editForm.notes} onChange={e => setEditForm(f => ({ ...f, notes: e.target.value }))} placeholder="Optional notes" data-testid="input-att-notes" />
-            </div>
-          </div>
+            );
+          })()}
           <DialogFooter>
             <Button variant="outline" onClick={() => setEditingCell(null)}>Cancel</Button>
             <Button onClick={saveEdit} disabled={saveMutation.isPending} data-testid="btn-save-att">
