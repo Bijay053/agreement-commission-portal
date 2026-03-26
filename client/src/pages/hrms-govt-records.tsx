@@ -92,14 +92,26 @@ export function GovernmentRecordsTab() {
     typeOptions.push({ value: "ssf", label: "SSF", icon: <Wallet className="h-4 w-4 text-green-500" /> });
   }
 
+  const displayTotals = filterMonth !== "all" && selectedMonth
+    ? {
+        total_cit: selectedMonth.total_cit,
+        total_ssf_employee: selectedMonth.total_ssf_employee,
+        total_ssf_employer: selectedMonth.total_ssf_employer,
+        total_tax: selectedMonth.total_tax,
+        total_payable_to_govt: selectedMonth.total_payable_to_govt,
+      }
+    : totals;
+
+  const summaryLabel = filterMonth !== "all" ? MONTHS[parseInt(filterMonth) - 1] : "Total";
+
   const summaryCards = [];
-  if (totals && hasData) {
-    summaryCards.push({ icon: <Shield className="h-4 w-4 text-blue-500" />, label: "Total CIT", value: totals.total_cit, testId: "text-total-cit" });
+  if (displayTotals && hasData) {
+    summaryCards.push({ icon: <Shield className="h-4 w-4 text-blue-500" />, label: `${summaryLabel} CIT`, value: displayTotals.total_cit, testId: "text-total-cit" });
     if (hasSSF) {
-      summaryCards.push({ icon: <Wallet className="h-4 w-4 text-green-500" />, label: "SSF (Employee)", value: totals.total_ssf_employee, testId: "text-total-ssf-emp" });
-      summaryCards.push({ icon: <Wallet className="h-4 w-4 text-purple-500" />, label: "SSF (Employer)", value: totals.total_ssf_employer, testId: "text-total-ssf-empr" });
+      summaryCards.push({ icon: <Wallet className="h-4 w-4 text-green-500" />, label: "SSF (Employee)", value: displayTotals.total_ssf_employee, testId: "text-total-ssf-emp" });
+      summaryCards.push({ icon: <Wallet className="h-4 w-4 text-purple-500" />, label: "SSF (Employer)", value: displayTotals.total_ssf_employer, testId: "text-total-ssf-empr" });
     }
-    summaryCards.push({ icon: <TrendingUp className="h-4 w-4 text-orange-500" />, label: "Income Tax", value: totals.total_tax, testId: "text-total-tax" });
+    summaryCards.push({ icon: <TrendingUp className="h-4 w-4 text-orange-500" />, label: `${summaryLabel} Income Tax`, value: displayTotals.total_tax, testId: "text-total-tax" });
   }
 
   return (
@@ -145,7 +157,7 @@ export function GovernmentRecordsTab() {
         )}
       </div>
 
-      {summaryCards.length > 0 && totals && (
+      {summaryCards.length > 0 && displayTotals && (
         <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
           {summaryCards.map(c => (
             <Card key={c.testId}>
@@ -162,9 +174,9 @@ export function GovernmentRecordsTab() {
             <CardContent className="p-4">
               <div className="flex items-center gap-2 mb-1">
                 <Landmark className="h-4 w-4 text-primary" />
-                <p className="text-xs text-muted-foreground font-medium">Total to Govt</p>
+                <p className="text-xs text-muted-foreground font-medium">{summaryLabel} to Govt</p>
               </div>
-              <p className="text-xl font-bold font-mono text-primary" data-testid="text-total-govt">{totals.total_payable_to_govt.toLocaleString()}</p>
+              <p className="text-xl font-bold font-mono text-primary" data-testid="text-total-govt">{displayTotals.total_payable_to_govt.toLocaleString()}</p>
             </CardContent>
           </Card>
         </div>
