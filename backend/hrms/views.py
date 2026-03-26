@@ -403,10 +403,23 @@ def serialize_advance_payment(ap):
 
 
 def get_employee_for_user(user_id):
+    if not user_id:
+        return None
     try:
         return Employee.objects.get(user_id=user_id)
     except Employee.DoesNotExist:
-        return None
+        pass
+    try:
+        from accounts.models import User as AccountUser
+        account = AccountUser.objects.get(id=user_id)
+        if account.email:
+            emp = Employee.objects.get(email__iexact=account.email)
+            emp.user_id = user_id
+            emp.save(update_fields=['user_id'])
+            return emp
+    except (AccountUser.DoesNotExist, Employee.DoesNotExist):
+        pass
+    return None
 
 
 def _attendance_email_wrap(title, body_html):
