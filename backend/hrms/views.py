@@ -22,6 +22,35 @@ from .models import (
 )
 
 
+def get_presigned_url(s3_url, expiry=3600):
+    if not s3_url:
+        return None
+    import boto3
+    try:
+        bucket = settings.AWS_S3_BUCKET_NAME
+        region = settings.AWS_S3_REGION_NAME
+        prefix = f'https://{bucket}.s3.{region}.amazonaws.com/'
+        if s3_url.startswith(prefix):
+            key = s3_url[len(prefix):]
+        elif f'{bucket}.s3.amazonaws.com/' in s3_url:
+            key = s3_url.split(f'{bucket}.s3.amazonaws.com/')[-1]
+        else:
+            return s3_url
+        s3 = boto3.client(
+            's3',
+            aws_access_key_id=settings.AWS_ACCESS_KEY_ID,
+            aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY,
+            region_name=region,
+        )
+        return s3.generate_presigned_url(
+            'get_object',
+            Params={'Bucket': bucket, 'Key': key},
+            ExpiresIn=expiry,
+        )
+    except Exception:
+        return s3_url
+
+
 COUNTRY_TAX_LABELS = {
     'Nepal': 'PAN No.',
     'Australia': 'TFN',
@@ -254,8 +283,8 @@ def serialize_attendance(att):
         'check_out_method': att.check_out_method,
         'check_in_location': att.check_in_location,
         'check_out_location': att.check_out_location,
-        'check_in_photo_url': att.check_in_photo_url,
-        'check_out_photo_url': att.check_out_photo_url,
+        'check_in_photo_url': get_presigned_url(att.check_in_photo_url),
+        'check_out_photo_url': get_presigned_url(att.check_out_photo_url),
         'is_late': att.is_late,
         'is_early_leave': att.is_early_leave,
         'late_minutes': att.late_minutes,
@@ -1649,8 +1678,8 @@ class AttendanceGridView(APIView):
                 'late_minutes': r.late_minutes,
                 'check_in_method': r.check_in_method,
                 'check_out_method': r.check_out_method,
-                'check_in_photo_url': r.check_in_photo_url or None,
-                'check_out_photo_url': r.check_out_photo_url or None,
+                'check_in_photo_url': get_presigned_url(r.check_in_photo_url) if r.check_in_photo_url else None,
+                'check_out_photo_url': get_presigned_url(r.check_out_photo_url) if r.check_out_photo_url else None,
                 'check_in_location': r.check_in_location or None,
                 'notes': r.notes or '',
             }
