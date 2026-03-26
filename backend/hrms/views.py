@@ -141,6 +141,9 @@ def serialize_leave_policy(lp):
         'require_approval': lp.require_approval,
         'auto_approve_if_balance': lp.auto_approve_if_balance,
         'weekend_days': lp.weekend_days,
+        'advance_notice_rules': lp.advance_notice_rules or [],
+        'require_cover_person': lp.require_cover_person,
+        'require_cover_after_days': lp.require_cover_after_days,
     }
 
 
@@ -169,6 +172,16 @@ def serialize_leave_balance(lb):
         'carried_forward_days': float(lb.carried_forward_days),
         'remaining_days': float(lb.remaining_days),
     }
+
+
+def _get_cover_person_name(cover_person_id):
+    if not cover_person_id:
+        return None
+    try:
+        emp = Employee.objects.get(id=cover_person_id)
+        return emp.full_name
+    except Employee.DoesNotExist:
+        return None
 
 
 def serialize_leave_request(lr):
@@ -207,6 +220,8 @@ def serialize_leave_request(lr):
         'approved_at': lr.approved_at.isoformat() if lr.approved_at else None,
         'rejection_reason': lr.rejection_reason,
         'document_url': lr.document_url,
+        'cover_person_id': str(lr.cover_person_id) if lr.cover_person_id else None,
+        'cover_person_name': _get_cover_person_name(lr.cover_person_id),
         'created_at': lr.created_at.isoformat() if lr.created_at else None,
     }
 
@@ -839,6 +854,9 @@ class LeavePolicyListView(APIView):
             require_approval=data.get('require_approval', True),
             auto_approve_if_balance=data.get('auto_approve_if_balance', False),
             weekend_days=data.get('weekend_days', [6]),
+            advance_notice_rules=data.get('advance_notice_rules', []),
+            require_cover_person=data.get('require_cover_person', False),
+            require_cover_after_days=data.get('require_cover_after_days', 1),
         )
         return Response(serialize_leave_policy(lp), status=201)
 
@@ -861,7 +879,8 @@ class LeavePolicyDetailView(APIView):
         data = request.data
         for field in ['min_days_advance_notice', 'max_consecutive_days', 'require_document_after_days',
                       'allow_half_day', 'allow_negative_balance', 'max_negative_days',
-                      'require_approval', 'auto_approve_if_balance', 'weekend_days']:
+                      'require_approval', 'auto_approve_if_balance', 'weekend_days',
+                      'advance_notice_rules', 'require_cover_person', 'require_cover_after_days']:
             if field in data:
                 setattr(lp, field, data[field])
         lp.save()
@@ -2834,6 +2853,36 @@ class MyLeaveBalanceView(APIView):
         return Response([serialize_leave_balance(lb) for lb in balances])
 
 
+class MyLeavePolicyView(APIView):
+    @require_auth
+    def get(self, request):
+        user_id = request.session.get('userId')
+        employee = get_employee_for_user(user_id)
+        if not employee:
+            return Response({'message': 'No employee profile linked'}, status=404)
+        if not employee.organization_id:
+            return Response({})
+        policy = LeavePolicy.objects.filter(organization_id=employee.organization_id).first()
+        if not policy:
+            return Response({})
+
+        colleagues = Employee.objects.filter(
+            organization_id=employee.organization_id,
+            status='active',
+        ).exclude(id=employee.id).values('id', 'full_name', 'department_id')
+
+        return Response({
+            'advance_notice_rules': policy.advance_notice_rules or [],
+            'min_days_advance_notice': policy.min_days_advance_notice,
+            'max_consecutive_days': policy.max_consecutive_days,
+            'require_document_after_days': policy.require_document_after_days,
+            'require_cover_person': policy.require_cover_person,
+            'require_cover_after_days': policy.require_cover_after_days,
+            'allow_half_day': policy.allow_half_day,
+            'colleagues': [{'id': str(c['id']), 'full_name': c['full_name']} for c in colleagues],
+        })
+
+
 class MyLeaveRequestsView(APIView):
     @require_auth
     def get(self, request):
@@ -2889,13 +2938,28 @@ class MyLeaveRequestsView(APIView):
                 if days_count > policy.max_consecutive_days:
                     return Response({'message': f'Cannot request more than {policy.max_consecutive_days} consecutive days'}, status=400)
 
-                if policy.min_days_advance_notice > 0:
-                    days_ahead = (start - date.today()).days
+                days_ahead = (start - date.today()).days
+                advance_notice_rules = policy.advance_notice_rules or []
+                if advance_notice_rules:
+                    sorted_rules = sorted(advance_notice_rules, key=lambda r: r.get('min_leave_days', 0), reverse=True)
+                    for rule in sorted_rules:
+                        if float(days_count) >= rule.get('min_leave_days', 0):
+                            required_notice = rule.get('advance_notice_days', 0)
+                            if days_ahead < required_notice:
+                                return Response({
+                                    'message': f'Leave of {int(days_count)}+ days requires at least {required_notice} days advance notice (you gave {days_ahead} days)'
+                                }, status=400)
+                            break
+                elif policy.min_days_advance_notice > 0:
                     if days_ahead < policy.min_days_advance_notice:
                         return Response({'message': f'Leave must be requested at least {policy.min_days_advance_notice} days in advance'}, status=400)
 
                 if not policy.allow_half_day and is_half_day:
                     return Response({'message': 'Half-day leave is not allowed'}, status=400)
+
+                if policy.require_cover_person and float(days_count) >= policy.require_cover_after_days:
+                    if not data.get('cover_person_id'):
+                        return Response({'message': f'A cover person is required for leave of {policy.require_cover_after_days}+ days'}, status=400)
 
                 if not policy.allow_negative_balance:
                     current_fy = FiscalYear.objects.filter(is_current=True).first()
@@ -2918,6 +2982,7 @@ class MyLeaveRequestsView(APIView):
             half_day_period=data.get('half_day_period'),
             reason=data.get('reason'),
             document_url=data.get('document_url'),
+            cover_person_id=data.get('cover_person_id') or None,
         )
         return Response(serialize_leave_request(lr), status=201)
 

@@ -599,7 +599,7 @@ function RemoteCheckInDialog({
 function LeaveTab() {
   const { toast } = useToast();
   const [showRequestForm, setShowRequestForm] = useState(false);
-  const [leaveForm, setLeaveForm] = useState({ leave_type_id: "", start_date: "", end_date: "", reason: "" });
+  const [leaveForm, setLeaveForm] = useState({ leave_type_id: "", start_date: "", end_date: "", reason: "", cover_person_id: "" });
   const [documentFile, setDocumentFile] = useState<globalThis.File | null>(null);
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -611,6 +611,42 @@ function LeaveTab() {
   const { data: requests, isLoading: reqLoading } = useQuery<any[]>({
     queryKey: ["/api/hrms/my/leave-requests"],
   });
+
+  const { data: policy } = useQuery<any>({
+    queryKey: ["/api/hrms/my/leave-policy"],
+  });
+
+  const leaveDays = (() => {
+    if (!leaveForm.start_date || !leaveForm.end_date) return 0;
+    const s = new Date(leaveForm.start_date);
+    const e = new Date(leaveForm.end_date);
+    if (e < s) return 0;
+    return Math.floor((e.getTime() - s.getTime()) / 86400000) + 1;
+  })();
+
+  const needsCoverPerson = policy?.require_cover_person && leaveDays >= (policy?.require_cover_after_days || 1);
+
+  const advanceNoticeWarning = (() => {
+    if (!leaveForm.start_date || !policy) return null;
+    const daysAhead = Math.floor((new Date(leaveForm.start_date).getTime() - new Date().getTime()) / 86400000);
+    const rules: any[] = policy.advance_notice_rules || [];
+    if (rules.length > 0 && leaveDays > 0) {
+      const sorted = [...rules].sort((a, b) => b.min_leave_days - a.min_leave_days);
+      for (const rule of sorted) {
+        if (leaveDays >= rule.min_leave_days) {
+          if (daysAhead < rule.advance_notice_days) {
+            return `Leave of ${rule.min_leave_days}+ days requires ${rule.advance_notice_days} days advance notice`;
+          }
+          break;
+        }
+      }
+    } else if (policy.min_days_advance_notice > 0 && daysAhead < policy.min_days_advance_notice) {
+      return `Leave must be requested at least ${policy.min_days_advance_notice} days in advance`;
+    }
+    return null;
+  })();
+
+  const needsDocument = policy?.require_document_after_days && leaveDays >= policy.require_document_after_days;
 
   const submitLeave = async () => {
     setUploading(true);
@@ -641,7 +677,7 @@ function LeaveTab() {
       queryClient.refetchQueries({ queryKey: ["/api/hrms/my/leave-requests"] });
       queryClient.refetchQueries({ queryKey: ["/api/hrms/my/leave-balance"] });
       setShowRequestForm(false);
-      setLeaveForm({ leave_type_id: "", start_date: "", end_date: "", reason: "" });
+      setLeaveForm({ leave_type_id: "", start_date: "", end_date: "", reason: "", cover_person_id: "" });
       setDocumentFile(null);
       toast({ title: "Leave request submitted" });
     } catch (err: any) {
@@ -697,12 +733,13 @@ function LeaveTab() {
                   <TableHead>To</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Reason</TableHead>
+                  <TableHead>Cover Person</TableHead>
                   <TableHead>Document</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {(!requests || requests.length === 0) ? (
-                  <TableRow><TableCell colSpan={6} className="text-center text-muted-foreground py-8">No leave requests</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground py-8">No leave requests</TableCell></TableRow>
                 ) : requests.map((r: any) => (
                   <TableRow key={r.id}>
                     <TableCell className="font-medium">{r.leave_type_name || r.leave_type}</TableCell>
@@ -715,6 +752,7 @@ function LeaveTab() {
                       </div>
                     </TableCell>
                     <TableCell className="max-w-[200px] truncate">{r.reason || "—"}</TableCell>
+                    <TableCell>{r.cover_person_name || "—"}</TableCell>
                     <TableCell>
                       {r.document_url ? (
                         <a href={r.document_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-primary hover:underline text-xs" data-testid={`link-doc-${r.id}`}>
@@ -755,14 +793,56 @@ function LeaveTab() {
                 <input type="date" className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm" value={leaveForm.end_date} onChange={e => setLeaveForm({ ...leaveForm, end_date: e.target.value })} data-testid="input-leave-end" />
               </div>
             </div>
+            {advanceNoticeWarning && (
+              <div className="flex items-center gap-2 p-3 rounded-md bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900">
+                <AlertCircle className="h-4 w-4 text-amber-600 shrink-0" />
+                <p className="text-sm text-amber-800 dark:text-amber-200">{advanceNoticeWarning}</p>
+              </div>
+            )}
+
+            {leaveDays > 0 && (
+              <div className="flex items-center gap-2 p-2 rounded-md bg-muted/40">
+                <Calendar className="h-3.5 w-3.5 text-muted-foreground" />
+                <span className="text-xs text-muted-foreground">{leaveDays} day{leaveDays !== 1 ? "s" : ""} requested</span>
+                {policy?.max_consecutive_days && leaveDays > policy.max_consecutive_days && (
+                  <Badge variant="destructive" className="text-[10px] ml-auto">Exceeds max {policy.max_consecutive_days} days</Badge>
+                )}
+              </div>
+            )}
+
             <div>
               <Label>Reason</Label>
               <Textarea value={leaveForm.reason} onChange={e => setLeaveForm({ ...leaveForm, reason: e.target.value })} placeholder="Reason for leave..." data-testid="input-leave-reason" />
             </div>
+
+            {(needsCoverPerson || policy?.require_cover_person) && (
+              <div>
+                <Label className="flex items-center gap-1.5 mb-1">
+                  Cover Person During Leave
+                  {needsCoverPerson && <Badge variant="destructive" className="text-[10px]">Required</Badge>}
+                </Label>
+                <p className="text-[10px] text-muted-foreground mb-2">
+                  Select a colleague who will cover your responsibilities
+                </p>
+                <Select value={leaveForm.cover_person_id} onValueChange={v => setLeaveForm({ ...leaveForm, cover_person_id: v })}>
+                  <SelectTrigger data-testid="select-cover-person"><SelectValue placeholder="Select cover person" /></SelectTrigger>
+                  <SelectContent>
+                    {(policy?.colleagues || []).map((c: any) => (
+                      <SelectItem key={c.id} value={c.id}>{c.full_name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
             <div>
               <Label className="flex items-center gap-1.5 mb-2">
                 <Paperclip className="h-3.5 w-3.5" /> Evidence / Medical Report
-                <span className="text-xs text-muted-foreground font-normal ml-1">(optional)</span>
+                {needsDocument ? (
+                  <Badge variant="destructive" className="text-[10px]">Required for {policy.require_document_after_days}+ days</Badge>
+                ) : (
+                  <span className="text-xs text-muted-foreground font-normal ml-1">(optional)</span>
+                )}
               </Label>
               <input
                 ref={fileInputRef}

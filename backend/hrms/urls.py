@@ -84,6 +84,7 @@ urlpatterns = [
     path('hrms/my/profile', views.MyProfileView.as_view()),
     path('hrms/my/attendance', views.MyAttendanceView.as_view()),
     path('hrms/my/leave-balance', views.MyLeaveBalanceView.as_view()),
+    path('hrms/my/leave-policy', views.MyLeavePolicyView.as_view()),
     path('hrms/my/leave-requests', views.MyLeaveRequestsView.as_view()),
     path('hrms/my/payslips', views.MyPayslipsView.as_view()),
     path('hrms/my/payslips/<uuid:ps_id>/pdf', views.MyPayslipPDFView.as_view()),

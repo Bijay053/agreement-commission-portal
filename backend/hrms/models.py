@@ -117,6 +117,9 @@ class LeavePolicy(models.Model):
     require_approval = models.BooleanField(default=True)
     auto_approve_if_balance = models.BooleanField(default=False)
     weekend_days = models.JSONField(default=list)
+    advance_notice_rules = models.JSONField(default=list, blank=True)
+    require_cover_person = models.BooleanField(default=False)
+    require_cover_after_days = models.IntegerField(default=1)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -180,6 +183,7 @@ class LeaveRequest(models.Model):
     approved_at = models.DateTimeField(null=True, blank=True)
     rejection_reason = models.TextField(null=True, blank=True)
     document_url = models.URLField(null=True, blank=True)
+    cover_person_id = models.UUIDField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
