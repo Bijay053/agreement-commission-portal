@@ -41,6 +41,10 @@ EMPLOYEE_PERMISSIONS = [
     ('provider_commission.delete', 'Sub Agent Commission Distribution', 'provider_commission', 'delete', 'Delete provider commission entries'),
     ('provider_commission.manage', 'Sub Agent Commission Distribution', 'provider_commission', 'manage', 'Manage sub-agent percentage config'),
     ('hrms.staff.write', 'HRMS', 'staff', 'write', 'Create, update and manage staff profiles and portal access'),
+    ('hrms.expense.read', 'HRMS', 'expense', 'read', 'View travel and expense records'),
+    ('hrms.expense.add', 'HRMS', 'expense', 'add', 'Add travel and expense entries'),
+    ('hrms.expense.update', 'HRMS', 'expense', 'update', 'Approve, reject, and update expenses'),
+    ('hrms.expense.delete', 'HRMS', 'expense', 'delete', 'Delete travel and expense entries'),
 ]
 
 
