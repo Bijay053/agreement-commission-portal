@@ -760,7 +760,115 @@ function AttendanceTab() {
         </>
       )}
 
-      {isLoading ? <Skeleton className="h-60 w-full" /> : grid && (
+      {isLoading ? <Skeleton className="h-60 w-full" /> : grid && viewMode === "daily" ? (
+        <Card>
+          <CardContent className="p-0">
+            <div className="overflow-auto max-h-[calc(100vh-320px)]">
+              <table className="w-full text-xs border-collapse">
+                <thead className="sticky top-0 z-10 bg-muted">
+                  <tr>
+                    <th className="text-left p-2 border-b font-medium min-w-[160px]">Employee</th>
+                    <th className="p-2 border-b text-center min-w-[70px] font-medium">Status</th>
+                    <th className="p-2 border-b text-center min-w-[80px] font-medium">Check In</th>
+                    <th className="p-2 border-b text-center min-w-[70px] font-medium">Method</th>
+                    <th className="p-2 border-b text-center min-w-[80px] font-medium">Check Out</th>
+                    <th className="p-2 border-b text-center min-w-[70px] font-medium">Method</th>
+                    <th className="p-2 border-b text-center min-w-[70px] font-medium">Hours</th>
+                    <th className="p-2 border-b text-center min-w-[50px] font-medium">Late</th>
+                    <th className="p-2 border-b text-center min-w-[50px] font-medium">Notes</th>
+                    <th className="p-2 border-b text-center min-w-[50px] font-medium">Edit</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredEmployees.map((emp: any) => {
+                    const day = grid.days[0];
+                    const entry = emp.attendance[day];
+                    const isFuture = day > new Date().toISOString().split("T")[0];
+                    const formatTime = (t: string | null) => {
+                      if (!t) return "—";
+                      try {
+                        const d = new Date(t);
+                        return d.toLocaleTimeString("en", { hour: "2-digit", minute: "2-digit", hour12: true });
+                      } catch { return t.substring(11, 16); }
+                    };
+                    const methodBadge = (method: string | null) => {
+                      if (!method) return <span className="text-muted-foreground">—</span>;
+                      const colors: Record<string, string> = {
+                        online: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400",
+                        manual: "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-400",
+                        device: "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400",
+                      };
+                      return <span className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-medium ${colors[method] || "bg-gray-100 text-gray-700"}`}>{method === "online" ? "Remote" : method.charAt(0).toUpperCase() + method.slice(1)}</span>;
+                    };
+                    const calcHours = (ci: string | null, co: string | null) => {
+                      if (!ci || !co) return "—";
+                      try {
+                        const diff = (new Date(co).getTime() - new Date(ci).getTime()) / 3600000;
+                        if (diff <= 0 || diff > 24) return "—";
+                        const h = Math.floor(diff);
+                        const m = Math.round((diff - h) * 60);
+                        return `${h}h ${m}m`;
+                      } catch { return "—"; }
+                    };
+                    return (
+                      <tr key={emp.employee_id} className="hover:bg-muted/30 border-b" data-testid={`daily-row-${emp.employee_id}`}>
+                        <td className="p-2 border-r">
+                          <p className="font-medium truncate max-w-[140px]">{emp.full_name}</p>
+                          <p className="text-[10px] text-muted-foreground truncate max-w-[140px]">{emp.department || emp.position}</p>
+                        </td>
+                        <td className="p-2 text-center border-r">
+                          {isFuture ? <span className="text-muted-foreground">—</span> : entry ? (
+                            <span className={`inline-block px-2 py-0.5 rounded text-[10px] font-medium ${statusColors[entry.status] || ""}`}>
+                              {entry.status === "present" ? "Present" : entry.status === "absent" ? "Absent" : entry.status === "on_leave" ? "On Leave" : entry.status === "half_day" ? "Half Day" : entry.status}
+                            </span>
+                          ) : <span className={`inline-block px-2 py-0.5 rounded text-[10px] font-medium ${statusColors.absent}`}>Absent</span>}
+                        </td>
+                        <td className="p-2 text-center border-r font-mono">
+                          {entry?.check_in ? formatTime(entry.check_in) : "—"}
+                        </td>
+                        <td className="p-2 text-center border-r">
+                          {entry ? methodBadge(entry.check_in_method) : "—"}
+                        </td>
+                        <td className="p-2 text-center border-r font-mono">
+                          {entry?.check_out ? formatTime(entry.check_out) : "—"}
+                        </td>
+                        <td className="p-2 text-center border-r">
+                          {entry ? methodBadge(entry.check_out_method) : "—"}
+                        </td>
+                        <td className="p-2 text-center border-r font-mono">
+                          {entry ? calcHours(entry.check_in, entry.check_out) : "—"}
+                        </td>
+                        <td className="p-2 text-center border-r">
+                          {entry?.is_late ? (
+                            <span className="inline-block px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">
+                              {entry.late_minutes ? `${entry.late_minutes}m` : "Yes"}
+                            </span>
+                          ) : "—"}
+                        </td>
+                        <td className="p-2 text-center border-r text-muted-foreground truncate max-w-[100px]">
+                          {entry?.notes || "—"}
+                        </td>
+                        <td className="p-2 text-center">
+                          {!isFuture && (
+                            <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => openEdit(emp.employee_id, day, entry)} data-testid={`btn-edit-${emp.employee_id}`}>
+                              <Pencil className="h-3 w-3" />
+                            </Button>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                  {filteredEmployees.length === 0 && (
+                    <tr><td colSpan={10} className="text-center p-8 text-muted-foreground">
+                      {searchTerm ? `No employees matching "${searchTerm}"` : "No employees found"}
+                    </td></tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </CardContent>
+        </Card>
+      ) : grid && (
         <Card>
           <CardContent className="p-0">
             <div className="overflow-auto max-h-[calc(100vh-320px)]">

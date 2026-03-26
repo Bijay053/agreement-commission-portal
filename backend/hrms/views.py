@@ -1619,6 +1619,9 @@ class AttendanceGridView(APIView):
                 'is_late': r.is_late,
                 'late_minutes': r.late_minutes,
                 'check_in_method': r.check_in_method,
+                'check_out_method': r.check_out_method,
+                'check_in_photo_url': r.check_in_photo_url or None,
+                'check_out_photo_url': r.check_out_photo_url or None,
                 'notes': r.notes or '',
             }
 
