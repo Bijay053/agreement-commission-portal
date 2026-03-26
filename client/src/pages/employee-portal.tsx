@@ -22,6 +22,7 @@ import {
   User, Clock, Calendar, FileText, LogOut, Shield, ChevronLeft, ChevronRight,
   CheckCircle, XCircle, AlertCircle, Download, Briefcase,
   Camera, MapPin, Loader2, RefreshCw, Paperclip, Upload, File,
+  DollarSign, Eye, EyeOff, Building2,
 } from "lucide-react";
 
 type Tab = "profile" | "attendance" | "leave" | "payslips";
@@ -106,6 +107,7 @@ function ProfileTab() {
   const { data: profile, isLoading } = useQuery<any>({
     queryKey: ["/api/hrms/my/profile"],
   });
+  const [showSalary, setShowSalary] = useState(false);
 
   if (isLoading) return <div className="space-y-4"><Skeleton className="h-40" /><Skeleton className="h-60" /></div>;
   if (!profile) return <div className="text-center py-12 text-muted-foreground">No employee profile found linked to your account.</div>;
@@ -114,12 +116,16 @@ function ProfileTab() {
     { label: "Full Name", value: profile.full_name },
     { label: "Email", value: profile.email },
     { label: "Phone", value: profile.phone },
-    { label: "Organization", value: profile.organization_name },
-    { label: "Department", value: profile.department_name },
-    { label: "Designation", value: profile.designation },
-    { label: "Employment Type", value: profile.employment_type },
+    { label: "Organization", value: profile.organization },
+    { label: "Department", value: profile.department },
+    { label: "Position", value: profile.position },
+    { label: "Employment Type", value: profile.employment_type?.replace(/_/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase()) },
     { label: "Join Date", value: profile.join_date },
   ].filter(r => r.value);
+
+  const currency = profile.salary_currency || profile.organization_currency || 'NPR';
+  const ss = profile.salary_structure;
+  const fmtAmt = (v: number) => `${currency} ${v.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
 
   return (
     <div className="max-w-2xl space-y-6">
@@ -135,8 +141,8 @@ function ProfileTab() {
             </div>
             <div>
               <h3 className="text-xl font-semibold" data-testid="text-employee-name">{profile.full_name}</h3>
-              <p className="text-sm text-muted-foreground">{profile.designation || "Employee"}</p>
-              {profile.department_name && <Badge variant="outline" className="mt-1">{profile.department_name}</Badge>}
+              <p className="text-sm text-muted-foreground">{profile.position || "Employee"}</p>
+              {profile.department && <Badge variant="outline" className="mt-1">{profile.department}</Badge>}
             </div>
           </div>
           <div className="space-y-3">
@@ -149,6 +155,104 @@ function ProfileTab() {
           </div>
         </CardContent>
       </Card>
+
+      {(profile.salary_amount || ss) && (
+        <Card>
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-base font-semibold flex items-center gap-2" data-testid="text-salary-title">
+                <DollarSign className="h-4 w-4" /> Salary Details
+              </h3>
+              <Button variant="ghost" size="sm" onClick={() => setShowSalary(!showSalary)} data-testid="button-toggle-salary">
+                {showSalary ? <EyeOff className="h-4 w-4 mr-1" /> : <Eye className="h-4 w-4 mr-1" />}
+                {showSalary ? "Hide" : "Show"}
+              </Button>
+            </div>
+            {showSalary ? (
+              <div className="space-y-3">
+                {ss ? (
+                  <>
+                    <div className="flex justify-between py-2 border-b">
+                      <span className="text-sm text-muted-foreground">Basic Salary</span>
+                      <span className="text-sm font-medium" data-testid="text-basic-salary">{fmtAmt(ss.basic_salary)}</span>
+                    </div>
+                    {Object.keys(ss.allowances || {}).length > 0 && (
+                      <>
+                        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide pt-2">Allowances</p>
+                        {Object.entries(ss.allowances).map(([key, val]: [string, any]) => (
+                          <div key={key} className="flex justify-between py-1.5 border-b">
+                            <span className="text-sm text-muted-foreground pl-2">{key.replace(/_/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase())}</span>
+                            <span className="text-sm font-medium">{fmtAmt(Number(val))}</span>
+                          </div>
+                        ))}
+                      </>
+                    )}
+                    {Object.keys(ss.deductions || {}).length > 0 && (
+                      <>
+                        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide pt-2">Deductions</p>
+                        {Object.entries(ss.deductions).map(([key, val]: [string, any]) => (
+                          <div key={key} className="flex justify-between py-1.5 border-b">
+                            <span className="text-sm text-muted-foreground pl-2">{key.replace(/_/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase())}</span>
+                            <span className="text-sm font-medium text-red-600">- {fmtAmt(Number(val))}</span>
+                          </div>
+                        ))}
+                      </>
+                    )}
+                    <div className="flex justify-between py-2 border-t-2 border-primary/20 mt-2">
+                      <span className="text-sm font-semibold">Gross Salary</span>
+                      <span className="text-sm font-bold text-primary" data-testid="text-gross-salary">{fmtAmt(ss.gross_salary)}</span>
+                    </div>
+                    {ss.ssf_applicable && (
+                      <div className="flex justify-between py-1.5">
+                        <span className="text-sm text-muted-foreground">SSF (Employee {ss.ssf_employee_percentage}%)</span>
+                        <span className="text-sm font-medium text-red-600">- {fmtAmt(ss.basic_salary * ss.ssf_employee_percentage / 100)}</span>
+                      </div>
+                    )}
+                    {ss.cit_type !== 'none' && (
+                      <div className="flex justify-between py-1.5">
+                        <span className="text-sm text-muted-foreground">CIT ({ss.cit_type === 'percentage' ? `${ss.cit_value}%` : fmtAmt(ss.cit_value)})</span>
+                        <span className="text-sm font-medium text-red-600">
+                          - {ss.cit_type === 'percentage' ? fmtAmt(ss.basic_salary * ss.cit_value / 100) : fmtAmt(ss.cit_value)}
+                        </span>
+                      </div>
+                    )}
+                    <div className="text-xs text-muted-foreground pt-2">Effective from: {ss.effective_from}</div>
+                  </>
+                ) : (
+                  <div className="flex justify-between py-2">
+                    <span className="text-sm text-muted-foreground">Monthly Salary</span>
+                    <span className="text-sm font-bold" data-testid="text-salary-amount">{fmtAmt(profile.salary_amount)}</span>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <p className="text-sm text-muted-foreground">Click "Show" to view your salary breakdown</p>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {(profile.bank_name || profile.bank_account_number) && (
+        <Card>
+          <CardContent className="p-6">
+            <h3 className="text-base font-semibold mb-4 flex items-center gap-2" data-testid="text-bank-title">
+              <Building2 className="h-4 w-4" /> Bank Details
+            </h3>
+            <div className="space-y-3">
+              {[
+                { label: "Bank", value: profile.bank_name },
+                { label: "Account Number", value: showSalary ? profile.bank_account_number : profile.bank_account_number ? '••••' + profile.bank_account_number.slice(-4) : null },
+                { label: "Branch", value: profile.bank_branch },
+              ].filter(r => r.value).map(row => (
+                <div key={row.label} className="flex justify-between py-2 border-b last:border-0">
+                  <span className="text-sm text-muted-foreground">{row.label}</span>
+                  <span className="text-sm font-medium" data-testid={`text-bank-${row.label.toLowerCase().replace(/\s+/g, '-')}`}>{row.value}</span>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }

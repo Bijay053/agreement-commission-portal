@@ -2789,6 +2789,26 @@ class MyProfileView(APIView):
         if employee.department_id:
             dept = Department.objects.filter(id=employee.department_id).first()
 
+        salary_structure = None
+        ss = SalaryStructure.objects.filter(employee_id=employee.id, status='active').first()
+        if ss:
+            gross = float(ss.basic_salary)
+            for k, v in (ss.allowances or {}).items():
+                gross += float(v)
+            salary_structure = {
+                'basic_salary': float(ss.basic_salary),
+                'allowances': ss.allowances or {},
+                'deductions': ss.deductions or {},
+                'gross_salary': gross,
+                'cit_type': ss.cit_type,
+                'cit_value': float(ss.cit_value),
+                'ssf_applicable': ss.ssf_applicable,
+                'ssf_employee_percentage': float(ss.ssf_employee_percentage),
+                'ssf_employer_percentage': float(ss.ssf_employer_percentage),
+                'tax_applicable': ss.tax_applicable,
+                'effective_from': ss.effective_from.isoformat() if ss.effective_from else None,
+            }
+
         return Response({
             'id': str(employee.id),
             'full_name': employee.full_name,
@@ -2797,9 +2817,16 @@ class MyProfileView(APIView):
             'position': employee.position,
             'department': dept.name if dept else employee.department,
             'organization': org.name if org else None,
+            'organization_currency': org.currency if org else 'NPR',
             'join_date': employee.join_date.isoformat() if employee.join_date else None,
             'profile_photo_url': employee.profile_photo_url,
             'employment_type': employee.employment_type,
+            'salary_amount': float(employee.salary_amount) if employee.salary_amount else None,
+            'salary_currency': employee.salary_currency or 'NPR',
+            'bank_name': employee.bank_name,
+            'bank_account_number': employee.bank_account_number,
+            'bank_branch': employee.bank_branch,
+            'salary_structure': salary_structure,
         })
 
 
