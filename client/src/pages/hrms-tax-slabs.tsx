@@ -14,12 +14,16 @@ import {
 import {
   Tabs, TabsContent, TabsList, TabsTrigger,
 } from "@/components/ui/tabs";
-import { Plus, Trash2, Save, Info } from "lucide-react";
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
+import { Plus, Trash2, Save, Info, Globe } from "lucide-react";
 
 interface TaxSlabRecord {
   id: string;
   organization_id: string | null;
   fiscal_year_id: string | null;
+  country: string | null;
   marital_status: string;
   slab_order: number;
   lower_limit: number;
@@ -28,21 +32,31 @@ interface TaxSlabRecord {
   is_active: boolean;
 }
 
+interface CountryTaxLabel {
+  id: string;
+  country: string;
+  tax_id_label: string;
+}
+
 interface SlabRow {
   lower_limit: string;
   upper_limit: string;
   rate: string;
 }
 
-function SlabEditor({ maritalStatus, slabs, isLoading }: { maritalStatus: string; slabs: TaxSlabRecord[]; isLoading: boolean }) {
+function SlabEditor({ maritalStatus, slabs, isLoading, country }: { maritalStatus: string; slabs: TaxSlabRecord[]; isLoading: boolean; country: string | null }) {
   const { toast } = useToast();
 
   const [rows, setRows] = useState<SlabRow[]>([]);
   const [initialized, setInitialized] = useState(false);
 
   useEffect(() => {
+    setInitialized(false);
+  }, [country]);
+
+  useEffect(() => {
     if (initialized) return;
-    const filtered = slabs.filter(s => s.marital_status === maritalStatus);
+    const filtered = slabs.filter(s => s.marital_status === maritalStatus && s.country === country);
     if (filtered.length > 0) {
       setRows(filtered.map(s => ({
         lower_limit: String(s.lower_limit),
@@ -69,13 +83,13 @@ function SlabEditor({ maritalStatus, slabs, isLoading }: { maritalStatus: string
       setRows(defaults);
       setInitialized(true);
     }
-  }, [slabs, isLoading, maritalStatus, initialized]);
+  }, [slabs, isLoading, maritalStatus, initialized, country]);
 
   const saveMutation = useMutation({
     mutationFn: (data: any) => apiRequest("POST", "/api/hrms/tax-slabs/bulk-save", data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/hrms/tax-slabs"] });
-      toast({ title: `${maritalStatus === "married" ? "Married" : "Single"} tax slabs saved` });
+      toast({ title: `${maritalStatus === "married" ? "Married" : "Single"} tax slabs saved${country ? ` for ${country}` : ""}` });
     },
     onError: (err: any) => toast({ title: "Error", description: err.message, variant: "destructive" }),
   });
@@ -86,7 +100,7 @@ function SlabEditor({ maritalStatus, slabs, isLoading }: { maritalStatus: string
       upper_limit: r.upper_limit ? parseFloat(r.upper_limit) : null,
       rate: parseFloat(r.rate) || 0,
     }));
-    saveMutation.mutate({ marital_status: maritalStatus, slabs: slabData });
+    saveMutation.mutate({ marital_status: maritalStatus, slabs: slabData, country });
   };
 
   const addRow = () => {
@@ -224,15 +238,41 @@ function SlabEditor({ maritalStatus, slabs, isLoading }: { maritalStatus: string
 }
 
 export function TaxSlabsTab() {
+  const [selectedCountry, setSelectedCountry] = useState<string | null>(null);
   const { data: slabs, isLoading } = useQuery<TaxSlabRecord[]>({ queryKey: ["/api/hrms/tax-slabs"] });
+  const { data: countryLabels } = useQuery<CountryTaxLabel[]>({ queryKey: ["/api/hrms/country-tax-labels"] });
+  const countries = countryLabels || [];
+
+  const filteredSlabs = (slabs || []).filter(s => s.country === selectedCountry);
 
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-lg font-semibold">Tax Slab Configuration</h2>
-          <p className="text-sm text-muted-foreground">Configure Nepal income tax slabs for single and married employees. These slabs are used during payroll processing.</p>
+          <p className="text-sm text-muted-foreground">Configure income tax slabs per country for single and married employees. These slabs are used during payroll processing.</p>
         </div>
+      </div>
+
+      <div className="flex items-center gap-3">
+        <Globe className="h-4 w-4 text-muted-foreground" />
+        <Label className="text-sm font-medium">Country</Label>
+        <Select value={selectedCountry || "__global__"} onValueChange={v => setSelectedCountry(v === "__global__" ? null : v)}>
+          <SelectTrigger className="w-[220px]" data-testid="select-tax-country">
+            <SelectValue placeholder="Select Country" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="__global__">Global (Default)</SelectItem>
+            {countries.map(c => (
+              <SelectItem key={c.country} value={c.country}>{c.country}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        {selectedCountry && (
+          <Badge variant="outline" className="text-xs">
+            Slabs for {selectedCountry}
+          </Badge>
+        )}
       </div>
 
       <Tabs defaultValue="single">
@@ -241,10 +281,10 @@ export function TaxSlabsTab() {
           <TabsTrigger value="married" data-testid="tab-slab-married">Married / Couple</TabsTrigger>
         </TabsList>
         <TabsContent value="single">
-          <SlabEditor maritalStatus="single" slabs={slabs || []} isLoading={isLoading} />
+          <SlabEditor maritalStatus="single" slabs={filteredSlabs} isLoading={isLoading} country={selectedCountry} />
         </TabsContent>
         <TabsContent value="married">
-          <SlabEditor maritalStatus="married" slabs={slabs || []} isLoading={isLoading} />
+          <SlabEditor maritalStatus="married" slabs={filteredSlabs} isLoading={isLoading} country={selectedCountry} />
         </TabsContent>
       </Tabs>
     </div>

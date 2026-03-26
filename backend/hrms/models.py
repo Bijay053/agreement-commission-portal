@@ -499,10 +499,24 @@ class NotificationSetting(models.Model):
         db_table = 'hrms_notification_settings'
 
 
+class CountryTaxLabel(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    country = models.CharField(max_length=100, unique=True)
+    tax_id_label = models.CharField(max_length=100, default='Tax ID No.')
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'hrms_country_tax_labels'
+        managed = False
+        ordering = ['country']
+
+
 class TaxSlab(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     organization = models.ForeignKey(Organization, on_delete=models.CASCADE, related_name='tax_slabs', null=True, blank=True)
     fiscal_year = models.ForeignKey('FiscalYear', on_delete=models.SET_NULL, null=True, blank=True)
+    country = models.CharField(max_length=100, null=True, blank=True)
     marital_status = models.CharField(max_length=16, choices=[('single', 'Single'), ('married', 'Married')], default='single')
     slab_order = models.IntegerField(default=1)
     lower_limit = models.DecimalField(max_digits=14, decimal_places=2, default=0)

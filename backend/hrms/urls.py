@@ -74,6 +74,9 @@ urlpatterns = [
     path('hrms/tax-slabs/bulk-save', views.TaxSlabBulkSaveView.as_view()),
     path('hrms/tax-slabs/<uuid:slab_id>', views.TaxSlabDetailView.as_view()),
 
+    path('hrms/country-tax-labels', views.CountryTaxLabelListView.as_view()),
+    path('hrms/country-tax-labels/<uuid:label_id>', views.CountryTaxLabelDetailView.as_view()),
+
     path('hrms/government-tax-records', views.GovernmentTaxRecordsView.as_view()),
 
     path('hrms/my/profile', views.MyProfileView.as_view()),

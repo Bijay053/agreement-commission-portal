@@ -17,33 +17,16 @@ import { useAuth } from "@/lib/auth";
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
-const COUNTRY_TAX_LABELS: Record<string, string> = {
-  'Nepal': 'PAN No.',
-  'Australia': 'TFN',
-  'Bangladesh': 'TIN',
-  'India': 'PAN',
-  'United Kingdom': 'NI Number',
-  'United States': 'SSN',
-  'Canada': 'SIN',
-  'New Zealand': 'IRD Number',
-  'Pakistan': 'NTN',
-  'Sri Lanka': 'TIN',
-  'Philippines': 'TIN',
-  'Malaysia': 'TIN',
-  'Singapore': 'NRIC/FIN',
-  'Japan': 'My Number',
-  'South Korea': 'RRN',
-  'Germany': 'Tax ID',
-  'France': 'NIF',
-  'UAE': 'TRN',
-  'Saudi Arabia': 'TIN',
-  'Qatar': 'QID',
-  'China': 'Tax ID',
-};
+interface CountryTaxLabelRecord {
+  id: string;
+  country: string;
+  tax_id_label: string;
+}
 
-function getTaxIdLabel(country?: string | null): string {
+function getTaxIdLabelFromList(countries: CountryTaxLabelRecord[], country?: string | null): string {
   if (!country) return 'Tax ID No.';
-  return COUNTRY_TAX_LABELS[country] || 'Tax ID No.';
+  const found = countries.find(c => c.country === country);
+  return found?.tax_id_label || 'Tax ID No.';
 }
 
 const BONUS_TYPES: Record<string, string> = {
@@ -126,6 +109,8 @@ export function EmployeeDetailView({ employeeId, onBack }: { employeeId: string;
       return res.json();
     },
   });
+  const { data: countryLabelsData } = useQuery<CountryTaxLabelRecord[]>({ queryKey: ["/api/hrms/country-tax-labels"] });
+  const countryLabels = countryLabelsData || [];
 
   if (isLoading) return (
     <div className="space-y-4">
@@ -480,7 +465,7 @@ export function EmployeeDetailView({ employeeId, onBack }: { employeeId: string;
             <Card>
               <CardHeader className="p-4 pb-2"><CardTitle className="text-sm">Tax Profile</CardTitle></CardHeader>
               <CardContent className="p-4 pt-0 space-y-2 text-sm">
-                <div className="flex justify-between"><span>{getTaxIdLabel(emp.country)}</span><span className="font-mono">{emp.pan_no || "Not Set"}</span></div>
+                <div className="flex justify-between"><span>{getTaxIdLabelFromList(countryLabels, emp.country)}</span><span className="font-mono">{emp.pan_no || "Not Set"}</span></div>
                 <div className="flex justify-between"><span>Marital Status</span><span className="capitalize">{emp.marital_status || "Not Set"}</span></div>
                 <div className="flex justify-between"><span>Tax Category</span><span>{emp.marital_status === 'married' ? 'Married Slab' : 'Single Slab'}</span></div>
                 {sal && (
@@ -518,7 +503,7 @@ export function EmployeeDetailView({ employeeId, onBack }: { employeeId: string;
                 <div className="flex justify-between"><span>Marital Status</span><span className="capitalize">{emp.marital_status || "—"}</span></div>
                 <div className="flex justify-between"><span>Employee ID</span><span className="font-mono">{emp.employee_id_number || "—"}</span></div>
                 <div className="flex justify-between"><span>Citizenship No</span><span className="font-mono">{emp.citizenship_no || "—"}</span></div>
-                <div className="flex justify-between"><span>{getTaxIdLabel(emp.country)}</span><span className="font-mono">{emp.pan_no || "—"}</span></div>
+                <div className="flex justify-between"><span>{getTaxIdLabelFromList(countryLabels, emp.country)}</span><span className="font-mono">{emp.pan_no || "—"}</span></div>
                 <div className="flex justify-between"><span>Passport</span><span className="font-mono">{emp.passport_number || "—"}</span></div>
               </CardContent>
             </Card>

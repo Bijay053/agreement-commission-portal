@@ -74,35 +74,16 @@ interface Department {
   id: string; organization_id: string; name: string;
 }
 
-const COUNTRY_TAX_LABELS: Record<string, string> = {
-  'Nepal': 'PAN No.',
-  'Australia': 'TFN',
-  'Bangladesh': 'TIN',
-  'India': 'PAN',
-  'United Kingdom': 'NI Number',
-  'United States': 'SSN',
-  'Canada': 'SIN',
-  'New Zealand': 'IRD Number',
-  'Pakistan': 'NTN',
-  'Sri Lanka': 'TIN',
-  'Philippines': 'TIN',
-  'Malaysia': 'TIN',
-  'Singapore': 'NRIC/FIN',
-  'Japan': 'My Number',
-  'South Korea': 'RRN',
-  'Germany': 'Tax ID',
-  'France': 'NIF',
-  'UAE': 'TRN',
-  'Saudi Arabia': 'TIN',
-  'Qatar': 'QID',
-  'China': 'Tax ID',
-};
+interface CountryTaxLabelRecord {
+  id: string;
+  country: string;
+  tax_id_label: string;
+}
 
-const EMPLOYEE_COUNTRIES = Object.keys(COUNTRY_TAX_LABELS);
-
-function getTaxIdLabel(country?: string | null): string {
+function getTaxIdLabelFromList(countries: CountryTaxLabelRecord[], country?: string | null): string {
   if (!country) return 'Tax ID No.';
-  return COUNTRY_TAX_LABELS[country] || 'Tax ID No.';
+  const found = countries.find(c => c.country === country);
+  return found?.tax_id_label || 'Tax ID No.';
 }
 
 export function StaffProfilesTab() {
@@ -145,6 +126,8 @@ export function StaffProfilesTab() {
   const { data: staff, isLoading } = useQuery<StaffProfile[]>({ queryKey: ["/api/hrms/staff-profiles"] });
   const { data: orgs } = useQuery<Organization[]>({ queryKey: ["/api/hrms/organizations"] });
   const { data: depts } = useQuery<Department[]>({ queryKey: ["/api/hrms/departments"] });
+  const { data: countryLabels } = useQuery<CountryTaxLabelRecord[]>({ queryKey: ["/api/hrms/country-tax-labels"] });
+  const countries = countryLabels || [];
 
   const createSalaryMutation = useMutation({
     mutationFn: (data: any) => apiRequest("POST", "/api/hrms/salary-structures", data),
@@ -536,7 +519,7 @@ export function StaffProfilesTab() {
                 <Select value={empForm.country} onValueChange={v => setEmpForm({ ...empForm, country: v })}>
                   <SelectTrigger><SelectValue placeholder="Select Country" /></SelectTrigger>
                   <SelectContent>
-                    {EMPLOYEE_COUNTRIES.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                    {countries.map(c => <SelectItem key={c.country} value={c.country}>{c.country}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
@@ -558,7 +541,7 @@ export function StaffProfilesTab() {
             <div className="grid grid-cols-4 gap-4">
               <div><Label>Employee ID</Label><Input value={empForm.employee_id_number} onChange={e => setEmpForm({ ...empForm, employee_id_number: e.target.value })} placeholder="ZKT Device ID" data-testid="input-emp-id-number" /></div>
               <div><Label>Citizenship No</Label><Input value={empForm.citizenship_no} onChange={e => setEmpForm({ ...empForm, citizenship_no: e.target.value })} /></div>
-              <div><Label>{getTaxIdLabel(empForm.country)}</Label><Input value={empForm.pan_no} onChange={e => setEmpForm({ ...empForm, pan_no: e.target.value })} /></div>
+              <div><Label>{getTaxIdLabelFromList(countries, empForm.country)}</Label><Input value={empForm.pan_no} onChange={e => setEmpForm({ ...empForm, pan_no: e.target.value })} /></div>
               <div><Label>Passport Number</Label><Input value={empForm.passport_number} onChange={e => setEmpForm({ ...empForm, passport_number: e.target.value })} data-testid="input-emp-passport" /></div>
             </div>
             <div className="grid grid-cols-3 gap-4">
@@ -646,7 +629,7 @@ export function StaffProfilesTab() {
                 <Select value={empForm.country} onValueChange={v => setEmpForm({ ...empForm, country: v })}>
                   <SelectTrigger><SelectValue placeholder="Select Country" /></SelectTrigger>
                   <SelectContent>
-                    {EMPLOYEE_COUNTRIES.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                    {countries.map(c => <SelectItem key={c.country} value={c.country}>{c.country}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
@@ -660,7 +643,7 @@ export function StaffProfilesTab() {
                   </SelectContent>
                 </Select>
               </div>
-              <div><Label>{getTaxIdLabel(empForm.country)}</Label><Input value={empForm.pan_no} onChange={e => setEmpForm({ ...empForm, pan_no: e.target.value })} /></div>
+              <div><Label>{getTaxIdLabelFromList(countries, empForm.country)}</Label><Input value={empForm.pan_no} onChange={e => setEmpForm({ ...empForm, pan_no: e.target.value })} /></div>
             </div>
           </div>
           <DialogFooter>

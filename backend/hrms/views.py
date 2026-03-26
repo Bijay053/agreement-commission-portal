@@ -15,6 +15,7 @@ from .models import (
     OnlineCheckInPermission, DeviceMapping, SalaryStructure,
     PayrollRun, Payslip, NotificationSetting,
     Bonus, TravelExpense, AdvancePayment, TaxSlab,
+    CountryTaxLabel,
 )
 
 
@@ -46,7 +47,11 @@ COUNTRY_TAX_LABELS = {
 def _get_tax_id_label(country):
     if not country:
         return 'Tax ID No.'
-    return COUNTRY_TAX_LABELS.get(country, 'Tax ID No.')
+    try:
+        ctl = CountryTaxLabel.objects.get(country=country, is_active=True)
+        return ctl.tax_id_label
+    except CountryTaxLabel.DoesNotExist:
+        return COUNTRY_TAX_LABELS.get(country, 'Tax ID No.')
 
 
 def serialize_org(org):
@@ -1678,10 +1683,18 @@ class PayrollRunDetailView(APIView):
         return Response({'message': 'Payroll run deleted'})
 
 
-def calculate_nepal_tax(annual_income, marital_status='single', organization_id=None):
+def calculate_nepal_tax(annual_income, marital_status='single', organization_id=None, country=None):
     db_slabs = TaxSlab.objects.filter(
         marital_status=marital_status, is_active=True
     ).order_by('slab_order')
+    if country:
+        country_slabs = db_slabs.filter(country=country)
+        if country_slabs.exists():
+            db_slabs = country_slabs
+        else:
+            db_slabs = db_slabs.filter(country__isnull=True)
+    else:
+        db_slabs = db_slabs.filter(country__isnull=True)
     if organization_id:
         org_slabs = db_slabs.filter(organization_id=organization_id)
         if org_slabs.exists():
@@ -1885,7 +1898,7 @@ class PayrollRunProcessView(APIView):
             tax_deduction = Decimal('0')
             if sal.tax_applicable:
                 annual_taxable = (taxable_income - cit_deduction - ssf_employee) * 12
-                annual_tax = calculate_nepal_tax(annual_taxable, emp.marital_status or 'single', organization_id=pr.organization_id)
+                annual_tax = calculate_nepal_tax(annual_taxable, emp.marital_status or 'single', organization_id=pr.organization_id, country=emp.country)
                 tax_deduction = (annual_tax / 12).quantize(Decimal('0.01'))
 
             other_deductions = sal.deductions or {}
@@ -3241,6 +3254,7 @@ def serialize_tax_slab(s):
         'id': str(s.id),
         'organization_id': str(s.organization_id) if s.organization_id else None,
         'fiscal_year_id': str(s.fiscal_year_id) if s.fiscal_year_id else None,
+        'country': s.country,
         'marital_status': s.marital_status,
         'slab_order': s.slab_order,
         'lower_limit': float(s.lower_limit),
@@ -3257,6 +3271,9 @@ class TaxSlabListView(APIView):
         org = request.GET.get('organization_id')
         if org:
             qs = qs.filter(Q(organization_id=org) | Q(organization__isnull=True))
+        country = request.GET.get('country')
+        if country:
+            qs = qs.filter(Q(country=country) | Q(country__isnull=True))
         ms = request.GET.get('marital_status')
         if ms:
             qs = qs.filter(marital_status=ms)
@@ -3268,6 +3285,7 @@ class TaxSlabListView(APIView):
         s = TaxSlab.objects.create(
             organization_id=data.get('organization_id') or None,
             fiscal_year_id=data.get('fiscal_year_id') or None,
+            country=data.get('country') or None,
             marital_status=data.get('marital_status', 'single'),
             slab_order=int(data.get('slab_order', 1)),
             lower_limit=Decimal(str(data.get('lower_limit', 0))),
@@ -3286,7 +3304,7 @@ class TaxSlabDetailView(APIView):
         except TaxSlab.DoesNotExist:
             return Response({'message': 'Tax slab not found'}, status=404)
         data = request.data
-        for field in ['marital_status', 'slab_order', 'lower_limit', 'upper_limit', 'rate', 'is_active', 'organization_id', 'fiscal_year_id']:
+        for field in ['marital_status', 'slab_order', 'lower_limit', 'upper_limit', 'rate', 'is_active', 'organization_id', 'fiscal_year_id', 'country']:
             if field in data:
                 val = data[field]
                 if field in ('lower_limit', 'rate') and val is not None:
@@ -3316,16 +3334,19 @@ class TaxSlabBulkSaveView(APIView):
         marital_status = data.get('marital_status', 'single')
         slabs = data.get('slabs', [])
         org_id = data.get('organization_id') or None
+        country = data.get('country') or None
 
         TaxSlab.objects.filter(
             marital_status=marital_status,
             organization_id=org_id,
+            country=country,
         ).delete()
 
         created = []
         for i, slab in enumerate(slabs):
             s = TaxSlab.objects.create(
                 organization_id=org_id,
+                country=country,
                 marital_status=marital_status,
                 slab_order=i + 1,
                 lower_limit=Decimal(str(slab.get('lower_limit', 0))),
@@ -3402,3 +3423,55 @@ class GovernmentTaxRecordsView(APIView):
             'annual_totals': totals,
             'year': int(year),
         })
+
+
+class CountryTaxLabelListView(APIView):
+    @require_auth
+    def get(self, request):
+        qs = CountryTaxLabel.objects.filter(is_active=True).order_by('country')
+        return Response([{
+            'id': str(c.id),
+            'country': c.country,
+            'tax_id_label': c.tax_id_label,
+        } for c in qs])
+
+    @require_permission('hrms.organization.add')
+    def post(self, request):
+        data = request.data
+        country = (data.get('country') or '').strip()
+        tax_id_label = (data.get('tax_id_label') or 'Tax ID No.').strip()
+        if not country:
+            return Response({'message': 'Country name is required'}, status=400)
+        if CountryTaxLabel.objects.filter(country__iexact=country).exists():
+            return Response({'message': f'Country "{country}" already exists'}, status=400)
+        c = CountryTaxLabel.objects.create(country=country, tax_id_label=tax_id_label)
+        return Response({'id': str(c.id), 'country': c.country, 'tax_id_label': c.tax_id_label}, status=201)
+
+
+class CountryTaxLabelDetailView(APIView):
+    @require_permission('hrms.organization.add')
+    def patch(self, request, label_id):
+        try:
+            c = CountryTaxLabel.objects.get(id=label_id)
+        except CountryTaxLabel.DoesNotExist:
+            return Response({'message': 'Not found'}, status=404)
+        data = request.data
+        if 'country' in data:
+            new_country = (data['country'] or '').strip()
+            if new_country and new_country != c.country:
+                if CountryTaxLabel.objects.filter(country__iexact=new_country).exclude(id=c.id).exists():
+                    return Response({'message': f'Country "{new_country}" already exists'}, status=400)
+                c.country = new_country
+        if 'tax_id_label' in data:
+            c.tax_id_label = (data['tax_id_label'] or 'Tax ID No.').strip()
+        c.save()
+        return Response({'id': str(c.id), 'country': c.country, 'tax_id_label': c.tax_id_label})
+
+    @require_permission('hrms.organization.add')
+    def delete(self, request, label_id):
+        try:
+            c = CountryTaxLabel.objects.get(id=label_id)
+        except CountryTaxLabel.DoesNotExist:
+            return Response({'message': 'Not found'}, status=404)
+        c.delete()
+        return Response({'message': 'Deleted'})

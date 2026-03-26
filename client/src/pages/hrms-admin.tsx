@@ -32,7 +32,7 @@ import {
   Gift, Receipt, Banknote, UserCog, Landmark, Calculator,
   ChevronLeft, ChevronRight, Save, ArrowLeft, CheckCircle,
   CreditCard, RotateCcw, Loader2, AlertTriangle, FileText,
-  Download, Search, BarChart3, UserX, Timer,
+  Download, Search, BarChart3, UserX, Timer, Globe,
 } from "lucide-react";
 import { StaffProfilesTab } from "./hrms-staff-profiles";
 import { BonusesTab } from "./hrms-bonuses";
@@ -40,6 +40,7 @@ import { TravelExpensesTab } from "./hrms-expenses";
 import { AdvancePaymentsTab } from "./hrms-advances";
 import { TaxSlabsTab } from "./hrms-tax-slabs";
 import { GovernmentRecordsTab } from "./hrms-govt-records";
+import { CountriesTab } from "./hrms-countries";
 import { CURRENCIES, getCurrencySymbol } from "@/lib/currencies";
 
 interface Organization {
@@ -1438,6 +1439,7 @@ const SIDEBAR_ITEMS = [
   { key: "tax-slabs", label: "Tax Slabs", icon: Calculator, group: "Payroll & Finance", permissions: ["hrms.tax.read"] },
   { key: "payroll", label: "Payroll", icon: DollarSign, group: "Payroll & Finance", permissions: ["hrms.payroll.read"] },
   { key: "govt-records", label: "Govt Records", icon: Landmark, group: "Payroll & Finance", permissions: ["hrms.payroll.read"] },
+  { key: "countries", label: "Countries", icon: Globe, group: "Settings", permissions: ["hrms.organization.read"] },
   { key: "organizations", label: "Organizations", icon: Building2, group: "Settings", permissions: ["hrms.organization.read"] },
   { key: "departments", label: "Departments", icon: Users, group: "Settings", permissions: ["hrms.department.read"] },
 ];
@@ -1456,6 +1458,7 @@ const CONTENT_MAP: Record<string, React.ComponentType> = {
   "tax-slabs": TaxSlabsTab,
   "payroll": PayrollTab,
   "govt-records": GovernmentRecordsTab,
+  "countries": CountriesTab,
 };
 
 export default function HRMSAdminPage() {
