@@ -3386,43 +3386,51 @@ class GovernmentTaxRecordsView(APIView):
         if org_id:
             payslips = payslips.filter(payroll_run__organization_id=org_id)
 
+        emp_cache = {}
+        def get_emp_name(eid):
+            if eid not in emp_cache:
+                try:
+                    emp_cache[eid] = Employee.objects.get(id=eid).full_name
+                except Employee.DoesNotExist:
+                    emp_cache[eid] = str(eid)
+            return emp_cache[eid]
+
         monthly_records = []
         for month in range(1, 13):
             month_slips = payslips.filter(payroll_run__month=month)
-            if not month_slips.exists():
-                monthly_records.append({
-                    'month': month,
-                    'year': int(year),
-                    'employee_count': 0,
-                    'total_gross': 0,
-                    'total_cit': 0,
-                    'total_ssf_employee': 0,
-                    'total_ssf_employer': 0,
-                    'total_tax': 0,
-                    'total_payable_to_govt': 0,
-                })
-                continue
-            agg = month_slips.aggregate(
-                total_gross=Sum('gross_salary'),
-                total_cit=Sum('cit_deduction'),
-                total_ssf_employee=Sum('ssf_employee_deduction'),
-                total_ssf_employer=Sum('ssf_employer_contribution'),
-                total_tax=Sum('tax_deduction'),
-            )
-            total_cit = float(agg['total_cit'] or 0)
-            total_ssf_emp = float(agg['total_ssf_employee'] or 0)
-            total_ssf_empr = float(agg['total_ssf_employer'] or 0)
-            total_tax = float(agg['total_tax'] or 0)
+            staff_details = []
+            if month_slips.exists():
+                for slip in month_slips.select_related('payroll_run'):
+                    cit = float(slip.cit_deduction or 0)
+                    ssf_emp = float(slip.ssf_employee_deduction or 0)
+                    ssf_empr = float(slip.ssf_employer_contribution or 0)
+                    tax = float(slip.tax_deduction or 0)
+                    staff_details.append({
+                        'employee_id': str(slip.employee_id),
+                        'employee_name': get_emp_name(slip.employee_id),
+                        'gross_salary': float(slip.gross_salary or 0),
+                        'cit': cit,
+                        'ssf_employee': ssf_emp,
+                        'ssf_employer': ssf_empr,
+                        'tax': tax,
+                        'total_govt': cit + ssf_emp + ssf_empr + tax,
+                    })
+            agg_gross = sum(s['gross_salary'] for s in staff_details)
+            agg_cit = sum(s['cit'] for s in staff_details)
+            agg_ssf_emp = sum(s['ssf_employee'] for s in staff_details)
+            agg_ssf_empr = sum(s['ssf_employer'] for s in staff_details)
+            agg_tax = sum(s['tax'] for s in staff_details)
             monthly_records.append({
                 'month': month,
                 'year': int(year),
-                'employee_count': month_slips.count(),
-                'total_gross': float(agg['total_gross'] or 0),
-                'total_cit': total_cit,
-                'total_ssf_employee': total_ssf_emp,
-                'total_ssf_employer': total_ssf_empr,
-                'total_tax': total_tax,
-                'total_payable_to_govt': total_cit + total_ssf_emp + total_ssf_empr + total_tax,
+                'employee_count': len(staff_details),
+                'total_gross': agg_gross,
+                'total_cit': agg_cit,
+                'total_ssf_employee': agg_ssf_emp,
+                'total_ssf_employer': agg_ssf_empr,
+                'total_tax': agg_tax,
+                'total_payable_to_govt': agg_cit + agg_ssf_emp + agg_ssf_empr + agg_tax,
+                'staff': staff_details,
             })
 
         totals = {

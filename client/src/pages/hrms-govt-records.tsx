@@ -8,7 +8,18 @@ import {
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
-import { Landmark, TrendingUp, Shield, Wallet } from "lucide-react";
+import { Landmark, TrendingUp, Shield, Wallet, ChevronDown, ChevronRight } from "lucide-react";
+
+interface StaffDetail {
+  employee_id: string;
+  employee_name: string;
+  gross_salary: number;
+  cit: number;
+  ssf_employee: number;
+  ssf_employer: number;
+  tax: number;
+  total_govt: number;
+}
 
 interface MonthlyRecord {
   month: number;
@@ -20,6 +31,7 @@ interface MonthlyRecord {
   total_ssf_employer: number;
   total_tax: number;
   total_payable_to_govt: number;
+  staff: StaffDetail[];
 }
 
 interface GovtTaxData {
@@ -34,12 +46,30 @@ interface GovtTaxData {
   year: number;
 }
 
-const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 
 const fmt = (v: number) => v > 0 ? v.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "—";
 
 export function GovernmentRecordsTab() {
   const [filterYear, setFilterYear] = useState(String(new Date().getFullYear()));
+  const [expandedTaxMonths, setExpandedTaxMonths] = useState<Set<number>>(new Set());
+  const [expandedCitMonths, setExpandedCitMonths] = useState<Set<number>>(new Set());
+
+  const toggleTaxMonth = (month: number) => {
+    setExpandedTaxMonths(prev => {
+      const next = new Set(prev);
+      next.has(month) ? next.delete(month) : next.add(month);
+      return next;
+    });
+  };
+
+  const toggleCitMonth = (month: number) => {
+    setExpandedCitMonths(prev => {
+      const next = new Set(prev);
+      next.has(month) ? next.delete(month) : next.add(month);
+      return next;
+    });
+  };
 
   const { data, isLoading } = useQuery<GovtTaxData>({
     queryKey: ["/api/hrms/government-tax-records", { year: filterYear }],
@@ -55,15 +85,14 @@ export function GovernmentRecordsTab() {
   const totals = data?.annual_totals;
   const monthly = data?.monthly || [];
   const hasData = monthly.some(m => m.employee_count > 0);
-
-  const totalGross = monthly.reduce((s, m) => s + m.total_gross, 0);
+  const monthsWithData = monthly.filter(m => m.employee_count > 0);
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-lg font-semibold">Government Records</h2>
-          <p className="text-sm text-muted-foreground">Monthly breakdown of Income Tax, CIT, and SSF payable to government from processed payroll.</p>
+          <p className="text-sm text-muted-foreground">Monthly staff-level breakdown of Income Tax, CIT, and SSF payable to government.</p>
         </div>
         <Select value={filterYear} onValueChange={setFilterYear}>
           <SelectTrigger className="w-24"><SelectValue /></SelectTrigger>
@@ -115,7 +144,7 @@ export function GovernmentRecordsTab() {
             <CardContent className="p-4">
               <div className="flex items-center gap-2 mb-1">
                 <Landmark className="h-4 w-4 text-primary" />
-                <p className="text-xs text-muted-foreground font-medium">Total Payable to Govt</p>
+                <p className="text-xs text-muted-foreground font-medium">Total to Govt</p>
               </div>
               <p className="text-xl font-bold font-mono text-primary" data-testid="text-total-govt">{totals.total_payable_to_govt.toLocaleString()}</p>
             </CardContent>
@@ -126,39 +155,66 @@ export function GovernmentRecordsTab() {
       <div>
         <div className="flex items-center gap-2 mb-3">
           <TrendingUp className="h-4 w-4 text-orange-500" />
-          <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">Income Tax Records</h3>
+          <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">Income Tax Records — Staff Details</h3>
         </div>
         <Table>
           <TableHeader>
             <TableRow>
+              <TableHead className="w-8"></TableHead>
               <TableHead>Month</TableHead>
-              <TableHead className="text-center">Employees</TableHead>
+              <TableHead className="text-center">Staff</TableHead>
               <TableHead className="text-right">Gross Salary</TableHead>
               <TableHead className="text-right">Income Tax</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {monthly.map(m => (
-              <TableRow key={m.month} className={m.employee_count === 0 ? "opacity-40" : ""} data-testid={`row-tax-${m.month}`}>
-                <TableCell className="font-medium">{MONTHS[m.month - 1]} {m.year}</TableCell>
-                <TableCell className="text-center">{m.employee_count || "—"}</TableCell>
-                <TableCell className="text-right font-mono text-sm">{fmt(m.total_gross)}</TableCell>
-                <TableCell className="text-right font-mono text-sm font-semibold">
-                  {m.total_tax > 0 ? <span className="text-orange-600">{fmt(m.total_tax)}</span> : "—"}
-                </TableCell>
-              </TableRow>
-            ))}
+            {monthly.map(m => {
+              const isExpanded = expandedTaxMonths.has(m.month);
+              const hasStaff = m.staff && m.staff.length > 0;
+              return (
+                <>
+                  <TableRow
+                    key={`tax-${m.month}`}
+                    className={`${m.employee_count === 0 ? "opacity-40" : "cursor-pointer hover:bg-muted/50"}`}
+                    onClick={() => hasStaff && toggleTaxMonth(m.month)}
+                    data-testid={`row-tax-${m.month}`}
+                  >
+                    <TableCell className="w-8 px-2">
+                      {hasStaff && (isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />)}
+                    </TableCell>
+                    <TableCell className="font-semibold">{MONTHS[m.month - 1]} {m.year}</TableCell>
+                    <TableCell className="text-center">{m.employee_count || "—"}</TableCell>
+                    <TableCell className="text-right font-mono text-sm">{fmt(m.total_gross)}</TableCell>
+                    <TableCell className="text-right font-mono text-sm font-semibold">
+                      {m.total_tax > 0 ? <span className="text-orange-600">{fmt(m.total_tax)}</span> : "—"}
+                    </TableCell>
+                  </TableRow>
+                  {isExpanded && hasStaff && m.staff.map((s, idx) => (
+                    <TableRow key={`tax-${m.month}-${s.employee_id}-${idx}`} className="bg-muted/20">
+                      <TableCell></TableCell>
+                      <TableCell className="pl-8 text-sm">{s.employee_name}</TableCell>
+                      <TableCell></TableCell>
+                      <TableCell className="text-right font-mono text-sm">{fmt(s.gross_salary)}</TableCell>
+                      <TableCell className="text-right font-mono text-sm">
+                        {s.tax > 0 ? <span className="text-orange-600">{fmt(s.tax)}</span> : "—"}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </>
+              );
+            })}
             {hasData && totals && (
               <TableRow className="bg-muted/50 font-semibold border-t-2">
+                <TableCell></TableCell>
                 <TableCell className="font-bold">Annual Total</TableCell>
                 <TableCell></TableCell>
-                <TableCell className="text-right font-mono">{fmt(totalGross)}</TableCell>
+                <TableCell className="text-right font-mono">{fmt(monthsWithData.reduce((s, m) => s + m.total_gross, 0))}</TableCell>
                 <TableCell className="text-right font-mono text-orange-600">{fmt(totals.total_tax)}</TableCell>
               </TableRow>
             )}
             {!hasData && (
               <TableRow>
-                <TableCell colSpan={4} className="text-center text-muted-foreground py-8">
+                <TableCell colSpan={5} className="text-center text-muted-foreground py-8">
                   No payroll data for {filterYear}. Process payroll runs to see income tax records.
                 </TableCell>
               </TableRow>
@@ -170,37 +226,67 @@ export function GovernmentRecordsTab() {
       <div>
         <div className="flex items-center gap-2 mb-3">
           <Shield className="h-4 w-4 text-blue-500" />
-          <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">CIT & SSF Records</h3>
+          <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">CIT & SSF Records — Staff Details</h3>
         </div>
         <Table>
           <TableHeader>
             <TableRow>
+              <TableHead className="w-8"></TableHead>
               <TableHead>Month</TableHead>
-              <TableHead className="text-center">Employees</TableHead>
+              <TableHead className="text-center">Staff</TableHead>
               <TableHead className="text-right">CIT</TableHead>
               <TableHead className="text-right">SSF (Employee)</TableHead>
               <TableHead className="text-right">SSF (Employer)</TableHead>
-              <TableHead className="text-right font-semibold">Total CIT + SSF</TableHead>
+              <TableHead className="text-right font-semibold">Total</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {monthly.map(m => {
-              const subtotal = m.total_cit + m.total_ssf_employee + m.total_ssf_employer;
+              const isExpanded = expandedCitMonths.has(m.month);
+              const hasStaff = m.staff && m.staff.length > 0;
+              const monthCitTotal = m.total_cit + m.total_ssf_employee + m.total_ssf_employer;
               return (
-                <TableRow key={m.month} className={m.employee_count === 0 ? "opacity-40" : ""} data-testid={`row-cit-${m.month}`}>
-                  <TableCell className="font-medium">{MONTHS[m.month - 1]} {m.year}</TableCell>
-                  <TableCell className="text-center">{m.employee_count || "—"}</TableCell>
-                  <TableCell className="text-right font-mono text-sm">{fmt(m.total_cit)}</TableCell>
-                  <TableCell className="text-right font-mono text-sm">{fmt(m.total_ssf_employee)}</TableCell>
-                  <TableCell className="text-right font-mono text-sm">{fmt(m.total_ssf_employer)}</TableCell>
-                  <TableCell className="text-right font-mono text-sm font-semibold">
-                    {subtotal > 0 ? <span className="text-blue-600">{fmt(subtotal)}</span> : "—"}
-                  </TableCell>
-                </TableRow>
+                <>
+                  <TableRow
+                    key={`cit-${m.month}`}
+                    className={`${m.employee_count === 0 ? "opacity-40" : "cursor-pointer hover:bg-muted/50"}`}
+                    onClick={() => hasStaff && toggleCitMonth(m.month)}
+                    data-testid={`row-cit-${m.month}`}
+                  >
+                    <TableCell className="w-8 px-2">
+                      {hasStaff && (isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />)}
+                    </TableCell>
+                    <TableCell className="font-semibold">{MONTHS[m.month - 1]} {m.year}</TableCell>
+                    <TableCell className="text-center">{m.employee_count || "—"}</TableCell>
+                    <TableCell className="text-right font-mono text-sm">{fmt(m.total_cit)}</TableCell>
+                    <TableCell className="text-right font-mono text-sm">{fmt(m.total_ssf_employee)}</TableCell>
+                    <TableCell className="text-right font-mono text-sm">{fmt(m.total_ssf_employer)}</TableCell>
+                    <TableCell className="text-right font-mono text-sm font-semibold">
+                      {monthCitTotal > 0 ? <span className="text-blue-600">{fmt(monthCitTotal)}</span> : "—"}
+                    </TableCell>
+                  </TableRow>
+                  {isExpanded && hasStaff && m.staff.map((s, idx) => {
+                    const staffCitTotal = s.cit + s.ssf_employee + s.ssf_employer;
+                    return (
+                      <TableRow key={`cit-${m.month}-${s.employee_id}-${idx}`} className="bg-muted/20">
+                        <TableCell></TableCell>
+                        <TableCell className="pl-8 text-sm">{s.employee_name}</TableCell>
+                        <TableCell></TableCell>
+                        <TableCell className="text-right font-mono text-sm">{fmt(s.cit)}</TableCell>
+                        <TableCell className="text-right font-mono text-sm">{fmt(s.ssf_employee)}</TableCell>
+                        <TableCell className="text-right font-mono text-sm">{fmt(s.ssf_employer)}</TableCell>
+                        <TableCell className="text-right font-mono text-sm">
+                          {staffCitTotal > 0 ? <span className="text-blue-600">{fmt(staffCitTotal)}</span> : "—"}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </>
               );
             })}
             {hasData && totals && (
               <TableRow className="bg-muted/50 font-semibold border-t-2">
+                <TableCell></TableCell>
                 <TableCell className="font-bold">Annual Total</TableCell>
                 <TableCell></TableCell>
                 <TableCell className="text-right font-mono">{fmt(totals.total_cit)}</TableCell>
@@ -213,7 +299,7 @@ export function GovernmentRecordsTab() {
             )}
             {!hasData && (
               <TableRow>
-                <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
+                <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
                   No payroll data for {filterYear}. Process payroll runs to see CIT & SSF records.
                 </TableCell>
               </TableRow>
