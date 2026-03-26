@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger,
 } from "@/components/ui/dialog";
@@ -753,48 +753,91 @@ function HolidaysTab() {
   );
 }
 
+const SIDEBAR_ITEMS = [
+  { key: "staff-profiles", label: "Staff & Salary", icon: UserCog, group: "People" },
+  { key: "attendance", label: "Attendance", icon: Clock, group: "People" },
+  { key: "leave-types", label: "Leave Types", icon: TreePalm, group: "Leave" },
+  { key: "leave-requests", label: "Leave Requests", icon: CalendarDays, group: "Leave" },
+  { key: "holidays", label: "Holidays", icon: Calendar, group: "Leave" },
+  { key: "bonuses", label: "Bonuses", icon: Gift, group: "Payroll & Finance" },
+  { key: "expenses", label: "Travel Expenses", icon: Receipt, group: "Payroll & Finance" },
+  { key: "advances", label: "Advances", icon: Banknote, group: "Payroll & Finance" },
+  { key: "tax-slabs", label: "Tax Slabs", icon: Calculator, group: "Payroll & Finance" },
+  { key: "payroll", label: "Payroll", icon: DollarSign, group: "Payroll & Finance" },
+  { key: "govt-records", label: "Govt Records", icon: Landmark, group: "Payroll & Finance" },
+  { key: "organizations", label: "Organizations", icon: Building2, group: "Settings" },
+  { key: "departments", label: "Departments", icon: Users, group: "Settings" },
+];
+
+const CONTENT_MAP: Record<string, React.ComponentType> = {
+  "staff-profiles": StaffProfilesTab,
+  "attendance": AttendanceTab,
+  "organizations": OrgTab,
+  "departments": DeptTab,
+  "leave-types": LeaveTypesTab,
+  "leave-requests": LeaveRequestsTab,
+  "holidays": HolidaysTab,
+  "bonuses": BonusesTab,
+  "expenses": TravelExpensesTab,
+  "advances": AdvancePaymentsTab,
+  "tax-slabs": TaxSlabsTab,
+  "payroll": PayrollTab,
+  "govt-records": GovernmentRecordsTab,
+};
+
 export default function HRMSAdminPage() {
+  const [activeTab, setActiveTab] = useState("staff-profiles");
+
+  const groups = SIDEBAR_ITEMS.reduce<Record<string, typeof SIDEBAR_ITEMS>>((acc, item) => {
+    if (!acc[item.group]) acc[item.group] = [];
+    acc[item.group].push(item);
+    return acc;
+  }, {});
+
+  const ActiveComponent = CONTENT_MAP[activeTab];
+
   return (
-    <div className="p-6 max-w-[1400px] mx-auto space-y-6">
-      <div className="flex items-center gap-3">
-        <Briefcase className="h-7 w-7 text-primary" />
-        <div>
-          <h1 className="text-2xl font-bold" data-testid="text-hrms-title">HRMS Management</h1>
-          <p className="text-sm text-muted-foreground">Manage organizations, departments, attendance, leave, and payroll</p>
+    <div className="flex h-[calc(100vh-64px)]">
+      <aside className="w-56 shrink-0 border-r bg-muted/30 overflow-y-auto">
+        <div className="p-4 border-b">
+          <div className="flex items-center gap-2">
+            <Briefcase className="h-5 w-5 text-primary" />
+            <h1 className="text-sm font-bold" data-testid="text-hrms-title">HRMS</h1>
+          </div>
         </div>
-      </div>
+        <nav className="p-2 space-y-4">
+          {Object.entries(groups).map(([group, items]) => (
+            <div key={group}>
+              <p className="px-2 py-1 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">{group}</p>
+              <div className="space-y-0.5">
+                {items.map((item) => {
+                  const Icon = item.icon;
+                  const isActive = activeTab === item.key;
+                  return (
+                    <button
+                      key={item.key}
+                      onClick={() => setActiveTab(item.key)}
+                      data-testid={`tab-${item.key}`}
+                      className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-sm transition-colors ${
+                        isActive
+                          ? "bg-primary text-primary-foreground font-medium"
+                          : "hover:bg-muted text-muted-foreground hover:text-foreground"
+                      }`}
+                    >
+                      <Icon className="h-4 w-4 shrink-0" />
+                      <span className="truncate">{item.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+        </nav>
+      </aside>
 
-      <Tabs defaultValue="attendance" className="w-full">
-        <TabsList className="flex w-full overflow-x-auto">
-          <TabsTrigger value="attendance" data-testid="tab-attendance"><Clock className="h-4 w-4 mr-1" /> Attendance</TabsTrigger>
-          <TabsTrigger value="staff-profiles" data-testid="tab-staff-profiles"><UserCog className="h-4 w-4 mr-1" /> Staff & Salary</TabsTrigger>
-          <TabsTrigger value="organizations" data-testid="tab-orgs"><Building2 className="h-4 w-4 mr-1" /> Organizations</TabsTrigger>
-          <TabsTrigger value="departments" data-testid="tab-depts"><Users className="h-4 w-4 mr-1" /> Departments</TabsTrigger>
-          <TabsTrigger value="leave-types" data-testid="tab-leave-types"><TreePalm className="h-4 w-4 mr-1" /> Leave Types</TabsTrigger>
-          <TabsTrigger value="leave-requests" data-testid="tab-leave-requests"><CalendarDays className="h-4 w-4 mr-1" /> Leave Requests</TabsTrigger>
-          <TabsTrigger value="holidays" data-testid="tab-holidays"><Calendar className="h-4 w-4 mr-1" /> Holidays</TabsTrigger>
-          <TabsTrigger value="bonuses" data-testid="tab-bonuses"><Gift className="h-4 w-4 mr-1" /> Bonuses</TabsTrigger>
-          <TabsTrigger value="expenses" data-testid="tab-expenses"><Receipt className="h-4 w-4 mr-1" /> Expenses</TabsTrigger>
-          <TabsTrigger value="advances" data-testid="tab-advances"><Banknote className="h-4 w-4 mr-1" /> Advances</TabsTrigger>
-          <TabsTrigger value="tax-slabs" data-testid="tab-tax-slabs"><Calculator className="h-4 w-4 mr-1" /> Tax Slabs</TabsTrigger>
-          <TabsTrigger value="payroll" data-testid="tab-payroll"><DollarSign className="h-4 w-4 mr-1" /> Payroll</TabsTrigger>
-          <TabsTrigger value="govt-records" data-testid="tab-govt-records"><Landmark className="h-4 w-4 mr-1" /> Govt Records</TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="attendance"><AttendanceTab /></TabsContent>
-        <TabsContent value="staff-profiles"><StaffProfilesTab /></TabsContent>
-        <TabsContent value="organizations"><OrgTab /></TabsContent>
-        <TabsContent value="departments"><DeptTab /></TabsContent>
-        <TabsContent value="leave-types"><LeaveTypesTab /></TabsContent>
-        <TabsContent value="leave-requests"><LeaveRequestsTab /></TabsContent>
-        <TabsContent value="holidays"><HolidaysTab /></TabsContent>
-        <TabsContent value="bonuses"><BonusesTab /></TabsContent>
-        <TabsContent value="expenses"><TravelExpensesTab /></TabsContent>
-        <TabsContent value="advances"><AdvancePaymentsTab /></TabsContent>
-        <TabsContent value="tax-slabs"><TaxSlabsTab /></TabsContent>
-        <TabsContent value="payroll"><PayrollTab /></TabsContent>
-        <TabsContent value="govt-records"><GovernmentRecordsTab /></TabsContent>
-      </Tabs>
+      <main className="flex-1 overflow-y-auto p-6">
+        {ActiveComponent && <ActiveComponent />}
+      </main>
     </div>
   );
 }

@@ -215,8 +215,8 @@ def serialize_salary_structure(ss):
         'ssf_employee_percentage': float(ss.ssf_employee_percentage),
         'ssf_employer_percentage': float(ss.ssf_employer_percentage),
         'tax_applicable': ss.tax_applicable,
-        'effective_from': ss.effective_from.isoformat() if ss.effective_from else None,
-        'effective_to': ss.effective_to.isoformat() if ss.effective_to else None,
+        'effective_from': ss.effective_from.isoformat() if ss.effective_from and hasattr(ss.effective_from, 'isoformat') else str(ss.effective_from) if ss.effective_from else None,
+        'effective_to': ss.effective_to.isoformat() if ss.effective_to and hasattr(ss.effective_to, 'isoformat') else str(ss.effective_to) if ss.effective_to else None,
         'status': ss.status,
     }
 
