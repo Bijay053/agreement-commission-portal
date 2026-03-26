@@ -52,7 +52,7 @@ export default function LoginPage() {
             </div>
             <div>
               <h2 className="text-lg font-semibold tracking-tight">Study Info Centre</h2>
-              <p className="text-sm text-blue-200">{isPeoplePortal ? "People & HRMS" : "Agreement Portal"}</p>
+              <p className="text-sm text-blue-200">{isPeoplePortal ? "HRMS Portal" : "Agreement Portal"}</p>
             </div>
           </div>
           {isPeoplePortal ? (
@@ -119,7 +119,7 @@ export default function LoginPage() {
               </div>
               <div>
                 <h2 className="text-sm font-semibold">Study Info Centre</h2>
-                <p className="text-xs text-muted-foreground">{isPeoplePortal ? "People & HRMS" : "Agreement Portal"}</p>
+                <p className="text-xs text-muted-foreground">{isPeoplePortal ? "HRMS Portal" : "Agreement Portal"}</p>
               </div>
             </div>
             <h1 className="text-2xl font-bold text-foreground">Welcome back</h1>

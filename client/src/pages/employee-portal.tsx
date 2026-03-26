@@ -45,7 +45,7 @@ export default function EmployeePortal() {
               <span className="text-xs font-bold text-primary-foreground">SIC</span>
             </div>
             <div>
-              <p className="text-sm font-semibold leading-tight">People & HRMS</p>
+              <p className="text-sm font-semibold leading-tight">HRMS Portal</p>
               <p className="text-[10px] text-muted-foreground">Study Info Centre</p>
             </div>
           </div>
