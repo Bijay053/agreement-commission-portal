@@ -51,7 +51,12 @@ export default function EmployeesListPage() {
     fullName: "", email: "", phone: "", position: "", department: "",
     joinDate: "", citizenshipNo: "", panNo: "", passportNumber: "",
     permanentAddress: "", salaryAmount: "", salaryCurrency: "NPR",
+    organization_id: "", department_id: "",
   });
+
+  const { data: orgs } = useQuery<any[]>({ queryKey: ["/api/hrms/organizations"], queryFn: () => apiRequest("/api/hrms/organizations") });
+  const { data: depts } = useQuery<any[]>({ queryKey: ["/api/hrms/departments"], queryFn: () => apiRequest("/api/hrms/departments") });
+  const filteredDepts = form.organization_id ? depts?.filter((d: any) => d.organization_id === form.organization_id) : depts;
 
   const { data, isLoading } = useQuery<{ results?: Employee[] }>({
     queryKey: ["/api/employees", search, statusFilter],
@@ -75,7 +80,7 @@ export default function EmployeesListPage() {
     onSuccess: (newEmp: Employee) => {
       queryClient.invalidateQueries({ queryKey: ["/api/employees"] });
       setShowAdd(false);
-      setForm({ fullName: "", email: "", phone: "", position: "", department: "", joinDate: "", citizenshipNo: "", panNo: "", passportNumber: "", permanentAddress: "", salaryAmount: "", salaryCurrency: "NPR" });
+      setForm({ fullName: "", email: "", phone: "", position: "", department: "", joinDate: "", citizenshipNo: "", panNo: "", passportNumber: "", permanentAddress: "", salaryAmount: "", salaryCurrency: "NPR", organization_id: "", department_id: "" });
       toast({ title: "Employee created" });
       navigate(`/employees/${newEmp.id}`);
     },
@@ -202,12 +207,35 @@ export default function EmployeesListPage() {
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="text-xs font-medium text-muted-foreground mb-1 block">Department</label>
-                <Input value={form.department} onChange={(e) => setForm({ ...form, department: e.target.value })} data-testid="input-emp-department" />
+                <label className="text-xs font-medium text-muted-foreground mb-1 block">Organization *</label>
+                <Select value={form.organization_id} onValueChange={v => setForm({ ...form, organization_id: v, department_id: "" })}>
+                  <SelectTrigger data-testid="select-emp-org"><SelectValue placeholder="Select organization" /></SelectTrigger>
+                  <SelectContent>
+                    {orgs?.map((o: any) => <SelectItem key={o.id} value={o.id}>{o.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
               </div>
+              <div>
+                <label className="text-xs font-medium text-muted-foreground mb-1 block">Department</label>
+                <Select value={form.department_id} onValueChange={v => {
+                  const dept = filteredDepts?.find((d: any) => d.id === v);
+                  setForm({ ...form, department_id: v, department: dept?.name || "" });
+                }}>
+                  <SelectTrigger data-testid="select-emp-dept"><SelectValue placeholder="Select department" /></SelectTrigger>
+                  <SelectContent>
+                    {filteredDepts?.map((d: any) => <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="text-xs font-medium text-muted-foreground mb-1 block">Join Date</label>
                 <Input type="date" value={form.joinDate} onChange={(e) => setForm({ ...form, joinDate: e.target.value })} data-testid="input-emp-join-date" />
+              </div>
+              <div>
+                <label className="text-xs font-medium text-muted-foreground mb-1 block">Position</label>
+                <Input value={form.position} onChange={(e) => setForm({ ...form, position: e.target.value })} data-testid="input-emp-position2" />
               </div>
             </div>
             <div className="grid grid-cols-2 gap-3">

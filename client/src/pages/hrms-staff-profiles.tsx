@@ -77,6 +77,8 @@ export function StaffProfilesTab() {
   const [selectedStaff, setSelectedStaff] = useState<StaffProfile | null>(null);
   const [showSalaryDialog, setShowSalaryDialog] = useState(false);
   const [showAddEmployee, setShowAddEmployee] = useState(false);
+  const [showEditEmployee, setShowEditEmployee] = useState(false);
+  const [editingEmployee, setEditingEmployee] = useState<StaffProfile | null>(null);
   const [viewEmployeeId, setViewEmployeeId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [salaryForm, setSalaryForm] = useState({
@@ -142,6 +144,34 @@ export function StaffProfilesTab() {
     },
     onError: (err: any) => toast({ title: "Error", description: err.message, variant: "destructive" }),
   });
+
+  const updateEmployeeMutation = useMutation({
+    mutationFn: ({ id, data }: { id: string; data: any }) => apiRequest("PUT", `/api/employees/${id}`, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/hrms/staff-profiles"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/employees"] });
+      setShowEditEmployee(false);
+      setEditingEmployee(null);
+      toast({ title: "Employee updated" });
+    },
+    onError: (err: any) => toast({ title: "Error", description: err.message, variant: "destructive" }),
+  });
+
+  const openEditEmployee = (s: StaffProfile) => {
+    setEditingEmployee(s);
+    setEmpForm({
+      full_name: s.full_name, email: s.email, phone: s.phone || "", position: s.position || "",
+      department: s.department || "", organization_id: s.organization_id || "",
+      department_id: s.department_id || "", gender: s.gender || "", marital_status: s.marital_status || "",
+      join_date: s.join_date || "", employment_type: s.employment_type || "full_time",
+      citizenship_no: s.citizenship_no || "", pan_no: s.pan_no || "",
+      bank_name: s.bank_name || "", bank_account_number: s.bank_account_number || "",
+      bank_branch: s.bank_branch || "", permanent_address: "", temporary_address: "",
+      salary_amount: s.salary_amount ? String(s.salary_amount) : "", salary_currency: s.salary_currency || "NPR",
+      emergency_contact_name: "", emergency_contact_phone: "",
+    });
+    setShowEditEmployee(true);
+  };
 
   const openSalaryDialog = (s: StaffProfile) => {
     setSelectedStaff(s);
@@ -390,6 +420,9 @@ export function StaffProfilesTab() {
                   <Button size="sm" variant="ghost" onClick={() => setViewEmployeeId(s.id)} data-testid={`btn-view-${s.id}`} title="View Details">
                     <Eye className="w-3 h-3" />
                   </Button>
+                  <Button size="sm" variant="ghost" onClick={() => openEditEmployee(s)} data-testid={`btn-edit-${s.id}`} title="Edit Employee">
+                    <Pencil className="w-3 h-3" />
+                  </Button>
                   <Button size="sm" variant="outline" onClick={() => openSalaryDialog(s)} data-testid={`btn-salary-${s.id}`}>
                     <DollarSign className="w-3 h-3 mr-1" /> {s.salary_structure ? "Edit" : "Set"}
                   </Button>
@@ -500,6 +533,101 @@ export function StaffProfilesTab() {
             <Button variant="outline" onClick={() => setShowAddEmployee(false)}>Cancel</Button>
             <Button onClick={handleAddEmployee} disabled={createEmployeeMutation.isPending} data-testid="btn-save-employee">
               {createEmployeeMutation.isPending ? "Adding..." : "Add Employee"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showEditEmployee} onOpenChange={(open) => { if (!open) { setShowEditEmployee(false); setEditingEmployee(null); } }}>
+        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader><DialogTitle>Edit Employee — {editingEmployee?.full_name}</DialogTitle></DialogHeader>
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div><Label>Full Name *</Label><Input value={empForm.full_name} onChange={e => setEmpForm({ ...empForm, full_name: e.target.value })} /></div>
+              <div><Label>Email *</Label><Input type="email" value={empForm.email} onChange={e => setEmpForm({ ...empForm, email: e.target.value })} /></div>
+            </div>
+            <div className="grid grid-cols-3 gap-4">
+              <div><Label>Phone</Label><Input value={empForm.phone} onChange={e => setEmpForm({ ...empForm, phone: e.target.value })} /></div>
+              <div><Label>Position</Label><Input value={empForm.position} onChange={e => setEmpForm({ ...empForm, position: e.target.value })} /></div>
+              <div>
+                <Label>Employment Type</Label>
+                <Select value={empForm.employment_type} onValueChange={v => setEmpForm({ ...empForm, employment_type: v })}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="full_time">Full Time</SelectItem>
+                    <SelectItem value="part_time">Part Time</SelectItem>
+                    <SelectItem value="contract">Contract</SelectItem>
+                    <SelectItem value="intern">Intern</SelectItem>
+                    <SelectItem value="probation">Probation</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="grid grid-cols-3 gap-4">
+              <div>
+                <Label>Organization *</Label>
+                <Select value={empForm.organization_id} onValueChange={v => setEmpForm({ ...empForm, organization_id: v, department_id: "" })}>
+                  <SelectTrigger data-testid="edit-select-org"><SelectValue placeholder="Select organization" /></SelectTrigger>
+                  <SelectContent>{orgs?.map(o => <SelectItem key={o.id} value={o.id}>{o.name}</SelectItem>)}</SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label>Department</Label>
+                <Select value={empForm.department_id} onValueChange={v => {
+                  const dept = depts?.find(d => d.id === v);
+                  setEmpForm({ ...empForm, department_id: v, department: dept?.name || "" });
+                }}>
+                  <SelectTrigger data-testid="edit-select-dept"><SelectValue placeholder="Select department" /></SelectTrigger>
+                  <SelectContent>{filteredDepts?.map(d => <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>)}</SelectContent>
+                </Select>
+              </div>
+              <div><Label>Join Date</Label><Input type="date" value={empForm.join_date} onChange={e => setEmpForm({ ...empForm, join_date: e.target.value })} /></div>
+            </div>
+            <div className="grid grid-cols-3 gap-4">
+              <div>
+                <Label>Gender</Label>
+                <Select value={empForm.gender} onValueChange={v => setEmpForm({ ...empForm, gender: v })}>
+                  <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="male">Male</SelectItem>
+                    <SelectItem value="female">Female</SelectItem>
+                    <SelectItem value="other">Other</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label>Marital Status</Label>
+                <Select value={empForm.marital_status} onValueChange={v => setEmpForm({ ...empForm, marital_status: v })}>
+                  <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="single">Single</SelectItem>
+                    <SelectItem value="married">Married</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div><Label>PAN Number</Label><Input value={empForm.pan_no} onChange={e => setEmpForm({ ...empForm, pan_no: e.target.value })} /></div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setShowEditEmployee(false); setEditingEmployee(null); }}>Cancel</Button>
+            <Button onClick={() => {
+              if (!editingEmployee || !empForm.full_name.trim()) return;
+              const payload: any = {
+                fullName: empForm.full_name, email: empForm.email,
+              };
+              if (empForm.phone) payload.phone = empForm.phone;
+              if (empForm.position) payload.position = empForm.position;
+              if (empForm.department) payload.department = empForm.department;
+              payload.organization_id = empForm.organization_id || null;
+              payload.department_id = empForm.department_id || null;
+              if (empForm.gender) payload.gender = empForm.gender;
+              if (empForm.marital_status) payload.marital_status = empForm.marital_status;
+              if (empForm.join_date) payload.joinDate = empForm.join_date;
+              if (empForm.employment_type) payload.employmentType = empForm.employment_type;
+              if (empForm.pan_no) payload.panNo = empForm.pan_no;
+              updateEmployeeMutation.mutate({ id: editingEmployee.id, data: payload });
+            }} disabled={updateEmployeeMutation.isPending} data-testid="btn-update-employee">
+              {updateEmployeeMutation.isPending ? "Saving..." : "Update Employee"}
             </Button>
           </DialogFooter>
         </DialogContent>

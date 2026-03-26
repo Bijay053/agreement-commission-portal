@@ -22,6 +22,11 @@ def _serialize_employee(e):
         'phone': e.phone or '',
         'position': e.position or '',
         'department': e.department or '',
+        'organization_id': str(e.organization_id) if e.organization_id else None,
+        'department_id': str(e.department_id) if e.department_id else None,
+        'gender': e.gender or '',
+        'marital_status': e.marital_status or '',
+        'employment_type': e.employment_type or 'full_time',
         'citizenshipNo': e.citizenship_no or '',
         'panNo': e.pan_no or '',
         'permanentAddress': e.permanent_address or '',
@@ -29,6 +34,9 @@ def _serialize_employee(e):
         'joinDate': _safe_iso(e.join_date),
         'salaryAmount': str(e.salary_amount) if e.salary_amount else '',
         'salaryCurrency': e.salary_currency or 'NPR',
+        'bankName': e.bank_name or '',
+        'bankAccountNumber': e.bank_account_number or '',
+        'bankBranch': e.bank_branch or '',
         'status': e.status,
         'createdAt': _safe_iso(e.created_at),
         'updatedAt': _safe_iso(e.updated_at),
@@ -121,19 +129,54 @@ class EmployeeDetailView(APIView):
             return Response({'message': 'Employee not found'}, status=404)
 
         data = request.data
-        employee.full_name = data.get('fullName', employee.full_name).strip()
+        employee.full_name = data.get('fullName', data.get('full_name', employee.full_name))
+        if isinstance(employee.full_name, str):
+            employee.full_name = employee.full_name.strip()
         employee.email = data.get('email', employee.email).strip()
         employee.phone = data.get('phone', employee.phone)
         employee.position = data.get('position', employee.position)
         employee.department = data.get('department', employee.department)
-        employee.citizenship_no = data.get('citizenshipNo', employee.citizenship_no)
-        employee.pan_no = data.get('panNo', employee.pan_no)
-        employee.permanent_address = data.get('permanentAddress', employee.permanent_address)
-        employee.passport_number = data.get('passportNumber', employee.passport_number)
-        employee.join_date = data.get('joinDate') or employee.join_date
-        employee.salary_amount = data.get('salaryAmount') or employee.salary_amount
-        employee.salary_currency = data.get('salaryCurrency', employee.salary_currency)
+        employee.citizenship_no = data.get('citizenshipNo', data.get('citizenship_no', employee.citizenship_no))
+        employee.pan_no = data.get('panNo', data.get('pan_no', employee.pan_no))
+        employee.permanent_address = data.get('permanentAddress', data.get('permanent_address', employee.permanent_address))
+        employee.passport_number = data.get('passportNumber', data.get('passport_number', employee.passport_number))
+        employee.join_date = data.get('joinDate', data.get('join_date')) or employee.join_date
+        employee.salary_amount = data.get('salaryAmount', data.get('salary_amount')) or employee.salary_amount
+        employee.salary_currency = data.get('salaryCurrency', data.get('salary_currency', employee.salary_currency))
         employee.status = data.get('status', employee.status)
+        org_id = data.get('organizationId') or data.get('organization_id')
+        if org_id is not None:
+            employee.organization_id = org_id if org_id else None
+        dept_id = data.get('departmentId') or data.get('department_id')
+        if dept_id is not None:
+            employee.department_id = dept_id if dept_id else None
+        gender = data.get('gender')
+        if gender is not None:
+            employee.gender = gender
+        marital = data.get('maritalStatus') or data.get('marital_status')
+        if marital is not None:
+            employee.marital_status = marital
+        emp_type = data.get('employmentType') or data.get('employment_type')
+        if emp_type is not None:
+            employee.employment_type = emp_type
+        bank_name = data.get('bankName') or data.get('bank_name')
+        if bank_name is not None:
+            employee.bank_name = bank_name
+        bank_acc = data.get('bankAccountNumber') or data.get('bank_account_number')
+        if bank_acc is not None:
+            employee.bank_account_number = bank_acc
+        bank_branch = data.get('bankBranch') or data.get('bank_branch')
+        if bank_branch is not None:
+            employee.bank_branch = bank_branch
+        temp_addr = data.get('temporaryAddress') or data.get('temporary_address')
+        if temp_addr is not None:
+            employee.temporary_address = temp_addr
+        emg_name = data.get('emergencyContactName') or data.get('emergency_contact_name')
+        if emg_name is not None:
+            employee.emergency_contact_name = emg_name
+        emg_phone = data.get('emergencyContactPhone') or data.get('emergency_contact_phone')
+        if emg_phone is not None:
+            employee.emergency_contact_phone = emg_phone
         employee.save()
         return Response(_serialize_employee(employee))
 
