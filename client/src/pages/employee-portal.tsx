@@ -115,7 +115,10 @@ function ProfileTab() {
   const [otpCode, setOtpCode] = useState('');
   const [otpMaskedEmail, setOtpMaskedEmail] = useState('');
   const [showExpenseForm, setShowExpenseForm] = useState(false);
-  const [expenseForm, setExpenseForm] = useState({ category: 'travel', description: '', amount: '', expense_date: new Date().toISOString().split('T')[0] });
+  const [expenseForm, setExpenseForm] = useState({ category: 'travel', description: '', amount: '', expense_date: new Date().toISOString().split('T')[0], receipt_url: '' });
+  const [uploadingReceipt, setUploadingReceipt] = useState(false);
+  const [receiptFileName, setReceiptFileName] = useState('');
+  const receiptInputRef = useRef<HTMLInputElement>(null);
 
   const sendOtpMutation = useMutation({
     mutationFn: async () => {
@@ -157,7 +160,8 @@ function ProfileTab() {
     },
     onSuccess: () => {
       setShowExpenseForm(false);
-      setExpenseForm({ category: 'travel', description: '', amount: '', expense_date: new Date().toISOString().split('T')[0] });
+      setExpenseForm({ category: 'travel', description: '', amount: '', expense_date: new Date().toISOString().split('T')[0], receipt_url: '' });
+      setReceiptFileName('');
       toast({ title: 'Expense submitted', description: 'Your expense has been submitted for approval' });
       queryClient.invalidateQueries({ queryKey: ["/api/hrms/my/profile"] });
     },
@@ -471,6 +475,7 @@ function ProfileTab() {
                     <TableHead>Category</TableHead>
                     <TableHead>Description</TableHead>
                     <TableHead className="text-right">Amount</TableHead>
+                    <TableHead>Receipt</TableHead>
                     <TableHead>Status</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -481,6 +486,13 @@ function ProfileTab() {
                       <TableCell className="text-sm capitalize">{e.category?.replace(/_/g, ' ')}</TableCell>
                       <TableCell className="text-sm text-muted-foreground">{e.description || '—'}</TableCell>
                       <TableCell className="text-sm text-right font-medium">{fmtAmt(e.amount)}</TableCell>
+                      <TableCell>
+                        {e.receipt_url ? (
+                          <a href={e.receipt_url} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline text-xs flex items-center gap-1" data-testid={`link-receipt-${e.id}`}>
+                            <Paperclip className="h-3 w-3" /> View
+                          </a>
+                        ) : <span className="text-muted-foreground text-xs">—</span>}
+                      </TableCell>
                       <TableCell>
                         <Badge variant={e.status === 'approved' ? 'default' : e.status === 'rejected' ? 'destructive' : 'outline'} className="text-xs">
                           {e.status}
@@ -551,6 +563,63 @@ function ProfileTab() {
                 />
               </div>
             </div>
+            <div>
+              <Label>Bill / Receipt</Label>
+              <input
+                ref={receiptInputRef}
+                type="file"
+                accept="image/*,.pdf"
+                className="hidden"
+                data-testid="input-expense-receipt"
+                onChange={async (e) => {
+                  const file = e.target.files?.[0];
+                  if (!file) return;
+                  setUploadingReceipt(true);
+                  try {
+                    const fd = new FormData();
+                    fd.append('file', file);
+                    const res = await fetch('/api/hrms/expense-receipt-upload', { method: 'POST', body: fd, credentials: 'include' });
+                    if (!res.ok) throw new Error('Upload failed');
+                    const data = await res.json();
+                    setExpenseForm(f => ({ ...f, receipt_url: data.url }));
+                    setReceiptFileName(file.name);
+                    toast({ title: 'Receipt uploaded' });
+                  } catch {
+                    toast({ title: 'Upload failed', variant: 'destructive' });
+                  } finally {
+                    setUploadingReceipt(false);
+                  }
+                }}
+              />
+              {expenseForm.receipt_url ? (
+                <div className="flex items-center gap-2 mt-1.5 p-2 bg-green-50 border border-green-200 rounded-md">
+                  <File className="h-4 w-4 text-green-600 shrink-0" />
+                  <span className="text-sm text-green-700 truncate flex-1">{receiptFileName || 'Receipt uploaded'}</span>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-6 px-2 text-red-500 hover:text-red-700"
+                    onClick={() => { setExpenseForm(f => ({ ...f, receipt_url: '' })); setReceiptFileName(''); }}
+                    data-testid="button-remove-receipt"
+                  >
+                    <XCircle className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
+              ) : (
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full mt-1.5"
+                  onClick={() => receiptInputRef.current?.click()}
+                  disabled={uploadingReceipt}
+                  data-testid="button-upload-receipt"
+                >
+                  {uploadingReceipt ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <Upload className="h-4 w-4 mr-1.5" />}
+                  {uploadingReceipt ? 'Uploading...' : 'Upload Bill / Receipt'}
+                </Button>
+              )}
+            </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowExpenseForm(false)}>Cancel</Button>
@@ -563,9 +632,10 @@ function ProfileTab() {
                   description: expenseForm.description,
                   amount: Number(expenseForm.amount),
                   expense_date: expenseForm.expense_date,
+                  receipt_url: expenseForm.receipt_url || undefined,
                 });
               }}
-              disabled={submitExpenseMutation.isPending || !expenseForm.description.trim() || !expenseForm.amount}
+              disabled={submitExpenseMutation.isPending || uploadingReceipt || !expenseForm.description.trim() || !expenseForm.amount}
               data-testid="button-submit-expense"
             >
               {submitExpenseMutation.isPending ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Send className="h-4 w-4 mr-1" />}

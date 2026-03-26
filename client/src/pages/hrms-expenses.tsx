@@ -19,7 +19,7 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
-import { Plus, Check, X, Trash2 } from "lucide-react";
+import { Plus, Check, X, Trash2, Paperclip, Upload, Loader2 } from "lucide-react";
 
 interface TravelExpense {
   id: string;
@@ -68,6 +68,8 @@ export function TravelExpensesTab() {
   const [filterYear, setFilterYear] = useState(String(new Date().getFullYear()));
   const [rejectId, setRejectId] = useState<string | null>(null);
   const [rejectReason, setRejectReason] = useState("");
+  const [uploadingAdminReceipt, setUploadingAdminReceipt] = useState(false);
+  const [adminReceiptName, setAdminReceiptName] = useState("");
   const [form, setForm] = useState({
     employee_id: "",
     category: "travel",
@@ -166,6 +168,7 @@ export function TravelExpensesTab() {
             <TableHead>Description</TableHead>
             <TableHead>Date</TableHead>
             <TableHead className="text-right">Amount</TableHead>
+            <TableHead>Receipt</TableHead>
             <TableHead>In Salary</TableHead>
             <TableHead>Status</TableHead>
             <TableHead></TableHead>
@@ -179,6 +182,13 @@ export function TravelExpensesTab() {
               <TableCell className="text-sm max-w-[200px] truncate">{e.description}</TableCell>
               <TableCell className="text-sm">{e.expense_date}</TableCell>
               <TableCell className="text-right font-mono text-sm">{ e.amount.toLocaleString()}</TableCell>
+              <TableCell>
+                {e.receipt_url ? (
+                  <a href={e.receipt_url} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline text-xs flex items-center gap-1">
+                    <Paperclip className="h-3 w-3" /> View
+                  </a>
+                ) : <span className="text-muted-foreground text-xs">—</span>}
+              </TableCell>
               <TableCell>{e.include_in_salary ? <Badge variant="outline" className="text-xs">Yes</Badge> : <Badge variant="secondary" className="text-xs">No</Badge>}</TableCell>
               <TableCell><span className={`text-xs px-2 py-1 rounded-full ${STATUS_COLORS[e.status] || ""}`}>{e.status}</span></TableCell>
               <TableCell>
@@ -195,7 +205,7 @@ export function TravelExpensesTab() {
             </TableRow>
           ))}
           {(!expenses || expenses.length === 0) && (
-            <TableRow><TableCell colSpan={8} className="text-center text-muted-foreground py-8">No expenses for {filterYear}</TableCell></TableRow>
+            <TableRow><TableCell colSpan={9} className="text-center text-muted-foreground py-8">No expenses for {filterYear}</TableCell></TableRow>
           )}
         </TableBody>
       </Table>
@@ -248,8 +258,47 @@ export function TravelExpensesTab() {
               </div>
             </div>
             <div>
-              <Label>Receipt URL (optional)</Label>
-              <Input value={form.receipt_url} onChange={e => setForm({ ...form, receipt_url: e.target.value })} placeholder="https://..." />
+              <Label>Bill / Receipt (optional)</Label>
+              {form.receipt_url ? (
+                <div className="flex items-center gap-2 mt-1 p-2 bg-green-50 border border-green-200 rounded-md">
+                  <Paperclip className="h-4 w-4 text-green-600 shrink-0" />
+                  <span className="text-sm text-green-700 truncate flex-1">{adminReceiptName || 'Uploaded'}</span>
+                  <Button type="button" variant="ghost" size="sm" className="h-6 px-2 text-red-500" onClick={() => { setForm({ ...form, receipt_url: "" }); setAdminReceiptName(""); }}>
+                    <X className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
+              ) : (
+                <>
+                  <input
+                    type="file"
+                    accept="image/*,.pdf"
+                    className="hidden"
+                    id="admin-receipt-upload"
+                    onChange={async (e) => {
+                      const file = e.target.files?.[0];
+                      if (!file) return;
+                      setUploadingAdminReceipt(true);
+                      try {
+                        const fd = new FormData();
+                        fd.append('file', file);
+                        const res = await fetch('/api/hrms/expense-receipt-upload', { method: 'POST', body: fd, credentials: 'include' });
+                        if (!res.ok) throw new Error('Upload failed');
+                        const data = await res.json();
+                        setForm(f => ({ ...f, receipt_url: data.url }));
+                        setAdminReceiptName(file.name);
+                      } catch {
+                        toast({ title: 'Upload failed', variant: 'destructive' });
+                      } finally {
+                        setUploadingAdminReceipt(false);
+                      }
+                    }}
+                  />
+                  <Button type="button" variant="outline" className="w-full mt-1" onClick={() => document.getElementById('admin-receipt-upload')?.click()} disabled={uploadingAdminReceipt}>
+                    {uploadingAdminReceipt ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <Upload className="h-4 w-4 mr-1.5" />}
+                    {uploadingAdminReceipt ? 'Uploading...' : 'Upload Bill / Receipt'}
+                  </Button>
+                </>
+              )}
             </div>
             <div className="flex items-center gap-3">
               <Checkbox checked={form.include_in_salary} onCheckedChange={(v) => setForm({ ...form, include_in_salary: !!v })} />

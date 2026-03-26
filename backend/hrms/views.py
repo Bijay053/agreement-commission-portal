@@ -402,7 +402,7 @@ def serialize_travel_expense(te):
         'description': te.description,
         'amount': float(te.amount),
         'expense_date': te.expense_date.isoformat() if te.expense_date else None,
-        'receipt_url': te.receipt_url,
+        'receipt_url': get_presigned_url(te.receipt_url) if te.receipt_url else None,
         'month': te.month,
         'year': te.year,
         'include_in_salary': te.include_in_salary,
@@ -1472,6 +1472,33 @@ class AttendancePhotoUploadView(APIView):
             )
             url = f'https://{settings.AWS_S3_BUCKET_NAME}.s3.{settings.AWS_S3_REGION_NAME}.amazonaws.com/{key}'
             return Response({'url': url})
+        except Exception as e:
+            return Response({'message': f'Upload failed: {str(e)}'}, status=500)
+
+
+class ExpenseReceiptUploadView(APIView):
+    @require_auth
+    def post(self, request):
+        import boto3
+        import uuid as uuid_mod
+        file = request.FILES.get('file')
+        if not file:
+            return Response({'message': 'No file provided'}, status=400)
+        ext = file.name.rsplit('.', 1)[-1] if '.' in file.name else 'pdf'
+        key = f'expense-receipts/{uuid_mod.uuid4()}.{ext}'
+        try:
+            s3 = boto3.client(
+                's3',
+                aws_access_key_id=settings.AWS_ACCESS_KEY_ID,
+                aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY,
+                region_name=settings.AWS_S3_REGION_NAME,
+            )
+            s3.upload_fileobj(
+                file, settings.AWS_S3_BUCKET_NAME, key,
+                ExtraArgs={'ContentType': file.content_type or 'application/octet-stream'},
+            )
+            url = f'https://{settings.AWS_S3_BUCKET_NAME}.s3.{settings.AWS_S3_REGION_NAME}.amazonaws.com/{key}'
+            return Response({'url': url, 'filename': file.name})
         except Exception as e:
             return Response({'message': f'Upload failed: {str(e)}'}, status=500)
 
@@ -4361,7 +4388,7 @@ class MyExpensesView(APIView):
             'description': e.description,
             'amount': float(e.amount),
             'expense_date': e.expense_date.isoformat() if e.expense_date else None,
-            'receipt_url': e.receipt_url,
+            'receipt_url': get_presigned_url(e.receipt_url) if e.receipt_url else None,
             'status': e.status,
             'rejection_reason': e.rejection_reason,
         } for e in qs[:20]])
