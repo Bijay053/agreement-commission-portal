@@ -63,6 +63,12 @@ urlpatterns = [
     path('hrms/advance-payments', views.AdvancePaymentListView.as_view()),
     path('hrms/advance-payments/<uuid:advance_id>', views.AdvancePaymentDetailView.as_view()),
 
+    path('hrms/tax-slabs', views.TaxSlabListView.as_view()),
+    path('hrms/tax-slabs/bulk-save', views.TaxSlabBulkSaveView.as_view()),
+    path('hrms/tax-slabs/<uuid:slab_id>', views.TaxSlabDetailView.as_view()),
+
+    path('hrms/government-tax-records', views.GovernmentTaxRecordsView.as_view()),
+
     path('hrms/my/profile', views.MyProfileView.as_view()),
     path('hrms/my/attendance', views.MyAttendanceView.as_view()),
     path('hrms/my/leave-balance', views.MyLeaveBalanceView.as_view()),

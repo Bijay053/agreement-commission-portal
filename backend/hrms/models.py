@@ -484,3 +484,21 @@ class NotificationSetting(models.Model):
 
     class Meta:
         db_table = 'hrms_notification_settings'
+
+
+class TaxSlab(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    organization = models.ForeignKey(Organization, on_delete=models.CASCADE, related_name='tax_slabs', null=True, blank=True)
+    fiscal_year = models.ForeignKey('FiscalYear', on_delete=models.SET_NULL, null=True, blank=True)
+    marital_status = models.CharField(max_length=16, choices=[('single', 'Single'), ('married', 'Married')], default='single')
+    slab_order = models.IntegerField(default=1)
+    lower_limit = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    upper_limit = models.DecimalField(max_digits=14, decimal_places=2, null=True, blank=True)
+    rate = models.DecimalField(max_digits=5, decimal_places=2, default=0)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'hrms_tax_slabs'
+        ordering = ['marital_status', 'slab_order']

@@ -14,7 +14,7 @@ from .models import (
     LeaveBalance, LeaveRequest, AttendanceRecord,
     OnlineCheckInPermission, DeviceMapping, SalaryStructure,
     PayrollRun, Payslip, NotificationSetting,
-    Bonus, TravelExpense, AdvancePayment,
+    Bonus, TravelExpense, AdvancePayment, TaxSlab,
 )
 
 
@@ -1528,23 +1528,42 @@ class PayrollRunDetailView(APIView):
         return Response({'message': 'Payroll run deleted'})
 
 
-def calculate_nepal_tax(annual_income, marital_status='single'):
-    if marital_status == 'married':
-        slabs = [
-            (500000, Decimal('0.01')),
-            (200000, Decimal('0.10')),
-            (300000, Decimal('0.20')),
-            (1000000, Decimal('0.30')),
-            (None, Decimal('0.36')),
-        ]
+def calculate_nepal_tax(annual_income, marital_status='single', organization_id=None):
+    db_slabs = TaxSlab.objects.filter(
+        marital_status=marital_status, is_active=True
+    ).order_by('slab_order')
+    if organization_id:
+        org_slabs = db_slabs.filter(organization_id=organization_id)
+        if org_slabs.exists():
+            db_slabs = org_slabs
+        else:
+            db_slabs = db_slabs.filter(organization__isnull=True)
+
+    if db_slabs.exists():
+        slabs = []
+        for s in db_slabs:
+            if s.upper_limit is not None:
+                slab_width = s.upper_limit - s.lower_limit
+                slabs.append((slab_width, s.rate / Decimal('100')))
+            else:
+                slabs.append((None, s.rate / Decimal('100')))
     else:
-        slabs = [
-            (500000, Decimal('0.01')),
-            (200000, Decimal('0.10')),
-            (300000, Decimal('0.20')),
-            (1000000, Decimal('0.30')),
-            (None, Decimal('0.36')),
-        ]
+        if marital_status == 'married':
+            slabs = [
+                (Decimal('600000'), Decimal('0.01')),
+                (Decimal('200000'), Decimal('0.10')),
+                (Decimal('300000'), Decimal('0.20')),
+                (Decimal('1000000'), Decimal('0.30')),
+                (None, Decimal('0.36')),
+            ]
+        else:
+            slabs = [
+                (Decimal('500000'), Decimal('0.01')),
+                (Decimal('200000'), Decimal('0.10')),
+                (Decimal('300000'), Decimal('0.20')),
+                (Decimal('1000000'), Decimal('0.30')),
+                (None, Decimal('0.36')),
+            ]
 
     remaining = Decimal(str(annual_income))
     total_tax = Decimal('0')
@@ -1696,7 +1715,7 @@ class PayrollRunProcessView(APIView):
             tax_deduction = Decimal('0')
             if sal.tax_applicable:
                 annual_taxable = (taxable_income - cit_deduction - ssf_employee) * 12
-                annual_tax = calculate_nepal_tax(annual_taxable, emp.marital_status or 'single')
+                annual_tax = calculate_nepal_tax(annual_taxable, emp.marital_status or 'single', organization_id=pr.organization_id)
                 tax_deduction = (annual_tax / 12).quantize(Decimal('0.01'))
 
             other_deductions = sal.deductions or {}
@@ -2304,3 +2323,171 @@ class StaffProfileListView(APIView):
                 'outstanding_advance': float(active_advances),
             })
         return Response(result)
+
+
+def serialize_tax_slab(s):
+    return {
+        'id': str(s.id),
+        'organization_id': str(s.organization_id) if s.organization_id else None,
+        'fiscal_year_id': str(s.fiscal_year_id) if s.fiscal_year_id else None,
+        'marital_status': s.marital_status,
+        'slab_order': s.slab_order,
+        'lower_limit': float(s.lower_limit),
+        'upper_limit': float(s.upper_limit) if s.upper_limit is not None else None,
+        'rate': float(s.rate),
+        'is_active': s.is_active,
+    }
+
+
+class TaxSlabListView(APIView):
+    @require_permission('hrms.tax.read')
+    def get(self, request):
+        qs = TaxSlab.objects.filter(is_active=True)
+        org = request.GET.get('organization_id')
+        if org:
+            qs = qs.filter(Q(organization_id=org) | Q(organization__isnull=True))
+        ms = request.GET.get('marital_status')
+        if ms:
+            qs = qs.filter(marital_status=ms)
+        return Response([serialize_tax_slab(s) for s in qs])
+
+    @require_permission('hrms.tax.update')
+    def post(self, request):
+        data = request.data
+        s = TaxSlab.objects.create(
+            organization_id=data.get('organization_id') or None,
+            fiscal_year_id=data.get('fiscal_year_id') or None,
+            marital_status=data.get('marital_status', 'single'),
+            slab_order=int(data.get('slab_order', 1)),
+            lower_limit=Decimal(str(data.get('lower_limit', 0))),
+            upper_limit=Decimal(str(data['upper_limit'])) if data.get('upper_limit') is not None else None,
+            rate=Decimal(str(data.get('rate', 0))),
+            is_active=data.get('is_active', True),
+        )
+        return Response(serialize_tax_slab(s), status=201)
+
+
+class TaxSlabDetailView(APIView):
+    @require_permission('hrms.tax.update')
+    def patch(self, request, slab_id):
+        try:
+            s = TaxSlab.objects.get(id=slab_id)
+        except TaxSlab.DoesNotExist:
+            return Response({'message': 'Tax slab not found'}, status=404)
+        data = request.data
+        for field in ['marital_status', 'slab_order', 'lower_limit', 'upper_limit', 'rate', 'is_active', 'organization_id', 'fiscal_year_id']:
+            if field in data:
+                val = data[field]
+                if field in ('lower_limit', 'rate') and val is not None:
+                    val = Decimal(str(val))
+                if field == 'upper_limit':
+                    val = Decimal(str(val)) if val is not None else None
+                if field == 'slab_order' and val is not None:
+                    val = int(val)
+                setattr(s, field, val)
+        s.save()
+        return Response(serialize_tax_slab(s))
+
+    @require_permission('hrms.tax.update')
+    def delete(self, request, slab_id):
+        try:
+            s = TaxSlab.objects.get(id=slab_id)
+        except TaxSlab.DoesNotExist:
+            return Response({'message': 'Tax slab not found'}, status=404)
+        s.delete()
+        return Response({'message': 'Tax slab deleted'})
+
+
+class TaxSlabBulkSaveView(APIView):
+    @require_permission('hrms.tax.update')
+    def post(self, request):
+        data = request.data
+        marital_status = data.get('marital_status', 'single')
+        slabs = data.get('slabs', [])
+        org_id = data.get('organization_id') or None
+
+        TaxSlab.objects.filter(
+            marital_status=marital_status,
+            organization_id=org_id,
+        ).delete()
+
+        created = []
+        for i, slab in enumerate(slabs):
+            s = TaxSlab.objects.create(
+                organization_id=org_id,
+                marital_status=marital_status,
+                slab_order=i + 1,
+                lower_limit=Decimal(str(slab.get('lower_limit', 0))),
+                upper_limit=Decimal(str(slab['upper_limit'])) if slab.get('upper_limit') is not None else None,
+                rate=Decimal(str(slab.get('rate', 0))),
+                is_active=True,
+            )
+            created.append(serialize_tax_slab(s))
+        return Response(created, status=201)
+
+
+class GovernmentTaxRecordsView(APIView):
+    @require_permission('hrms.payroll.read')
+    def get(self, request):
+        year = request.GET.get('year', datetime.now().year)
+        org_id = request.GET.get('organization_id')
+
+        payslips = Payslip.objects.filter(
+            payroll_run__year=int(year),
+            payroll_run__status='completed',
+        )
+        if org_id:
+            payslips = payslips.filter(payroll_run__organization_id=org_id)
+
+        monthly_records = []
+        for month in range(1, 13):
+            month_slips = payslips.filter(payroll_run__month=month)
+            if not month_slips.exists():
+                monthly_records.append({
+                    'month': month,
+                    'year': int(year),
+                    'employee_count': 0,
+                    'total_gross': 0,
+                    'total_cit': 0,
+                    'total_ssf_employee': 0,
+                    'total_ssf_employer': 0,
+                    'total_tax': 0,
+                    'total_payable_to_govt': 0,
+                })
+                continue
+            agg = month_slips.aggregate(
+                total_gross=Sum('gross_salary'),
+                total_cit=Sum('cit_deduction'),
+                total_ssf_employee=Sum('ssf_employee_deduction'),
+                total_ssf_employer=Sum('ssf_employer_contribution'),
+                total_tax=Sum('tax_deduction'),
+            )
+            total_cit = float(agg['total_cit'] or 0)
+            total_ssf_emp = float(agg['total_ssf_employee'] or 0)
+            total_ssf_empr = float(agg['total_ssf_employer'] or 0)
+            total_tax = float(agg['total_tax'] or 0)
+            monthly_records.append({
+                'month': month,
+                'year': int(year),
+                'employee_count': month_slips.count(),
+                'total_gross': float(agg['total_gross'] or 0),
+                'total_cit': total_cit,
+                'total_ssf_employee': total_ssf_emp,
+                'total_ssf_employer': total_ssf_empr,
+                'total_tax': total_tax,
+                'total_payable_to_govt': total_cit + total_ssf_emp + total_ssf_empr + total_tax,
+            })
+
+        totals = {
+            'total_cit': sum(r['total_cit'] for r in monthly_records),
+            'total_ssf_employee': sum(r['total_ssf_employee'] for r in monthly_records),
+            'total_ssf_employer': sum(r['total_ssf_employer'] for r in monthly_records),
+            'total_tax': sum(r['total_tax'] for r in monthly_records),
+            'total_payable_to_govt': sum(r['total_payable_to_govt'] for r in monthly_records),
+        }
+
+        return Response({
+            'monthly': monthly_records,
+            'annual_totals': totals,
+            'year': int(year),
+        })

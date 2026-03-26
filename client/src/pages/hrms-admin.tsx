@@ -25,12 +25,14 @@ import {
   Building2, Users, Calendar, TreePalm, Clock, DollarSign,
   Plus, Pencil, Trash2, Check, X, Eye, MapPin, Camera,
   Bell, Settings, Briefcase, UserCheck, CalendarDays,
-  Gift, Receipt, Banknote, UserCog,
+  Gift, Receipt, Banknote, UserCog, Landmark, Calculator,
 } from "lucide-react";
 import { StaffProfilesTab } from "./hrms-staff-profiles";
 import { BonusesTab } from "./hrms-bonuses";
 import { TravelExpensesTab } from "./hrms-expenses";
 import { AdvancePaymentsTab } from "./hrms-advances";
+import { TaxSlabsTab } from "./hrms-tax-slabs";
+import { GovernmentRecordsTab } from "./hrms-govt-records";
 
 interface Organization {
   id: string; name: string; short_code: string; address: string | null;
@@ -774,7 +776,9 @@ export default function HRMSAdminPage() {
           <TabsTrigger value="bonuses" data-testid="tab-bonuses"><Gift className="h-4 w-4 mr-1" /> Bonuses</TabsTrigger>
           <TabsTrigger value="expenses" data-testid="tab-expenses"><Receipt className="h-4 w-4 mr-1" /> Expenses</TabsTrigger>
           <TabsTrigger value="advances" data-testid="tab-advances"><Banknote className="h-4 w-4 mr-1" /> Advances</TabsTrigger>
+          <TabsTrigger value="tax-slabs" data-testid="tab-tax-slabs"><Calculator className="h-4 w-4 mr-1" /> Tax Slabs</TabsTrigger>
           <TabsTrigger value="payroll" data-testid="tab-payroll"><DollarSign className="h-4 w-4 mr-1" /> Payroll</TabsTrigger>
+          <TabsTrigger value="govt-records" data-testid="tab-govt-records"><Landmark className="h-4 w-4 mr-1" /> Govt Records</TabsTrigger>
         </TabsList>
 
         <TabsContent value="attendance"><AttendanceTab /></TabsContent>
@@ -787,7 +791,9 @@ export default function HRMSAdminPage() {
         <TabsContent value="bonuses"><BonusesTab /></TabsContent>
         <TabsContent value="expenses"><TravelExpensesTab /></TabsContent>
         <TabsContent value="advances"><AdvancePaymentsTab /></TabsContent>
+        <TabsContent value="tax-slabs"><TaxSlabsTab /></TabsContent>
         <TabsContent value="payroll"><PayrollTab /></TabsContent>
+        <TabsContent value="govt-records"><GovernmentRecordsTab /></TabsContent>
       </Tabs>
     </div>
   );

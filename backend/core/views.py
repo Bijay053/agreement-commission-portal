@@ -161,6 +161,7 @@ PERMISSION_REGISTRY = [
             {"resource": "bonus", "label": "Bonuses", "actions": ["read", "add", "update", "delete"]},
             {"resource": "expense", "label": "Travel Expenses", "actions": ["read", "add", "update", "delete"]},
             {"resource": "advance", "label": "Advance Payments", "actions": ["read", "add", "update", "delete"]},
+            {"resource": "tax", "label": "Tax Slabs & Records", "actions": ["read", "update"]},
         ],
     },
 ]
