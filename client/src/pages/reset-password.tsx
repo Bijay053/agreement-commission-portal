@@ -113,7 +113,7 @@ export default function ResetPasswordPage() {
           <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-primary/10 mb-4">
             <Shield className="w-8 h-8 text-primary" />
           </div>
-          <h1 className="text-2xl font-semibold text-foreground" data-testid="text-page-title">Agreement Portal</h1>
+          <h1 className="text-2xl font-semibold text-foreground" data-testid="text-page-title">{window.location.hostname.includes("people.") ? "People & HRMS" : "Agreement Portal"}</h1>
           <p className="text-sm text-muted-foreground mt-1">Study Info Centre</p>
         </div>
 

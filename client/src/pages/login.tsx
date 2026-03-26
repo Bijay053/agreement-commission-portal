@@ -4,9 +4,11 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import { Lock, Mail, Eye, EyeOff } from "lucide-react";
+import { Lock, Mail, Eye, EyeOff, Users, Calendar, Clock, Shield } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
+
+const isPeoplePortal = window.location.hostname.includes("people.");
 
 export default function LoginPage() {
   const { login } = useAuth();
@@ -50,30 +52,61 @@ export default function LoginPage() {
             </div>
             <div>
               <h2 className="text-lg font-semibold tracking-tight">Study Info Centre</h2>
-              <p className="text-sm text-blue-200">Agreement Portal</p>
+              <p className="text-sm text-blue-200">{isPeoplePortal ? "People & HRMS" : "Agreement Portal"}</p>
             </div>
           </div>
-          <h1 className="text-4xl font-bold leading-tight mb-4">
-            Manage Agreements<br />
-            <span className="text-blue-200">& Commissions</span>
-          </h1>
-          <p className="text-blue-100 text-lg leading-relaxed max-w-md">
-            Streamline your university agreements, track commissions, and manage contacts all in one place.
-          </p>
-          <div className="mt-12 grid grid-cols-3 gap-6">
-            <div className="bg-white/10 backdrop-blur-sm rounded-xl p-4 border border-white/10">
-              <p className="text-2xl font-bold">100+</p>
-              <p className="text-sm text-blue-200 mt-1">Agreements</p>
-            </div>
-            <div className="bg-white/10 backdrop-blur-sm rounded-xl p-4 border border-white/10">
-              <p className="text-2xl font-bold">50+</p>
-              <p className="text-sm text-blue-200 mt-1">Providers</p>
-            </div>
-            <div className="bg-white/10 backdrop-blur-sm rounded-xl p-4 border border-white/10">
-              <p className="text-2xl font-bold">24/7</p>
-              <p className="text-sm text-blue-200 mt-1">Monitoring</p>
-            </div>
-          </div>
+          {isPeoplePortal ? (
+            <>
+              <h1 className="text-4xl font-bold leading-tight mb-4">
+                Your Workplace<br />
+                <span className="text-blue-200">at a Glance</span>
+              </h1>
+              <p className="text-blue-100 text-lg leading-relaxed max-w-md">
+                Access your attendance, leave, payslips, and more — all in one secure employee portal.
+              </p>
+              <div className="mt-12 grid grid-cols-3 gap-6">
+                <div className="bg-white/10 backdrop-blur-sm rounded-xl p-4 border border-white/10">
+                  <Clock className="h-5 w-5 text-blue-200 mb-2" />
+                  <p className="text-sm font-semibold">Attendance</p>
+                  <p className="text-xs text-blue-200 mt-1">Track hours</p>
+                </div>
+                <div className="bg-white/10 backdrop-blur-sm rounded-xl p-4 border border-white/10">
+                  <Calendar className="h-5 w-5 text-blue-200 mb-2" />
+                  <p className="text-sm font-semibold">Leave</p>
+                  <p className="text-xs text-blue-200 mt-1">Request & manage</p>
+                </div>
+                <div className="bg-white/10 backdrop-blur-sm rounded-xl p-4 border border-white/10">
+                  <Shield className="h-5 w-5 text-blue-200 mb-2" />
+                  <p className="text-sm font-semibold">Payslips</p>
+                  <p className="text-xs text-blue-200 mt-1">View & download</p>
+                </div>
+              </div>
+            </>
+          ) : (
+            <>
+              <h1 className="text-4xl font-bold leading-tight mb-4">
+                Manage Agreements<br />
+                <span className="text-blue-200">& Commissions</span>
+              </h1>
+              <p className="text-blue-100 text-lg leading-relaxed max-w-md">
+                Streamline your university agreements, track commissions, and manage contacts all in one place.
+              </p>
+              <div className="mt-12 grid grid-cols-3 gap-6">
+                <div className="bg-white/10 backdrop-blur-sm rounded-xl p-4 border border-white/10">
+                  <p className="text-2xl font-bold">100+</p>
+                  <p className="text-sm text-blue-200 mt-1">Agreements</p>
+                </div>
+                <div className="bg-white/10 backdrop-blur-sm rounded-xl p-4 border border-white/10">
+                  <p className="text-2xl font-bold">50+</p>
+                  <p className="text-sm text-blue-200 mt-1">Providers</p>
+                </div>
+                <div className="bg-white/10 backdrop-blur-sm rounded-xl p-4 border border-white/10">
+                  <p className="text-2xl font-bold">24/7</p>
+                  <p className="text-sm text-blue-200 mt-1">Monitoring</p>
+                </div>
+              </div>
+            </>
+          )}
         </div>
       </div>
 
@@ -86,11 +119,11 @@ export default function LoginPage() {
               </div>
               <div>
                 <h2 className="text-sm font-semibold">Study Info Centre</h2>
-                <p className="text-xs text-muted-foreground">Agreement Portal</p>
+                <p className="text-xs text-muted-foreground">{isPeoplePortal ? "People & HRMS" : "Agreement Portal"}</p>
               </div>
             </div>
             <h1 className="text-2xl font-bold text-foreground">Welcome back</h1>
-            <p className="text-sm text-muted-foreground mt-2">Sign in to access your dashboard</p>
+            <p className="text-sm text-muted-foreground mt-2">{isPeoplePortal ? "Sign in to access your employee portal" : "Sign in to access your dashboard"}</p>
           </div>
 
           {reason === "inactivity" && (
