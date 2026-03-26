@@ -10,8 +10,9 @@ import {
 import {
   User, DollarSign, Calendar, Clock, Gift, Banknote, Receipt,
   ArrowLeft, Building2, Phone, Mail, MapPin, CreditCard, Shield,
-  FileText, TrendingUp,
+  FileText, TrendingUp, ExternalLink,
 } from "lucide-react";
+import { useLocation } from "wouter";
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
@@ -77,6 +78,7 @@ interface Employee360Data {
 }
 
 export function EmployeeDetailView({ employeeId, onBack }: { employeeId: string; onBack: () => void }) {
+  const [, navigate] = useLocation();
   const { data, isLoading } = useQuery<Employee360Data>({
     queryKey: ["/api/hrms/employee-360", employeeId],
     queryFn: async () => {
@@ -103,7 +105,12 @@ export function EmployeeDetailView({ employeeId, onBack }: { employeeId: string;
 
   return (
     <div className="space-y-4">
-      <Button variant="ghost" onClick={onBack} data-testid="btn-back-staff"><ArrowLeft className="w-4 h-4 mr-2" /> Back to Staff List</Button>
+      <div className="flex items-center justify-between">
+        <Button variant="ghost" onClick={onBack} data-testid="btn-back-staff"><ArrowLeft className="w-4 h-4 mr-2" /> Back to Staff List</Button>
+        <Button variant="outline" size="sm" onClick={() => navigate(`/employees/${employeeId}`)} data-testid="btn-agreements-offers">
+          <FileText className="w-4 h-4 mr-1" /> Agreements & Offers
+        </Button>
+      </div>
 
       <Card>
         <CardContent className="p-5">

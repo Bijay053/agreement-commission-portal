@@ -1400,7 +1400,7 @@ export default function EmployeeDetailPage({ params }: { params: { id: string } 
     return (
       <div className="p-6 text-center">
         <p className="text-muted-foreground">Employee not found</p>
-        <Button variant="ghost" onClick={() => navigate('/employees')}>Back to Employees</Button>
+        <Button variant="ghost" onClick={() => navigate('/hrms')}>Back to HRMS</Button>
       </div>
     );
   }
@@ -1409,7 +1409,7 @@ export default function EmployeeDetailPage({ params }: { params: { id: string } 
     <div className="p-6 max-w-5xl mx-auto space-y-6">
       <div className="flex items-start justify-between gap-4">
         <div className="flex items-center gap-4">
-          <Button variant="ghost" size="icon" onClick={() => navigate('/employees')} data-testid="button-back">
+          <Button variant="ghost" size="icon" onClick={() => navigate('/hrms')} data-testid="button-back">
             <ArrowLeft className="w-5 h-5" />
           </Button>
           <div>

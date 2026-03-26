@@ -48,13 +48,9 @@ export function AppSidebar() {
   ];
 
   const employeeNav = [
-    { title: "Employees", url: "/employees", icon: UserCheck, show: hasPermission("employee.view") },
+    { title: "HRMS", url: "/hrms", icon: Briefcase, show: hasPermission("hrms.organization.read") || hasPermission("hrms.attendance.read") || hasPermission("employee.view") },
     { title: "Agreement Templates", url: "/templates?type=agreement", icon: ClipboardList, show: hasPermission("emp_template.view") },
     { title: "Offer Letter Templates", url: "/templates?type=offer_letter", icon: ClipboardList, show: hasPermission("emp_template.view") },
-  ];
-
-  const hrmsNav = [
-    { title: "HRMS Dashboard", url: "/hrms", icon: Briefcase, show: hasPermission("hrms.organization.read") || hasPermission("hrms.attendance.read") },
   ];
 
   const adminNav = [
@@ -189,7 +185,7 @@ export function AppSidebar() {
 
         {employeeNav.some(i => i.show) && (
           <SidebarGroup>
-            <SidebarGroupLabel className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground/70">Employee Management</SidebarGroupLabel>
+            <SidebarGroupLabel className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground/70">People & HRMS</SidebarGroupLabel>
             <SidebarGroupContent>
               <SidebarMenu>
                 {employeeNav.filter(i => i.show).map((item) => (
@@ -233,29 +229,6 @@ export function AppSidebar() {
           </SidebarGroup>
         )}
 
-        {hrmsNav.some(i => i.show) && (
-          <SidebarGroup>
-            <SidebarGroupLabel className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground/70">HRMS</SidebarGroupLabel>
-            <SidebarGroupContent>
-              <SidebarMenu>
-                {hrmsNav.filter(i => i.show).map((item) => (
-                  <SidebarMenuItem key={item.title}>
-                    <SidebarMenuButton
-                      asChild
-                      data-active={isActive(item.url)}
-                      data-testid={`nav-${item.title.toLowerCase().replace(/\s/g, "-")}`}
-                    >
-                      <a href={item.url} onClick={(e) => { e.preventDefault(); navigate(item.url); }}>
-                        <item.icon className="w-4 h-4" />
-                        <span>{item.title}</span>
-                      </a>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                ))}
-              </SidebarMenu>
-            </SidebarGroupContent>
-          </SidebarGroup>
-        )}
 
         {adminNav.some(i => i.show) && (
           <SidebarGroup>
