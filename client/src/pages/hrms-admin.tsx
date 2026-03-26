@@ -1586,9 +1586,10 @@ function RemoteCheckInPermissionsTab() {
     queryKey: ["/api/hrms/online-checkin-permissions"],
   });
 
-  const { data: employees } = useQuery<any[]>({
+  const { data: employeesRaw } = useQuery<any>({
     queryKey: ["/api/employees"],
   });
+  const employees: any[] = Array.isArray(employeesRaw) ? employeesRaw : (employeesRaw?.results || []);
 
   const addMutation = useMutation({
     mutationFn: (data: any) => apiRequest("POST", "/api/hrms/online-checkin-permissions", data),
