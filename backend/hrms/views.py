@@ -3381,7 +3381,7 @@ class GovernmentTaxRecordsView(APIView):
 
         payslips = Payslip.objects.filter(
             payroll_run__year=int(year),
-            payroll_run__status='completed',
+            payroll_run__status__in=['processed', 'approved', 'paid', 'completed'],
         )
         if org_id:
             payslips = payslips.filter(payroll_run__organization_id=org_id)
