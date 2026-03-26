@@ -41,6 +41,7 @@ import { AdvancePaymentsTab } from "./hrms-advances";
 import { TaxSlabsTab } from "./hrms-tax-slabs";
 import { GovernmentRecordsTab } from "./hrms-govt-records";
 import { CountriesTab } from "./hrms-countries";
+import { FiscalYearsTab } from "./hrms-fiscal-years";
 import { CURRENCIES, getCurrencySymbol } from "@/lib/currencies";
 
 function extractErrorMessage(err: any, fallback: string): string {
@@ -1452,6 +1453,7 @@ const SIDEBAR_ITEMS = [
   { key: "tax-slabs", label: "Tax Slabs", icon: Calculator, group: "Payroll & Finance", permissions: ["hrms.tax.read"] },
   { key: "payroll", label: "Payroll", icon: DollarSign, group: "Payroll & Finance", permissions: ["hrms.payroll.read"] },
   { key: "govt-records", label: "Govt Records", icon: Landmark, group: "Payroll & Finance", permissions: ["hrms.payroll.read"] },
+  { key: "fiscal-years", label: "Fiscal Years", icon: CalendarDays, group: "Settings", permissions: ["hrms.fiscal_year.read"] },
   { key: "countries", label: "Countries", icon: Globe, group: "Settings", permissions: ["hrms.organization.read"] },
   { key: "organizations", label: "Organizations", icon: Building2, group: "Settings", permissions: ["hrms.organization.read"] },
   { key: "departments", label: "Departments", icon: Users, group: "Settings", permissions: ["hrms.department.read"] },
@@ -1472,6 +1474,7 @@ const CONTENT_MAP: Record<string, React.ComponentType> = {
   "payroll": PayrollTab,
   "govt-records": GovernmentRecordsTab,
   "countries": CountriesTab,
+  "fiscal-years": FiscalYearsTab,
 };
 
 export default function HRMSAdminPage() {
