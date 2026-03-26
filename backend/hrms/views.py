@@ -26,16 +26,30 @@ def get_presigned_url(s3_url, expiry=3600):
     if not s3_url:
         return None
     import boto3
+    from urllib.parse import unquote
     try:
         bucket = settings.AWS_S3_BUCKET_NAME
         region = settings.AWS_S3_REGION_NAME
-        prefix = f'https://{bucket}.s3.{region}.amazonaws.com/'
-        if s3_url.startswith(prefix):
-            key = s3_url[len(prefix):]
+        key = None
+        prefix_vhost = f'https://{bucket}.s3.{region}.amazonaws.com/'
+        prefix_vhost_no_region = f'https://{bucket}.s3.amazonaws.com/'
+        prefix_path = f'https://s3.{region}.amazonaws.com/{bucket}/'
+        prefix_path_no_region = f'https://s3.amazonaws.com/{bucket}/'
+        if s3_url.startswith(prefix_vhost):
+            key = s3_url[len(prefix_vhost):]
+        elif s3_url.startswith(prefix_vhost_no_region):
+            key = s3_url[len(prefix_vhost_no_region):]
+        elif s3_url.startswith(prefix_path):
+            key = s3_url[len(prefix_path):]
+        elif s3_url.startswith(prefix_path_no_region):
+            key = s3_url[len(prefix_path_no_region):]
         elif f'{bucket}.s3.amazonaws.com/' in s3_url:
             key = s3_url.split(f'{bucket}.s3.amazonaws.com/')[-1]
-        else:
+        elif f'{bucket}/' in s3_url and 's3' in s3_url and 'amazonaws.com' in s3_url:
+            key = s3_url.split(f'{bucket}/')[-1]
+        if key is None:
             return s3_url
+        key = unquote(key)
         s3 = boto3.client(
             's3',
             aws_access_key_id=settings.AWS_ACCESS_KEY_ID,
@@ -1484,6 +1498,60 @@ class AttendancePhotoUploadView(APIView):
             return Response({'url': url})
         except Exception as e:
             return Response({'message': f'Upload failed: {str(e)}'}, status=500)
+
+
+class AttendancePhotoProxyView(APIView):
+    @require_auth
+    def get(self, request, att_id):
+        import boto3
+        from urllib.parse import unquote
+        from django.http import HttpResponse
+
+        photo_type = request.GET.get('type', 'check_in')
+        try:
+            att = AttendanceRecord.objects.get(id=att_id)
+        except AttendanceRecord.DoesNotExist:
+            return Response({'message': 'Attendance record not found'}, status=404)
+
+        s3_url = att.check_in_photo_url if photo_type == 'check_in' else att.check_out_photo_url
+        if not s3_url:
+            return Response({'message': 'No photo available'}, status=404)
+
+        bucket = settings.AWS_S3_BUCKET_NAME
+        region = settings.AWS_S3_REGION_NAME
+        key = None
+        prefix_vhost = f'https://{bucket}.s3.{region}.amazonaws.com/'
+        prefix_vhost_no_region = f'https://{bucket}.s3.amazonaws.com/'
+        prefix_path = f'https://s3.{region}.amazonaws.com/{bucket}/'
+        if s3_url.startswith(prefix_vhost):
+            key = s3_url[len(prefix_vhost):]
+        elif s3_url.startswith(prefix_vhost_no_region):
+            key = s3_url[len(prefix_vhost_no_region):]
+        elif s3_url.startswith(prefix_path):
+            key = s3_url[len(prefix_path):]
+        elif f'{bucket}.s3.amazonaws.com/' in s3_url:
+            key = s3_url.split(f'{bucket}.s3.amazonaws.com/')[-1]
+        elif f'{bucket}/' in s3_url and 's3' in s3_url:
+            key = s3_url.split(f'{bucket}/')[-1]
+        if not key:
+            return Response({'message': 'Cannot resolve S3 key'}, status=400)
+        key = unquote(key)
+
+        try:
+            s3 = boto3.client(
+                's3',
+                aws_access_key_id=settings.AWS_ACCESS_KEY_ID,
+                aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY,
+                region_name=region,
+            )
+            obj = s3.get_object(Bucket=bucket, Key=key)
+            content_type = obj.get('ContentType', 'image/jpeg')
+            body = obj['Body'].read()
+            response = HttpResponse(body, content_type=content_type)
+            response['Cache-Control'] = 'private, max-age=3600'
+            return response
+        except Exception as e:
+            return Response({'message': f'Failed to fetch photo: {str(e)}'}, status=500)
 
 
 class ExpenseReceiptUploadView(APIView):

@@ -937,13 +937,13 @@ function AttendanceTab() {
                           {(entry?.check_in_photo_url || entry?.check_out_photo_url) ? (
                             <div className="flex gap-1 justify-center">
                               {entry.check_in_photo_url && (
-                                <a href={entry.check_in_photo_url} target="_blank" rel="noreferrer" title="Check-in photo">
-                                  <img src={entry.check_in_photo_url} alt="In" className="w-7 h-7 rounded object-cover border hover:ring-2 hover:ring-primary" />
+                                <a href={`/api/hrms/attendance/${entry.id}/photo?type=check_in`} target="_blank" rel="noreferrer" title="Check-in photo">
+                                  <img src={`/api/hrms/attendance/${entry.id}/photo?type=check_in`} alt="In" className="w-7 h-7 rounded object-cover border hover:ring-2 hover:ring-primary" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
                                 </a>
                               )}
                               {entry.check_out_photo_url && (
-                                <a href={entry.check_out_photo_url} target="_blank" rel="noreferrer" title="Check-out photo">
-                                  <img src={entry.check_out_photo_url} alt="Out" className="w-7 h-7 rounded object-cover border hover:ring-2 hover:ring-primary" />
+                                <a href={`/api/hrms/attendance/${entry.id}/photo?type=check_out`} target="_blank" rel="noreferrer" title="Check-out photo">
+                                  <img src={`/api/hrms/attendance/${entry.id}/photo?type=check_out`} alt="Out" className="w-7 h-7 rounded object-cover border hover:ring-2 hover:ring-primary" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
                                 </a>
                               )}
                             </div>
@@ -1074,16 +1074,16 @@ function AttendanceTab() {
                       <div className="flex gap-3">
                         {entry?.check_in_photo_url && (
                           <div className="text-center">
-                            <a href={entry.check_in_photo_url} target="_blank" rel="noreferrer">
-                              <img src={entry.check_in_photo_url} alt="Check-in" className="w-20 h-20 rounded-lg object-cover border hover:ring-2 hover:ring-primary" />
+                            <a href={`/api/hrms/attendance/${entry.id}/photo?type=check_in`} target="_blank" rel="noreferrer">
+                              <img src={`/api/hrms/attendance/${entry.id}/photo?type=check_in`} alt="Check-in" className="w-20 h-20 rounded-lg object-cover border hover:ring-2 hover:ring-primary" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
                             </a>
                             <p className="text-[10px] text-muted-foreground mt-1">Check-in Photo</p>
                           </div>
                         )}
                         {entry?.check_out_photo_url && (
                           <div className="text-center">
-                            <a href={entry.check_out_photo_url} target="_blank" rel="noreferrer">
-                              <img src={entry.check_out_photo_url} alt="Check-out" className="w-20 h-20 rounded-lg object-cover border hover:ring-2 hover:ring-primary" />
+                            <a href={`/api/hrms/attendance/${entry.id}/photo?type=check_out`} target="_blank" rel="noreferrer">
+                              <img src={`/api/hrms/attendance/${entry.id}/photo?type=check_out`} alt="Check-out" className="w-20 h-20 rounded-lg object-cover border hover:ring-2 hover:ring-primary" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
                             </a>
                             <p className="text-[10px] text-muted-foreground mt-1">Check-out Photo</p>
                           </div>

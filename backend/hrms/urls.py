@@ -33,6 +33,7 @@ urlpatterns = [
     path('hrms/attendance/online-checkout', views.OnlineCheckOutView.as_view()),
     path('hrms/leave-requests/upload-document', views.LeaveDocumentUploadView.as_view()),
     path('hrms/attendance/photo-upload', views.AttendancePhotoUploadView.as_view()),
+    path('hrms/attendance/<uuid:att_id>/photo', views.AttendancePhotoProxyView.as_view()),
     path('hrms/attendance/device-sync', views.DeviceSyncView.as_view()),
     path('hrms/attendance/dashboard', views.AttendanceDashboardView.as_view()),
     path('hrms/attendance/grid', views.AttendanceGridView.as_view()),
