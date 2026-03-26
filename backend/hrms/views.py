@@ -2699,12 +2699,10 @@ def generate_payslip_pdf(ps, emp, org):
     att_val_s = ParagraphStyle('AttVal', fontName='Helvetica-Bold', fontSize=9, textColor=c_dark, alignment=TA_CENTER, leading=12)
 
     att_data = [
-        [Paragraph('Working Days', att_lbl_s), Paragraph('Present', att_lbl_s),
-         Paragraph('Absent', att_lbl_s), Paragraph('Leave', att_lbl_s), Paragraph('Late', att_lbl_s)],
-        [Paragraph(str(ps.working_days), att_val_s), Paragraph(str(ps.present_days), att_val_s),
-         Paragraph(str(absent_days), att_val_s), Paragraph(str(leave_days), att_val_s), Paragraph(str(late_count), att_val_s)],
+        [Paragraph('Working Days', att_lbl_s), Paragraph('Leave', att_lbl_s)],
+        [Paragraph(str(ps.working_days), att_val_s), Paragraph(str(leave_days), att_val_s)],
     ]
-    att_tbl = RTable(att_data, colWidths=[page_w*0.2]*5)
+    att_tbl = RTable(att_data, colWidths=[page_w*0.5]*2)
     att_tbl.setStyle(TableStyle([
         ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
         ('BACKGROUND', (0,0), (-1,-1), c_lightgrey),
@@ -2714,9 +2712,6 @@ def generate_payslip_pdf(ps, emp, org):
         ('BOTTOMPADDING', (0,1), (-1,1), 4),
         ('BOX', (0,0), (-1,-1), 0.5, c_border),
         ('LINEBEFORE', (1,0), (1,-1), 0.3, c_border),
-        ('LINEBEFORE', (2,0), (2,-1), 0.3, c_border),
-        ('LINEBEFORE', (3,0), (3,-1), 0.3, c_border),
-        ('LINEBEFORE', (4,0), (4,-1), 0.3, c_border),
     ]))
     elements.append(att_tbl)
     elements.append(Spacer(1, 5*mm))
@@ -2767,7 +2762,7 @@ def generate_payslip_pdf(ps, emp, org):
 
     ded_rows = []
     if float(ps.unpaid_leave_deduction) > 0:
-        ded_rows.append(('Absent / Unpaid Leave Deduction', float(ps.unpaid_leave_deduction)))
+        ded_rows.append(('Unpaid Leave Deduction', float(ps.unpaid_leave_deduction)))
     if float(ps.cit_deduction) > 0:
         ded_rows.append(('CIT (Provident Fund)', float(ps.cit_deduction)))
     if float(ps.ssf_employee_deduction) > 0:
