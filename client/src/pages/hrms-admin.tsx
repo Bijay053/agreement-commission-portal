@@ -32,6 +32,7 @@ import {
   Gift, Receipt, Banknote, UserCog, Landmark, Calculator,
   ChevronLeft, ChevronRight, Save, ArrowLeft, CheckCircle,
   CreditCard, RotateCcw, Loader2, AlertTriangle, FileText,
+  Download, Search, BarChart3, UserX, Timer,
 } from "lucide-react";
 import { StaffProfilesTab } from "./hrms-staff-profiles";
 import { BonusesTab } from "./hrms-bonuses";
@@ -478,6 +479,8 @@ function AttendanceTab() {
   const [currentDate, setCurrentDate] = useState(new Date().toISOString().split("T")[0]);
   const [editingCell, setEditingCell] = useState<{ empId: string; day: string } | null>(null);
   const [editForm, setEditForm] = useState({ status: "present", check_in: "", check_out: "", notes: "" });
+  const [searchTerm, setSearchTerm] = useState("");
+  const [showDashboard, setShowDashboard] = useState(true);
 
   const { data: grid, isLoading } = useQuery<any>({
     queryKey: ["/api/hrms/attendance/grid", viewMode, currentDate],
@@ -501,7 +504,7 @@ function AttendanceTab() {
     onError: () => toast({ title: "Failed to save", variant: "destructive" }),
   });
 
-  const navigate = (dir: number) => {
+  const navDate = (dir: number) => {
     const d = new Date(currentDate);
     if (viewMode === "daily") d.setDate(d.getDate() + dir);
     else if (viewMode === "weekly") d.setDate(d.getDate() + dir * 7);
@@ -562,7 +565,16 @@ function AttendanceTab() {
     return new Date(grid.date_from + "T00:00:00").toLocaleDateString("en", { year: "numeric", month: "long" });
   };
 
-  const totalSummary = grid?.employees?.reduce(
+  const allEmployees = grid?.employees || [];
+  const filteredEmployees = searchTerm
+    ? allEmployees.filter((emp: any) =>
+        emp.full_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (emp.department || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (emp.position || "").toLowerCase().includes(searchTerm.toLowerCase())
+      )
+    : allEmployees;
+
+  const totalSummary = allEmployees.reduce(
     (acc: any, emp: any) => ({
       present: acc.present + emp.summary.present,
       absent: acc.absent + emp.summary.absent,
@@ -570,13 +582,47 @@ function AttendanceTab() {
       late: acc.late + emp.summary.late,
     }),
     { present: 0, absent: 0, on_leave: 0, late: 0 }
-  ) || { present: 0, absent: 0, on_leave: 0, late: 0 };
+  );
+
+  const totalStaff = allEmployees.length;
+  const todayStr = new Date().toISOString().split("T")[0];
+  const hasTodayInGrid = grid?.days?.includes(todayStr);
+  const todayPresent = hasTodayInGrid ? allEmployees.filter((e: any) => e.attendance[todayStr]?.status === 'present').length : 0;
+  const todayAbsent = hasTodayInGrid ? allEmployees.filter((e: any) => !e.attendance[todayStr] || e.attendance[todayStr]?.status === 'absent').length : 0;
+  const todayLate = hasTodayInGrid ? allEmployees.filter((e: any) => e.attendance[todayStr]?.is_late).length : 0;
+  const todayOnLeave = hasTodayInGrid ? allEmployees.filter((e: any) => e.attendance[todayStr]?.status === 'on_leave').length : 0;
+  const attendanceRate = totalStaff > 0 && hasTodayInGrid ? Math.round((todayPresent / totalStaff) * 100) : 0;
+
+  const topAbsentees = [...allEmployees]
+    .sort((a: any, b: any) => b.summary.absent - a.summary.absent)
+    .slice(0, 5)
+    .filter((e: any) => e.summary.absent > 0);
+
+  const topLateComers = [...allEmployees]
+    .sort((a: any, b: any) => b.summary.late - a.summary.late)
+    .slice(0, 5)
+    .filter((e: any) => e.summary.late > 0);
 
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h3 className="text-lg font-semibold" data-testid="text-att-title">Attendance</h3>
+        <div className="flex items-center gap-3">
+          <h3 className="text-lg font-semibold" data-testid="text-att-title">Attendance</h3>
+          <Button variant={showDashboard ? "default" : "outline"} size="sm" className="h-7 text-xs" onClick={() => setShowDashboard(!showDashboard)} data-testid="btn-toggle-dashboard">
+            <BarChart3 className="w-3.5 h-3.5 mr-1" /> Dashboard
+          </Button>
+        </div>
         <div className="flex items-center gap-2">
+          <div className="relative">
+            <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+            <Input
+              placeholder="Search employee..."
+              value={searchTerm}
+              onChange={e => setSearchTerm(e.target.value)}
+              className="w-48 h-8 text-xs pl-7"
+              data-testid="input-att-search"
+            />
+          </div>
           <div className="flex border rounded-md overflow-hidden">
             {(["daily", "weekly", "monthly"] as const).map(m => (
               <button key={m} onClick={() => setViewMode(m)} data-testid={`btn-mode-${m}`}
@@ -584,20 +630,92 @@ function AttendanceTab() {
             ))}
           </div>
           <div className="flex items-center gap-1">
-            <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => navigate(-1)} data-testid="btn-prev"><ChevronLeft className="h-4 w-4" /></Button>
+            <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => navDate(-1)} data-testid="btn-prev"><ChevronLeft className="h-4 w-4" /></Button>
             <span className="text-sm font-medium min-w-[160px] text-center">{periodLabel()}</span>
-            <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => navigate(1)} data-testid="btn-next"><ChevronRight className="h-4 w-4" /></Button>
+            <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => navDate(1)} data-testid="btn-next"><ChevronRight className="h-4 w-4" /></Button>
           </div>
           <Input type="date" value={currentDate} onChange={e => setCurrentDate(e.target.value)} className="w-auto h-8 text-xs" data-testid="input-att-date" />
         </div>
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <Card><CardContent className="pt-3 pb-3"><div className="text-xl font-bold text-green-600" data-testid="text-present-count">{totalSummary.present}</div><p className="text-xs text-muted-foreground">Present</p></CardContent></Card>
-        <Card><CardContent className="pt-3 pb-3"><div className="text-xl font-bold text-red-600" data-testid="text-absent-count">{totalSummary.absent}</div><p className="text-xs text-muted-foreground">Absent</p></CardContent></Card>
-        <Card><CardContent className="pt-3 pb-3"><div className="text-xl font-bold text-blue-600" data-testid="text-leave-count">{totalSummary.on_leave}</div><p className="text-xs text-muted-foreground">On Leave</p></CardContent></Card>
-        <Card><CardContent className="pt-3 pb-3"><div className="text-xl font-bold text-amber-600" data-testid="text-late-count">{totalSummary.late}</div><p className="text-xs text-muted-foreground">Late</p></CardContent></Card>
-      </div>
+      {showDashboard && (
+        <>
+          <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
+            <Card><CardContent className="pt-3 pb-3">
+              <div className="flex items-center gap-2"><Users className="w-4 h-4 text-primary" /><p className="text-xs text-muted-foreground">Total Staff</p></div>
+              <div className="text-2xl font-bold mt-1" data-testid="text-total-staff">{totalStaff}</div>
+            </CardContent></Card>
+            <Card className="border-green-200 bg-green-50/50"><CardContent className="pt-3 pb-3">
+              <div className="flex items-center gap-2"><Check className="w-4 h-4 text-green-600" /><p className="text-xs text-muted-foreground">{hasTodayInGrid ? "Today Present" : "Present (today N/A)"}</p></div>
+              <div className="text-2xl font-bold text-green-600 mt-1" data-testid="text-today-present">{hasTodayInGrid ? todayPresent : "—"}</div>
+            </CardContent></Card>
+            <Card className="border-red-200 bg-red-50/50"><CardContent className="pt-3 pb-3">
+              <div className="flex items-center gap-2"><UserX className="w-4 h-4 text-red-600" /><p className="text-xs text-muted-foreground">{hasTodayInGrid ? "Today Absent" : "Absent (today N/A)"}</p></div>
+              <div className="text-2xl font-bold text-red-600 mt-1" data-testid="text-today-absent">{hasTodayInGrid ? todayAbsent : "—"}</div>
+            </CardContent></Card>
+            <Card className="border-amber-200 bg-amber-50/50"><CardContent className="pt-3 pb-3">
+              <div className="flex items-center gap-2"><Timer className="w-4 h-4 text-amber-600" /><p className="text-xs text-muted-foreground">{hasTodayInGrid ? "Today Late" : "Late (today N/A)"}</p></div>
+              <div className="text-2xl font-bold text-amber-600 mt-1" data-testid="text-today-late">{hasTodayInGrid ? todayLate : "—"}</div>
+            </CardContent></Card>
+            <Card className="border-blue-200 bg-blue-50/50"><CardContent className="pt-3 pb-3">
+              <div className="flex items-center gap-2"><CalendarDays className="w-4 h-4 text-blue-600" /><p className="text-xs text-muted-foreground">{hasTodayInGrid ? "On Leave" : "Leave (today N/A)"}</p></div>
+              <div className="text-2xl font-bold text-blue-600 mt-1" data-testid="text-today-leave">{hasTodayInGrid ? todayOnLeave : "—"}</div>
+            </CardContent></Card>
+            <Card className="border-primary/30 bg-primary/5"><CardContent className="pt-3 pb-3">
+              <div className="flex items-center gap-2"><BarChart3 className="w-4 h-4 text-primary" /><p className="text-xs text-muted-foreground">{hasTodayInGrid ? "Attendance Rate" : "Rate (today N/A)"}</p></div>
+              <div className="text-2xl font-bold text-primary mt-1" data-testid="text-att-rate">{hasTodayInGrid ? `${attendanceRate}%` : "—"}</div>
+            </CardContent></Card>
+          </div>
+
+          {(topAbsentees.length > 0 || topLateComers.length > 0) && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {topAbsentees.length > 0 && (
+                <Card>
+                  <CardHeader className="pb-2 pt-3 px-4"><CardTitle className="text-sm font-medium flex items-center gap-2"><UserX className="w-4 h-4 text-red-500" /> Most Absent ({periodLabel()})</CardTitle></CardHeader>
+                  <CardContent className="px-4 pb-3">
+                    <div className="space-y-1.5">
+                      {topAbsentees.map((emp: any, i: number) => (
+                        <div key={emp.employee_id} className="flex items-center justify-between text-sm">
+                          <span className="flex items-center gap-2">
+                            <span className="w-5 h-5 rounded-full bg-red-100 text-red-700 text-[10px] font-bold flex items-center justify-center">{i + 1}</span>
+                            <span className="truncate max-w-[150px]">{emp.full_name}</span>
+                          </span>
+                          <Badge variant="outline" className="text-red-600 border-red-200 text-xs">{emp.summary.absent} days</Badge>
+                        </div>
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+              {topLateComers.length > 0 && (
+                <Card>
+                  <CardHeader className="pb-2 pt-3 px-4"><CardTitle className="text-sm font-medium flex items-center gap-2"><Timer className="w-4 h-4 text-amber-500" /> Most Late ({periodLabel()})</CardTitle></CardHeader>
+                  <CardContent className="px-4 pb-3">
+                    <div className="space-y-1.5">
+                      {topLateComers.map((emp: any, i: number) => (
+                        <div key={emp.employee_id} className="flex items-center justify-between text-sm">
+                          <span className="flex items-center gap-2">
+                            <span className="w-5 h-5 rounded-full bg-amber-100 text-amber-700 text-[10px] font-bold flex items-center justify-center">{i + 1}</span>
+                            <span className="truncate max-w-[150px]">{emp.full_name}</span>
+                          </span>
+                          <Badge variant="outline" className="text-amber-600 border-amber-200 text-xs">{emp.summary.late} times</Badge>
+                        </div>
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+            </div>
+          )}
+
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <Card><CardContent className="pt-3 pb-3"><div className="text-xl font-bold text-green-600" data-testid="text-present-count">{totalSummary.present}</div><p className="text-xs text-muted-foreground">Total Present ({periodLabel()})</p></CardContent></Card>
+            <Card><CardContent className="pt-3 pb-3"><div className="text-xl font-bold text-red-600" data-testid="text-absent-count">{totalSummary.absent}</div><p className="text-xs text-muted-foreground">Total Absent ({periodLabel()})</p></CardContent></Card>
+            <Card><CardContent className="pt-3 pb-3"><div className="text-xl font-bold text-blue-600" data-testid="text-leave-count">{totalSummary.on_leave}</div><p className="text-xs text-muted-foreground">Total On Leave ({periodLabel()})</p></CardContent></Card>
+            <Card><CardContent className="pt-3 pb-3"><div className="text-xl font-bold text-amber-600" data-testid="text-late-count">{totalSummary.late}</div><p className="text-xs text-muted-foreground">Total Late ({periodLabel()})</p></CardContent></Card>
+          </div>
+        </>
+      )}
 
       {isLoading ? <Skeleton className="h-60 w-full" /> : grid && (
         <Card>
@@ -622,7 +740,7 @@ function AttendanceTab() {
                   </tr>
                 </thead>
                 <tbody>
-                  {grid.employees.map((emp: any) => (
+                  {filteredEmployees.map((emp: any) => (
                     <tr key={emp.employee_id} className="hover:bg-muted/30 border-b">
                       <td className="p-2 sticky left-0 bg-background z-[5] border-r">
                         <p className="font-medium truncate max-w-[140px]">{emp.full_name}</p>
@@ -662,8 +780,10 @@ function AttendanceTab() {
                       <td className="p-1 text-center font-medium text-blue-600">{emp.summary.on_leave}</td>
                     </tr>
                   ))}
-                  {grid.employees.length === 0 && (
-                    <tr><td colSpan={grid.days.length + 4} className="text-center p-8 text-muted-foreground">No employees found</td></tr>
+                  {filteredEmployees.length === 0 && (
+                    <tr><td colSpan={grid.days.length + 4} className="text-center p-8 text-muted-foreground">
+                      {searchTerm ? `No employees matching "${searchTerm}"` : "No employees found"}
+                    </td></tr>
                   )}
                 </tbody>
               </table>
@@ -900,6 +1020,30 @@ function PayrollRunDetailView({ runId, onBack }: { runId: string; onBack: () => 
               Mark Payment Made
             </Button>
           )}
+          {detail.payslips && detail.payslips.length > 0 && (
+            <Button size="sm" variant="outline" onClick={() => {
+              fetch('/api/hrms/payslips/bulk-pdf', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify({ payroll_run_id: runId }),
+              }).then(res => {
+                if (!res.ok) throw new Error('Download failed');
+                const ct = res.headers.get('content-type') || '';
+                if (!ct.includes('zip') && !ct.includes('octet')) throw new Error('Unexpected response');
+                return res.blob();
+              }).then(blob => {
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `Payslips_${MONTHS_FULL[(detail.month || 1) - 1]}_${detail.year}.zip`;
+                a.click();
+                URL.revokeObjectURL(url);
+              }).catch(() => toast({ title: "Download failed", variant: "destructive" }));
+            }} data-testid="btn-download-all-payslips">
+              <Download className="w-4 h-4 mr-1" /> Download All
+            </Button>
+          )}
           {canDelete && (
             <Button size="sm" variant="destructive" onClick={() => setDeleteConfirm(true)} disabled={anyPending} data-testid="btn-delete-payroll">
               <Trash2 className="w-4 h-4 mr-1" /> Delete
@@ -954,7 +1098,7 @@ function PayrollRunDetailView({ runId, onBack }: { runId: string; onBack: () => 
                 <TableHead className="text-right min-w-[100px]">Total Ded</TableHead>
                 <TableHead className="text-right min-w-[110px]">Net Salary</TableHead>
                 <TableHead className="text-center min-w-[70px]">Days</TableHead>
-                {canEdit && <TableHead className="text-center min-w-[80px]">Actions</TableHead>}
+                <TableHead className="text-center min-w-[80px]">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -996,9 +1140,20 @@ function PayrollRunDetailView({ runId, onBack }: { runId: string; onBack: () => 
                         <TableCell className="text-right font-mono text-xs text-red-600">{ps.total_deductions.toLocaleString()}</TableCell>
                         <TableCell className="text-right font-mono text-xs font-bold text-green-700">{ps.net_salary.toLocaleString()}</TableCell>
                         <TableCell className="text-center text-xs">{ps.present_days}/{ps.working_days}</TableCell>
-                        {canEdit && (
+                        {canEdit ? (
                           <TableCell className="text-center">
-                            <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => startEdit(ps)} data-testid={`btn-edit-payslip-${ps.id}`}><Pencil className="w-3.5 h-3.5" /></Button>
+                            <div className="flex gap-0.5 justify-center">
+                              <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => startEdit(ps)} data-testid={`btn-edit-payslip-${ps.id}`}><Pencil className="w-3.5 h-3.5" /></Button>
+                              <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => {
+                                window.open(`/api/hrms/payslips/${ps.id}/pdf`, '_blank');
+                              }} data-testid={`btn-dl-payslip-${ps.id}`}><Download className="w-3.5 h-3.5" /></Button>
+                            </div>
+                          </TableCell>
+                        ) : (
+                          <TableCell className="text-center">
+                            <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => {
+                              window.open(`/api/hrms/payslips/${ps.id}/pdf`, '_blank');
+                            }} data-testid={`btn-dl-payslip-${ps.id}`}><Download className="w-3.5 h-3.5" /></Button>
                           </TableCell>
                         )}
                       </>
@@ -1019,7 +1174,7 @@ function PayrollRunDetailView({ runId, onBack }: { runId: string; onBack: () => 
                 <TableCell className="text-right font-mono text-xs text-red-600">{detail.payslips.reduce((s, p) => s + p.total_deductions, 0).toLocaleString()}</TableCell>
                 <TableCell className="text-right font-mono text-xs text-green-700">{detail.payslips.reduce((s, p) => s + p.net_salary, 0).toLocaleString()}</TableCell>
                 <TableCell></TableCell>
-                {canEdit && <TableCell></TableCell>}
+                <TableCell></TableCell>
               </TableRow>
             </TableBody>
           </Table>

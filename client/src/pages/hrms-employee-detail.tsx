@@ -10,7 +10,7 @@ import {
 import {
   User, DollarSign, Calendar, Clock, Gift, Banknote, Receipt,
   ArrowLeft, Building2, Phone, Mail, MapPin, CreditCard, Shield,
-  FileText, TrendingUp, ExternalLink,
+  FileText, TrendingUp, ExternalLink, Download,
 } from "lucide-react";
 import { useLocation } from "wouter";
 
@@ -305,6 +305,7 @@ export function EmployeeDetailView({ employeeId, onBack }: { employeeId: string;
                   <TableHead className="text-right">Net Pay</TableHead>
                   <TableHead>Days</TableHead>
                   <TableHead>Status</TableHead>
+                  <TableHead className="text-center">PDF</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -320,6 +321,11 @@ export function EmployeeDetailView({ employeeId, onBack }: { employeeId: string;
                     <TableCell className="text-right font-mono text-sm font-bold">{ps.net_salary.toLocaleString()}</TableCell>
                     <TableCell className="text-sm">{ps.present_days}/{ps.working_days}</TableCell>
                     <TableCell><Badge variant={ps.status === 'completed' ? 'default' : 'secondary'} className="text-xs">{ps.status}</Badge></TableCell>
+                    <TableCell className="text-center">
+                      <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => window.open(`/api/hrms/my/payslips/${ps.id}/pdf`, '_blank')} data-testid={`btn-dl-payslip-${ps.id}`}>
+                        <Download className="w-3.5 h-3.5" />
+                      </Button>
+                    </TableCell>
                   </TableRow>
                 ))}
               </TableBody>

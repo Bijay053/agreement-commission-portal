@@ -51,6 +51,8 @@ urlpatterns = [
     path('hrms/payroll-runs/<uuid:pr_id>', views.PayrollRunDetailView.as_view()),
 
     path('hrms/payslips', views.PayslipListView.as_view()),
+    path('hrms/payslips/bulk-pdf', views.PayslipBulkPDFView.as_view()),
+    path('hrms/payslips/<uuid:ps_id>/pdf', views.PayslipPDFView.as_view()),
     path('hrms/payslips/<uuid:ps_id>', views.PayslipUpdateView.as_view()),
     path('hrms/payslips/detail/<uuid:ps_id>', views.PayslipDetailView.as_view()),
 
@@ -79,4 +81,5 @@ urlpatterns = [
     path('hrms/my/leave-balance', views.MyLeaveBalanceView.as_view()),
     path('hrms/my/leave-requests', views.MyLeaveRequestsView.as_view()),
     path('hrms/my/payslips', views.MyPayslipsView.as_view()),
+    path('hrms/my/payslips/<uuid:ps_id>/pdf', views.MyPayslipPDFView.as_view()),
 ]

@@ -2010,6 +2010,204 @@ class PayslipDetailView(APIView):
         return Response(serialize_payslip(ps))
 
 
+class PayslipPDFView(APIView):
+    @require_permission('hrms.payslip.read')
+    def get(self, request, ps_id):
+        try:
+            ps = Payslip.objects.get(id=ps_id)
+        except Payslip.DoesNotExist:
+            return Response({'message': 'Payslip not found'}, status=404)
+        try:
+            emp = Employee.objects.get(id=ps.employee_id)
+        except Employee.DoesNotExist:
+            return Response({'message': 'Employee not found'}, status=404)
+        pr = ps.payroll_run
+        org = pr.organization if pr else None
+        pdf_bytes = generate_payslip_pdf(ps, emp, org)
+        from django.http import HttpResponse
+        month_name = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][ps.month - 1]
+        filename = f"Payslip_{emp.full_name.replace(' ', '_')}_{month_name}_{ps.year}.pdf"
+        response = HttpResponse(pdf_bytes, content_type='application/pdf')
+        response['Content-Disposition'] = f'attachment; filename="{filename}"'
+        return response
+
+
+class PayslipBulkPDFView(APIView):
+    @require_permission('hrms.payslip.read')
+    def post(self, request):
+        payslip_ids = request.data.get('payslip_ids', [])
+        payroll_run_id = request.data.get('payroll_run_id')
+
+        if payroll_run_id:
+            payslips = Payslip.objects.filter(payroll_run_id=payroll_run_id)
+        elif payslip_ids:
+            payslips = Payslip.objects.filter(id__in=payslip_ids)
+        else:
+            return Response({'message': 'Provide payslip_ids or payroll_run_id'}, status=400)
+
+        if not payslips.exists():
+            return Response({'message': 'No payslips found'}, status=404)
+
+        import zipfile, io
+        zip_buffer = io.BytesIO()
+        month_name = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
+        with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zf:
+            for ps in payslips:
+                try:
+                    emp = Employee.objects.get(id=ps.employee_id)
+                except Employee.DoesNotExist:
+                    continue
+                pr = ps.payroll_run
+                org = pr.organization if pr else None
+                pdf_bytes = generate_payslip_pdf(ps, emp, org)
+                mn = month_name[ps.month - 1]
+                fname = f"Payslip_{emp.full_name.replace(' ', '_')}_{mn}_{ps.year}.pdf"
+                zf.writestr(fname, pdf_bytes)
+        zip_buffer.seek(0)
+        from django.http import HttpResponse
+        first_ps = payslips.first()
+        mn = month_name[first_ps.month - 1] if first_ps else 'Unknown'
+        yr = first_ps.year if first_ps else ''
+        response = HttpResponse(zip_buffer.read(), content_type='application/zip')
+        response['Content-Disposition'] = f'attachment; filename="Payslips_{mn}_{yr}.zip"'
+        return response
+
+
+def generate_payslip_pdf(ps, emp, org):
+    import io
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.units import mm
+    from reportlab.lib import colors
+    from reportlab.platypus import SimpleDocTemplate, Table as RTable, TableStyle, Paragraph, Spacer
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+
+    buf = io.BytesIO()
+    doc = SimpleDocTemplate(buf, pagesize=A4, leftMargin=15*mm, rightMargin=15*mm, topMargin=15*mm, bottomMargin=15*mm)
+    styles = getSampleStyleSheet()
+    title_style = ParagraphStyle('PayslipTitle', parent=styles['Heading1'], fontSize=14, alignment=1, spaceAfter=2*mm)
+    subtitle_style = ParagraphStyle('PayslipSubtitle', parent=styles['Normal'], fontSize=9, alignment=1, spaceAfter=4*mm, textColor=colors.grey)
+    label_style = ParagraphStyle('Label', parent=styles['Normal'], fontSize=8, textColor=colors.grey)
+    value_style = ParagraphStyle('Value', parent=styles['Normal'], fontSize=9, fontName='Helvetica-Bold')
+    month_names = ['January','February','March','April','May','June','July','August','September','October','November','December']
+
+    elements = []
+    org_name = org.name if org else 'Company'
+    elements.append(Paragraph(org_name, title_style))
+    elements.append(Paragraph(f"Payslip for {month_names[ps.month - 1]} {ps.year}", subtitle_style))
+
+    emp_info = [
+        [Paragraph('Employee Name', label_style), Paragraph(emp.full_name, value_style),
+         Paragraph('Employee ID', label_style), Paragraph(str(emp.id)[:8], value_style)],
+        [Paragraph('Department', label_style), Paragraph(emp.department or '-', value_style),
+         Paragraph('Position', label_style), Paragraph(emp.position or '-', value_style)],
+        [Paragraph('PAN No', label_style), Paragraph(emp.pan_no or '-', value_style),
+         Paragraph('Bank', label_style), Paragraph(emp.bank_name or '-', value_style)],
+        [Paragraph('Working Days', label_style), Paragraph(str(ps.working_days), value_style),
+         Paragraph('Present Days', label_style), Paragraph(str(ps.present_days), value_style)],
+    ]
+    emp_table = RTable(emp_info, colWidths=[80, 140, 80, 140])
+    emp_table.setStyle(TableStyle([
+        ('VALIGN', (0,0), (-1,-1), 'TOP'),
+        ('BOTTOMPADDING', (0,0), (-1,-1), 3),
+        ('TOPPADDING', (0,0), (-1,-1), 3),
+    ]))
+    elements.append(emp_table)
+    elements.append(Spacer(1, 5*mm))
+
+    earnings = [['Earnings', '', 'Amount']]
+    earnings.append(['Basic Salary', '', f"Rs. {float(ps.basic_salary):,.2f}"])
+    allow_dict = ps.allowances or {}
+    for k, v in allow_dict.items():
+        earnings.append([k.replace('_', ' ').title(), '', f"Rs. {float(v):,.2f}"])
+    if float(ps.bonus_amount) > 0:
+        earnings.append(['Bonus', '', f"Rs. {float(ps.bonus_amount):,.2f}"])
+    if float(ps.travel_reimbursement) > 0:
+        earnings.append(['Travel Reimbursement', '', f"Rs. {float(ps.travel_reimbursement):,.2f}"])
+    gross_val = float(ps.gross_salary) + float(ps.bonus_amount) + float(ps.travel_reimbursement)
+    earnings.append(['Total Earnings', '', f"Rs. {gross_val:,.2f}"])
+
+    deductions = [['Deductions', '', 'Amount']]
+    if float(ps.cit_deduction) > 0:
+        deductions.append(['CIT (Contribution to Insurance/Provident)', '', f"Rs. {float(ps.cit_deduction):,.2f}"])
+    if float(ps.ssf_employee_deduction) > 0:
+        deductions.append(['SSF (Employee)', '', f"Rs. {float(ps.ssf_employee_deduction):,.2f}"])
+    if float(ps.tax_deduction) > 0:
+        deductions.append(['Income Tax (TDS)', '', f"Rs. {float(ps.tax_deduction):,.2f}"])
+    if float(ps.unpaid_leave_deduction) > 0:
+        deductions.append(['Unpaid Leave Deduction', '', f"Rs. {float(ps.unpaid_leave_deduction):,.2f}"])
+    if float(ps.advance_deduction) > 0:
+        deductions.append(['Advance Deduction', '', f"Rs. {float(ps.advance_deduction):,.2f}"])
+    other_ded = ps.other_deductions or {}
+    for k, v in other_ded.items():
+        deductions.append([k.replace('_', ' ').title(), '', f"Rs. {float(v):,.2f}"])
+    deductions.append(['Total Deductions', '', f"Rs. {float(ps.total_deductions):,.2f}"])
+
+    col_w = [200, 60, 120]
+    e_table = RTable(earnings, colWidths=col_w)
+    e_table.setStyle(TableStyle([
+        ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0,0), (-1,-1), 9),
+        ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#f0f4f8')),
+        ('LINEBELOW', (0,0), (-1,0), 1, colors.HexColor('#cbd5e1')),
+        ('LINEBELOW', (0,-1), (-1,-1), 1.5, colors.HexColor('#334155')),
+        ('FONTNAME', (0,-1), (-1,-1), 'Helvetica-Bold'),
+        ('TOPPADDING', (0,0), (-1,-1), 4),
+        ('BOTTOMPADDING', (0,0), (-1,-1), 4),
+        ('ALIGN', (2,0), (2,-1), 'RIGHT'),
+    ]))
+    elements.append(e_table)
+    elements.append(Spacer(1, 4*mm))
+
+    d_table = RTable(deductions, colWidths=col_w)
+    d_table.setStyle(TableStyle([
+        ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0,0), (-1,-1), 9),
+        ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#fef2f2')),
+        ('LINEBELOW', (0,0), (-1,0), 1, colors.HexColor('#fca5a5')),
+        ('LINEBELOW', (0,-1), (-1,-1), 1.5, colors.HexColor('#991b1b')),
+        ('FONTNAME', (0,-1), (-1,-1), 'Helvetica-Bold'),
+        ('TEXTCOLOR', (2,-1), (2,-1), colors.HexColor('#991b1b')),
+        ('TOPPADDING', (0,0), (-1,-1), 4),
+        ('BOTTOMPADDING', (0,0), (-1,-1), 4),
+        ('ALIGN', (2,0), (2,-1), 'RIGHT'),
+    ]))
+    elements.append(d_table)
+    elements.append(Spacer(1, 6*mm))
+
+    net_data = [['Net Salary', '', f"Rs. {float(ps.net_salary):,.2f}"]]
+    net_table = RTable(net_data, colWidths=col_w)
+    net_table.setStyle(TableStyle([
+        ('FONTNAME', (0,0), (-1,-1), 'Helvetica-Bold'),
+        ('FONTSIZE', (0,0), (-1,-1), 11),
+        ('BACKGROUND', (0,0), (-1,-1), colors.HexColor('#ecfdf5')),
+        ('BOX', (0,0), (-1,-1), 1, colors.HexColor('#059669')),
+        ('TEXTCOLOR', (2,0), (2,0), colors.HexColor('#059669')),
+        ('TOPPADDING', (0,0), (-1,-1), 6),
+        ('BOTTOMPADDING', (0,0), (-1,-1), 6),
+        ('ALIGN', (2,0), (2,0), 'RIGHT'),
+    ]))
+    elements.append(net_table)
+    elements.append(Spacer(1, 6*mm))
+
+    if float(ps.ssf_employer_contribution) > 0:
+        employer_data = [['Employer SSF Contribution', '', f"Rs. {float(ps.ssf_employer_contribution):,.2f}"]]
+        emp_tbl = RTable(employer_data, colWidths=col_w)
+        emp_tbl.setStyle(TableStyle([
+            ('FONTSIZE', (0,0), (-1,-1), 8),
+            ('TEXTCOLOR', (0,0), (-1,-1), colors.grey),
+            ('TOPPADDING', (0,0), (-1,-1), 2),
+            ('ALIGN', (2,0), (2,0), 'RIGHT'),
+        ]))
+        elements.append(emp_tbl)
+
+    elements.append(Spacer(1, 10*mm))
+    disclaimer = ParagraphStyle('Disclaimer', parent=styles['Normal'], fontSize=7, textColor=colors.grey, alignment=1)
+    elements.append(Paragraph("This is a system-generated payslip. No signature is required.", disclaimer))
+
+    doc.build(elements)
+    return buf.getvalue()
+
+
 class NotificationSettingView(APIView):
     @require_permission('hrms.notification.read')
     def get(self, request):
@@ -2226,6 +2424,28 @@ class MyPayslipsView(APIView):
         if year:
             payslips = payslips.filter(year=year)
         return Response([serialize_payslip(ps) for ps in payslips])
+
+
+class MyPayslipPDFView(APIView):
+    @require_auth
+    def get(self, request, ps_id):
+        user_id = request.session.get('userId')
+        employee = get_employee_for_user(user_id)
+        if not employee:
+            return Response({'message': 'No employee profile linked'}, status=404)
+        try:
+            ps = Payslip.objects.get(id=ps_id, employee_id=employee.id, status='paid')
+        except Payslip.DoesNotExist:
+            return Response({'message': 'Payslip not found'}, status=404)
+        pr = ps.payroll_run
+        org = pr.organization if pr else None
+        pdf_bytes = generate_payslip_pdf(ps, employee, org)
+        from django.http import HttpResponse
+        month_name = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][ps.month - 1]
+        filename = f"Payslip_{employee.full_name.replace(' ', '_')}_{month_name}_{ps.year}.pdf"
+        response = HttpResponse(pdf_bytes, content_type='application/pdf')
+        response['Content-Disposition'] = f'attachment; filename="{filename}"'
+        return response
 
 
 class BonusListView(APIView):
