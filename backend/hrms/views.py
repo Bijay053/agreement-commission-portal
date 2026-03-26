@@ -2830,12 +2830,6 @@ class MyProfileView(APIView):
             'total_records': att_records.count(),
         }
 
-        outstanding_advance = float(
-            AdvancePayment.objects.filter(
-                employee_id=employee.id, status__in=['approved', 'active']
-            ).aggregate(total=Sum('remaining_balance'))['total'] or 0
-        )
-
         tax_summary = Payslip.objects.filter(
             employee_id=employee.id, year=now.year
         ).aggregate(
@@ -2872,32 +2866,6 @@ class MyProfileView(APIView):
                 'view_token': ps.view_token,
             })
 
-        bonuses = []
-        for b in Bonus.objects.filter(employee_id=employee.id).order_by('-year', '-month')[:10]:
-            bonuses.append({
-                'id': str(b.id),
-                'bonus_type': b.bonus_type,
-                'amount': float(b.amount),
-                'reason': b.reason,
-                'month': b.month,
-                'year': b.year,
-                'is_taxable': b.is_taxable,
-                'status': b.status,
-            })
-
-        advances = []
-        for a in AdvancePayment.objects.filter(employee_id=employee.id).order_by('-request_date')[:10]:
-            advances.append({
-                'id': str(a.id),
-                'amount': float(a.amount),
-                'reason': a.reason,
-                'request_date': a.request_date.isoformat() if a.request_date else None,
-                'monthly_deduction': float(a.monthly_deduction),
-                'total_deducted': float(a.total_deducted),
-                'remaining_balance': float(a.remaining_balance),
-                'status': a.status,
-            })
-
         expenses = []
         for e in TravelExpense.objects.filter(employee_id=employee.id).order_by('-expense_date')[:10]:
             expenses.append({
@@ -2910,6 +2878,10 @@ class MyProfileView(APIView):
             })
 
         currency = org.currency if org else 'NPR'
+
+        user_perms = set(request.session.get('userPermissions', []))
+        can_expense = 'hrms.expense.read' in user_perms or 'hrms.expense.add' in user_perms
+        can_submit_expense = 'hrms.expense.add' in user_perms
 
         return Response({
             'id': str(employee.id),
@@ -2946,7 +2918,6 @@ class MyProfileView(APIView):
             'salary_structure': salary_structure,
             'gross_salary': gross_salary,
             'attendance_summary': att_summary,
-            'outstanding_advance': outstanding_advance,
             'tax_summary': {
                 'year': now.year,
                 'total_tax': float(tax_summary['total_tax'] or 0),
@@ -2955,9 +2926,9 @@ class MyProfileView(APIView):
             },
             'leave_balances': leave_balances,
             'recent_payslips': recent_payslips,
-            'bonuses': bonuses,
-            'advances': advances,
-            'expenses': expenses,
+            'expenses': expenses if can_expense else [],
+            'can_expense': can_expense,
+            'can_submit_expense': can_submit_expense,
         })
 
 
@@ -4311,3 +4282,67 @@ class ConfidentialOTPVerifyView(APIView):
 
         request.session['confidential_unlocked_at'] = timezone.now().isoformat()
         return Response({'message': 'Verified successfully', 'unlocked': True})
+
+
+class MyExpensesView(APIView):
+    @require_auth
+    def get(self, request):
+        user_id = request.session.get('userId')
+        employee = get_employee_for_user(user_id)
+        if not employee:
+            return Response({'message': 'No employee profile linked'}, status=404)
+
+        qs = TravelExpense.objects.filter(employee_id=employee.id).order_by('-expense_date')
+        return Response([{
+            'id': str(e.id),
+            'category': e.category,
+            'description': e.description,
+            'amount': float(e.amount),
+            'expense_date': e.expense_date.isoformat() if e.expense_date else None,
+            'receipt_url': e.receipt_url,
+            'status': e.status,
+            'rejection_reason': e.rejection_reason,
+        } for e in qs[:20]])
+
+    @require_auth
+    def post(self, request):
+        user_id = request.session.get('userId')
+        employee = get_employee_for_user(user_id)
+        if not employee:
+            return Response({'message': 'No employee profile linked'}, status=404)
+
+        data = request.data
+        category = data.get('category', 'travel')
+        description = (data.get('description') or '').strip()
+        amount = data.get('amount')
+        expense_date_str = data.get('expense_date')
+        receipt_url = data.get('receipt_url')
+
+        if not description:
+            return Response({'message': 'Description is required'}, status=400)
+        if not amount or float(amount) <= 0:
+            return Response({'message': 'Amount must be greater than 0'}, status=400)
+
+        exp_date = date.fromisoformat(expense_date_str) if expense_date_str else date.today()
+
+        te = TravelExpense.objects.create(
+            employee_id=employee.id,
+            category=category,
+            description=description,
+            amount=float(amount),
+            expense_date=exp_date,
+            receipt_url=receipt_url or None,
+            month=exp_date.month,
+            year=exp_date.year,
+            status='pending',
+        )
+
+        return Response({
+            'id': str(te.id),
+            'category': te.category,
+            'description': te.description,
+            'amount': float(te.amount),
+            'expense_date': te.expense_date.isoformat() if te.expense_date else None,
+            'receipt_url': te.receipt_url,
+            'status': te.status,
+        }, status=201)

@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
@@ -22,7 +23,7 @@ import {
   User, Clock, Calendar, FileText, LogOut, Shield, ChevronLeft, ChevronRight,
   CheckCircle, XCircle, AlertCircle, Download, Briefcase,
   Camera, MapPin, Loader2, RefreshCw, Paperclip, Upload, File,
-  DollarSign, Eye, EyeOff, Building2, Gift, Banknote, Receipt,
+  DollarSign, Eye, EyeOff, Building2, Receipt, Lock, Send, Plus,
 } from "lucide-react";
 
 type Tab = "profile" | "attendance" | "leave" | "payslips";
@@ -107,8 +108,80 @@ function ProfileTab() {
   const { data: profile, isLoading } = useQuery<any>({
     queryKey: ["/api/hrms/my/profile"],
   });
+  const { toast } = useToast();
   const [showSalary, setShowSalary] = useState(false);
   const [profileSubTab, setProfileSubTab] = useState<string>("salary");
+  const [otpStep, setOtpStep] = useState<'idle' | 'sending' | 'input' | 'verifying'>('idle');
+  const [otpCode, setOtpCode] = useState('');
+  const [otpMaskedEmail, setOtpMaskedEmail] = useState('');
+  const [showExpenseForm, setShowExpenseForm] = useState(false);
+  const [expenseForm, setExpenseForm] = useState({ category: 'travel', description: '', amount: '', expense_date: new Date().toISOString().split('T')[0] });
+
+  const sendOtpMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest('POST', '/api/hrms/confidential/send-otp');
+      return res.json();
+    },
+    onSuccess: (data: any) => {
+      setOtpMaskedEmail(data.maskedEmail || '');
+      setOtpStep('input');
+      toast({ title: 'OTP sent', description: `Check your email (${data.maskedEmail})` });
+    },
+    onError: (err: any) => {
+      setOtpStep('idle');
+      toast({ title: 'Failed to send OTP', description: err.message, variant: 'destructive' });
+    },
+  });
+
+  const verifyOtpMutation = useMutation({
+    mutationFn: async (code: string) => {
+      const res = await apiRequest('POST', '/api/hrms/confidential/verify-otp', { code });
+      return res.json();
+    },
+    onSuccess: () => {
+      setShowSalary(true);
+      setOtpStep('idle');
+      setOtpCode('');
+      toast({ title: 'Verified', description: 'Salary details are now visible' });
+    },
+    onError: (err: any) => {
+      setOtpStep('input');
+      toast({ title: 'Verification failed', description: err.message, variant: 'destructive' });
+    },
+  });
+
+  const submitExpenseMutation = useMutation({
+    mutationFn: async (data: any) => {
+      const res = await apiRequest('POST', '/api/hrms/my/expenses', data);
+      return res.json();
+    },
+    onSuccess: () => {
+      setShowExpenseForm(false);
+      setExpenseForm({ category: 'travel', description: '', amount: '', expense_date: new Date().toISOString().split('T')[0] });
+      toast({ title: 'Expense submitted', description: 'Your expense has been submitted for approval' });
+      queryClient.invalidateQueries({ queryKey: ["/api/hrms/my/profile"] });
+    },
+    onError: (err: any) => {
+      toast({ title: 'Failed to submit', description: err.message, variant: 'destructive' });
+    },
+  });
+
+  const handleRequestOtp = () => {
+    setOtpStep('sending');
+    sendOtpMutation.mutate();
+  };
+
+  const handleVerifyOtp = () => {
+    if (otpCode.length !== 6) return;
+    setOtpStep('verifying');
+    verifyOtpMutation.mutate(otpCode);
+  };
+
+  const handleHideSalary = () => {
+    setShowSalary(false);
+    setOtpCode('');
+    setOtpStep('idle');
+  };
 
   if (isLoading) return <div className="space-y-4"><Skeleton className="h-40" /><Skeleton className="h-60" /></div>;
   if (!profile) return <div className="text-center py-12 text-muted-foreground">No employee profile found linked to your account.</div>;
@@ -121,13 +194,11 @@ function ProfileTab() {
   const taxSum = profile.tax_summary || {};
   const empType = profile.employment_type?.replace(/_/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase());
 
-  const subTabs = [
+  const subTabs: { key: string; label: string; icon: any }[] = [
     { key: "salary", label: "Salary", icon: DollarSign },
     { key: "leaves", label: "Leaves", icon: Calendar },
     { key: "payslips", label: "Payslips", icon: FileText },
-    { key: "bonuses", label: "Bonuses", icon: Gift },
-    { key: "advances", label: "Advances", icon: Banknote },
-    { key: "expenses", label: "Expenses", icon: Receipt },
+    ...(profile.can_expense ? [{ key: "expenses", label: "Expenses", icon: Receipt }] : []),
     { key: "personal", label: "Personal", icon: User },
   ];
 
@@ -161,20 +232,55 @@ function ProfileTab() {
         </CardContent>
       </Card>
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
         <Card className="bg-muted/30">
           <CardContent className="p-4 text-center">
             <p className="text-xs text-muted-foreground">Gross Salary</p>
             <div className="flex items-center justify-center gap-1 mt-1">
               {showSalary ? (
-                <p className="text-lg font-bold" data-testid="text-summary-gross">{fmtAmt(profile.gross_salary || 0)}</p>
+                <>
+                  <p className="text-lg font-bold" data-testid="text-summary-gross">{fmtAmt(profile.gross_salary || 0)}</p>
+                  <button onClick={handleHideSalary} className="text-muted-foreground hover:text-foreground" data-testid="button-hide-salary">
+                    <EyeOff className="h-3.5 w-3.5" />
+                  </button>
+                </>
+              ) : otpStep === 'idle' ? (
+                <>
+                  <p className="text-lg font-bold">****</p>
+                  <button onClick={handleRequestOtp} className="text-muted-foreground hover:text-foreground" data-testid="button-request-otp" title="Verify with OTP to view salary">
+                    <Lock className="h-3.5 w-3.5" />
+                  </button>
+                </>
+              ) : otpStep === 'sending' ? (
+                <>
+                  <p className="text-lg font-bold">****</p>
+                  <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
+                </>
               ) : (
-                <p className="text-lg font-bold">****</p>
+                <div className="flex items-center gap-1">
+                  <input
+                    type="text"
+                    maxLength={6}
+                    placeholder="Enter OTP"
+                    value={otpCode}
+                    onChange={e => setOtpCode(e.target.value.replace(/\D/g, ''))}
+                    onKeyDown={e => e.key === 'Enter' && handleVerifyOtp()}
+                    className="w-20 h-7 text-center text-sm border rounded bg-background px-1"
+                    data-testid="input-otp-code"
+                    autoFocus
+                  />
+                  <button onClick={handleVerifyOtp} disabled={otpStep === 'verifying' || otpCode.length !== 6} className="text-primary hover:text-primary/80 disabled:opacity-50" data-testid="button-verify-otp">
+                    {otpStep === 'verifying' ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle className="h-4 w-4" />}
+                  </button>
+                  <button onClick={() => { setOtpStep('idle'); setOtpCode(''); }} className="text-muted-foreground hover:text-foreground">
+                    <XCircle className="h-3.5 w-3.5" />
+                  </button>
+                </div>
               )}
-              <button onClick={() => setShowSalary(!showSalary)} className="text-muted-foreground hover:text-foreground" data-testid="button-toggle-salary">
-                {showSalary ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
-              </button>
             </div>
+            {otpStep === 'input' && otpMaskedEmail && (
+              <p className="text-[10px] text-muted-foreground mt-1">OTP sent to {otpMaskedEmail}</p>
+            )}
           </CardContent>
         </Card>
         <Card className="bg-muted/30">
@@ -185,23 +291,8 @@ function ProfileTab() {
         </Card>
         <Card className="bg-muted/30">
           <CardContent className="p-4 text-center">
-            <p className="text-xs text-muted-foreground">Outstanding Advance</p>
-            <div className="flex items-center justify-center gap-1 mt-1">
-              {showSalary ? (
-                <p className="text-lg font-bold" data-testid="text-summary-advance">{fmtAmt(profile.outstanding_advance || 0)}</p>
-              ) : (
-                <p className="text-lg font-bold">****</p>
-              )}
-              <button onClick={() => setShowSalary(!showSalary)} className="text-muted-foreground hover:text-foreground">
-                {showSalary ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
-              </button>
-            </div>
-          </CardContent>
-        </Card>
-        <Card className="bg-muted/30">
-          <CardContent className="p-4 text-center">
             <p className="text-xs text-muted-foreground">Tax Paid ({taxSum.year || new Date().getFullYear()})</p>
-            <p className="text-lg font-bold mt-1" data-testid="text-summary-tax">{fmtAmt(taxSum.total_tax || 0)}</p>
+            <p className="text-lg font-bold mt-1" data-testid="text-summary-tax">{showSalary ? fmtAmt(taxSum.total_tax || 0) : '****'}</p>
           </CardContent>
         </Card>
       </div>
@@ -361,80 +452,17 @@ function ProfileTab() {
         </Card>
       )}
 
-      {profileSubTab === "bonuses" && (
+      {profileSubTab === "expenses" && profile.can_expense && (
         <Card>
           <CardContent className="p-5">
-            <h4 className="font-semibold mb-3">Bonuses</h4>
-            {(profile.bonuses || []).length > 0 ? (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Period</TableHead>
-                    <TableHead>Type</TableHead>
-                    <TableHead>Reason</TableHead>
-                    <TableHead className="text-right">Amount</TableHead>
-                    <TableHead>Status</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {profile.bonuses.map((b: any) => (
-                    <TableRow key={b.id}>
-                      <TableCell className="text-sm">{MONTHS[b.month]} {b.year}</TableCell>
-                      <TableCell className="text-sm">{b.bonus_type?.replace(/_/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase())}</TableCell>
-                      <TableCell className="text-sm text-muted-foreground">{b.reason || '—'}</TableCell>
-                      <TableCell className="text-sm text-right font-medium">{showSalary ? fmtAmt(b.amount) : '****'}</TableCell>
-                      <TableCell><Badge variant="outline" className="text-xs">{b.status}</Badge></TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            ) : (
-              <p className="text-sm text-muted-foreground">No bonuses recorded</p>
-            )}
-          </CardContent>
-        </Card>
-      )}
-
-      {profileSubTab === "advances" && (
-        <Card>
-          <CardContent className="p-5">
-            <h4 className="font-semibold mb-3">Advance Payments</h4>
-            {(profile.advances || []).length > 0 ? (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Date</TableHead>
-                    <TableHead>Reason</TableHead>
-                    <TableHead className="text-right">Amount</TableHead>
-                    <TableHead className="text-right">Deducted</TableHead>
-                    <TableHead className="text-right">Remaining</TableHead>
-                    <TableHead>Status</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {profile.advances.map((a: any) => (
-                    <TableRow key={a.id}>
-                      <TableCell className="text-sm">{a.request_date || '—'}</TableCell>
-                      <TableCell className="text-sm text-muted-foreground">{a.reason || '—'}</TableCell>
-                      <TableCell className="text-sm text-right">{showSalary ? fmtAmt(a.amount) : '****'}</TableCell>
-                      <TableCell className="text-sm text-right">{showSalary ? fmtAmt(a.total_deducted) : '****'}</TableCell>
-                      <TableCell className="text-sm text-right font-medium">{showSalary ? fmtAmt(a.remaining_balance) : '****'}</TableCell>
-                      <TableCell><Badge variant={a.status === 'active' ? 'default' : 'outline'} className="text-xs">{a.status}</Badge></TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            ) : (
-              <p className="text-sm text-muted-foreground">No advance payments</p>
-            )}
-          </CardContent>
-        </Card>
-      )}
-
-      {profileSubTab === "expenses" && (
-        <Card>
-          <CardContent className="p-5">
-            <h4 className="font-semibold mb-3">Travel Expenses</h4>
+            <div className="flex items-center justify-between mb-3">
+              <h4 className="font-semibold">Expenses</h4>
+              {profile.can_submit_expense && (
+                <Button size="sm" variant="outline" onClick={() => setShowExpenseForm(true)} data-testid="button-add-expense">
+                  <Plus className="h-3.5 w-3.5 mr-1" /> Submit Expense
+                </Button>
+              )}
+            </div>
             {(profile.expenses || []).length > 0 ? (
               <Table>
                 <TableHeader>
@@ -448,22 +476,104 @@ function ProfileTab() {
                 </TableHeader>
                 <TableBody>
                   {profile.expenses.map((e: any) => (
-                    <TableRow key={e.id}>
+                    <TableRow key={e.id} data-testid={`expense-row-${e.id}`}>
                       <TableCell className="text-sm">{e.expense_date || '—'}</TableCell>
-                      <TableCell className="text-sm">{e.category}</TableCell>
+                      <TableCell className="text-sm capitalize">{e.category?.replace(/_/g, ' ')}</TableCell>
                       <TableCell className="text-sm text-muted-foreground">{e.description || '—'}</TableCell>
                       <TableCell className="text-sm text-right font-medium">{fmtAmt(e.amount)}</TableCell>
-                      <TableCell><Badge variant={e.status === 'approved' ? 'default' : 'outline'} className="text-xs">{e.status}</Badge></TableCell>
+                      <TableCell>
+                        <Badge variant={e.status === 'approved' ? 'default' : e.status === 'rejected' ? 'destructive' : 'outline'} className="text-xs">
+                          {e.status}
+                        </Badge>
+                      </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
               </Table>
             ) : (
-              <p className="text-sm text-muted-foreground">No travel expenses recorded</p>
+              <p className="text-sm text-muted-foreground">No expenses recorded</p>
             )}
           </CardContent>
         </Card>
       )}
+
+      <Dialog open={showExpenseForm} onOpenChange={setShowExpenseForm}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Submit Expense</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div>
+              <Label>Category</Label>
+              <Select value={expenseForm.category} onValueChange={v => setExpenseForm(f => ({ ...f, category: v }))}>
+                <SelectTrigger data-testid="select-expense-category"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="travel">Travel</SelectItem>
+                  <SelectItem value="accommodation">Accommodation</SelectItem>
+                  <SelectItem value="food">Food & Meals</SelectItem>
+                  <SelectItem value="transport">Local Transport</SelectItem>
+                  <SelectItem value="client_meeting">Client Meeting</SelectItem>
+                  <SelectItem value="training">Training</SelectItem>
+                  <SelectItem value="other">Other</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>Description</Label>
+              <Textarea
+                value={expenseForm.description}
+                onChange={e => setExpenseForm(f => ({ ...f, description: e.target.value }))}
+                placeholder="Describe the expense..."
+                rows={3}
+                data-testid="input-expense-description"
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label>Amount ({currency})</Label>
+                <Input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={expenseForm.amount}
+                  onChange={e => setExpenseForm(f => ({ ...f, amount: e.target.value }))}
+                  placeholder="0.00"
+                  data-testid="input-expense-amount"
+                />
+              </div>
+              <div>
+                <Label>Date</Label>
+                <Input
+                  type="date"
+                  value={expenseForm.expense_date}
+                  onChange={e => setExpenseForm(f => ({ ...f, expense_date: e.target.value }))}
+                  data-testid="input-expense-date"
+                />
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowExpenseForm(false)}>Cancel</Button>
+            <Button
+              onClick={() => {
+                if (!expenseForm.description.trim()) return;
+                if (!expenseForm.amount || Number(expenseForm.amount) <= 0) return;
+                submitExpenseMutation.mutate({
+                  category: expenseForm.category,
+                  description: expenseForm.description,
+                  amount: Number(expenseForm.amount),
+                  expense_date: expenseForm.expense_date,
+                });
+              }}
+              disabled={submitExpenseMutation.isPending || !expenseForm.description.trim() || !expenseForm.amount}
+              data-testid="button-submit-expense"
+            >
+              {submitExpenseMutation.isPending ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Send className="h-4 w-4 mr-1" />}
+              Submit
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {profileSubTab === "personal" && (
         <div className="grid md:grid-cols-2 gap-4">

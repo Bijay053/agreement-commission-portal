@@ -95,4 +95,6 @@ urlpatterns = [
 
     path('hrms/confidential/send-otp', views.ConfidentialOTPSendView.as_view()),
     path('hrms/confidential/verify-otp', views.ConfidentialOTPVerifyView.as_view()),
+
+    path('hrms/my/expenses', views.MyExpensesView.as_view()),
 ]
