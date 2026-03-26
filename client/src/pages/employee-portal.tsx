@@ -31,6 +31,7 @@ type Tab = "profile" | "attendance" | "leave" | "payslips";
 export default function EmployeePortal() {
   const { user, logout } = useAuth();
   const [activeTab, setActiveTab] = useState<Tab>("profile");
+  const [showSalary, setShowSalary] = useState(false);
 
   const tabs: { key: Tab; label: string; icon: any }[] = [
     { key: "profile", label: "My Profile", icon: User },
@@ -95,21 +96,20 @@ export default function EmployeePortal() {
         </div>
       </aside>
       <main className="flex-1 overflow-auto p-6">
-        {activeTab === "profile" && <ProfileTab />}
+        {activeTab === "profile" && <ProfileTab showSalary={showSalary} setShowSalary={setShowSalary} />}
         {activeTab === "attendance" && <AttendanceTab />}
         {activeTab === "leave" && <LeaveTab />}
-        {activeTab === "payslips" && <PayslipsTab />}
+        {activeTab === "payslips" && <PayslipsTab showSalary={showSalary} setShowSalary={setShowSalary} />}
       </main>
     </div>
   );
 }
 
-function ProfileTab() {
+function ProfileTab({ showSalary, setShowSalary }: { showSalary: boolean; setShowSalary: (v: boolean) => void }) {
   const { data: profile, isLoading } = useQuery<any>({
     queryKey: ["/api/hrms/my/profile"],
   });
   const { toast } = useToast();
-  const [showSalary, setShowSalary] = useState(false);
   const [profileSubTab, setProfileSubTab] = useState<string>("salary");
   const [otpStep, setOtpStep] = useState<'idle' | 'sending' | 'input' | 'verifying'>('idle');
   const [otpCode, setOtpCode] = useState('');
@@ -1470,9 +1470,46 @@ function LeaveTab() {
   );
 }
 
-function PayslipsTab() {
+function PayslipsTab({ showSalary, setShowSalary }: { showSalary: boolean; setShowSalary: (v: boolean) => void }) {
+  const { toast } = useToast();
   const { data: payslips, isLoading } = useQuery<any[]>({
     queryKey: ["/api/hrms/my/payslips"],
+  });
+  const [otpStep, setOtpStep] = useState<'idle' | 'sending' | 'input' | 'verifying'>('idle');
+  const [otpCode, setOtpCode] = useState('');
+  const [otpMaskedEmail, setOtpMaskedEmail] = useState('');
+
+  const sendOtpMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest('POST', '/api/hrms/confidential/send-otp');
+      return res.json();
+    },
+    onSuccess: (data: any) => {
+      setOtpMaskedEmail(data.maskedEmail || '');
+      setOtpStep('input');
+      toast({ title: 'OTP sent', description: `Check your email (${data.maskedEmail})` });
+    },
+    onError: (err: any) => {
+      setOtpStep('idle');
+      toast({ title: 'Failed to send OTP', description: err.message, variant: 'destructive' });
+    },
+  });
+
+  const verifyOtpMutation = useMutation({
+    mutationFn: async (code: string) => {
+      const res = await apiRequest('POST', '/api/hrms/confidential/verify-otp', { code });
+      return res.json();
+    },
+    onSuccess: () => {
+      setShowSalary(true);
+      setOtpStep('idle');
+      setOtpCode('');
+      toast({ title: 'Verified', description: 'Salary details are now visible' });
+    },
+    onError: (err: any) => {
+      setOtpStep('input');
+      toast({ title: 'Verification failed', description: err.message, variant: 'destructive' });
+    },
   });
 
   const handleDownload = async (id: string) => {
@@ -1487,11 +1524,34 @@ function PayslipsTab() {
     URL.revokeObjectURL(url);
   };
 
+  const fmtAmt = (v: number) => Number(v || 0).toLocaleString(undefined, { minimumFractionDigits: 2 });
+
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-lg font-semibold" data-testid="text-payslips-title">My Payslips</h2>
-        <p className="text-sm text-muted-foreground">View and download your payslips</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-lg font-semibold" data-testid="text-payslips-title">My Payslips</h2>
+          <p className="text-sm text-muted-foreground">View and download your payslips</p>
+        </div>
+        {!showSalary && (
+          <div className="flex items-center gap-2">
+            {otpStep === 'idle' && (
+              <Button variant="outline" size="sm" onClick={() => { setOtpStep('sending'); sendOtpMutation.mutate(); }} data-testid="button-payslip-otp">
+                <Lock className="h-3.5 w-3.5 mr-1.5" />
+                Verify OTP to view amounts
+              </Button>
+            )}
+            {otpStep === 'sending' && <p className="text-xs text-muted-foreground">Sending OTP...</p>}
+            {otpStep === 'input' && (
+              <div className="flex items-center gap-2">
+                <p className="text-xs text-muted-foreground">OTP sent to {otpMaskedEmail}</p>
+                <Input className="w-28 h-8 text-center text-sm" placeholder="Enter OTP" maxLength={6} value={otpCode} onChange={e => setOtpCode(e.target.value)} data-testid="input-payslip-otp" />
+                <Button size="sm" className="h-8" onClick={() => { setOtpStep('verifying'); verifyOtpMutation.mutate(otpCode); }} disabled={otpCode.length < 4} data-testid="button-verify-payslip-otp">Verify</Button>
+              </div>
+            )}
+            {otpStep === 'verifying' && <p className="text-xs text-muted-foreground">Verifying...</p>}
+          </div>
+        )}
       </div>
 
       {isLoading ? <Skeleton className="h-60" /> : (
@@ -1513,14 +1573,18 @@ function PayslipsTab() {
               ) : payslips.map((p: any) => (
                 <TableRow key={p.id}>
                   <TableCell className="font-medium">{p.month_name || p.month}/{p.year}</TableCell>
-                  <TableCell>{Number(p.gross_salary || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</TableCell>
-                  <TableCell>{Number(p.total_deductions || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</TableCell>
-                  <TableCell className="font-semibold">{Number(p.net_salary || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</TableCell>
+                  <TableCell>{showSalary ? fmtAmt(p.gross_salary) : '****'}</TableCell>
+                  <TableCell>{showSalary ? fmtAmt(p.total_deductions) : '****'}</TableCell>
+                  <TableCell className="font-semibold">{showSalary ? fmtAmt(p.net_salary) : '****'}</TableCell>
                   <TableCell><Badge variant="default">{p.status}</Badge></TableCell>
                   <TableCell>
-                    <Button variant="ghost" size="sm" onClick={() => handleDownload(p.id)} data-testid={`button-download-payslip-${p.id}`}>
-                      <Download className="h-4 w-4" />
-                    </Button>
+                    {showSalary ? (
+                      <Button variant="ghost" size="sm" onClick={() => handleDownload(p.id)} data-testid={`button-download-payslip-${p.id}`}>
+                        <Download className="h-4 w-4" />
+                      </Button>
+                    ) : (
+                      <Lock className="h-4 w-4 text-muted-foreground" />
+                    )}
                   </TableCell>
                 </TableRow>
               ))}
