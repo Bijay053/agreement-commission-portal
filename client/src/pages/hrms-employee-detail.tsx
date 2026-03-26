@@ -27,6 +27,7 @@ interface Employee360Data {
   employee: {
     id: string; full_name: string; email: string; phone: string | null;
     position: string | null; department: string | null; organization_name: string | null;
+    registration_label: string; pan_label: string;
     department_name: string | null; organization_id: string | null; department_id: string | null;
     gender: string | null; marital_status: string | null; date_of_birth: string | null;
     join_date: string | null; employment_type: string; bank_name: string | null;
@@ -435,7 +436,7 @@ export function EmployeeDetailView({ employeeId, onBack }: { employeeId: string;
             <Card>
               <CardHeader className="p-4 pb-2"><CardTitle className="text-sm">Tax Profile</CardTitle></CardHeader>
               <CardContent className="p-4 pt-0 space-y-2 text-sm">
-                <div className="flex justify-between"><span>PAN Number</span><span className="font-mono">{emp.pan_no || "Not Set"}</span></div>
+                <div className="flex justify-between"><span>{emp.pan_label || 'PAN Number'}</span><span className="font-mono">{emp.pan_no || "Not Set"}</span></div>
                 <div className="flex justify-between"><span>Marital Status</span><span className="capitalize">{emp.marital_status || "Not Set"}</span></div>
                 <div className="flex justify-between"><span>Tax Category</span><span>{emp.marital_status === 'married' ? 'Married Slab' : 'Single Slab'}</span></div>
                 {sal && (
@@ -472,7 +473,7 @@ export function EmployeeDetailView({ employeeId, onBack }: { employeeId: string;
                 <div className="flex justify-between"><span>Marital Status</span><span className="capitalize">{emp.marital_status || "—"}</span></div>
                 <div className="flex justify-between"><span>Employee ID</span><span className="font-mono">{emp.employee_id_number || "—"}</span></div>
                 <div className="flex justify-between"><span>Citizenship No</span><span className="font-mono">{emp.citizenship_no || "—"}</span></div>
-                <div className="flex justify-between"><span>PAN No</span><span className="font-mono">{emp.pan_no || "—"}</span></div>
+                <div className="flex justify-between"><span>{emp.pan_label || 'PAN No'}</span><span className="font-mono">{emp.pan_no || "—"}</span></div>
                 <div className="flex justify-between"><span>Passport</span><span className="font-mono">{emp.passport_number || "—"}</span></div>
               </CardContent>
             </Card>

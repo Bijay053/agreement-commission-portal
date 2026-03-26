@@ -14,7 +14,18 @@ def _safe_iso(val):
     return str(val)
 
 
+def _get_org(org_id):
+    if not org_id:
+        return None
+    from hrms.models import Organization
+    try:
+        return Organization.objects.get(id=org_id)
+    except Organization.DoesNotExist:
+        return None
+
+
 def _serialize_employee(e):
+    org = _get_org(e.organization_id)
     return {
         'id': str(e.id),
         'fullName': e.full_name,
@@ -23,6 +34,9 @@ def _serialize_employee(e):
         'position': e.position or '',
         'department': e.department or '',
         'organization_id': str(e.organization_id) if e.organization_id else None,
+        'organization_name': org.name if org else None,
+        'registration_label': org.registration_label if org else 'Registration No.',
+        'pan_label': org.pan_label if org else 'PAN No.',
         'department_id': str(e.department_id) if e.department_id else None,
         'gender': e.gender or '',
         'marital_status': e.marital_status or '',

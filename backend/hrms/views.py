@@ -28,7 +28,9 @@ def serialize_org(org):
         'phone': org.phone,
         'email': org.email,
         'registration_number': org.registration_number,
+        'registration_label': org.registration_label or 'Registration No.',
         'pan_number': org.pan_number,
+        'pan_label': org.pan_label or 'PAN No.',
         'logo_url': org.logo_url,
         'currency': org.currency or 'NPR',
         'status': org.status,
@@ -411,7 +413,9 @@ class OrganizationListView(APIView):
             phone=data.get('phone'),
             email=data.get('email'),
             registration_number=data.get('registration_number'),
+            registration_label=data.get('registration_label', 'Registration No.'),
             pan_number=data.get('pan_number'),
+            pan_label=data.get('pan_label', 'PAN No.'),
             logo_url=data.get('logo_url'),
             currency=data.get('currency', 'NPR'),
         )
@@ -435,7 +439,8 @@ class OrganizationDetailView(APIView):
             return Response({'message': 'Organization not found'}, status=404)
         data = request.data
         for field in ['name', 'short_code', 'address', 'country', 'phone', 'email',
-                      'registration_number', 'pan_number', 'logo_url', 'currency', 'status']:
+                      'registration_number', 'registration_label', 'pan_number', 'pan_label',
+                      'logo_url', 'currency', 'status']:
             if field in data:
                 setattr(org, field, data[field])
         org.save()
@@ -2155,6 +2160,8 @@ def generate_payslip_pdf(ps, emp, org):
     org_email = getattr(org, 'email', None) or ''
     org_pan = getattr(org, 'pan_number', None) or ''
     org_reg = getattr(org, 'registration_number', None) or ''
+    org_reg_label = getattr(org, 'registration_label', None) or 'Registration No.'
+    org_pan_label_val = getattr(org, 'pan_label', None) or 'PAN No.'
 
     period_label = f"{month_names[ps.month - 1]} {ps.year}"
     pay_date_label = ps.updated_at.strftime('%d %b %Y') if ps.updated_at else ''
@@ -2164,9 +2171,9 @@ def generate_payslip_pdf(ps, emp, org):
         hdr_left_parts.append(org_address)
     detail_parts = []
     if org_reg:
-        detail_parts.append(f"Reg: {org_reg}")
+        detail_parts.append(f"{org_reg_label}: {org_reg}")
     if org_pan:
-        detail_parts.append(f"PAN: {org_pan}")
+        detail_parts.append(f"{org_pan_label_val}: {org_pan}")
     if org_phone:
         detail_parts.append(org_phone)
     if org_email:
@@ -2221,7 +2228,7 @@ def generate_payslip_pdf(ps, emp, org):
          Paragraph('Position', lbl_style), Paragraph(emp.position or '-', val_style)],
         [Paragraph('Employment Type', lbl_style), Paragraph(emp_type_display, val_style),
          Paragraph('Date Joined', lbl_style), Paragraph(join_display, val_style)],
-        [Paragraph('PAN No', lbl_style), Paragraph(emp.pan_no or '-', val_style),
+        [Paragraph(org_pan_label_val, lbl_style), Paragraph(emp.pan_no or '-', val_style),
          Paragraph('Citizenship No', lbl_style), Paragraph(getattr(emp, 'citizenship_no', None) or '-', val_style)],
     ]
     info_tbl = RTable(info_data, colWidths=[page_w*0.17, page_w*0.33, page_w*0.17, page_w*0.33])
@@ -2987,9 +2994,14 @@ class Employee360View(APIView):
 
         org_name = None
         dept_name = None
+        org_reg_label = 'Registration No.'
+        org_pan_label = 'PAN No.'
         if emp.organization_id:
             try:
-                org_name = Organization.objects.get(id=emp.organization_id).name
+                org_obj = Organization.objects.get(id=emp.organization_id)
+                org_name = org_obj.name
+                org_reg_label = org_obj.registration_label or 'Registration No.'
+                org_pan_label = org_obj.pan_label or 'PAN No.'
             except Organization.DoesNotExist:
                 pass
         if emp.department_id:
@@ -3129,6 +3141,8 @@ class Employee360View(APIView):
                 'position': emp.position,
                 'department': emp.department,
                 'organization_name': org_name,
+                'registration_label': org_reg_label,
+                'pan_label': org_pan_label,
                 'department_name': dept_name,
                 'organization_id': str(emp.organization_id) if emp.organization_id else None,
                 'department_id': str(emp.department_id) if emp.department_id else None,

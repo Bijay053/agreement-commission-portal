@@ -66,6 +66,7 @@ interface StaffProfile {
 
 interface Organization {
   id: string; name: string; short_code: string; currency: string;
+  registration_label: string; pan_label: string;
 }
 
 interface Department {
@@ -515,7 +516,7 @@ export function StaffProfilesTab() {
             <div className="grid grid-cols-4 gap-4">
               <div><Label>Employee ID</Label><Input value={empForm.employee_id_number} onChange={e => setEmpForm({ ...empForm, employee_id_number: e.target.value })} placeholder="ZKT Device ID" data-testid="input-emp-id-number" /></div>
               <div><Label>Citizenship No</Label><Input value={empForm.citizenship_no} onChange={e => setEmpForm({ ...empForm, citizenship_no: e.target.value })} /></div>
-              <div><Label>PAN Number</Label><Input value={empForm.pan_no} onChange={e => setEmpForm({ ...empForm, pan_no: e.target.value })} /></div>
+              <div><Label>{orgs?.find(o => o.id === empForm.organization_id)?.pan_label || 'PAN Number'}</Label><Input value={empForm.pan_no} onChange={e => setEmpForm({ ...empForm, pan_no: e.target.value })} /></div>
               <div><Label>Passport Number</Label><Input value={empForm.passport_number} onChange={e => setEmpForm({ ...empForm, passport_number: e.target.value })} data-testid="input-emp-passport" /></div>
             </div>
             <div className="grid grid-cols-3 gap-4">
@@ -608,7 +609,7 @@ export function StaffProfilesTab() {
                   </SelectContent>
                 </Select>
               </div>
-              <div><Label>PAN Number</Label><Input value={empForm.pan_no} onChange={e => setEmpForm({ ...empForm, pan_no: e.target.value })} /></div>
+              <div><Label>{orgs?.find(o => o.id === empForm.organization_id)?.pan_label || 'PAN Number'}</Label><Input value={empForm.pan_no} onChange={e => setEmpForm({ ...empForm, pan_no: e.target.value })} /></div>
             </div>
           </div>
           <DialogFooter>

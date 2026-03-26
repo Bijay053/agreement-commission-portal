@@ -45,7 +45,8 @@ import { CURRENCIES, getCurrencySymbol } from "@/lib/currencies";
 interface Organization {
   id: string; name: string; short_code: string; address: string | null;
   country: string | null; phone: string | null; email: string | null;
-  registration_number: string | null; pan_number: string | null;
+  registration_number: string | null; registration_label: string;
+  pan_number: string | null; pan_label: string;
   currency: string; status: string; created_at: string | null;
 }
 
@@ -106,7 +107,7 @@ function OrgTab() {
   const { toast } = useToast();
   const [showForm, setShowForm] = useState(false);
   const [editOrg, setEditOrg] = useState<Organization | null>(null);
-  const [form, setForm] = useState({ name: "", short_code: "", address: "", country: "", phone: "", email: "", registration_number: "", pan_number: "", currency: "NPR" });
+  const [form, setForm] = useState({ name: "", short_code: "", address: "", country: "", phone: "", email: "", registration_number: "", registration_label: "Registration No.", pan_number: "", pan_label: "PAN No.", currency: "NPR" });
 
   const { data: orgs, isLoading } = useQuery<Organization[]>({ queryKey: ["/api/hrms/organizations"] });
 
@@ -125,8 +126,8 @@ function OrgTab() {
     onSuccess: () => { queryClient.refetchQueries({ queryKey: ["/api/hrms/organizations"] }); toast({ title: "Organization deleted" }); },
   });
 
-  const openCreate = () => { setForm({ name: "", short_code: "", address: "", country: "", phone: "", email: "", registration_number: "", pan_number: "", currency: "NPR" }); setShowForm(true); };
-  const openEdit = (o: Organization) => { setForm({ name: o.name, short_code: o.short_code, address: o.address || "", country: o.country || "", phone: o.phone || "", email: o.email || "", registration_number: o.registration_number || "", pan_number: o.pan_number || "", currency: o.currency || "NPR" }); setEditOrg(o); };
+  const openCreate = () => { setForm({ name: "", short_code: "", address: "", country: "", phone: "", email: "", registration_number: "", registration_label: "Registration No.", pan_number: "", pan_label: "PAN No.", currency: "NPR" }); setShowForm(true); };
+  const openEdit = (o: Organization) => { setForm({ name: o.name, short_code: o.short_code, address: o.address || "", country: o.country || "", phone: o.phone || "", email: o.email || "", registration_number: o.registration_number || "", registration_label: o.registration_label || "Registration No.", pan_number: o.pan_number || "", pan_label: o.pan_label || "PAN No.", currency: o.currency || "NPR" }); setEditOrg(o); };
 
   if (isLoading) return <Skeleton className="h-40 w-full" />;
 
@@ -150,6 +151,8 @@ function OrgTab() {
               <p>Code: <span className="font-medium text-foreground">{o.short_code}</span></p>
               {o.country && <p>Country: {o.country}</p>}
               <p>Currency: <span className="font-medium text-foreground">{o.currency || 'NPR'}</span></p>
+              {o.registration_number && <p>{o.registration_label || 'Registration No.'}: <span className="font-medium text-foreground">{o.registration_number}</span></p>}
+              {o.pan_number && <p>{o.pan_label || 'PAN No.'}: <span className="font-medium text-foreground">{o.pan_number}</span></p>}
               {o.email && <p>Email: {o.email}</p>}
               {o.phone && <p>Phone: {o.phone}</p>}
               <div className="flex gap-2 mt-3">
@@ -185,8 +188,18 @@ function OrgTab() {
             <div><Label>Email</Label><Input type="email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} data-testid="input-org-email" /></div>
             <div><Label>Address</Label><Textarea value={form.address} onChange={e => setForm({ ...form, address: e.target.value })} data-testid="input-org-address" /></div>
             <div className="grid grid-cols-2 gap-3">
-              <div><Label>Registration No.</Label><Input value={form.registration_number} onChange={e => setForm({ ...form, registration_number: e.target.value })} data-testid="input-org-reg" /></div>
-              <div><Label>PAN No.</Label><Input value={form.pan_number} onChange={e => setForm({ ...form, pan_number: e.target.value })} data-testid="input-org-pan" /></div>
+              <div>
+                <Label className="text-xs text-muted-foreground">Field Label</Label>
+                <Input value={form.registration_label} onChange={e => setForm({ ...form, registration_label: e.target.value })} placeholder="e.g. ACN, Registration No." className="mb-1 h-7 text-xs" data-testid="input-org-reg-label" />
+                <Label>{form.registration_label || 'Registration No.'}</Label>
+                <Input value={form.registration_number} onChange={e => setForm({ ...form, registration_number: e.target.value })} data-testid="input-org-reg" />
+              </div>
+              <div>
+                <Label className="text-xs text-muted-foreground">Field Label</Label>
+                <Input value={form.pan_label} onChange={e => setForm({ ...form, pan_label: e.target.value })} placeholder="e.g. TIN, PAN No., ABN" className="mb-1 h-7 text-xs" data-testid="input-org-pan-label" />
+                <Label>{form.pan_label || 'PAN No.'}</Label>
+                <Input value={form.pan_number} onChange={e => setForm({ ...form, pan_number: e.target.value })} data-testid="input-org-pan" />
+              </div>
             </div>
           </div>
           <DialogFooter>
