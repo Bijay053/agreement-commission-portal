@@ -168,11 +168,20 @@ class PermissionSchemaView(APIView):
                         if p.code == new_code or p.code == legacy_code or (p.module == mod['module'] and p.resource == resource['resource'] and p.action == action):
                             perm = p
                             break
+                    if not perm:
+                        perm = Permission.objects.create(
+                            code=new_code,
+                            module=mod['module'],
+                            resource=resource['resource'],
+                            action=action,
+                            description=f"{action} {resource['label']}",
+                        )
+                        all_permissions.append(perm)
                     actions.append({
                         'action': action,
-                        'code': perm.code if perm else new_code,
-                        'permissionId': perm.id if perm else None,
-                        'description': perm.description if perm else f"{action} {resource['label']}",
+                        'code': perm.code,
+                        'permissionId': perm.id,
+                        'description': perm.description,
                     })
                 resources.append({
                     'resource': resource['resource'],
