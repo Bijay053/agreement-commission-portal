@@ -347,12 +347,55 @@ def serialize_salary_structure(ss):
 def serialize_payslip(ps):
     emp_name = None
     emp_pan = None
+    emp_join_date = None
+    emp_marital_status = None
+    emp_gender = None
     try:
         emp = Employee.objects.get(id=ps.employee_id)
         emp_name = emp.full_name
         emp_pan = emp.pan_no
+        emp_join_date = emp.join_date.isoformat() if emp.join_date else None
+        emp_marital_status = emp.marital_status
+        emp_gender = emp.gender
     except Employee.DoesNotExist:
         pass
+
+    paid_leave_days = 0
+    unpaid_leave_days_count = 0
+    from datetime import date as dt_date
+    month_start = dt_date(ps.year, ps.month, 1)
+    if ps.month == 12:
+        month_end = dt_date(ps.year, 12, 31)
+    else:
+        month_end = dt_date(ps.year, ps.month + 1, 1) - timedelta(days=1)
+    approved_leaves = LeaveRequest.objects.filter(
+        employee_id=ps.employee_id,
+        status='approved',
+        start_date__lte=month_end,
+        end_date__gte=month_start,
+    ).select_related('leave_type').only(
+        'id', 'employee_id', 'start_date', 'end_date',
+        'days_count', 'status', 'is_half_day',
+        'leave_type__is_paid', 'leave_type__id', 'leave_type__name',
+    )
+    for lr in approved_leaves:
+        overlap_start = max(lr.start_date, month_start)
+        overlap_end = min(lr.end_date, month_end)
+        days = float(lr.days_count) if lr.is_half_day else (overlap_end - overlap_start).days + 1
+        if lr.leave_type and lr.leave_type.is_paid:
+            paid_leave_days += days
+        else:
+            unpaid_leave_days_count += days
+
+    total_calendar_days = (month_end - month_start).days + 1
+
+    total_income = float(ps.gross_salary)
+    leave_amount = float(getattr(ps, 'unpaid_leave_deduction', 0) or 0)
+    sst = float(ps.ssf_employee_deduction)
+    tds = float(ps.tax_deduction)
+    total_tax = float(ps.cit_deduction) + sst + tds
+    advance = float(getattr(ps, 'advance_deduction', 0) or 0)
+    payable_salary = float(ps.net_salary) - advance
 
     return {
         'id': str(ps.id),
@@ -360,19 +403,22 @@ def serialize_payslip(ps):
         'employee_id': str(ps.employee_id),
         'employee_name': emp_name,
         'employee_pan': emp_pan,
+        'employee_join_date': emp_join_date,
+        'employee_marital_status': emp_marital_status,
+        'employee_gender': emp_gender,
         'month': ps.month,
         'year': ps.year,
         'basic_salary': float(ps.basic_salary),
         'allowances': ps.allowances,
         'gross_salary': float(ps.gross_salary),
         'cit_deduction': float(ps.cit_deduction),
-        'ssf_employee_deduction': float(ps.ssf_employee_deduction),
+        'ssf_employee_deduction': sst,
         'ssf_employer_contribution': float(ps.ssf_employer_contribution),
-        'tax_deduction': float(ps.tax_deduction),
+        'tax_deduction': tds,
         'bonus_amount': float(getattr(ps, 'bonus_amount', 0) or 0),
         'travel_reimbursement': float(getattr(ps, 'travel_reimbursement', 0) or 0),
-        'advance_deduction': float(getattr(ps, 'advance_deduction', 0) or 0),
-        'unpaid_leave_deduction': float(getattr(ps, 'unpaid_leave_deduction', 0) or 0),
+        'advance_deduction': advance,
+        'unpaid_leave_deduction': leave_amount,
         'other_deductions': ps.other_deductions,
         'total_deductions': float(ps.total_deductions),
         'net_salary': float(ps.net_salary),
@@ -380,8 +426,17 @@ def serialize_payslip(ps):
         'present_days': ps.present_days,
         'absent_days': ps.absent_days,
         'leave_days': ps.leave_days,
+        'paid_leave_days': paid_leave_days,
+        'unpaid_leave_days': unpaid_leave_days_count,
+        'total_days': total_calendar_days,
         'late_count': ps.late_count,
         'early_leave_count': ps.early_leave_count,
+        'total_income': total_income,
+        'leave_deduction_amount': leave_amount,
+        'sst': sst,
+        'tds': tds,
+        'total_tax': total_tax,
+        'payable_salary': payable_salary,
         'status': ps.status,
         'view_token': ps.view_token,
     }
@@ -2440,6 +2495,203 @@ class PayrollRunDetailView(APIView):
             return Response({'message': 'Cannot delete a paid payroll run'}, status=400)
         pr.delete()
         return Response({'message': 'Payroll run deleted'})
+
+
+class PayrollExportView(APIView):
+    @require_permission('hrms.payroll.read')
+    def get(self, request, pr_id):
+        try:
+            pr = PayrollRun.objects.get(id=pr_id)
+        except PayrollRun.DoesNotExist:
+            return Response({'message': 'Payroll run not found'}, status=404)
+
+        payslips = Payslip.objects.filter(payroll_run=pr)
+        rows_data = [serialize_payslip(ps) for ps in payslips]
+
+        import openpyxl
+        from openpyxl.styles import Font, Alignment, Border, Side, PatternFill
+        from io import BytesIO
+
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = 'Payroll Report'
+
+        month_name = ['January','February','March','April','May','June','July','August','September','October','November','December'][(pr.month or 1) - 1]
+        org_name = ''
+        try:
+            org_name = Organization.objects.get(id=pr.organization_id).name
+        except Organization.DoesNotExist:
+            pass
+
+        ws.merge_cells('A1:AB1')
+        title_cell = ws['A1']
+        title_cell.value = f'Payroll Report — {org_name} — {month_name} {pr.year}'
+        title_cell.font = Font(bold=True, size=14)
+        title_cell.alignment = Alignment(horizontal='center')
+
+        header_font = Font(bold=True, size=9)
+        header_fill = PatternFill(start_color='D9E1F2', end_color='D9E1F2', fill_type='solid')
+        thin_border = Border(
+            left=Side(style='thin'), right=Side(style='thin'),
+            top=Side(style='thin'), bottom=Side(style='thin'),
+        )
+        center_align = Alignment(horizontal='center', vertical='center', wrap_text=True)
+        right_align = Alignment(horizontal='right', vertical='center')
+
+        row1_headers = [
+            ('S.N', 1, 1), ('Employee Name', 1, 1), ('Join Date', 1, 1),
+            ('Marital Status', 1, 1), ('Gender', 1, 1),
+            ('Total Days', 1, 1), ('Total Worked Days', 1, 1),
+            ('Extra Working Days', 1, 1), ('Total Paid Leave Days', 1, 1),
+            ('Total Unpaid Leave Days', 1, 1),
+        ]
+
+        row = 3
+        col = 1
+        for label, rs, cs in row1_headers:
+            cell = ws.cell(row=row, column=col, value=label)
+            cell.font = header_font
+            cell.fill = header_fill
+            cell.border = thin_border
+            cell.alignment = center_align
+            if rs > 1:
+                ws.merge_cells(start_row=row, start_column=col, end_row=row + rs - 1, end_column=col)
+            col += 1
+
+        income_start = col
+        ws.merge_cells(start_row=row, start_column=income_start, end_row=row, end_column=income_start + 2)
+        cell = ws.cell(row=row, column=income_start, value='Income')
+        cell.font = header_font
+        cell.fill = PatternFill(start_color='E2EFDA', end_color='E2EFDA', fill_type='solid')
+        cell.border = thin_border
+        cell.alignment = center_align
+        col = income_start + 3
+
+        ded_start = col
+        ws.merge_cells(start_row=row, start_column=ded_start, end_row=row, end_column=ded_start + 2)
+        cell = ws.cell(row=row, column=ded_start, value='Deduction')
+        cell.font = header_font
+        cell.fill = PatternFill(start_color='FCE4D6', end_color='FCE4D6', fill_type='solid')
+        cell.border = thin_border
+        cell.alignment = center_align
+        col = ded_start + 3
+
+        remaining_headers = [
+            'Total Salary', 'Festival Bonus', 'Taxable Amount (Yearly)',
+            'SST', 'TDS', 'Single Women Tax Credit\n(10% of SST + TDS)',
+            'Total Tax', 'Net Salary', 'Adjustment', 'Advance',
+            'Payable Salary', 'Remarks',
+        ]
+        for label in remaining_headers:
+            cell = ws.cell(row=row, column=col, value=label)
+            cell.font = header_font
+            cell.fill = header_fill
+            cell.border = thin_border
+            cell.alignment = center_align
+            ws.merge_cells(start_row=row, start_column=col, end_row=row + 1, end_column=col)
+            col += 1
+
+        row2 = row + 1
+        income_sub = ['Arrear Amount', 'Over-Time Pay', 'Total']
+        for i, label in enumerate(income_sub):
+            cell = ws.cell(row=row2, column=income_start + i, value=label)
+            cell.font = header_font
+            cell.fill = PatternFill(start_color='E2EFDA', end_color='E2EFDA', fill_type='solid')
+            cell.border = thin_border
+            cell.alignment = center_align
+
+        ded_sub = ['Leave Amount', 'Fine & Penalty', 'Total']
+        for i, label in enumerate(ded_sub):
+            cell = ws.cell(row=row2, column=ded_start + i, value=label)
+            cell.font = header_font
+            cell.fill = PatternFill(start_color='FCE4D6', end_color='FCE4D6', fill_type='solid')
+            cell.border = thin_border
+            cell.alignment = center_align
+
+        for i in range(10):
+            ws.merge_cells(start_row=row, start_column=i + 1, end_row=row + 1, end_column=i + 1)
+
+        data_row = row + 2
+        for sn, ps in enumerate(rows_data, start=1):
+            c = 1
+            vals = [
+                sn,
+                ps.get('employee_name') or 'Unknown',
+                ps.get('employee_join_date') or '',
+                (ps.get('employee_marital_status') or '').title(),
+                (ps.get('employee_gender') or '').title(),
+                ps.get('total_days', 0),
+                ps.get('present_days', 0),
+                0,
+                ps.get('paid_leave_days', 0),
+                ps.get('unpaid_leave_days', 0),
+                0,
+                0,
+                ps.get('total_income', 0),
+                ps.get('leave_deduction_amount', 0),
+                0,
+                ps.get('total_deductions', 0),
+                ps.get('gross_salary', 0),
+                ps.get('bonus_amount', 0),
+                0,
+                ps.get('sst', 0),
+                ps.get('tds', 0),
+                0,
+                ps.get('total_tax', 0),
+                ps.get('net_salary', 0),
+                ps.get('travel_reimbursement', 0),
+                ps.get('advance_deduction', 0),
+                ps.get('payable_salary', 0),
+                '',
+            ]
+            for v in vals:
+                cell = ws.cell(row=data_row, column=c, value=v)
+                cell.border = thin_border
+                if isinstance(v, (int, float)) and c > 5:
+                    cell.alignment = right_align
+                    cell.number_format = '#,##0'
+                c += 1
+            data_row += 1
+
+        total_row = data_row
+        ws.cell(row=total_row, column=1, value='').border = thin_border
+        total_cell = ws.cell(row=total_row, column=2, value=f'TOTAL ({len(rows_data)} staff)')
+        total_cell.font = Font(bold=True, size=9)
+        total_cell.border = thin_border
+        for c in range(3, 6):
+            ws.cell(row=total_row, column=c, value='').border = thin_border
+
+        sum_cols = {
+            6: 'total_days', 7: 'present_days', 9: 'paid_leave_days', 10: 'unpaid_leave_days',
+            13: 'total_income', 14: 'leave_deduction_amount', 16: 'total_deductions',
+            17: 'gross_salary', 18: 'bonus_amount', 20: 'sst', 21: 'tds',
+            23: 'total_tax', 24: 'net_salary', 25: 'travel_reimbursement',
+            26: 'advance_deduction', 27: 'payable_salary',
+        }
+        for col_idx in range(6, 29):
+            key = sum_cols.get(col_idx)
+            val = sum(ps.get(key, 0) for ps in rows_data) if key else 0
+            cell = ws.cell(row=total_row, column=col_idx, value=val)
+            cell.font = Font(bold=True, size=9)
+            cell.border = thin_border
+            cell.alignment = right_align
+            cell.number_format = '#,##0'
+
+        col_widths = [5, 22, 12, 12, 10, 10, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 14, 10, 10, 18, 10, 12, 12, 10, 12, 12]
+        for i, w in enumerate(col_widths, start=1):
+            ws.column_dimensions[openpyxl.utils.get_column_letter(i)].width = w
+
+        output = BytesIO()
+        wb.save(output)
+        output.seek(0)
+
+        from django.http import HttpResponse
+        response = HttpResponse(
+            output.getvalue(),
+            content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        )
+        response['Content-Disposition'] = f'attachment; filename="payroll_report_{month_name}_{pr.year}.xlsx"'
+        return response
 
 
 def calculate_nepal_tax(annual_income, marital_status='single', organization_id=None, country=None):

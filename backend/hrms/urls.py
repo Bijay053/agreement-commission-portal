@@ -54,6 +54,7 @@ urlpatterns = [
     path('hrms/payroll-runs/<uuid:pr_id>/process', views.PayrollRunProcessView.as_view()),
     path('hrms/payroll-runs/<uuid:pr_id>/approve', views.PayrollRunApproveView.as_view()),
     path('hrms/payroll-runs/<uuid:pr_id>/mark-paid', views.PayrollRunMarkPaidView.as_view()),
+    path('hrms/payroll-runs/<uuid:pr_id>/export', views.PayrollExportView.as_view()),
     path('hrms/payroll-runs/<uuid:pr_id>', views.PayrollRunDetailView.as_view()),
 
     path('hrms/payslips', views.PayslipListView.as_view()),
