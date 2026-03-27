@@ -1487,6 +1487,7 @@ function PayrollRunDetailView({ runId, onBack }: { runId: string; onBack: () => 
               <TableRow className="bg-muted/50 border-b-0">
                 <TableHead rowSpan={2} className="sticky left-0 bg-muted/50 z-10 w-[30px] text-center border-r">S.N</TableHead>
                 <TableHead rowSpan={2} className="sticky left-[30px] bg-muted/50 z-10 w-[140px] min-w-[140px] border-r">Employee Name</TableHead>
+                <TableHead rowSpan={2} className="w-[100px] text-center">Position</TableHead>
                 <TableHead rowSpan={2} className="w-[80px] text-center">Join Date</TableHead>
                 <TableHead rowSpan={2} className="w-[60px] text-center">Gender</TableHead>
                 <TableHead rowSpan={2} className="text-center w-[50px]">Total Days</TableHead>
@@ -1497,6 +1498,8 @@ function PayrollRunDetailView({ runId, onBack }: { runId: string; onBack: () => 
                 <TableHead colSpan={3} className="text-center bg-red-50 border-x">Deduction</TableHead>
                 <TableHead rowSpan={2} className="text-right w-[85px]">Total Salary</TableHead>
                 <TableHead rowSpan={2} className="text-right w-[65px]">Bonus</TableHead>
+                <TableHead rowSpan={2} className="text-right w-[60px]">CIT</TableHead>
+                <TableHead rowSpan={2} className="text-right w-[90px]">Taxable (Yr)</TableHead>
                 <TableHead rowSpan={2} className="text-right w-[60px]">SST</TableHead>
                 <TableHead rowSpan={2} className="text-right w-[60px]">TDS</TableHead>
                 <TableHead rowSpan={2} className="text-right w-[70px]">Total Tax</TableHead>
@@ -1521,6 +1524,7 @@ function PayrollRunDetailView({ runId, onBack }: { runId: string; onBack: () => 
                   <TableRow key={ps.id} className={isEditing ? "bg-blue-50/50" : ""}>
                     <TableCell className="sticky left-0 bg-white z-10 text-center text-xs border-r">{idx + 1}</TableCell>
                     <TableCell className="sticky left-[30px] bg-white z-10 font-medium text-sm border-r">{ps.employee_name || "Unknown"}</TableCell>
+                    <TableCell className="text-xs text-center">{ps.employee_position || "—"}</TableCell>
                     <TableCell className="text-xs text-center">{ps.employee_join_date || "—"}</TableCell>
                     <TableCell className="text-xs text-center capitalize">{ps.employee_gender || "—"}</TableCell>
                     <TableCell className="text-center text-xs">{ps.total_days || "—"}</TableCell>
@@ -1537,12 +1541,14 @@ function PayrollRunDetailView({ runId, onBack }: { runId: string; onBack: () => 
                         <TableCell className="text-right bg-red-50/20 border-r"><Input type="number" className="w-20 h-7 text-right text-xs" value={editValues.total_deductions} onChange={e => setEditValues(v => ({ ...v, total_deductions: parseFloat(e.target.value) || 0 }))} /></TableCell>
                         <TableCell className="text-right"><Input type="number" className="w-20 h-7 text-right text-xs" value={editValues.gross_salary} onChange={e => setEditValues(v => ({ ...v, gross_salary: parseFloat(e.target.value) || 0 }))} /></TableCell>
                         <TableCell className="text-right"><Input type="number" className="w-16 h-7 text-right text-xs" value={editValues.bonus_amount} onChange={e => setEditValues(v => ({ ...v, bonus_amount: parseFloat(e.target.value) || 0 }))} /></TableCell>
+                        <TableCell className="text-right"><Input type="number" className="w-16 h-7 text-right text-xs" value={editValues.cit_deduction} onChange={e => setEditValues(v => ({ ...v, cit_deduction: parseFloat(e.target.value) || 0 }))} /></TableCell>
+                        <TableCell className="text-right font-mono text-xs">{((editValues.gross_salary - (editValues.cit_deduction || 0) + (editValues.bonus_amount || 0)) * 12).toLocaleString()}</TableCell>
                         <TableCell className="text-right"><Input type="number" className="w-16 h-7 text-right text-xs" value={editValues.ssf_employee_deduction} onChange={e => setEditValues(v => ({ ...v, ssf_employee_deduction: parseFloat(e.target.value) || 0 }))} /></TableCell>
                         <TableCell className="text-right"><Input type="number" className="w-16 h-7 text-right text-xs" value={editValues.tax_deduction} onChange={e => setEditValues(v => ({ ...v, tax_deduction: parseFloat(e.target.value) || 0 }))} /></TableCell>
                         <TableCell className="text-right text-xs">{((editValues.cit_deduction || 0) + (editValues.ssf_employee_deduction || 0) + (editValues.tax_deduction || 0)).toLocaleString()}</TableCell>
                         <TableCell className="text-right"><Input type="number" className="w-24 h-7 text-right text-xs font-bold" value={editValues.net_salary} onChange={e => setEditValues(v => ({ ...v, net_salary: parseFloat(e.target.value) || 0 }))} /></TableCell>
                         <TableCell className="text-right"><Input type="number" className="w-16 h-7 text-right text-xs" value={editValues.advance_deduction} onChange={e => setEditValues(v => ({ ...v, advance_deduction: parseFloat(e.target.value) || 0 }))} /></TableCell>
-                        <TableCell className="text-right font-mono text-xs font-bold">{editValues.net_salary.toLocaleString()}</TableCell>
+                        <TableCell className="text-right font-mono text-xs font-bold">{((editValues.net_salary || 0) - (editValues.advance_deduction || 0)).toLocaleString()}</TableCell>
                         <TableCell className="text-center">
                           <div className="flex gap-1 justify-center">
                             <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-green-600" onClick={saveEdit} disabled={updatePayslipMutation.isPending}><Check className="w-3.5 h-3.5" /></Button>
@@ -1560,6 +1566,8 @@ function PayrollRunDetailView({ runId, onBack }: { runId: string; onBack: () => 
                         <TableCell className="text-right font-mono text-xs bg-red-50/20 border-r">{ps.total_deductions.toLocaleString()}</TableCell>
                         <TableCell className="text-right font-mono text-xs">{ps.gross_salary.toLocaleString()}</TableCell>
                         <TableCell className="text-right font-mono text-xs">{ps.bonus_amount.toLocaleString()}</TableCell>
+                        <TableCell className="text-right font-mono text-xs">{ps.cit_deduction.toLocaleString()}</TableCell>
+                        <TableCell className="text-right font-mono text-xs">{(ps.taxable_amount_yearly || 0).toLocaleString()}</TableCell>
                         <TableCell className="text-right font-mono text-xs">{(ps.sst || ps.ssf_employee_deduction).toLocaleString()}</TableCell>
                         <TableCell className="text-right font-mono text-xs">{(ps.tds || ps.tax_deduction).toLocaleString()}</TableCell>
                         <TableCell className="text-right font-mono text-xs">{(ps.total_tax || (ps.cit_deduction + ps.ssf_employee_deduction + ps.tax_deduction)).toLocaleString()}</TableCell>
@@ -1594,6 +1602,7 @@ function PayrollRunDetailView({ runId, onBack }: { runId: string; onBack: () => 
                 <TableCell></TableCell>
                 <TableCell></TableCell>
                 <TableCell></TableCell>
+                <TableCell></TableCell>
                 <TableCell className="text-center text-xs">{detail.payslips.reduce((s: number, p: any) => s + (p.paid_leave_days || 0), 0)}</TableCell>
                 <TableCell className="text-center text-xs">{detail.payslips.reduce((s: number, p: any) => s + (p.unpaid_leave_days || 0), 0)}</TableCell>
                 <TableCell className="text-right font-mono text-xs bg-green-50/20">0</TableCell>
@@ -1604,6 +1613,8 @@ function PayrollRunDetailView({ runId, onBack }: { runId: string; onBack: () => 
                 <TableCell className="text-right font-mono text-xs bg-red-50/20 border-r">{detail.payslips.reduce((s: number, p: any) => s + p.total_deductions, 0).toLocaleString()}</TableCell>
                 <TableCell className="text-right font-mono text-xs">{detail.payslips.reduce((s: number, p: any) => s + p.gross_salary, 0).toLocaleString()}</TableCell>
                 <TableCell className="text-right font-mono text-xs">{detail.payslips.reduce((s: number, p: any) => s + p.bonus_amount, 0).toLocaleString()}</TableCell>
+                <TableCell className="text-right font-mono text-xs">{detail.payslips.reduce((s: number, p: any) => s + p.cit_deduction, 0).toLocaleString()}</TableCell>
+                <TableCell className="text-right font-mono text-xs">{detail.payslips.reduce((s: number, p: any) => s + (p.taxable_amount_yearly || 0), 0).toLocaleString()}</TableCell>
                 <TableCell className="text-right font-mono text-xs">{detail.payslips.reduce((s: number, p: any) => s + (p.sst || p.ssf_employee_deduction), 0).toLocaleString()}</TableCell>
                 <TableCell className="text-right font-mono text-xs">{detail.payslips.reduce((s: number, p: any) => s + (p.tds || p.tax_deduction), 0).toLocaleString()}</TableCell>
                 <TableCell className="text-right font-mono text-xs">{detail.payslips.reduce((s: number, p: any) => s + (p.total_tax || (p.cit_deduction + p.ssf_employee_deduction + p.tax_deduction)), 0).toLocaleString()}</TableCell>

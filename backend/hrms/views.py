@@ -350,6 +350,7 @@ def serialize_payslip(ps):
     emp_join_date = None
     emp_marital_status = None
     emp_gender = None
+    emp_position = None
     try:
         emp = Employee.objects.get(id=ps.employee_id)
         emp_name = emp.full_name
@@ -357,6 +358,7 @@ def serialize_payslip(ps):
         emp_join_date = emp.join_date.isoformat() if emp.join_date else None
         emp_marital_status = emp.marital_status
         emp_gender = emp.gender
+        emp_position = emp.position
     except Employee.DoesNotExist:
         pass
 
@@ -391,9 +393,12 @@ def serialize_payslip(ps):
 
     total_income = float(ps.gross_salary)
     leave_amount = float(getattr(ps, 'unpaid_leave_deduction', 0) or 0)
+    cit = float(ps.cit_deduction)
+    bonus = float(getattr(ps, 'bonus_amount', 0) or 0)
     sst = float(ps.ssf_employee_deduction)
     tds = float(ps.tax_deduction)
-    total_tax = float(ps.cit_deduction) + sst + tds
+    total_tax = cit + sst + tds
+    taxable_amount_yearly = (total_income - cit + bonus) * 12
     advance = float(getattr(ps, 'advance_deduction', 0) or 0)
     payable_salary = float(ps.net_salary) - advance
 
@@ -403,6 +408,7 @@ def serialize_payslip(ps):
         'employee_id': str(ps.employee_id),
         'employee_name': emp_name,
         'employee_pan': emp_pan,
+        'employee_position': emp_position,
         'employee_join_date': emp_join_date,
         'employee_marital_status': emp_marital_status,
         'employee_gender': emp_gender,
@@ -433,6 +439,7 @@ def serialize_payslip(ps):
         'early_leave_count': ps.early_leave_count,
         'total_income': total_income,
         'leave_deduction_amount': leave_amount,
+        'taxable_amount_yearly': taxable_amount_yearly,
         'sst': sst,
         'tds': tds,
         'total_tax': total_tax,
@@ -2523,7 +2530,7 @@ class PayrollExportView(APIView):
         except Organization.DoesNotExist:
             pass
 
-        ws.merge_cells('A1:AB1')
+        ws.merge_cells('A1:AD1')
         title_cell = ws['A1']
         title_cell.value = f'Payroll Report — {org_name} — {month_name} {pr.year}'
         title_cell.font = Font(bold=True, size=14)
@@ -2539,8 +2546,8 @@ class PayrollExportView(APIView):
         right_align = Alignment(horizontal='right', vertical='center')
 
         row1_headers = [
-            ('S.N', 1, 1), ('Employee Name', 1, 1), ('Join Date', 1, 1),
-            ('Marital Status', 1, 1), ('Gender', 1, 1),
+            ('S.N', 1, 1), ('Employee Name', 1, 1), ('Position', 1, 1),
+            ('Join Date', 1, 1), ('Marital Status', 1, 1), ('Gender', 1, 1),
             ('Total Days', 1, 1), ('Total Worked Days', 1, 1),
             ('Extra Working Days', 1, 1), ('Total Paid Leave Days', 1, 1),
             ('Total Unpaid Leave Days', 1, 1),
@@ -2577,7 +2584,8 @@ class PayrollExportView(APIView):
         col = ded_start + 3
 
         remaining_headers = [
-            'Total Salary', 'Festival Bonus', 'Taxable Amount (Yearly)',
+            'Total Salary', 'Festival Bonus', 'CIT',
+            'Taxable Amount (Yearly)',
             'SST', 'TDS', 'Single Women Tax Credit\n(10% of SST + TDS)',
             'Total Tax', 'Net Salary', 'Adjustment', 'Advance',
             'Payable Salary', 'Remarks',
@@ -2608,7 +2616,7 @@ class PayrollExportView(APIView):
             cell.border = thin_border
             cell.alignment = center_align
 
-        for i in range(10):
+        for i in range(11):
             ws.merge_cells(start_row=row, start_column=i + 1, end_row=row + 1, end_column=i + 1)
 
         data_row = row + 2
@@ -2617,6 +2625,7 @@ class PayrollExportView(APIView):
             vals = [
                 sn,
                 ps.get('employee_name') or 'Unknown',
+                ps.get('employee_position') or '',
                 ps.get('employee_join_date') or '',
                 (ps.get('employee_marital_status') or '').title(),
                 (ps.get('employee_gender') or '').title(),
@@ -2633,7 +2642,8 @@ class PayrollExportView(APIView):
                 ps.get('total_deductions', 0),
                 ps.get('gross_salary', 0),
                 ps.get('bonus_amount', 0),
-                0,
+                ps.get('cit_deduction', 0),
+                ps.get('taxable_amount_yearly', 0),
                 ps.get('sst', 0),
                 ps.get('tds', 0),
                 0,
@@ -2647,7 +2657,7 @@ class PayrollExportView(APIView):
             for v in vals:
                 cell = ws.cell(row=data_row, column=c, value=v)
                 cell.border = thin_border
-                if isinstance(v, (int, float)) and c > 5:
+                if isinstance(v, (int, float)) and c > 6:
                     cell.alignment = right_align
                     cell.number_format = '#,##0'
                 c += 1
@@ -2658,17 +2668,18 @@ class PayrollExportView(APIView):
         total_cell = ws.cell(row=total_row, column=2, value=f'TOTAL ({len(rows_data)} staff)')
         total_cell.font = Font(bold=True, size=9)
         total_cell.border = thin_border
-        for c in range(3, 6):
+        for c in range(3, 7):
             ws.cell(row=total_row, column=c, value='').border = thin_border
 
         sum_cols = {
-            6: 'total_days', 7: 'present_days', 9: 'paid_leave_days', 10: 'unpaid_leave_days',
-            13: 'total_income', 14: 'leave_deduction_amount', 16: 'total_deductions',
-            17: 'gross_salary', 18: 'bonus_amount', 20: 'sst', 21: 'tds',
-            23: 'total_tax', 24: 'net_salary', 25: 'travel_reimbursement',
-            26: 'advance_deduction', 27: 'payable_salary',
+            7: 'total_days', 8: 'present_days', 10: 'paid_leave_days', 11: 'unpaid_leave_days',
+            14: 'total_income', 15: 'leave_deduction_amount', 17: 'total_deductions',
+            18: 'gross_salary', 19: 'bonus_amount', 20: 'cit_deduction',
+            21: 'taxable_amount_yearly', 22: 'sst', 23: 'tds',
+            25: 'total_tax', 26: 'net_salary', 27: 'travel_reimbursement',
+            28: 'advance_deduction', 29: 'payable_salary',
         }
-        for col_idx in range(6, 29):
+        for col_idx in range(7, 31):
             key = sum_cols.get(col_idx)
             val = sum(ps.get(key, 0) for ps in rows_data) if key else 0
             cell = ws.cell(row=total_row, column=col_idx, value=val)
@@ -2677,7 +2688,7 @@ class PayrollExportView(APIView):
             cell.alignment = right_align
             cell.number_format = '#,##0'
 
-        col_widths = [5, 22, 12, 12, 10, 10, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 14, 10, 10, 18, 10, 12, 12, 10, 12, 12]
+        col_widths = [5, 22, 14, 12, 12, 10, 10, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 10, 14, 10, 10, 18, 10, 12, 12, 10, 12, 12]
         for i, w in enumerate(col_widths, start=1):
             ws.column_dimensions[openpyxl.utils.get_column_letter(i)].width = w
 
