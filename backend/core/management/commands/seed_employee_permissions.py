@@ -115,6 +115,19 @@ EMPLOYEE_PERMISSIONS = [
     ('hrms.fiscal_year.update', 'HRMS - Settings', 'fiscal_year', 'update', 'Update fiscal years'),
     ('hrms.fiscal_year.delete', 'HRMS - Settings', 'fiscal_year', 'delete', 'Delete fiscal years'),
 
+    ('hrms.leave_policy.read', 'HRMS - Leave', 'leave_policy', 'read', 'View leave policies'),
+    ('hrms.leave_policy.add', 'HRMS - Leave', 'leave_policy', 'add', 'Create leave policies'),
+    ('hrms.leave_policy.update', 'HRMS - Leave', 'leave_policy', 'update', 'Update leave policies'),
+    ('hrms.leave_policy.delete', 'HRMS - Leave', 'leave_policy', 'delete', 'Delete leave policies'),
+
+    ('hrms.device_mapping.read', 'HRMS - Attendance', 'device_mapping', 'read', 'View device mappings'),
+    ('hrms.device_mapping.add', 'HRMS - Attendance', 'device_mapping', 'add', 'Create device mappings'),
+    ('hrms.device_mapping.delete', 'HRMS - Attendance', 'device_mapping', 'delete', 'Delete device mappings'),
+
+    ('hrms.online_checkin.read', 'HRMS - Attendance', 'online_checkin', 'read', 'View online check-in permissions'),
+    ('hrms.online_checkin.add', 'HRMS - Attendance', 'online_checkin', 'add', 'Grant online check-in permissions'),
+    ('hrms.online_checkin.delete', 'HRMS - Attendance', 'online_checkin', 'delete', 'Revoke online check-in permissions'),
+
     ('hrms.notification.read', 'HRMS - Settings', 'notification', 'read', 'View notification settings'),
     ('hrms.notification.update', 'HRMS - Settings', 'notification', 'update', 'Update notification settings'),
 
