@@ -597,11 +597,34 @@ function AttendanceTab() {
   const [editForm, setEditForm] = useState({ status: "present", check_in: "", check_out: "", notes: "" });
   const [searchTerm, setSearchTerm] = useState("");
   const [showDashboard, setShowDashboard] = useState(true);
+  const [filterOrg, setFilterOrg] = useState("");
+  const [filterDept, setFilterDept] = useState("");
+  const [filterStatus, setFilterStatus] = useState("");
+
+  const { data: organizations } = useQuery<any[]>({
+    queryKey: ["/api/hrms/organizations"],
+    queryFn: async () => {
+      const res = await fetch("/api/hrms/organizations", { credentials: "include" });
+      if (!res.ok) return [];
+      return res.json();
+    },
+  });
+  const { data: departments } = useQuery<any[]>({
+    queryKey: ["/api/hrms/departments"],
+    queryFn: async () => {
+      const res = await fetch("/api/hrms/departments", { credentials: "include" });
+      if (!res.ok) return [];
+      return res.json();
+    },
+  });
 
   const { data: grid, isLoading } = useQuery<any>({
-    queryKey: ["/api/hrms/attendance/grid", viewMode, currentDate],
+    queryKey: ["/api/hrms/attendance/grid", viewMode, currentDate, filterOrg, filterDept],
     queryFn: async () => {
-      const res = await fetch(`/api/hrms/attendance/grid?mode=${viewMode}&date=${currentDate}`, { credentials: "include" });
+      const params = new URLSearchParams({ mode: viewMode, date: currentDate });
+      if (filterOrg) params.append("organization_id", filterOrg);
+      if (filterDept) params.append("department_id", filterDept);
+      const res = await fetch(`/api/hrms/attendance/grid?${params}`, { credentials: "include" });
       if (!res.ok) throw new Error("Failed to fetch");
       return res.json();
     },
@@ -694,13 +717,24 @@ function AttendanceTab() {
   };
 
   const allEmployees = grid?.employees || [];
-  const filteredEmployees = searchTerm
-    ? allEmployees.filter((emp: any) =>
-        emp.full_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (emp.department || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (emp.position || "").toLowerCase().includes(searchTerm.toLowerCase())
-      )
-    : allEmployees;
+  const filteredEmployees = allEmployees.filter((emp: any) => {
+    if (searchTerm && !emp.full_name.toLowerCase().includes(searchTerm.toLowerCase()) &&
+        !(emp.department || "").toLowerCase().includes(searchTerm.toLowerCase()) &&
+        !(emp.position || "").toLowerCase().includes(searchTerm.toLowerCase())) return false;
+    if (filterStatus) {
+      const days = grid?.days || [];
+      const todayStr = new Date().toISOString().split("T")[0];
+      const latestDay = days.filter((d: string) => d <= todayStr).pop();
+      if (latestDay) {
+        const entry = emp.attendance[latestDay];
+        const empStatus = entry?.status || "absent";
+        if (filterStatus === "late") {
+          if (!entry?.is_late) return false;
+        } else if (empStatus !== filterStatus) return false;
+      }
+    }
+    return true;
+  });
 
   const totalSummary = allEmployees.reduce(
     (acc: any, emp: any) => ({
@@ -740,7 +774,32 @@ function AttendanceTab() {
             <BarChart3 className="w-3.5 h-3.5 mr-1" /> Dashboard
           </Button>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          <Select value={filterOrg} onValueChange={v => { setFilterOrg(v === "__all__" ? "" : v); setFilterDept(""); }}>
+            <SelectTrigger className="w-44 h-8 text-xs" data-testid="select-att-org"><SelectValue placeholder="All Organizations" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__all__">All Organizations</SelectItem>
+              {organizations?.map((o: any) => <SelectItem key={o.id} value={o.id}>{o.name}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          <Select value={filterDept} onValueChange={v => setFilterDept(v === "__all__" ? "" : v)}>
+            <SelectTrigger className="w-44 h-8 text-xs" data-testid="select-att-dept"><SelectValue placeholder="All Departments" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__all__">All Departments</SelectItem>
+              {(departments || []).filter((d: any) => !filterOrg || d.organization_id === filterOrg).map((d: any) => <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          <Select value={filterStatus} onValueChange={v => setFilterStatus(v === "__all__" ? "" : v)}>
+            <SelectTrigger className="w-36 h-8 text-xs" data-testid="select-att-status-filter"><SelectValue placeholder="All Statuses" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__all__">All Statuses</SelectItem>
+              <SelectItem value="present">Present</SelectItem>
+              <SelectItem value="absent">Absent</SelectItem>
+              <SelectItem value="on_leave">On Leave</SelectItem>
+              <SelectItem value="half_day">Half Day</SelectItem>
+              <SelectItem value="late">Late</SelectItem>
+            </SelectContent>
+          </Select>
           <div className="relative">
             <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
             <Input

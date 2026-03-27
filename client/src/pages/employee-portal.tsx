@@ -800,28 +800,46 @@ function AttendanceTab() {
             <TableHeader>
               <TableRow>
                 <TableHead>Date</TableHead>
-                <TableHead>Status</TableHead>
+                <TableHead>Day</TableHead>
                 <TableHead>Check In</TableHead>
                 <TableHead>Check Out</TableHead>
+                <TableHead>Working Hours</TableHead>
+                <TableHead>Status</TableHead>
                 <TableHead>Late</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {records.length === 0 ? (
-                <TableRow><TableCell colSpan={5} className="text-center text-muted-foreground py-8">No attendance records for this period</TableCell></TableRow>
-              ) : records.map((r: any) => (
-                <TableRow key={r.date}>
-                  <TableCell className="font-medium">{r.date}</TableCell>
-                  <TableCell>
-                    <Badge variant={r.status === "present" ? "default" : r.status === "absent" ? "destructive" : "outline"}>
-                      {r.status}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>{r.check_in ? new Date(r.check_in).toLocaleTimeString() : "—"}</TableCell>
-                  <TableCell>{r.check_out ? new Date(r.check_out).toLocaleTimeString() : "—"}</TableCell>
-                  <TableCell>{r.is_late ? <Badge variant="destructive" className="text-xs">{r.late_minutes}m</Badge> : "—"}</TableCell>
-                </TableRow>
-              ))}
+                <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground py-8">No attendance records for this period</TableCell></TableRow>
+              ) : records.map((r: any) => {
+                const dayName = r.date ? new Date(r.date + "T00:00:00").toLocaleDateString("en", { weekday: "short" }) : "—";
+                const isSunday = r.date ? new Date(r.date + "T00:00:00").getDay() === 0 : false;
+                const calcWorkHours = (ci: string | null, co: string | null) => {
+                  if (!ci || !co) return "—";
+                  try {
+                    const diff = (new Date(co).getTime() - new Date(ci).getTime()) / 3600000;
+                    if (diff <= 0 || diff > 24) return "—";
+                    const h = Math.floor(diff);
+                    const m = Math.round((diff - h) * 60);
+                    return `${h}h ${m}m`;
+                  } catch { return "—"; }
+                };
+                return (
+                  <TableRow key={r.date} data-testid={`row-attendance-${r.date}`}>
+                    <TableCell className="font-medium">{r.date}</TableCell>
+                    <TableCell className={isSunday ? "text-red-500 font-medium" : ""}>{dayName}</TableCell>
+                    <TableCell>{r.check_in ? new Date(r.check_in).toLocaleTimeString() : "—"}</TableCell>
+                    <TableCell>{r.check_out ? new Date(r.check_out).toLocaleTimeString() : "—"}</TableCell>
+                    <TableCell className="font-mono text-sm">{calcWorkHours(r.check_in, r.check_out)}</TableCell>
+                    <TableCell>
+                      <Badge variant={r.status === "present" ? "default" : r.status === "absent" ? "destructive" : "outline"}>
+                        {r.status}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>{r.is_late ? <Badge variant="destructive" className="text-xs">{r.late_minutes}m</Badge> : "—"}</TableCell>
+                  </TableRow>
+                );
+              })}
             </TableBody>
           </Table>
         </Card>
