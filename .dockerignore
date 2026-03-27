@@ -1,6 +1,5 @@
 node_modules/
 .pythonlibs/
-dist/
 .git/
 .gitignore
 .replit
