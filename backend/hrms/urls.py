@@ -18,6 +18,7 @@ urlpatterns = [
     path('hrms/leave-policies/<uuid:lp_id>', views.LeavePolicyDetailView.as_view()),
 
     path('hrms/holidays', views.HolidayListView.as_view()),
+    path('hrms/holidays/bulk-upload', views.HolidayBulkUploadView.as_view()),
     path('hrms/holidays/<uuid:h_id>', views.HolidayDetailView.as_view()),
 
     path('hrms/leave-balances', views.LeaveBalanceListView.as_view()),
@@ -64,6 +65,7 @@ urlpatterns = [
     path('hrms/notification-settings', views.NotificationSettingView.as_view()),
 
     path('hrms/staff-profiles', views.StaffProfileListView.as_view()),
+    path('hrms/staff-profiles/bulk-upload', views.StaffBulkUploadView.as_view()),
     path('hrms/employees/<uuid:employee_id>/status', views.EmployeeStatusChangeView.as_view()),
     path('hrms/employees/<uuid:employee_id>/portal-access', views.EmployeePortalAccessView.as_view()),
     path('hrms/employee-360/<uuid:employee_id>', views.Employee360View.as_view()),

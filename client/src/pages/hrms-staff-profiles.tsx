@@ -24,7 +24,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import {
   User, DollarSign, Pencil, Building2, Shield, Plus, Eye, Search,
-  UserX, UserCheck, MoreHorizontal,
+  UserX, UserCheck, MoreHorizontal, Upload, Download, Loader2,
 } from "lucide-react";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
@@ -114,6 +114,8 @@ export function StaffProfilesTab() {
   const [viewEmployeeId, setViewEmployeeId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("active");
+  const [showBulkUpload, setShowBulkUpload] = useState(false);
+  const [bulkUploading, setBulkUploading] = useState(false);
   const [statusChangeTarget, setStatusChangeTarget] = useState<{ id: string; name: string; newStatus: string } | null>(null);
   const [portalAccessTarget, setPortalAccessTarget] = useState<StaffProfile | null>(null);
   const [portalForm, setPortalForm] = useState({ password: "", portal_access: "employee", role_id: "" });
@@ -474,6 +476,9 @@ export function StaffProfilesTab() {
               data-testid="input-search-staff"
             />
           </div>
+          <Button variant="outline" onClick={() => setShowBulkUpload(true)} data-testid="btn-bulk-upload-staff">
+            <Upload className="w-4 h-4 mr-1" /> Bulk Upload
+          </Button>
           <Button onClick={() => {
             setEmpForm({
               full_name: "", email: "", phone: "", position: "", department: "",
@@ -1212,6 +1217,58 @@ export function StaffProfilesTab() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <Dialog open={showBulkUpload} onOpenChange={setShowBulkUpload}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader><DialogTitle>Bulk Upload Staff Profiles & Salary</DialogTitle></DialogHeader>
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              Upload a CSV or Excel file with employee information and salary details. Existing employees (matched by email) will be updated.
+            </p>
+            <div className="text-xs text-muted-foreground space-y-1">
+              <p className="font-medium">Required columns: <code className="bg-muted px-1 rounded">full_name, email</code></p>
+              <p>Optional: <code className="bg-muted px-1 rounded">phone, position, organization_short_code, department_name, gender, country, marital_status, date_of_birth, join_date, employment_type, citizenship_no, pan_no, passport_number, employee_id_number, bank_name, bank_account_number, bank_branch, permanent_address, temporary_address, emergency_contact_name, emergency_contact_phone, salary_amount, salary_currency, basic_salary, cit_type, cit_value, ssf_applicable, tax_applicable</code></p>
+            </div>
+            <div className="flex gap-2">
+              <Button variant="outline" size="sm" onClick={() => window.open('/api/hrms/staff-profiles/bulk-upload', '_blank')} data-testid="btn-download-staff-template"><Download className="h-4 w-4 mr-1" /> Download Template</Button>
+            </div>
+            <div className="border-2 border-dashed rounded-lg p-6 text-center">
+              <Upload className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
+              <p className="text-sm text-muted-foreground mb-2">Select a CSV or Excel file (.xlsx)</p>
+              <Input
+                type="file"
+                accept=".csv,.xlsx"
+                className="max-w-xs mx-auto"
+                onChange={async e => {
+                  const f = e.target.files?.[0];
+                  if (!f) return;
+                  setBulkUploading(true);
+                  try {
+                    const formData = new FormData();
+                    formData.append('file', f);
+                    const res = await fetch('/api/hrms/staff-profiles/bulk-upload', { method: 'POST', credentials: 'include', body: formData });
+                    const data = await res.json();
+                    if (!res.ok) throw new Error(data.message || 'Upload failed');
+                    queryClient.invalidateQueries({ queryKey: ["/api/hrms/staff-profiles"] });
+                    queryClient.invalidateQueries({ queryKey: ["/api/employees"] });
+                    toast({ title: data.message || `${data.created} created, ${data.updated} updated` });
+                    if (data.errors?.length > 0) {
+                      toast({ title: `${data.errors.length} rows had errors`, description: data.errors.slice(0, 3).join('; '), variant: "destructive" });
+                    }
+                    setShowBulkUpload(false);
+                  } catch (err: any) {
+                    toast({ title: err.message || "Upload failed", variant: "destructive" });
+                  }
+                  setBulkUploading(false);
+                }}
+                disabled={bulkUploading}
+                data-testid="input-staff-bulk-file"
+              />
+              {bulkUploading && <div className="flex items-center justify-center gap-2 mt-3"><Loader2 className="h-4 w-4 animate-spin" /> <span className="text-sm">Processing...</span></div>}
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

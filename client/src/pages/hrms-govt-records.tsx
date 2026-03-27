@@ -18,6 +18,7 @@ interface Organization {
 interface StaffDetail {
   employee_id: string;
   employee_name: string;
+  employee_pan: string;
   gross_salary: number;
   cit: number;
   ssf_employee: number;
@@ -221,6 +222,7 @@ export function GovernmentRecordsTab() {
                       <TableHeader>
                         <TableRow>
                           <TableHead>Employee</TableHead>
+                          <TableHead>PAN</TableHead>
                           <TableHead className="text-right">Gross Salary</TableHead>
                           <TableHead className="text-right">Income Tax</TableHead>
                         </TableRow>
@@ -229,6 +231,7 @@ export function GovernmentRecordsTab() {
                         {m.staff.map((s, idx) => (
                           <TableRow key={`${s.employee_id}-${idx}`}>
                             <TableCell className="text-sm">{s.employee_name}</TableCell>
+                            <TableCell className="text-sm text-muted-foreground">{s.employee_pan || "—"}</TableCell>
                             <TableCell className="text-right font-mono text-sm">{fmt(s.gross_salary)}</TableCell>
                             <TableCell className="text-right font-mono text-sm">
                               {s.tax > 0 ? <span className="text-orange-600 font-medium">{fmt(s.tax)}</span> : "—"}
@@ -237,6 +240,7 @@ export function GovernmentRecordsTab() {
                         ))}
                         <TableRow className="bg-muted/30 font-semibold">
                           <TableCell className="font-bold text-sm">Total</TableCell>
+                          <TableCell></TableCell>
                           <TableCell className="text-right font-mono text-sm">{fmt(m.total_gross)}</TableCell>
                           <TableCell className="text-right font-mono text-sm text-orange-600">{fmt(m.total_tax)}</TableCell>
                         </TableRow>
@@ -276,6 +280,7 @@ export function GovernmentRecordsTab() {
                       <TableHeader>
                         <TableRow>
                           <TableHead>Employee</TableHead>
+                          <TableHead>PAN</TableHead>
                           <TableHead className="text-right">CIT Amount</TableHead>
                         </TableRow>
                       </TableHeader>
@@ -283,6 +288,7 @@ export function GovernmentRecordsTab() {
                         {m.staff.map((s, idx) => (
                           <TableRow key={`${s.employee_id}-${idx}`}>
                             <TableCell className="text-sm">{s.employee_name}</TableCell>
+                            <TableCell className="text-sm text-muted-foreground">{s.employee_pan || "—"}</TableCell>
                             <TableCell className="text-right font-mono text-sm">
                               {s.cit > 0 ? <span className="text-blue-600 font-medium">{fmt(s.cit)}</span> : "—"}
                             </TableCell>
@@ -290,6 +296,7 @@ export function GovernmentRecordsTab() {
                         ))}
                         <TableRow className="bg-muted/30 font-semibold">
                           <TableCell className="font-bold text-sm">Total</TableCell>
+                          <TableCell></TableCell>
                           <TableCell className="text-right font-mono text-sm text-blue-600">{fmt(m.total_cit)}</TableCell>
                         </TableRow>
                       </TableBody>
@@ -329,6 +336,7 @@ export function GovernmentRecordsTab() {
                         <TableHeader>
                           <TableRow>
                             <TableHead>Employee</TableHead>
+                            <TableHead>PAN</TableHead>
                             <TableHead className="text-right">SSF (Employee)</TableHead>
                             <TableHead className="text-right">SSF (Employer)</TableHead>
                             <TableHead className="text-right font-semibold">Total SSF</TableHead>
@@ -338,6 +346,7 @@ export function GovernmentRecordsTab() {
                           {m.staff.filter(s => s.ssf_employee > 0 || s.ssf_employer > 0).map((s, idx) => (
                             <TableRow key={`${s.employee_id}-${idx}`}>
                               <TableCell className="text-sm">{s.employee_name}</TableCell>
+                              <TableCell className="text-sm text-muted-foreground">{s.employee_pan || "—"}</TableCell>
                               <TableCell className="text-right font-mono text-sm">{fmt(s.ssf_employee)}</TableCell>
                               <TableCell className="text-right font-mono text-sm">{fmt(s.ssf_employer)}</TableCell>
                               <TableCell className="text-right font-mono text-sm">
@@ -347,6 +356,7 @@ export function GovernmentRecordsTab() {
                           ))}
                           <TableRow className="bg-muted/30 font-semibold">
                             <TableCell className="font-bold text-sm">Total</TableCell>
+                            <TableCell></TableCell>
                             <TableCell className="text-right font-mono text-sm">{fmt(m.total_ssf_employee)}</TableCell>
                             <TableCell className="text-right font-mono text-sm">{fmt(m.total_ssf_employer)}</TableCell>
                             <TableCell className="text-right font-mono text-sm text-green-600">{fmt(monthSsfTotal)}</TableCell>

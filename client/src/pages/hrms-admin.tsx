@@ -33,7 +33,7 @@ import {
   ChevronLeft, ChevronRight, Save, ArrowLeft, CheckCircle,
   CreditCard, RotateCcw, Loader2, AlertTriangle, FileText,
   Download, Search, BarChart3, UserX, Timer, Globe, Wifi,
-  ShieldCheck, ToggleLeft, ToggleRight,
+  ShieldCheck, ToggleLeft, ToggleRight, Upload,
 } from "lucide-react";
 import { StaffProfilesTab } from "./hrms-staff-profiles";
 import { BonusesTab } from "./hrms-bonuses";
@@ -1213,6 +1213,7 @@ function AttendanceTab() {
 
 interface PayrollPayslip {
   id: string; payroll_run_id: string; employee_id: string; employee_name: string | null;
+  employee_pan: string | null;
   month: number; year: number; basic_salary: number; allowances: Record<string,number>;
   gross_salary: number; cit_deduction: number; ssf_employee_deduction: number;
   ssf_employer_contribution: number; tax_deduction: number; bonus_amount: number;
@@ -1461,6 +1462,7 @@ function PayrollRunDetailView({ runId, onBack }: { runId: string; onBack: () => 
             <TableHeader>
               <TableRow className="bg-muted/50">
                 <TableHead className="sticky left-0 bg-muted/50 z-10 w-[140px] min-w-[140px]">Employee</TableHead>
+                <TableHead className="w-[90px]">PAN</TableHead>
                 <TableHead className="text-right w-[85px]">Basic</TableHead>
                 <TableHead className="text-right w-[85px]">Gross</TableHead>
                 <TableHead className="text-right w-[65px]">CIT</TableHead>
@@ -1481,6 +1483,7 @@ function PayrollRunDetailView({ runId, onBack }: { runId: string; onBack: () => 
                 return (
                   <TableRow key={ps.id} className={isEditing ? "bg-blue-50/50" : ""}>
                     <TableCell className="sticky left-0 bg-white z-10 font-medium">{ps.employee_name || "Unknown"}</TableCell>
+                    <TableCell className="text-xs text-muted-foreground">{ps.employee_pan || "—"}</TableCell>
                     {isEditing ? (
                       <>
                         <TableCell className="text-right"><Input type="number" className="w-24 h-7 text-right text-xs" value={editValues.basic_salary} onChange={e => setEditValues(v => ({ ...v, basic_salary: parseFloat(e.target.value) || 0 }))} /></TableCell>
@@ -1537,6 +1540,7 @@ function PayrollRunDetailView({ runId, onBack }: { runId: string; onBack: () => 
               })}
               <TableRow className="bg-muted/30 font-bold">
                 <TableCell className="sticky left-0 bg-muted/30 z-10">TOTAL ({detail.payslips.length} staff)</TableCell>
+                <TableCell></TableCell>
                 <TableCell className="text-right font-mono text-xs">{detail.payslips.reduce((s, p) => s + p.basic_salary, 0).toLocaleString()}</TableCell>
                 <TableCell className="text-right font-mono text-xs">{detail.payslips.reduce((s, p) => s + p.gross_salary, 0).toLocaleString()}</TableCell>
                 <TableCell className="text-right font-mono text-xs">{detail.payslips.reduce((s, p) => s + p.cit_deduction, 0).toLocaleString()}</TableCell>
@@ -1647,7 +1651,7 @@ function PayrollTab() {
               </TableRow>
             ))}
             {(!runs || runs.length === 0) && (
-              <TableRow><TableCell colSpan={8} className="text-center text-muted-foreground py-8">No payroll runs yet. Click "New Payroll Run" to get started.</TableCell></TableRow>
+              <TableRow><TableCell colSpan={9} className="text-center text-muted-foreground py-8">No payroll runs yet. Click "New Payroll Run" to get started.</TableCell></TableRow>
             )}
           </TableBody>
         </Table>
@@ -1703,6 +1707,8 @@ function PayrollTab() {
 function HolidaysTab() {
   const { toast } = useToast();
   const [showForm, setShowForm] = useState(false);
+  const [showBulkUpload, setShowBulkUpload] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const [form, setForm] = useState({ organization_id: "", name: "", date: "", is_optional: false });
 
   const { data: orgs } = useQuery<Organization[]>({ queryKey: ["/api/hrms/organizations"] });
@@ -1718,11 +1724,34 @@ function HolidaysTab() {
     onSuccess: () => { queryClient.refetchQueries({ queryKey: ["/api/hrms/holidays"] }); toast({ title: "Holiday deleted" }); },
   });
 
+  const handleBulkUpload = async (file: File) => {
+    setUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      const res = await fetch('/api/hrms/holidays/bulk-upload', { method: 'POST', credentials: 'include', body: formData });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || 'Upload failed');
+      queryClient.refetchQueries({ queryKey: ["/api/hrms/holidays"] });
+      toast({ title: data.message || `${data.created} holidays created` });
+      if (data.errors?.length > 0) {
+        toast({ title: `${data.errors.length} rows had errors`, description: data.errors.slice(0, 3).join('; '), variant: "destructive" });
+      }
+      setShowBulkUpload(false);
+    } catch (e: any) {
+      toast({ title: e.message || "Upload failed", variant: "destructive" });
+    }
+    setUploading(false);
+  };
+
   return (
     <div className="space-y-4">
       <div className="flex justify-between items-center">
         <h3 className="text-lg font-semibold">Holidays ({holidays?.length || 0})</h3>
-        <Button onClick={() => { setForm({ organization_id: orgs?.[0]?.id || "", name: "", date: "", is_optional: false }); setShowForm(true); }} size="sm" data-testid="button-add-holiday"><Plus className="h-4 w-4 mr-1" /> Add Holiday</Button>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={() => setShowBulkUpload(true)} size="sm" data-testid="button-bulk-upload-holiday"><Upload className="h-4 w-4 mr-1" /> Bulk Upload</Button>
+          <Button onClick={() => { setForm({ organization_id: orgs?.[0]?.id || "", name: "", date: "", is_optional: false }); setShowForm(true); }} size="sm" data-testid="button-add-holiday"><Plus className="h-4 w-4 mr-1" /> Add Holiday</Button>
+        </div>
       </div>
 
       <Table>
@@ -1765,6 +1794,31 @@ function HolidaysTab() {
             <Button variant="outline" onClick={() => setShowForm(false)}>Cancel</Button>
             <Button onClick={() => createMutation.mutate(form)} disabled={createMutation.isPending} data-testid="button-save-holiday">Add Holiday</Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showBulkUpload} onOpenChange={setShowBulkUpload}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader><DialogTitle>Bulk Upload Holidays</DialogTitle></DialogHeader>
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">Upload a CSV or Excel file with columns: <code className="text-xs bg-muted px-1 rounded">organization_short_code, name, date, is_optional</code></p>
+            <div className="flex gap-2">
+              <Button variant="outline" size="sm" onClick={() => window.open('/api/hrms/holidays/bulk-upload', '_blank')} data-testid="btn-download-holiday-template"><Download className="h-4 w-4 mr-1" /> Download Template</Button>
+            </div>
+            <div className="border-2 border-dashed rounded-lg p-6 text-center">
+              <Upload className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
+              <p className="text-sm text-muted-foreground mb-2">Drag and drop or click to select a CSV/Excel file</p>
+              <Input
+                type="file"
+                accept=".csv,.xlsx"
+                className="max-w-xs mx-auto"
+                onChange={e => { const f = e.target.files?.[0]; if (f) handleBulkUpload(f); }}
+                disabled={uploading}
+                data-testid="input-holiday-bulk-file"
+              />
+              {uploading && <div className="flex items-center justify-center gap-2 mt-3"><Loader2 className="h-4 w-4 animate-spin" /> <span className="text-sm">Uploading...</span></div>}
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
     </div>

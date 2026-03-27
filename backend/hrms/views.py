@@ -341,9 +341,11 @@ def serialize_salary_structure(ss):
 
 def serialize_payslip(ps):
     emp_name = None
+    emp_pan = None
     try:
         emp = Employee.objects.get(id=ps.employee_id)
         emp_name = emp.full_name
+        emp_pan = emp.pan_no
     except Employee.DoesNotExist:
         pass
 
@@ -352,6 +354,7 @@ def serialize_payslip(ps):
         'payroll_run_id': str(ps.payroll_run_id),
         'employee_id': str(ps.employee_id),
         'employee_name': emp_name,
+        'employee_pan': emp_pan,
         'month': ps.month,
         'year': ps.year,
         'basic_salary': float(ps.basic_salary),
@@ -4586,12 +4589,13 @@ class GovernmentTaxRecordsView(APIView):
             payslips = payslips.filter(payroll_run__organization_id=org_id)
 
         emp_cache = {}
-        def get_emp_name(eid):
+        def get_emp_info(eid):
             if eid not in emp_cache:
                 try:
-                    emp_cache[eid] = Employee.objects.get(id=eid).full_name
+                    emp = Employee.objects.get(id=eid)
+                    emp_cache[eid] = {'name': emp.full_name, 'pan': emp.pan_no or ''}
                 except Employee.DoesNotExist:
-                    emp_cache[eid] = str(eid)
+                    emp_cache[eid] = {'name': str(eid), 'pan': ''}
             return emp_cache[eid]
 
         monthly_records = []
@@ -4604,9 +4608,11 @@ class GovernmentTaxRecordsView(APIView):
                     ssf_emp = float(slip.ssf_employee_deduction or 0)
                     ssf_empr = float(slip.ssf_employer_contribution or 0)
                     tax = float(slip.tax_deduction or 0)
+                    emp_info = get_emp_info(slip.employee_id)
                     staff_details.append({
                         'employee_id': str(slip.employee_id),
-                        'employee_name': get_emp_name(slip.employee_id),
+                        'employee_name': emp_info['name'],
+                        'employee_pan': emp_info['pan'],
                         'gross_salary': float(slip.gross_salary or 0),
                         'cit': cit,
                         'ssf_employee': ssf_emp,
@@ -4908,3 +4914,340 @@ class DepartmentLeaveAllocationView(APIView):
         if alloc_id:
             DepartmentLeaveAllocation.objects.filter(id=alloc_id, leave_type_id=leave_type_id).delete()
         return Response({'message': 'Deleted'})
+
+
+class HolidayBulkUploadView(APIView):
+    @require_permission('hrms.holiday.add')
+    def get(self, request):
+        import csv
+        import io
+        output = io.StringIO()
+        writer = csv.writer(output)
+        writer.writerow(['organization_short_code', 'name', 'date', 'is_optional'])
+        writer.writerow(['SIC', 'New Year', '2026-01-01', 'no'])
+        writer.writerow(['SIC', 'Republic Day', '2026-05-28', 'no'])
+        writer.writerow(['SIC', 'Optional Holiday', '2026-06-15', 'yes'])
+        from django.http import HttpResponse
+        response = HttpResponse(output.getvalue(), content_type='text/csv')
+        response['Content-Disposition'] = 'attachment; filename="holidays_template.csv"'
+        return response
+
+    @require_permission('hrms.holiday.add')
+    def post(self, request):
+        import csv
+        import io
+
+        file = request.FILES.get('file')
+        if not file:
+            return Response({'message': 'No file uploaded'}, status=400)
+
+        fname = file.name.lower()
+        rows = []
+
+        if fname.endswith('.csv'):
+            decoded = file.read().decode('utf-8-sig')
+            reader = csv.DictReader(io.StringIO(decoded))
+            for row in reader:
+                rows.append({k.strip().lower().replace(' ', '_'): (v.strip() if v else '') for k, v in row.items() if k})
+        elif fname.endswith('.xlsx'):
+            import openpyxl
+            try:
+                wb = openpyxl.load_workbook(file, read_only=True)
+            except Exception:
+                return Response({'message': 'Invalid Excel file. Please upload a valid .xlsx file.'}, status=400)
+            ws = wb.active
+            headers = []
+            for i, row in enumerate(ws.iter_rows(values_only=True)):
+                if i == 0:
+                    headers = [str(c or '').strip().lower().replace(' ', '_') for c in row]
+                    continue
+                if not any(row):
+                    continue
+                rd = {}
+                for j, val in enumerate(row):
+                    if j < len(headers) and headers[j]:
+                        rd[headers[j]] = str(val).strip() if val is not None else ''
+                rows.append(rd)
+        else:
+            return Response({'message': 'Unsupported file format. Use CSV or Excel (.xlsx).'}, status=400)
+
+        if not rows:
+            return Response({'message': 'No data rows found in the file.'}, status=400)
+
+        org_map = {}
+        for org in Organization.objects.all():
+            org_map[org.short_code.lower()] = org
+            org_map[org.name.lower()] = org
+
+        created = 0
+        skipped = 0
+        errors = []
+        for i, row in enumerate(rows, start=2):
+            org_code = row.get('organization_short_code') or row.get('organization') or row.get('org_code') or ''
+            name = row.get('name') or row.get('holiday_name') or ''
+            date_str = row.get('date') or row.get('holiday_date') or ''
+            is_opt = row.get('is_optional') or row.get('optional') or 'no'
+
+            if not name or not date_str:
+                errors.append(f'Row {i}: Missing name or date')
+                continue
+
+            org = org_map.get(org_code.lower())
+            if not org:
+                errors.append(f'Row {i}: Organization "{org_code}" not found')
+                continue
+
+            try:
+                from datetime import datetime as dt
+                parsed_date = None
+                for fmt in ['%Y-%m-%d', '%d/%m/%Y', '%m/%d/%Y', '%d-%m-%Y']:
+                    try:
+                        parsed_date = dt.strptime(date_str, fmt).date()
+                        break
+                    except ValueError:
+                        continue
+                if not parsed_date:
+                    raise ValueError(f'Invalid date format: {date_str}')
+            except Exception as e:
+                errors.append(f'Row {i}: {str(e)}')
+                continue
+
+            optional = is_opt.lower() in ('yes', 'true', '1', 'optional')
+
+            if Holiday.objects.filter(organization=org, date=parsed_date, name=name).exists():
+                skipped += 1
+                continue
+
+            Holiday.objects.create(
+                organization=org,
+                name=name,
+                date=parsed_date,
+                is_optional=optional,
+            )
+            created += 1
+
+        return Response({
+            'message': f'{created} holidays created, {skipped} duplicates skipped.',
+            'created': created,
+            'skipped': skipped,
+            'errors': errors,
+        })
+
+
+class StaffBulkUploadView(APIView):
+    @require_auth
+    def get(self, request):
+        import csv
+        import io
+        output = io.StringIO()
+        writer = csv.writer(output)
+        writer.writerow([
+            'full_name', 'email', 'phone', 'position', 'organization_short_code',
+            'department_name', 'gender', 'country', 'marital_status',
+            'date_of_birth', 'join_date', 'employment_type',
+            'citizenship_no', 'pan_no', 'passport_number', 'employee_id_number',
+            'bank_name', 'bank_account_number', 'bank_branch',
+            'permanent_address', 'temporary_address',
+            'emergency_contact_name', 'emergency_contact_phone',
+            'probation_end_date', 'contract_end_date',
+            'salary_amount', 'salary_currency',
+            'basic_salary', 'cit_type', 'cit_value',
+            'ssf_applicable', 'tax_applicable',
+        ])
+        writer.writerow([
+            'John Doe', 'john@example.com', '9801234567', 'Software Engineer', 'SIC',
+            'Engineering', 'Male', 'Nepal', 'Single',
+            '1995-01-15', '2025-01-01', 'full_time',
+            'CTZN-12345', 'PAN-67890', '', 'EMP-001',
+            'Nepal Bank', '1234567890', 'Kathmandu',
+            'Kathmandu, Nepal', 'Lalitpur, Nepal',
+            'Jane Doe', '9809876543',
+            '', '',
+            '50000', 'NPR',
+            '40000', 'none', '0',
+            'no', 'yes',
+        ])
+        from django.http import HttpResponse
+        response = HttpResponse(output.getvalue(), content_type='text/csv')
+        response['Content-Disposition'] = 'attachment; filename="staff_template.csv"'
+        return response
+
+    @require_permission('hrms.staff.write')
+    def post(self, request):
+        import csv
+        import io
+
+        file = request.FILES.get('file')
+        if not file:
+            return Response({'message': 'No file uploaded'}, status=400)
+
+        fname = file.name.lower()
+        rows = []
+
+        if fname.endswith('.csv'):
+            decoded = file.read().decode('utf-8-sig')
+            reader = csv.DictReader(io.StringIO(decoded))
+            for row in reader:
+                rows.append({k.strip().lower().replace(' ', '_'): (v.strip() if v else '') for k, v in row.items() if k})
+        elif fname.endswith('.xlsx'):
+            import openpyxl
+            try:
+                wb = openpyxl.load_workbook(file, read_only=True)
+            except Exception:
+                return Response({'message': 'Invalid Excel file. Please upload a valid .xlsx file.'}, status=400)
+            ws = wb.active
+            headers = []
+            for i, row in enumerate(ws.iter_rows(values_only=True)):
+                if i == 0:
+                    headers = [str(c or '').strip().lower().replace(' ', '_') for c in row]
+                    continue
+                if not any(row):
+                    continue
+                rd = {}
+                for j, val in enumerate(row):
+                    if j < len(headers) and headers[j]:
+                        rd[headers[j]] = str(val).strip() if val is not None else ''
+                rows.append(rd)
+        else:
+            return Response({'message': 'Unsupported file format. Use CSV or Excel (.xlsx).'}, status=400)
+
+        if not rows:
+            return Response({'message': 'No data rows found in the file.'}, status=400)
+
+        org_map = {}
+        for org in Organization.objects.all():
+            org_map[org.short_code.lower()] = org
+            org_map[org.name.lower()] = org
+
+        dept_map = {}
+        for dept in Department.objects.all():
+            key = f"{str(dept.organization_id).lower()}_{dept.name.lower()}"
+            dept_map[key] = dept
+
+        def parse_date(val):
+            if not val or val.lower() == 'none':
+                return None
+            from datetime import datetime as dt
+            for fmt in ['%Y-%m-%d', '%d/%m/%Y', '%m/%d/%Y', '%d-%m-%Y']:
+                try:
+                    return dt.strptime(val, fmt).date()
+                except ValueError:
+                    continue
+            return None
+
+        created = 0
+        updated = 0
+        errors = []
+
+        for i, row in enumerate(rows, start=2):
+            full_name = row.get('full_name') or row.get('name') or ''
+            email = row.get('email') or ''
+
+            if not full_name or not email:
+                errors.append(f'Row {i}: Missing full_name or email')
+                continue
+
+            org_code = row.get('organization_short_code') or row.get('organization') or row.get('org_code') or ''
+            org = org_map.get(org_code.lower()) if org_code else None
+
+            dept_name = row.get('department_name') or row.get('department') or ''
+            dept = None
+            if org and dept_name:
+                dept_key = f"{str(org.id).lower()}_{dept_name.lower()}"
+                dept = dept_map.get(dept_key)
+
+            emp_data = {
+                'full_name': full_name,
+                'phone': row.get('phone') or None,
+                'position': row.get('position') or None,
+                'department': dept_name or None,
+                'organization_id': org.id if org else None,
+                'department_id': dept.id if dept else None,
+                'gender': row.get('gender') or None,
+                'country': row.get('country') or None,
+                'marital_status': row.get('marital_status') or None,
+                'date_of_birth': parse_date(row.get('date_of_birth')),
+                'join_date': parse_date(row.get('join_date')),
+                'employment_type': row.get('employment_type') or 'full_time',
+                'citizenship_no': row.get('citizenship_no') or None,
+                'pan_no': row.get('pan_no') or None,
+                'passport_number': row.get('passport_number') or None,
+                'employee_id_number': row.get('employee_id_number') or None,
+                'bank_name': row.get('bank_name') or None,
+                'bank_account_number': row.get('bank_account_number') or None,
+                'bank_branch': row.get('bank_branch') or None,
+                'permanent_address': row.get('permanent_address') or None,
+                'temporary_address': row.get('temporary_address') or None,
+                'emergency_contact_name': row.get('emergency_contact_name') or None,
+                'emergency_contact_phone': row.get('emergency_contact_phone') or None,
+                'probation_end_date': parse_date(row.get('probation_end_date')),
+                'contract_end_date': parse_date(row.get('contract_end_date')),
+                'salary_currency': row.get('salary_currency') or 'NPR',
+            }
+
+            salary_str = row.get('salary_amount') or ''
+            if salary_str:
+                try:
+                    emp_data['salary_amount'] = Decimal(salary_str)
+                except Exception:
+                    pass
+
+            try:
+                emp, is_new = Employee.objects.get_or_create(
+                    email=email,
+                    defaults=emp_data,
+                )
+                if not is_new:
+                    for k, v in emp_data.items():
+                        if v is not None:
+                            setattr(emp, k, v)
+                    emp.save()
+                    updated += 1
+                else:
+                    created += 1
+
+                basic_str = row.get('basic_salary') or ''
+                if basic_str:
+                    try:
+                        basic = Decimal(basic_str)
+                        cit_type = row.get('cit_type') or 'none'
+                        cit_value = Decimal(row.get('cit_value') or '0')
+                        ssf_val = (row.get('ssf_applicable') or 'no').lower()
+                        ssf_applicable = ssf_val in ('yes', 'true', '1')
+                        tax_val = (row.get('tax_applicable') or 'yes').lower()
+                        tax_applicable = tax_val in ('yes', 'true', '1')
+
+                        existing_ss = SalaryStructure.objects.filter(employee_id=emp.id, status='active').first()
+                        if existing_ss:
+                            existing_ss.basic_salary = basic
+                            existing_ss.cit_type = cit_type
+                            existing_ss.cit_value = cit_value
+                            existing_ss.ssf_applicable = ssf_applicable
+                            existing_ss.tax_applicable = tax_applicable
+                            existing_ss.save()
+                        else:
+                            SalaryStructure.objects.create(
+                                employee_id=emp.id,
+                                basic_salary=basic,
+                                allowances={},
+                                deductions={},
+                                cit_type=cit_type,
+                                cit_value=cit_value,
+                                ssf_applicable=ssf_applicable,
+                                ssf_employee_percentage=Decimal('11'),
+                                ssf_employer_percentage=Decimal('20'),
+                                tax_applicable=tax_applicable,
+                                status='active',
+                            )
+                    except Exception:
+                        pass
+
+            except Exception as e:
+                errors.append(f'Row {i}: {str(e)}')
+
+        return Response({
+            'message': f'{created} employees created, {updated} updated.',
+            'created': created,
+            'updated': updated,
+            'errors': errors,
+        })
