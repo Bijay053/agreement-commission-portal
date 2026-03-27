@@ -11,6 +11,7 @@ fi
 npm ci
 
 echo "=== Step 2: Build frontend ==="
+rm -rf dist/public
 NODE_OPTIONS="--max-old-space-size=2048" npx vite build
 
 echo "=== Step 3: Build Docker image (backend only) ==="
