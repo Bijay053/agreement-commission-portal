@@ -17,6 +17,7 @@ class Organization(models.Model):
     pan_label = models.CharField(max_length=64, default='PAN No.')
     logo_url = models.URLField(null=True, blank=True)
     currency = models.CharField(max_length=8, default='NPR')
+    week_off_day = models.IntegerField(default=6, help_text='Day of week that is off: 0=Monday..6=Sunday')
     status = models.CharField(max_length=24, default='active')
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

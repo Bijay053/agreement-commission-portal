@@ -40,11 +40,85 @@ EMPLOYEE_PERMISSIONS = [
     ('provider_commission.edit', 'Sub Agent Commission Distribution', 'provider_commission', 'edit', 'Edit provider commission entries'),
     ('provider_commission.delete', 'Sub Agent Commission Distribution', 'provider_commission', 'delete', 'Delete provider commission entries'),
     ('provider_commission.manage', 'Sub Agent Commission Distribution', 'provider_commission', 'manage', 'Manage sub-agent percentage config'),
-    ('hrms.staff.write', 'HRMS', 'staff', 'write', 'Create, update and manage staff profiles and portal access'),
-    ('hrms.expense.read', 'HRMS', 'expense', 'read', 'View travel and expense records'),
-    ('hrms.expense.add', 'HRMS', 'expense', 'add', 'Add travel and expense entries'),
-    ('hrms.expense.update', 'HRMS', 'expense', 'update', 'Approve, reject, and update expenses'),
-    ('hrms.expense.delete', 'HRMS', 'expense', 'delete', 'Delete travel and expense entries'),
+
+    ('hrms.staff.read', 'HRMS - Staff', 'staff', 'read', 'View staff profiles and employee list'),
+    ('hrms.staff.write', 'HRMS - Staff', 'staff', 'write', 'Create, update and manage staff profiles and portal access'),
+
+    ('hrms.salary.read', 'HRMS - Salary', 'salary', 'read', 'View salary structures'),
+    ('hrms.salary.add', 'HRMS - Salary', 'salary', 'add', 'Create salary structures'),
+    ('hrms.salary.update', 'HRMS - Salary', 'salary', 'update', 'Update salary structures'),
+    ('hrms.salary.delete', 'HRMS - Salary', 'salary', 'delete', 'Delete salary structures'),
+
+    ('hrms.attendance.read', 'HRMS - Attendance', 'attendance', 'read', 'View attendance records'),
+    ('hrms.attendance.add', 'HRMS - Attendance', 'attendance', 'add', 'Add attendance records'),
+    ('hrms.attendance.update', 'HRMS - Attendance', 'attendance', 'update', 'Update attendance records'),
+    ('hrms.attendance.delete', 'HRMS - Attendance', 'attendance', 'delete', 'Delete attendance records'),
+
+    ('hrms.leave_type.read', 'HRMS - Leave', 'leave_type', 'read', 'View leave types'),
+    ('hrms.leave_type.add', 'HRMS - Leave', 'leave_type', 'add', 'Create leave types'),
+    ('hrms.leave_type.update', 'HRMS - Leave', 'leave_type', 'update', 'Update leave types'),
+    ('hrms.leave_type.delete', 'HRMS - Leave', 'leave_type', 'delete', 'Delete leave types'),
+
+    ('hrms.leave_request.read', 'HRMS - Leave', 'leave_request', 'read', 'View leave requests'),
+    ('hrms.leave_request.add', 'HRMS - Leave', 'leave_request', 'add', 'Create leave requests'),
+    ('hrms.leave_request.update', 'HRMS - Leave', 'leave_request', 'update', 'Update leave requests'),
+    ('hrms.leave_request.delete', 'HRMS - Leave', 'leave_request', 'delete', 'Delete leave requests'),
+    ('hrms.leave_request.approve', 'HRMS - Leave', 'leave_request', 'approve', 'Approve or reject leave requests'),
+
+    ('hrms.leave_balance.read', 'HRMS - Leave', 'leave_balance', 'read', 'View leave balances'),
+    ('hrms.leave_balance.add', 'HRMS - Leave', 'leave_balance', 'add', 'Add leave balance allocations'),
+
+    ('hrms.holiday.read', 'HRMS - Holidays', 'holiday', 'read', 'View holidays'),
+    ('hrms.holiday.add', 'HRMS - Holidays', 'holiday', 'add', 'Create holidays'),
+    ('hrms.holiday.update', 'HRMS - Holidays', 'holiday', 'update', 'Update holidays'),
+    ('hrms.holiday.delete', 'HRMS - Holidays', 'holiday', 'delete', 'Delete holidays'),
+
+    ('hrms.bonus.read', 'HRMS - Payroll & Finance', 'bonus', 'read', 'View employee bonuses'),
+    ('hrms.bonus.add', 'HRMS - Payroll & Finance', 'bonus', 'add', 'Create employee bonuses'),
+    ('hrms.bonus.update', 'HRMS - Payroll & Finance', 'bonus', 'update', 'Update employee bonuses'),
+    ('hrms.bonus.delete', 'HRMS - Payroll & Finance', 'bonus', 'delete', 'Delete employee bonuses'),
+
+    ('hrms.expense.read', 'HRMS - Payroll & Finance', 'expense', 'read', 'View travel and expense records'),
+    ('hrms.expense.add', 'HRMS - Payroll & Finance', 'expense', 'add', 'Add travel and expense entries'),
+    ('hrms.expense.update', 'HRMS - Payroll & Finance', 'expense', 'update', 'Approve, reject, and update expenses'),
+    ('hrms.expense.delete', 'HRMS - Payroll & Finance', 'expense', 'delete', 'Delete travel and expense entries'),
+
+    ('hrms.advance.read', 'HRMS - Payroll & Finance', 'advance', 'read', 'View advance payments'),
+    ('hrms.advance.add', 'HRMS - Payroll & Finance', 'advance', 'add', 'Create advance payments'),
+    ('hrms.advance.update', 'HRMS - Payroll & Finance', 'advance', 'update', 'Update advance payments'),
+    ('hrms.advance.delete', 'HRMS - Payroll & Finance', 'advance', 'delete', 'Delete advance payments'),
+
+    ('hrms.payroll.read', 'HRMS - Payroll & Finance', 'payroll', 'read', 'View payroll runs'),
+    ('hrms.payroll.add', 'HRMS - Payroll & Finance', 'payroll', 'add', 'Create payroll runs'),
+    ('hrms.payroll.delete', 'HRMS - Payroll & Finance', 'payroll', 'delete', 'Delete payroll runs'),
+    ('hrms.payroll.process', 'HRMS - Payroll & Finance', 'payroll', 'process', 'Process and approve payroll'),
+
+    ('hrms.payslip.read', 'HRMS - Payroll & Finance', 'payslip', 'read', 'View payslips'),
+
+    ('hrms.tax.read', 'HRMS - Tax', 'tax', 'read', 'View tax slabs and configurations'),
+    ('hrms.tax.add', 'HRMS - Tax', 'tax', 'add', 'Create tax slabs'),
+    ('hrms.tax.update', 'HRMS - Tax', 'tax', 'update', 'Update tax slabs'),
+    ('hrms.tax.delete', 'HRMS - Tax', 'tax', 'delete', 'Delete tax slabs'),
+
+    ('hrms.organization.read', 'HRMS - Settings', 'organization', 'read', 'View organizations'),
+    ('hrms.organization.add', 'HRMS - Settings', 'organization', 'add', 'Create organizations'),
+    ('hrms.organization.update', 'HRMS - Settings', 'organization', 'update', 'Update organizations'),
+    ('hrms.organization.delete', 'HRMS - Settings', 'organization', 'delete', 'Delete organizations'),
+
+    ('hrms.department.read', 'HRMS - Settings', 'department', 'read', 'View departments'),
+    ('hrms.department.add', 'HRMS - Settings', 'department', 'add', 'Create departments'),
+    ('hrms.department.update', 'HRMS - Settings', 'department', 'update', 'Update departments'),
+    ('hrms.department.delete', 'HRMS - Settings', 'department', 'delete', 'Delete departments'),
+
+    ('hrms.fiscal_year.read', 'HRMS - Settings', 'fiscal_year', 'read', 'View fiscal years'),
+    ('hrms.fiscal_year.add', 'HRMS - Settings', 'fiscal_year', 'add', 'Create fiscal years'),
+    ('hrms.fiscal_year.update', 'HRMS - Settings', 'fiscal_year', 'update', 'Update fiscal years'),
+    ('hrms.fiscal_year.delete', 'HRMS - Settings', 'fiscal_year', 'delete', 'Delete fiscal years'),
+
+    ('hrms.notification.read', 'HRMS - Settings', 'notification', 'read', 'View notification settings'),
+    ('hrms.notification.update', 'HRMS - Settings', 'notification', 'update', 'Update notification settings'),
+
+    ('hrms.dashboard.read', 'HRMS - Dashboard', 'dashboard', 'read', 'View HRMS dashboard'),
 ]
 
 

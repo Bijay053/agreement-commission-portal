@@ -44,6 +44,7 @@ class Employee(models.Model):
     contract_end_date = models.DateField(null=True, blank=True)
     salary_amount = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
     salary_currency = models.CharField(max_length=3, default='NPR', choices=CURRENCY_CHOICES)
+    working_days_per_week = models.IntegerField(null=True, blank=True, help_text='Override department default: 5 or 6')
     employment_type = models.CharField(max_length=32, default='full_time')
     status = models.CharField(max_length=24, default='active')
     profile_photo_url = models.URLField(null=True, blank=True)

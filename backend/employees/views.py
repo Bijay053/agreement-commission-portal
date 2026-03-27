@@ -133,6 +133,7 @@ class EmployeeListView(APIView):
             emergency_contact_phone=data.get('emergencyContactPhone') or data.get('emergency_contact_phone') or '',
             probation_end_date=data.get('probationEndDate') or data.get('probation_end_date') or None,
             contract_end_date=data.get('contractEndDate') or data.get('contract_end_date') or None,
+            working_days_per_week=data.get('workingDaysPerWeek') or data.get('working_days_per_week') or None,
             status=data.get('status', 'active'),
         )
         return Response(_serialize_employee(employee), status=201)
@@ -216,6 +217,9 @@ class EmployeeDetailView(APIView):
         contract_end = data.get('contractEndDate') or data.get('contract_end_date')
         if contract_end is not None:
             employee.contract_end_date = contract_end or None
+        wdpw = data.get('workingDaysPerWeek') or data.get('working_days_per_week')
+        if wdpw is not None:
+            employee.working_days_per_week = int(wdpw) if wdpw else None
         employee.save()
         return Response(_serialize_employee(employee))
 

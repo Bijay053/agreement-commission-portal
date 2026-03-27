@@ -68,7 +68,8 @@ interface Organization {
   country: string | null; phone: string | null; email: string | null;
   registration_number: string | null; registration_label: string;
   pan_number: string | null; pan_label: string;
-  currency: string; status: string; created_at: string | null;
+  currency: string; week_off_day: number; week_off_day_name: string;
+  status: string; created_at: string | null;
 }
 
 interface Department {
@@ -130,7 +131,7 @@ function OrgTab() {
   const { toast } = useToast();
   const [showForm, setShowForm] = useState(false);
   const [editOrg, setEditOrg] = useState<Organization | null>(null);
-  const [form, setForm] = useState({ name: "", short_code: "", address: "", country: "", phone: "", email: "", registration_number: "", registration_label: "Registration No.", pan_number: "", pan_label: "PAN No.", currency: "NPR" });
+  const [form, setForm] = useState({ name: "", short_code: "", address: "", country: "", phone: "", email: "", registration_number: "", registration_label: "Registration No.", pan_number: "", pan_label: "PAN No.", currency: "NPR", week_off_day: "6" });
 
   const { data: orgs, isLoading } = useQuery<Organization[]>({ queryKey: ["/api/hrms/organizations"] });
 
@@ -149,8 +150,8 @@ function OrgTab() {
     onSuccess: () => { queryClient.refetchQueries({ queryKey: ["/api/hrms/organizations"] }); toast({ title: "Organization deleted" }); },
   });
 
-  const openCreate = () => { setForm({ name: "", short_code: "", address: "", country: "", phone: "", email: "", registration_number: "", registration_label: "Registration No.", pan_number: "", pan_label: "PAN No.", currency: "NPR" }); setShowForm(true); };
-  const openEdit = (o: Organization) => { setForm({ name: o.name, short_code: o.short_code, address: o.address || "", country: o.country || "", phone: o.phone || "", email: o.email || "", registration_number: o.registration_number || "", registration_label: o.registration_label || "Registration No.", pan_number: o.pan_number || "", pan_label: o.pan_label || "PAN No.", currency: o.currency || "NPR" }); setEditOrg(o); };
+  const openCreate = () => { setForm({ name: "", short_code: "", address: "", country: "", phone: "", email: "", registration_number: "", registration_label: "Registration No.", pan_number: "", pan_label: "PAN No.", currency: "NPR", week_off_day: "6" }); setShowForm(true); };
+  const openEdit = (o: Organization) => { setForm({ name: o.name, short_code: o.short_code, address: o.address || "", country: o.country || "", phone: o.phone || "", email: o.email || "", registration_number: o.registration_number || "", registration_label: o.registration_label || "Registration No.", pan_number: o.pan_number || "", pan_label: o.pan_label || "PAN No.", currency: o.currency || "NPR", week_off_day: String(o.week_off_day ?? 6) }); setEditOrg(o); };
 
   if (isLoading) return <Skeleton className="h-40 w-full" />;
 
@@ -174,6 +175,7 @@ function OrgTab() {
               <p>Code: <span className="font-medium text-foreground">{o.short_code}</span></p>
               {o.country && <p>Country: {o.country}</p>}
               <p>Currency: <span className="font-medium text-foreground">{o.currency || 'NPR'}</span></p>
+              <p>Weekly Off: <span className="font-medium text-foreground">{o.week_off_day_name || 'Sunday'}</span></p>
               {o.registration_number && <p>{o.registration_label || 'Registration No.'}: <span className="font-medium text-foreground">{o.registration_number}</span></p>}
               {o.pan_number && <p>{o.pan_label || 'PAN No.'}: <span className="font-medium text-foreground">{o.pan_number}</span></p>}
               {o.email && <p>Email: {o.email}</p>}
@@ -207,6 +209,21 @@ function OrgTab() {
                 </Select>
               </div>
               <div><Label>Phone</Label><Input value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} data-testid="input-org-phone" /></div>
+            </div>
+            <div>
+              <Label>Weekly Off Day</Label>
+              <Select value={form.week_off_day} onValueChange={v => setForm({ ...form, week_off_day: v })}>
+                <SelectTrigger data-testid="select-org-week-off"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="0">Monday</SelectItem>
+                  <SelectItem value="1">Tuesday</SelectItem>
+                  <SelectItem value="2">Wednesday</SelectItem>
+                  <SelectItem value="3">Thursday</SelectItem>
+                  <SelectItem value="4">Friday</SelectItem>
+                  <SelectItem value="5">Saturday</SelectItem>
+                  <SelectItem value="6">Sunday</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
             <div><Label>Email</Label><Input type="email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} data-testid="input-org-email" /></div>
             <div><Label>Address</Label><Textarea value={form.address} onChange={e => setForm({ ...form, address: e.target.value })} data-testid="input-org-address" /></div>

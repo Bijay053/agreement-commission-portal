@@ -100,6 +100,9 @@ def _get_tax_id_label(country):
         return COUNTRY_TAX_LABELS.get(country, 'Tax ID No.')
 
 
+WEEKDAY_NAMES = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
+
+
 def serialize_org(org):
     return {
         'id': str(org.id),
@@ -115,6 +118,8 @@ def serialize_org(org):
         'pan_label': org.pan_label or 'PAN No.',
         'logo_url': org.logo_url,
         'currency': org.currency or 'NPR',
+        'week_off_day': getattr(org, 'week_off_day', 6),
+        'week_off_day_name': WEEKDAY_NAMES[getattr(org, 'week_off_day', 6)] if 0 <= getattr(org, 'week_off_day', 6) <= 6 else 'Sunday',
         'status': org.status,
         'created_at': org.created_at.isoformat() if org.created_at else None,
     }
@@ -673,6 +678,7 @@ class OrganizationListView(APIView):
             pan_label=data.get('pan_label', 'PAN No.'),
             logo_url=data.get('logo_url'),
             currency=data.get('currency', 'NPR'),
+            week_off_day=int(data.get('week_off_day', 6)),
         )
         return Response(serialize_org(org), status=201)
 
@@ -695,9 +701,12 @@ class OrganizationDetailView(APIView):
         data = request.data
         for field in ['name', 'short_code', 'address', 'country', 'phone', 'email',
                       'registration_number', 'registration_label', 'pan_number', 'pan_label',
-                      'logo_url', 'currency', 'status']:
+                      'logo_url', 'currency', 'status', 'week_off_day']:
             if field in data:
-                setattr(org, field, data[field])
+                val = data[field]
+                if field == 'week_off_day':
+                    val = int(val)
+                setattr(org, field, val)
         org.save()
         return Response(serialize_org(org))
 
@@ -2059,6 +2068,11 @@ class AttendanceSummaryView(APIView):
             for d in Department.objects.filter(id__in=dept_ids_set):
                 dept_cache[str(d.id)] = d
 
+        org_cache = {}
+        if org_ids:
+            for o in Organization.objects.filter(id__in=org_ids):
+                org_cache[str(o.id)] = o
+
         leave_requests = LeaveRequest.objects.filter(
             employee_id__in=emp_ids,
             status='approved',
@@ -2072,7 +2086,9 @@ class AttendanceSummaryView(APIView):
         rows = []
         for idx, emp in enumerate(employees):
             dept = dept_cache.get(str(emp.department_id)) if emp.department_id else None
-            working_days_per_week = dept.working_days_per_week if dept else 6
+            emp_wdpw = emp.working_days_per_week if emp.working_days_per_week else (dept.working_days_per_week if dept else 6)
+            org_obj = org_cache.get(str(emp.organization_id)) if emp.organization_id else None
+            week_off_day = getattr(org_obj, 'week_off_day', 6) if org_obj else 6
             org_holidays = holidays_by_org.get(str(emp.organization_id), set()) if emp.organization_id else set()
 
             std_work_hours_per_day = 0
@@ -2088,13 +2104,15 @@ class AttendanceSummaryView(APIView):
             public_holiday_count = 0
             total_working_days = 0
 
+            second_off_day = 5 if emp_wdpw == 5 else None
+
             d = date_from
             while d <= date_to:
                 if d in org_holidays:
                     public_holiday_count += 1
-                elif d.weekday() == 6:
+                elif d.weekday() == week_off_day:
                     week_off_count += 1
-                elif working_days_per_week == 5 and d.weekday() == 5:
+                elif second_off_day is not None and d.weekday() == second_off_day:
                     week_off_count += 1
                 else:
                     total_working_days += 1
@@ -2124,8 +2142,8 @@ class AttendanceSummaryView(APIView):
 
             d = date_from
             while d <= effective_to:
-                if d not in att_dates_with_status and d not in org_holidays and d.weekday() != 6:
-                    if not (working_days_per_week == 5 and d.weekday() == 5):
+                if d not in att_dates_with_status and d not in org_holidays and d.weekday() != week_off_day:
+                    if second_off_day is None or d.weekday() != second_off_day:
                         absent_days += 1
                 d += timedelta(days=1)
 
@@ -2554,13 +2572,24 @@ class PayrollRunProcessView(APIView):
                     dept = Department.objects.get(id=emp.department_id)
                 except Department.DoesNotExist:
                     pass
-            working_days_per_week = dept.working_days_per_week if dept else 6
+            emp_wdpw = emp.working_days_per_week if emp.working_days_per_week else (dept.working_days_per_week if dept else 6)
+            org_obj = None
+            if emp.organization_id:
+                try:
+                    org_obj = Organization.objects.get(id=emp.organization_id)
+                except Organization.DoesNotExist:
+                    pass
+            week_off_day = getattr(org_obj, 'week_off_day', 6) if org_obj else 6
+            second_off_day = 5 if emp_wdpw == 5 else None
             total_calendar_days = (month_end - month_start).days + 1
             working_days = 0
             for d in range(total_calendar_days):
                 day = month_start + timedelta(days=d)
-                if day.weekday() < working_days_per_week:
-                    working_days += 1
+                if day.weekday() == week_off_day:
+                    continue
+                if second_off_day is not None and day.weekday() == second_off_day:
+                    continue
+                working_days += 1
             holidays_in_month = Holiday.objects.filter(
                 organization_id=pr.organization_id,
                 date__gte=month_start,
@@ -4226,6 +4255,7 @@ class StaffProfileListView(APIView):
                 'employee_id_number': emp.employee_id_number,
                 'probation_end_date': emp.probation_end_date.isoformat() if emp.probation_end_date else None,
                 'contract_end_date': emp.contract_end_date.isoformat() if emp.contract_end_date else None,
+                'working_days_per_week': emp.working_days_per_week,
                 'salary_amount': float(emp.salary_amount) if emp.salary_amount else None,
                 'salary_currency': emp.salary_currency,
                 'profile_photo_url': emp.profile_photo_url,
@@ -4459,6 +4489,7 @@ class Employee360View(APIView):
             'status': emp.status,
             'probation_end_date': emp.probation_end_date.isoformat() if emp.probation_end_date else None,
             'contract_end_date': emp.contract_end_date.isoformat() if emp.contract_end_date else None,
+            'working_days_per_week': emp.working_days_per_week,
             'emergency_contact_name': emp.emergency_contact_name,
             'emergency_contact_phone': emp.emergency_contact_phone,
         }
