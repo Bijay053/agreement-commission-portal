@@ -1727,6 +1727,143 @@ class AttendanceDashboardView(APIView):
         })
 
 
+class HRMSDashboardView(APIView):
+    @require_auth
+    def get(self, request):
+        today = date.today()
+        employees = Employee.objects.filter(status='active')
+        total = employees.count()
+
+        gender_counts = {}
+        marital_counts = {}
+        upcoming_birthdays = []
+        for emp in employees:
+            g = (emp.gender or 'unknown').lower()
+            gender_counts[g] = gender_counts.get(g, 0) + 1
+            ms = (emp.marital_status or 'unknown').lower()
+            marital_counts[ms] = marital_counts.get(ms, 0) + 1
+            if emp.date_of_birth:
+                this_year_bday = emp.date_of_birth.replace(year=today.year)
+                if this_year_bday < today:
+                    this_year_bday = emp.date_of_birth.replace(year=today.year + 1)
+                days_until = (this_year_bday - today).days
+                if 0 <= days_until <= 30:
+                    upcoming_birthdays.append({
+                        'id': str(emp.id),
+                        'name': emp.full_name,
+                        'email': emp.email,
+                        'date_of_birth': emp.date_of_birth.isoformat(),
+                        'days_until': days_until,
+                        'birthday_date': this_year_bday.isoformat(),
+                    })
+        upcoming_birthdays.sort(key=lambda x: x['days_until'])
+
+        emp_ids = list(employees.values_list('id', flat=True))
+
+        att_records = AttendanceRecord.objects.filter(employee_id__in=emp_ids, date=today)
+        att_map = {str(a.employee_id): a for a in att_records}
+        on_leave_today = []
+        on_leave_ids = set()
+
+        approved_leaves_today = LeaveRequest.objects.filter(
+            employee_id__in=emp_ids,
+            status='approved',
+            start_date__lte=today,
+            end_date__gte=today,
+        ).select_related('leave_type')
+        for lr in approved_leaves_today:
+            if str(lr.employee_id) not in on_leave_ids:
+                emp_obj = employees.filter(id=lr.employee_id).first()
+                if emp_obj:
+                    on_leave_ids.add(str(lr.employee_id))
+                    on_leave_today.append({
+                        'id': str(emp_obj.id),
+                        'name': emp_obj.full_name,
+                        'department': emp_obj.department or '',
+                        'leave_type': lr.leave_type.name if lr.leave_type else 'Leave',
+                        'start_date': lr.start_date.isoformat(),
+                        'end_date': lr.end_date.isoformat(),
+                        'days': float(lr.days_count),
+                    })
+
+        for emp in employees:
+            att = att_map.get(str(emp.id))
+            if att and att.status == 'on_leave' and str(emp.id) not in on_leave_ids:
+                on_leave_ids.add(str(emp.id))
+                on_leave_today.append({
+                    'id': str(emp.id),
+                    'name': emp.full_name,
+                    'department': emp.department or '',
+                    'leave_type': 'On Leave',
+                    'start_date': today.isoformat(),
+                    'end_date': today.isoformat(),
+                    'days': 1,
+                })
+
+        pending_leaves = LeaveRequest.objects.filter(
+            employee_id__in=emp_ids,
+            status='pending',
+        ).select_related('leave_type').order_by('-created_at')[:10]
+        pending_leave_list = []
+        for lr in pending_leaves:
+            emp_obj = employees.filter(id=lr.employee_id).first()
+            pending_leave_list.append({
+                'id': str(lr.id),
+                'employee_id': str(lr.employee_id),
+                'employee_name': emp_obj.full_name if emp_obj else 'Unknown',
+                'employee_email': emp_obj.email if emp_obj else '',
+                'leave_type': lr.leave_type.name if lr.leave_type else '',
+                'start_date': lr.start_date.isoformat(),
+                'end_date': lr.end_date.isoformat(),
+                'days': float(lr.days_count),
+                'reason': lr.reason or '',
+                'status': lr.status,
+                'created_at': lr.created_at.isoformat() if lr.created_at else None,
+            })
+
+        org_ids = set(employees.values_list('organization_id', flat=True))
+        org_ids.discard(None)
+        upcoming_holidays = []
+        if org_ids:
+            holidays = Holiday.objects.filter(
+                organization_id__in=org_ids,
+                date__gte=today,
+                date__lte=today + timedelta(days=60),
+            ).order_by('date')[:10]
+            for h in holidays:
+                org_name = ''
+                try:
+                    org_name = Organization.objects.get(id=h.organization_id).name
+                except Organization.DoesNotExist:
+                    pass
+                upcoming_holidays.append({
+                    'id': str(h.id),
+                    'name': h.name,
+                    'date': h.date.isoformat(),
+                    'is_optional': h.is_optional,
+                    'organization': org_name,
+                    'days_until': (h.date - today).days,
+                })
+
+        present_count = sum(1 for a in att_records if a.status in ('present', 'half_day'))
+        absent_count = total - present_count - len(on_leave_ids)
+        late_count = sum(1 for a in att_records if a.is_late)
+
+        return Response({
+            'total_employees': total,
+            'present_today': present_count,
+            'absent_today': max(absent_count, 0),
+            'on_leave_today': len(on_leave_ids),
+            'late_today': late_count,
+            'gender_distribution': gender_counts,
+            'marital_status_distribution': marital_counts,
+            'upcoming_birthdays': upcoming_birthdays[:10],
+            'on_leave_list': on_leave_today,
+            'pending_leave_requests': pending_leave_list,
+            'upcoming_holidays': upcoming_holidays,
+        })
+
+
 class AttendanceGridView(APIView):
     @require_permission('hrms.attendance.read')
     def get(self, request):

@@ -44,6 +44,7 @@ import { GovernmentRecordsTab } from "./hrms-govt-records";
 import { CountriesTab } from "./hrms-countries";
 import { FiscalYearsTab } from "./hrms-fiscal-years";
 import { AttendanceSummaryTab } from "./hrms-attendance-summary";
+import { HRMSDashboardTab } from "./hrms-dashboard";
 import { CURRENCIES, getCurrencySymbol } from "@/lib/currencies";
 
 function extractErrorMessage(err: any, fallback: string): string {
@@ -2100,6 +2101,7 @@ function RemoteCheckInPermissionsTab() {
 }
 
 const SIDEBAR_ITEMS = [
+  { key: "dashboard", label: "Dashboard", icon: BarChart3, group: "Overview", permissions: [] },
   { key: "staff-profiles", label: "Staff & Salary", icon: UserCog, group: "People", permissions: ["hrms.staff.read", "hrms.salary.read", "employee.view"] },
   { key: "attendance", label: "Attendance", icon: Clock, group: "People", permissions: ["hrms.attendance.read"] },
   { key: "attendance-summary", label: "Attendance Summary", icon: FileText, group: "People", permissions: ["hrms.attendance.read"] },
@@ -2121,6 +2123,7 @@ const SIDEBAR_ITEMS = [
 ];
 
 const CONTENT_MAP: Record<string, React.ComponentType> = {
+  "dashboard": HRMSDashboardTab,
   "staff-profiles": StaffProfilesTab,
   "attendance": AttendanceTab,
   "attendance-summary": AttendanceSummaryTab,
@@ -2145,7 +2148,7 @@ export default function HRMSAdminPage() {
   const { hasPermission } = useAuth();
 
   const visibleItems = SIDEBAR_ITEMS.filter(item =>
-    item.permissions.some(p => hasPermission(p))
+    item.permissions.length === 0 || item.permissions.some(p => hasPermission(p))
   );
 
   const [activeTab, setActiveTab] = useState(visibleItems[0]?.key || "staff-profiles");
