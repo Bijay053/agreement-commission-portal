@@ -23,10 +23,10 @@ import {
   User, Clock, Calendar, FileText, LogOut, Shield, ChevronLeft, ChevronRight,
   CheckCircle, XCircle, AlertCircle, Download, Briefcase,
   Camera, MapPin, Loader2, RefreshCw, Paperclip, Upload, File,
-  DollarSign, Eye, EyeOff, Building2, Receipt, Lock, Send, Plus,
+  DollarSign, Eye, EyeOff, Building2, Receipt, Lock, Send, Plus, KeyRound,
 } from "lucide-react";
 
-type Tab = "profile" | "attendance" | "leave" | "payslips";
+type Tab = "profile" | "attendance" | "leave" | "payslips" | "change-password";
 
 export default function EmployeePortal() {
   const { user, logout } = useAuth();
@@ -38,6 +38,7 @@ export default function EmployeePortal() {
     { key: "attendance", label: "Attendance", icon: Clock },
     { key: "leave", label: "Leave", icon: Calendar },
     { key: "payslips", label: "Payslips", icon: FileText },
+    { key: "change-password", label: "Change Password", icon: KeyRound },
   ];
 
   return (
@@ -100,6 +101,7 @@ export default function EmployeePortal() {
         {activeTab === "attendance" && <AttendanceTab />}
         {activeTab === "leave" && <LeaveTab />}
         {activeTab === "payslips" && <PayslipsTab showSalary={showSalary} setShowSalary={setShowSalary} />}
+        {activeTab === "change-password" && <ChangePasswordTab />}
       </main>
     </div>
   );
@@ -1617,6 +1619,125 @@ function PayslipsTab({ showSalary, setShowSalary }: { showSalary: boolean; setSh
           </Table>
         </Card>
       )}
+    </div>
+  );
+}
+
+function ChangePasswordTab() {
+  const { toast } = useToast();
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [showCurrent, setShowCurrent] = useState(false);
+  const [showNew, setShowNew] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+
+  const rules = [
+    { label: "At least 8 characters", met: newPassword.length >= 8 },
+    { label: "One uppercase letter", met: /[A-Z]/.test(newPassword) },
+    { label: "One lowercase letter", met: /[a-z]/.test(newPassword) },
+    { label: "One number", met: /\d/.test(newPassword) },
+    { label: "One special character", met: /[!@#$%^&*(),.?":{}|<>]/.test(newPassword) },
+  ];
+  const allMet = rules.every(r => r.met) && newPassword.length > 0;
+  const passwordsMatch = newPassword === confirmPassword && confirmPassword.length > 0;
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!allMet || !passwordsMatch || !currentPassword) return;
+    setSubmitting(true);
+    try {
+      const res = await apiRequest("POST", "/api/auth/change-password", {
+        currentPassword,
+        newPassword,
+        confirmPassword,
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        toast({ title: "Error", description: data.message || "Failed to change password", variant: "destructive" });
+      } else {
+        toast({ title: "Success", description: "Password changed successfully" });
+        setCurrentPassword("");
+        setNewPassword("");
+        setConfirmPassword("");
+      }
+    } catch {
+      toast({ title: "Error", description: "Failed to change password", variant: "destructive" });
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="max-w-md mx-auto">
+      <h2 className="text-xl font-bold mb-1" data-testid="text-change-password-title">Change Password</h2>
+      <p className="text-sm text-muted-foreground mb-6">Update your password to keep your account secure.</p>
+      <Card>
+        <CardContent className="pt-6">
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="current-password">Current Password</Label>
+              <div className="relative">
+                <Input
+                  id="current-password"
+                  type={showCurrent ? "text" : "password"}
+                  value={currentPassword}
+                  onChange={e => setCurrentPassword(e.target.value)}
+                  data-testid="input-current-password"
+                />
+                <button type="button" className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground" onClick={() => setShowCurrent(!showCurrent)}>
+                  {showCurrent ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="new-password">New Password</Label>
+              <div className="relative">
+                <Input
+                  id="new-password"
+                  type={showNew ? "text" : "password"}
+                  value={newPassword}
+                  onChange={e => setNewPassword(e.target.value)}
+                  data-testid="input-new-password"
+                />
+                <button type="button" className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground" onClick={() => setShowNew(!showNew)}>
+                  {showNew ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+              </div>
+              <div className="space-y-1 mt-2">
+                {rules.map(r => (
+                  <div key={r.label} className="flex items-center gap-2 text-xs">
+                    {r.met ? <CheckCircle className="h-3 w-3 text-green-600" /> : <XCircle className="h-3 w-3 text-muted-foreground" />}
+                    <span className={r.met ? "text-green-700" : "text-muted-foreground"}>{r.label}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="confirm-password">Confirm New Password</Label>
+              <Input
+                id="confirm-password"
+                type="password"
+                value={confirmPassword}
+                onChange={e => setConfirmPassword(e.target.value)}
+                data-testid="input-confirm-password"
+              />
+              {confirmPassword && !passwordsMatch && (
+                <p className="text-xs text-red-500">Passwords do not match</p>
+              )}
+            </div>
+            <Button
+              type="submit"
+              className="w-full"
+              disabled={!allMet || !passwordsMatch || !currentPassword || submitting}
+              data-testid="button-change-password"
+            >
+              {submitting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <KeyRound className="h-4 w-4 mr-2" />}
+              Change Password
+            </Button>
+          </form>
+        </CardContent>
+      </Card>
     </div>
   );
 }

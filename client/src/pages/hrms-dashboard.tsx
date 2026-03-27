@@ -7,7 +7,7 @@ import {
 } from "@/components/ui/table";
 import {
   Users, UserCheck, UserX, Clock, CalendarDays, Cake,
-  TreePalm, Calendar, AlertCircle,
+  TreePalm, Calendar, AlertCircle, FileWarning,
 } from "lucide-react";
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from "recharts";
 
@@ -258,6 +258,55 @@ export function HRMSDashboardTab() {
           </CardContent>
         </Card>
       </div>
+
+      {data.contracts_ending_soon && data.contracts_ending_soon.length > 0 && (
+        <Card className="border-orange-200">
+          <CardHeader className="pb-2 pt-4 px-4 bg-orange-600 dark:bg-orange-800 rounded-t-lg">
+            <CardTitle className="text-base font-semibold text-white flex items-center gap-2">
+              <FileWarning className="w-4 h-4" /> Contracts Ending Soon
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-0">
+            <div className="overflow-auto max-h-[300px]">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="text-xs">Employee</TableHead>
+                    <TableHead className="text-xs">Department</TableHead>
+                    <TableHead className="text-xs">Contract End Date</TableHead>
+                    <TableHead className="text-xs">Days Remaining</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {data.contracts_ending_soon.map((c: any) => (
+                    <TableRow key={c.id} data-testid={`contract-ending-${c.id}`}>
+                      <TableCell className="text-xs">
+                        <p className="font-medium">{c.name}</p>
+                        <p className="text-muted-foreground">{c.email}</p>
+                      </TableCell>
+                      <TableCell className="text-xs">{c.department || "—"}</TableCell>
+                      <TableCell className="text-xs">
+                        {new Date(c.contract_end_date + "T00:00:00").toLocaleDateString("en", { year: "numeric", month: "short", day: "numeric" })}
+                      </TableCell>
+                      <TableCell>
+                        <Badge className={`text-xs ${
+                          c.days_remaining <= 7
+                            ? "bg-red-100 text-red-700 hover:bg-red-200"
+                            : c.days_remaining <= 30
+                            ? "bg-orange-100 text-orange-700 hover:bg-orange-200"
+                            : "bg-yellow-100 text-yellow-700 hover:bg-yellow-200"
+                        }`}>
+                          {c.days_remaining === 0 ? "Today" : `${c.days_remaining} day${c.days_remaining > 1 ? "s" : ""}`}
+                        </Badge>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <Card>

@@ -165,7 +165,8 @@ def check_new_device(user, request, device_info, client_ip):
         </div>
         <p style="color:#94a3b8;font-size:13px;">For your security, the system administrator has also been notified.</p>
         '''
-        user_html = _email_wrap('New Device Login Detected', user_body)
+        device_portal = getattr(request, '_portal_type', 'agreement')
+        user_html = _email_wrap('New Device Login Detected', user_body, portal=device_portal)
         send_mail_with_bcc(
             user_subject, '',
             django_settings.DEFAULT_FROM_EMAIL,
@@ -283,16 +284,24 @@ def get_user_roles_list(user_id):
     return [role_to_dict(r) for r in roles]
 
 
-def _email_wrap(title, body_html, footer_note=''):
+def _email_wrap(title, body_html, footer_note='', portal='agreement'):
     footer = f'<p style="color:#9ca3af;font-size:12px;margin-top:8px;">{footer_note}</p>' if footer_note else ''
+    if portal == 'people':
+        header_title = 'HRMS Portal'
+        footer_text = 'HRMS &ndash; Study Info Centre'
+        gradient = 'linear-gradient(135deg,#0f766e 0%,#14b8a6 100%)'
+    else:
+        header_title = 'Agreement Portal'
+        footer_text = 'Agreement &amp; Commission Management Portal'
+        gradient = 'linear-gradient(135deg,#1e40af 0%,#3b82f6 100%)'
     return f'''<!DOCTYPE html>
 <html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"></head>
 <body style="margin:0;padding:0;background-color:#f1f5f9;font-family:'Segoe UI',Arial,sans-serif;">
 <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#f1f5f9;padding:40px 20px;">
 <tr><td align="center">
 <table width="600" cellpadding="0" cellspacing="0" style="background-color:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.08);">
-  <tr><td style="background:linear-gradient(135deg,#1e40af 0%,#3b82f6 100%);padding:32px 40px;text-align:center;">
-    <h1 style="color:#ffffff;margin:0;font-size:22px;font-weight:700;letter-spacing:0.5px;">Agreement Portal</h1>
+  <tr><td style="background:{gradient};padding:32px 40px;text-align:center;">
+    <h1 style="color:#ffffff;margin:0;font-size:22px;font-weight:700;letter-spacing:0.5px;">{header_title}</h1>
     <p style="color:#bfdbfe;margin:6px 0 0;font-size:13px;">Study Info Centre</p>
   </td></tr>
   <tr><td style="padding:36px 40px;">
@@ -300,7 +309,7 @@ def _email_wrap(title, body_html, footer_note=''):
     {body_html}
   </td></tr>
   <tr><td style="background-color:#f8fafc;padding:24px 40px;border-top:1px solid #e2e8f0;text-align:center;">
-    <p style="color:#94a3b8;font-size:12px;margin:0;">Agreement &amp; Commission Management Portal</p>
+    <p style="color:#94a3b8;font-size:12px;margin:0;">{footer_text}</p>
     <p style="color:#94a3b8;font-size:11px;margin:4px 0 0;">&copy; {timezone.now().year} Study Info Centre. All rights reserved.</p>
     {footer}
   </td></tr>
@@ -322,18 +331,27 @@ def _button(text, url, color='#3b82f6'):
     return f'<div style="text-align:center;padding:24px 0;"><a href="{url}" style="background-color:{color};color:#ffffff;padding:14px 36px;text-decoration:none;border-radius:8px;font-size:15px;font-weight:600;display:inline-block;letter-spacing:0.3px;">{text}</a></div>'
 
 
-def send_otp_email(email, code):
-    subject = 'Login Verification Code - Agreement Portal'
+def send_otp_email(email, code, portal='agreement'):
+    portal_label = 'HRMS Portal' if portal == 'people' else 'Agreement Portal'
+    subject = f'Login Verification Code - {portal_label}'
+    if portal == 'people':
+        border_color = '#0f766e'
+        bg_gradient = 'linear-gradient(135deg,#f0fdfa,#ccfbf1)'
+        text_color = '#0f766e'
+    else:
+        border_color = '#3b82f6'
+        bg_gradient = 'linear-gradient(135deg,#eff6ff,#dbeafe)'
+        text_color = '#1e40af'
     body = f'''
     <p style="color:#475569;font-size:15px;line-height:1.6;">Your one-time verification code is:</p>
     <div style="text-align:center;padding:24px 0;">
-      <div style="display:inline-block;background:linear-gradient(135deg,#eff6ff,#dbeafe);border:2px solid #3b82f6;border-radius:12px;padding:20px 48px;letter-spacing:10px;font-size:36px;font-weight:bold;color:#1e40af;font-family:'Courier New',monospace;">
+      <div style="display:inline-block;background:{bg_gradient};border:2px solid {border_color};border-radius:12px;padding:20px 48px;letter-spacing:10px;font-size:36px;font-weight:bold;color:{text_color};font-family:'Courier New',monospace;">
         {code}
       </div>
     </div>
     <p style="color:#94a3b8;font-size:13px;text-align:center;">This code expires in <strong>{settings.OTP_EXPIRY_MINUTES} minutes</strong>. Do not share it with anyone.</p>
     '''
-    html = _email_wrap('Login Verification Code', body)
+    html = _email_wrap('Login Verification Code', body, portal=portal)
     send_mail_with_bcc(
         subject,
         '',
@@ -405,8 +423,9 @@ class LoginView(APIView):
             )
 
             otp_sent = False
+            portal_type = 'people' if is_people_portal else 'agreement'
             try:
-                send_otp_email(user.email, otp_code)
+                send_otp_email(user.email, otp_code, portal=portal_type)
                 create_security_log(user_id=user.id, event_type='OTP_SENT', ip_address=client_ip, device_info=get_user_agent(request))
                 otp_sent = True
                 print(f'[OTP] Code for {user.email}: {otp_code} (expires in {settings.OTP_EXPIRY_MINUTES} min)')
@@ -502,6 +521,8 @@ class VerifyOtpView(APIView):
                 otp_verified=True,
             )
 
+            host = request.get_host().split(':')[0].lower()
+            request._portal_type = 'people' if 'people.' in host else 'agreement'
             is_new_device = check_new_device(user, request, device_info, client_ip)
 
             user.last_login_at = timezone.now()
@@ -559,8 +580,10 @@ class ResendOtpView(APIView):
                 resend_count=(existing.resend_count + 1) if existing else 1,
             )
 
+            host = request.get_host().split(':')[0].lower()
+            portal_type = 'people' if 'people.' in host else 'agreement'
             try:
-                send_otp_email(user.email, otp_code)
+                send_otp_email(user.email, otp_code, portal=portal_type)
                 create_security_log(user_id=user_id, event_type='OTP_RESENT', ip_address=client_ip)
                 print(f'[OTP] Resend code for {user.email}: {otp_code}')
             except Exception as e:

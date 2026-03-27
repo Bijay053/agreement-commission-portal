@@ -1852,6 +1852,21 @@ class HRMSDashboardView(APIView):
         absent_count = total - present_count - len(on_leave_ids)
         late_count = sum(1 for a in att_records if a.is_late)
 
+        contracts_ending = []
+        for emp in employees:
+            if emp.contract_end_date:
+                days_left = (emp.contract_end_date - today).days
+                if 0 <= days_left <= 60:
+                    contracts_ending.append({
+                        'id': str(emp.id),
+                        'name': emp.full_name,
+                        'email': emp.email,
+                        'department': emp.department or '',
+                        'contract_end_date': emp.contract_end_date.isoformat(),
+                        'days_remaining': days_left,
+                    })
+        contracts_ending.sort(key=lambda x: x['days_remaining'])
+
         return Response({
             'total_employees': total,
             'present_today': present_count,
@@ -1864,6 +1879,7 @@ class HRMSDashboardView(APIView):
             'on_leave_list': on_leave_today,
             'pending_leave_requests': pending_leave_list,
             'upcoming_holidays': upcoming_holidays,
+            'contracts_ending_soon': contracts_ending[:10],
         })
 
 
@@ -4759,7 +4775,7 @@ class ConfidentialOTPSendView(APIView):
         )
 
         try:
-            send_otp_email(user.email, otp_str)
+            send_otp_email(user.email, otp_str, portal='people')
         except Exception as e:
             print(f'[OTP-Confidential] Email send failed: {e}')
             return Response({'message': 'Failed to send OTP email'}, status=500)

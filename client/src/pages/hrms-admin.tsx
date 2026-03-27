@@ -2216,7 +2216,7 @@ export default function HRMSAdminPage() {
   const ActiveComponent = CONTENT_MAP[activeTab];
 
   return (
-    <div className="flex h-[calc(100vh-64px)]">
+    <div className="flex h-full">
       <aside className="w-56 shrink-0 border-r bg-muted/30 overflow-y-auto">
         <div className="p-4 border-b">
           <div className="flex items-center gap-2">
