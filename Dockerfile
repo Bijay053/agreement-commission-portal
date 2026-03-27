@@ -20,7 +20,7 @@ COPY client/ ./client/
 COPY shared/ ./shared/
 COPY vite.config.ts tsconfig.json tailwind.config.ts postcss.config.js components.json ./
 RUN mkdir -p attached_assets
-RUN NODE_OPTIONS="--max-old-space-size=1024" npx vite build
+RUN NODE_OPTIONS="--max-old-space-size=2048" npx vite build
 
 FROM base AS production
 COPY --from=python-deps /usr/local/lib/python3.12/site-packages /usr/local/lib/python3.12/site-packages
