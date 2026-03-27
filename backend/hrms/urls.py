@@ -37,6 +37,7 @@ urlpatterns = [
     path('hrms/attendance/device-sync', views.DeviceSyncView.as_view()),
     path('hrms/attendance/dashboard', views.AttendanceDashboardView.as_view()),
     path('hrms/attendance/grid', views.AttendanceGridView.as_view()),
+    path('hrms/attendance/summary', views.AttendanceSummaryView.as_view()),
     path('hrms/attendance/<uuid:att_id>', views.AttendanceDetailView.as_view()),
 
     path('hrms/device-mappings', views.DeviceMappingListView.as_view()),

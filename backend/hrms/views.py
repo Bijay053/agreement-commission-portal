@@ -1835,6 +1835,189 @@ class AttendanceGridView(APIView):
         })
 
 
+class AttendanceSummaryView(APIView):
+    @require_permission('hrms.attendance.read')
+    def get(self, request):
+        month = request.GET.get('month')
+        year = request.GET.get('year')
+        org_id = request.GET.get('organization_id')
+        dept_id = request.GET.get('department_id')
+
+        if not month or not year:
+            today = date.today()
+            month = month or str(today.month)
+            year = year or str(today.year)
+
+        month_int = int(month)
+        year_int = int(year)
+
+        date_from = date(year_int, month_int, 1)
+        if month_int == 12:
+            date_to = date(year_int + 1, 1, 1) - timedelta(days=1)
+        else:
+            date_to = date(year_int, month_int + 1, 1) - timedelta(days=1)
+
+        today_date = date.today()
+        effective_to = min(date_to, today_date)
+
+        total_days_in_month = (date_to - date_from).days + 1
+
+        employees = Employee.objects.filter(status='active').order_by('full_name')
+        if org_id:
+            employees = employees.filter(organization_id=org_id)
+        if dept_id:
+            employees = employees.filter(department_id=dept_id)
+
+        emp_ids = [emp.id for emp in employees]
+
+        records = AttendanceRecord.objects.filter(
+            employee_id__in=emp_ids,
+            date__gte=date_from,
+            date__lte=date_to,
+        )
+        att_map = {}
+        for r in records:
+            att_map.setdefault(str(r.employee_id), []).append(r)
+
+        org_ids = set()
+        dept_ids_set = set()
+        for emp in employees:
+            if emp.organization_id:
+                org_ids.add(emp.organization_id)
+            if emp.department_id:
+                dept_ids_set.add(emp.department_id)
+
+        holidays_by_org = {}
+        if org_ids:
+            all_holidays = Holiday.objects.filter(
+                organization_id__in=org_ids,
+                date__gte=date_from,
+                date__lte=date_to,
+                is_optional=False,
+            )
+            for h in all_holidays:
+                holidays_by_org.setdefault(str(h.organization_id), set()).add(h.date)
+
+        dept_cache = {}
+        if dept_ids_set:
+            for d in Department.objects.filter(id__in=dept_ids_set):
+                dept_cache[str(d.id)] = d
+
+        leave_requests = LeaveRequest.objects.filter(
+            employee_id__in=emp_ids,
+            status='approved',
+            start_date__lte=date_to,
+            end_date__gte=date_from,
+        ).select_related('leave_type')
+        leave_map = {}
+        for lr in leave_requests:
+            leave_map.setdefault(str(lr.employee_id), []).append(lr)
+
+        rows = []
+        for idx, emp in enumerate(employees):
+            dept = dept_cache.get(str(emp.department_id)) if emp.department_id else None
+            working_days_per_week = dept.working_days_per_week if dept else 6
+            org_holidays = holidays_by_org.get(str(emp.organization_id), set()) if emp.organization_id else set()
+
+            std_work_hours_per_day = 0
+            if dept and dept.work_start_time and dept.work_end_time:
+                from datetime import datetime as dt_mod
+                start_dt = dt_mod.combine(date_from, dept.work_start_time)
+                end_dt = dt_mod.combine(date_from, dept.work_end_time)
+                std_work_hours_per_day = (end_dt - start_dt).total_seconds() / 3600
+            if std_work_hours_per_day <= 0:
+                std_work_hours_per_day = 8
+
+            week_off_count = 0
+            public_holiday_count = 0
+            total_working_days = 0
+
+            d = date_from
+            while d <= date_to:
+                if d in org_holidays:
+                    public_holiday_count += 1
+                elif d.weekday() == 6:
+                    week_off_count += 1
+                elif working_days_per_week == 5 and d.weekday() == 5:
+                    week_off_count += 1
+                else:
+                    total_working_days += 1
+                d += timedelta(days=1)
+
+            total_working_hours = round(total_working_days * std_work_hours_per_day, 2)
+
+            emp_records = att_map.get(str(emp.id), [])
+            worked_days = 0
+            total_worked_hours = 0
+            absent_days = 0
+            system_overtime = 0
+            actual_overtime = 0
+
+            att_dates_with_status = {}
+            for r in emp_records:
+                att_dates_with_status[r.date] = r
+                if r.status in ('present', 'half_day'):
+                    worked_days += 1
+                    wh = float(r.work_hours) if r.work_hours else 0
+                    total_worked_hours += wh
+                    if wh > std_work_hours_per_day:
+                        system_overtime += round(wh - std_work_hours_per_day, 2)
+                    actual_overtime += float(r.overtime_hours) if r.overtime_hours else 0
+                elif r.status == 'absent':
+                    absent_days += 1
+
+            d = date_from
+            while d <= effective_to:
+                if d not in att_dates_with_status and d not in org_holidays and d.weekday() != 6:
+                    if not (working_days_per_week == 5 and d.weekday() == 5):
+                        absent_days += 1
+                d += timedelta(days=1)
+
+            emp_leaves = leave_map.get(str(emp.id), [])
+            total_leave_taken = 0
+            total_paid_leave = 0
+            total_unpaid_leave = 0
+            for lr in emp_leaves:
+                ls = max(lr.start_date, date_from)
+                le = min(lr.end_date, date_to)
+                if ls <= le:
+                    leave_days = float(lr.days_count) if lr.is_half_day else (le - ls).days + 1
+                    total_leave_taken += leave_days
+                    if lr.leave_type and lr.leave_type.is_paid:
+                        total_paid_leave += leave_days
+                    else:
+                        total_unpaid_leave += leave_days
+
+            dept_name = dept.name if dept else ''
+            rows.append({
+                'sn': idx + 1,
+                'employee_id': str(emp.id),
+                'employee_name': emp.full_name,
+                'department': dept_name,
+                'total_days': total_days_in_month,
+                'total_working_days': total_working_days,
+                'week_off': week_off_count,
+                'public_holidays': public_holiday_count,
+                'total_working_hours': total_working_hours,
+                'total_worked_days': worked_days,
+                'total_worked_hours': round(total_worked_hours, 2),
+                'total_leave_taken': total_leave_taken,
+                'total_paid_leave': total_paid_leave,
+                'total_unpaid_leave': total_unpaid_leave,
+                'absent_days': absent_days,
+                'system_overtime': round(system_overtime, 2),
+                'actual_overtime': round(actual_overtime, 2),
+            })
+
+        return Response({
+            'month': month_int,
+            'year': year_int,
+            'date_from': date_from.isoformat(),
+            'date_to': date_to.isoformat(),
+            'employees': rows,
+        })
+
+
 class DeviceMappingListView(APIView):
     @require_permission('hrms.device_mapping.read')
     def get(self, request):

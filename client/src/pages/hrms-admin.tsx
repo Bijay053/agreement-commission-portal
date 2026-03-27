@@ -43,6 +43,7 @@ import { TaxSlabsTab } from "./hrms-tax-slabs";
 import { GovernmentRecordsTab } from "./hrms-govt-records";
 import { CountriesTab } from "./hrms-countries";
 import { FiscalYearsTab } from "./hrms-fiscal-years";
+import { AttendanceSummaryTab } from "./hrms-attendance-summary";
 import { CURRENCIES, getCurrencySymbol } from "@/lib/currencies";
 
 function extractErrorMessage(err: any, fallback: string): string {
@@ -2101,6 +2102,7 @@ function RemoteCheckInPermissionsTab() {
 const SIDEBAR_ITEMS = [
   { key: "staff-profiles", label: "Staff & Salary", icon: UserCog, group: "People", permissions: ["hrms.staff.read", "hrms.salary.read", "employee.view"] },
   { key: "attendance", label: "Attendance", icon: Clock, group: "People", permissions: ["hrms.attendance.read"] },
+  { key: "attendance-summary", label: "Attendance Summary", icon: FileText, group: "People", permissions: ["hrms.attendance.read"] },
   { key: "remote-checkin", label: "Remote Check-In", icon: Wifi, group: "People", permissions: ["hrms.attendance.read"] },
   { key: "leave-types", label: "Leave Types", icon: TreePalm, group: "Leave", permissions: ["hrms.leave_type.read"] },
   { key: "leave-requests", label: "Leave Requests", icon: CalendarDays, group: "Leave", permissions: ["hrms.leave_request.read", "hrms.leave_request.approve"] },
@@ -2121,6 +2123,7 @@ const SIDEBAR_ITEMS = [
 const CONTENT_MAP: Record<string, React.ComponentType> = {
   "staff-profiles": StaffProfilesTab,
   "attendance": AttendanceTab,
+  "attendance-summary": AttendanceSummaryTab,
   "remote-checkin": RemoteCheckInPermissionsTab,
   "organizations": OrgTab,
   "departments": DeptTab,
