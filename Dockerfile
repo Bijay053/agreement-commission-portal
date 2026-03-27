@@ -10,23 +10,11 @@ FROM base AS python-deps
 COPY backend/requirements.txt ./backend/requirements.txt
 RUN pip install --no-cache-dir -r backend/requirements.txt gunicorn
 
-FROM python-deps AS frontend-build
-RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && \
-    apt-get install -y --no-install-recommends nodejs && \
-    rm -rf /var/lib/apt/lists/*
-COPY package.json package-lock.json ./
-RUN npm ci
-COPY client/ ./client/
-COPY shared/ ./shared/
-COPY vite.config.ts tsconfig.json tailwind.config.ts postcss.config.js components.json ./
-RUN mkdir -p attached_assets
-RUN NODE_OPTIONS="--max-old-space-size=2048" npx vite build
-
 FROM base AS production
 COPY --from=python-deps /usr/local/lib/python3.12/site-packages /usr/local/lib/python3.12/site-packages
 COPY --from=python-deps /usr/local/bin /usr/local/bin
 COPY backend/ ./backend/
-COPY --from=frontend-build /app/dist/public ./dist/public
+COPY dist/public ./dist/public
 COPY scripts/ ./scripts/
 RUN mkdir -p uploads
 
