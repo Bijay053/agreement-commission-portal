@@ -71,6 +71,7 @@ urlpatterns = [
     path('hrms/employee-360/<uuid:employee_id>', views.Employee360View.as_view()),
 
     path('hrms/bonuses', views.BonusListView.as_view()),
+    path('hrms/bonuses/bulk-upload', views.BonusBulkUploadView.as_view()),
     path('hrms/bonuses/<uuid:bonus_id>', views.BonusDetailView.as_view()),
 
     path('hrms/travel-expenses', views.TravelExpenseListView.as_view()),

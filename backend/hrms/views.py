@@ -18,7 +18,7 @@ from .models import (
     OnlineCheckInPermission, DeviceMapping, SalaryStructure,
     PayrollRun, Payslip, NotificationSetting,
     Bonus, TravelExpense, AdvancePayment, TaxSlab,
-    CountryTaxLabel,
+    CountryTaxLabel, BONUS_TYPE_CHOICES,
 )
 
 
@@ -3811,6 +3811,150 @@ class BonusDetailView(APIView):
             return Response({'message': 'Bonus not found'}, status=404)
         b.delete()
         return Response({'message': 'Bonus deleted'})
+
+
+class BonusBulkUploadView(APIView):
+    @require_auth
+    def get(self, request):
+        import csv
+        import io
+        output = io.StringIO()
+        writer = csv.writer(output)
+        writer.writerow([
+            'employee_email', 'bonus_type', 'amount', 'reason',
+            'month', 'year', 'is_taxable', 'status',
+        ])
+        writer.writerow([
+            'john@example.com', 'dashain', '10000', 'Dashain festival bonus',
+            '10', '2026', 'yes', 'pending',
+        ])
+        writer.writerow([
+            'jane@example.com', 'performance', '5000', 'Q3 performance',
+            '10', '2026', 'yes', 'approved',
+        ])
+        from django.http import HttpResponse
+        response = HttpResponse(output.getvalue(), content_type='text/csv')
+        response['Content-Disposition'] = 'attachment; filename="bonus_bulk_template.csv"'
+        return response
+
+    @require_permission('hrms.bonus.add')
+    def post(self, request):
+        import csv
+        import io
+
+        file = request.FILES.get('file')
+        if not file:
+            return Response({'message': 'No file uploaded'}, status=400)
+
+        fname = file.name.lower()
+        rows = []
+
+        if fname.endswith('.csv'):
+            decoded = file.read().decode('utf-8-sig')
+            reader = csv.DictReader(io.StringIO(decoded))
+            for row in reader:
+                rows.append({k.strip().lower().replace(' ', '_'): (v.strip() if v else '') for k, v in row.items() if k})
+        elif fname.endswith('.xlsx'):
+            import openpyxl
+            try:
+                wb = openpyxl.load_workbook(file, read_only=True)
+            except Exception:
+                return Response({'message': 'Invalid Excel file.'}, status=400)
+            ws = wb.active
+            headers = []
+            for i, row in enumerate(ws.iter_rows(values_only=True)):
+                if i == 0:
+                    headers = [str(c or '').strip().lower().replace(' ', '_') for c in row]
+                    continue
+                if not any(row):
+                    continue
+                rd = {}
+                for j, val in enumerate(row):
+                    if j < len(headers) and headers[j]:
+                        rd[headers[j]] = str(val).strip() if val is not None else ''
+                rows.append(rd)
+        else:
+            return Response({'message': 'Unsupported file format. Use CSV or Excel (.xlsx).'}, status=400)
+
+        if not rows:
+            return Response({'message': 'No data rows found in the file.'}, status=400)
+
+        emp_map = {}
+        for emp in Employee.objects.filter(status='active'):
+            emp_map[emp.email.lower()] = emp
+
+        valid_types = {c[0] for c in BONUS_TYPE_CHOICES}
+
+        created = 0
+        errors = []
+
+        for i, row in enumerate(rows, start=2):
+            email = (row.get('employee_email') or row.get('email') or '').lower()
+            if not email:
+                errors.append(f'Row {i}: Missing employee_email')
+                continue
+
+            emp = emp_map.get(email)
+            if not emp:
+                errors.append(f'Row {i}: Employee not found for email {email}')
+                continue
+
+            amount_str = row.get('amount') or '0'
+            try:
+                amount = Decimal(str(amount_str))
+            except Exception:
+                errors.append(f'Row {i}: Invalid amount "{amount_str}"')
+                continue
+
+            if amount <= 0:
+                errors.append(f'Row {i}: Amount must be positive')
+                continue
+
+            month_str = row.get('month') or ''
+            year_str = row.get('year') or ''
+            try:
+                month = int(month_str)
+                year = int(float(year_str))
+            except (ValueError, TypeError):
+                errors.append(f'Row {i}: Invalid month/year')
+                continue
+
+            if month < 1 or month > 12:
+                errors.append(f'Row {i}: Month must be 1-12')
+                continue
+
+            bonus_type = (row.get('bonus_type') or 'other').lower()
+            if bonus_type not in valid_types:
+                bonus_type = 'other'
+
+            is_taxable_str = (row.get('is_taxable') or 'yes').lower()
+            is_taxable = is_taxable_str in ('yes', 'true', '1', 'y')
+
+            status_val = (row.get('status') or 'pending').lower()
+            if status_val not in ('pending', 'approved', 'paid', 'cancelled'):
+                status_val = 'pending'
+
+            reason = row.get('reason') or ''
+
+            Bonus.objects.create(
+                employee_id=emp.id,
+                bonus_type=bonus_type,
+                amount=amount,
+                reason=reason if reason else None,
+                month=month,
+                year=year,
+                is_taxable=is_taxable,
+                status=status_val,
+                approved_by=request.session.get('userId') if status_val == 'approved' else None,
+                approved_at=timezone.now() if status_val == 'approved' else None,
+            )
+            created += 1
+
+        return Response({
+            'created': created,
+            'errors': errors,
+            'message': f'{created} bonus(es) created' + (f', {len(errors)} error(s)' if errors else ''),
+        })
 
 
 class TravelExpenseListView(APIView):

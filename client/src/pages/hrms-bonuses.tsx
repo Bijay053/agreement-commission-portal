@@ -19,7 +19,7 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
-import { Plus, Gift, Check, X, Trash2 } from "lucide-react";
+import { Plus, Gift, Check, X, Trash2, Upload, Download, FileSpreadsheet } from "lucide-react";
 
 interface BonusRecord {
   id: string;
@@ -69,6 +69,10 @@ const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "
 export function BonusesTab() {
   const { toast } = useToast();
   const [showForm, setShowForm] = useState(false);
+  const [showBulkUpload, setShowBulkUpload] = useState(false);
+  const [bulkFile, setBulkFile] = useState<File | null>(null);
+  const [bulkUploading, setBulkUploading] = useState(false);
+  const [bulkResult, setBulkResult] = useState<{ created: number; errors: string[] } | null>(null);
   const [filterYear, setFilterYear] = useState(String(new Date().getFullYear()));
   const [form, setForm] = useState({
     employee_id: "",
@@ -132,6 +136,31 @@ export function BonusesTab() {
     });
   };
 
+  const handleBulkUpload = async () => {
+    if (!bulkFile) return;
+    setBulkUploading(true);
+    setBulkResult(null);
+    try {
+      const formData = new FormData();
+      formData.append("file", bulkFile);
+      const res = await fetch("/api/hrms/bonuses/bulk-upload", { method: "POST", credentials: "include", body: formData });
+      const data = await res.json();
+      if (!res.ok) {
+        toast({ title: "Upload failed", description: data.message, variant: "destructive" });
+      } else {
+        setBulkResult({ created: data.created, errors: data.errors || [] });
+        if (data.created > 0) {
+          queryClient.invalidateQueries({ queryKey: ["/api/hrms/bonuses"] });
+          toast({ title: data.message });
+        }
+      }
+    } catch (err: any) {
+      toast({ title: "Upload failed", description: err.message, variant: "destructive" });
+    } finally {
+      setBulkUploading(false);
+    }
+  };
+
   if (isLoading) return <div className="space-y-3">{Array.from({ length: 3 }).map((_, i) => <Card key={i}><CardContent className="p-4"><Skeleton className="h-16" /></CardContent></Card>)}</div>;
 
   const totalApproved = bonuses?.filter(b => b.status === "approved" || b.status === "paid").reduce((s, b) => s + b.amount, 0) || 0;
@@ -149,9 +178,14 @@ export function BonusesTab() {
           </Select>
           <Badge variant="outline">Total Approved: { totalApproved.toLocaleString()}</Badge>
         </div>
-        <Button onClick={() => { setForm({ employee_id: "", bonus_type: "other", amount: "", reason: "", month: String(new Date().getMonth() + 1), year: filterYear, is_taxable: true }); setShowForm(true); }} data-testid="btn-add-bonus">
-          <Plus className="w-4 h-4 mr-1" /> Add Bonus
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={() => { setBulkFile(null); setBulkResult(null); setShowBulkUpload(true); }} data-testid="btn-bulk-upload-bonus">
+            <Upload className="w-4 h-4 mr-1" /> Bulk Upload
+          </Button>
+          <Button onClick={() => { setForm({ employee_id: "", bonus_type: "other", amount: "", reason: "", month: String(new Date().getMonth() + 1), year: filterYear, is_taxable: true }); setShowForm(true); }} data-testid="btn-add-bonus">
+            <Plus className="w-4 h-4 mr-1" /> Add Bonus
+          </Button>
+        </div>
       </div>
 
       <Table>
@@ -252,6 +286,60 @@ export function BonusesTab() {
             <Button variant="outline" onClick={() => setShowForm(false)}>Cancel</Button>
             <Button onClick={handleSubmit} disabled={createMutation.isPending} data-testid="btn-save-bonus">
               {createMutation.isPending ? "Adding..." : "Add Bonus"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showBulkUpload} onOpenChange={setShowBulkUpload}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader><DialogTitle>Bulk Upload Bonuses</DialogTitle></DialogHeader>
+          <div className="space-y-4">
+            <div className="flex items-center gap-2">
+              <Button variant="outline" size="sm" onClick={() => { window.open("/api/hrms/bonuses/bulk-upload", "_blank"); }} data-testid="btn-download-bonus-template">
+                <Download className="w-4 h-4 mr-1" /> Download Template
+              </Button>
+              <span className="text-xs text-muted-foreground">CSV or Excel (.xlsx)</span>
+            </div>
+
+            <div className="border-2 border-dashed rounded-lg p-6 text-center">
+              <FileSpreadsheet className="w-8 h-8 mx-auto mb-2 text-muted-foreground" />
+              <p className="text-sm text-muted-foreground mb-2">
+                {bulkFile ? bulkFile.name : "Select a CSV or Excel file"}
+              </p>
+              <Input
+                type="file"
+                accept=".csv,.xlsx"
+                className="max-w-xs mx-auto"
+                onChange={e => { setBulkFile(e.target.files?.[0] || null); setBulkResult(null); }}
+                data-testid="input-bulk-bonus-file"
+              />
+            </div>
+
+            <div className="text-xs text-muted-foreground space-y-1">
+              <p className="font-medium">Columns:</p>
+              <p>employee_email (required), bonus_type, amount (required), reason, month, year, is_taxable (yes/no), status (pending/approved)</p>
+              <p>Valid bonus_type values: festival, dashain, performance, target, attendance, referral, joining, retention, commission, yearly, special, other</p>
+            </div>
+
+            {bulkResult && (
+              <div className="space-y-2">
+                <div className="flex gap-3">
+                  <Badge variant="default" className="bg-green-600">{bulkResult.created} Created</Badge>
+                  {bulkResult.errors.length > 0 && <Badge variant="destructive">{bulkResult.errors.length} Error(s)</Badge>}
+                </div>
+                {bulkResult.errors.length > 0 && (
+                  <div className="max-h-32 overflow-y-auto bg-red-50 dark:bg-red-950 rounded p-2 text-xs text-red-700 dark:text-red-300 space-y-0.5">
+                    {bulkResult.errors.map((e, i) => <p key={i}>{e}</p>)}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowBulkUpload(false)}>Close</Button>
+            <Button onClick={handleBulkUpload} disabled={!bulkFile || bulkUploading} data-testid="btn-submit-bulk-bonus">
+              {bulkUploading ? "Uploading..." : "Upload & Process"}
             </Button>
           </DialogFooter>
         </DialogContent>
