@@ -1679,8 +1679,22 @@ class DeviceSyncView(APIView):
 
             mapping = DeviceMapping.objects.filter(device_user_id=device_user_id).first()
             if not mapping:
-                errors.append(f'No mapping for device user {device_user_id}')
-                continue
+                emp_match = Employee.objects.filter(
+                    employee_id_number=str(device_user_id), status='active'
+                ).first()
+                if emp_match:
+                    if not DeviceMapping.objects.filter(employee_id=emp_match.id).exists():
+                        mapping = DeviceMapping.objects.create(
+                            employee_id=emp_match.id,
+                            device_user_id=str(device_user_id),
+                            device_name='ZKT K40 (auto)',
+                        )
+                    else:
+                        errors.append(f'No mapping for device user {device_user_id} (employee {emp_match.employee_id_number} already mapped to different device)')
+                        continue
+                else:
+                    errors.append(f'No mapping for device user {device_user_id}')
+                    continue
 
             try:
                 punch_time = datetime.fromisoformat(punch_time_str)
