@@ -5,11 +5,18 @@ from django.utils import timezone
 
 @shared_task
 def check_missing_checkouts():
-    from hrms.models import AttendanceRecord, Organization, Department, NotificationSetting
+    from hrms.models import (
+        AttendanceRecord, Organization, Department,
+        NotificationSetting, LeaveRequest,
+    )
     from hrms.views import send_no_checkout_notification
     from employees.models import Employee
+    import zoneinfo
 
-    today = date.today()
+    nepal_tz = zoneinfo.ZoneInfo('Asia/Kathmandu')
+    now_npt = timezone.now().astimezone(nepal_tz)
+    today = now_npt.date()
+
     missing = AttendanceRecord.objects.filter(
         date=today,
         check_in__isnull=False,
@@ -17,8 +24,19 @@ def check_missing_checkouts():
         status='present',
     )
 
+    on_leave_emp_ids = set(
+        LeaveRequest.objects.filter(
+            status='approved',
+            start_date__lte=today,
+            end_date__gte=today,
+        ).values_list('employee_id', flat=True)
+    )
+
     count = 0
     for att in missing:
+        if att.employee_id in on_leave_emp_ids:
+            continue
+
         try:
             employee = Employee.objects.get(id=att.employee_id)
         except Employee.DoesNotExist:
@@ -29,12 +47,12 @@ def check_missing_checkouts():
             dept = Department.objects.filter(id=employee.department_id).first()
 
         if dept and dept.work_end_time:
-            work_end = timezone.now().replace(
+            work_end = now_npt.replace(
                 hour=dept.work_end_time.hour,
                 minute=dept.work_end_time.minute,
                 second=0, microsecond=0,
             )
-            if timezone.now() < work_end:
+            if now_npt < work_end:
                 continue
 
         send_no_checkout_notification(employee, att, dept)
