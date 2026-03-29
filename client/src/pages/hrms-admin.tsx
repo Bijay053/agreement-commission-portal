@@ -533,7 +533,7 @@ function LeaveTypesTab() {
 
 function LeaveRequestsTab() {
   const { toast } = useToast();
-  const [statusFilter, setStatusFilter] = useState("pending");
+  const [statusFilter, setStatusFilter] = useState("all");
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [createForm, setCreateForm] = useState({ employee_id: "", leave_type_id: "", start_date: "", end_date: "", reason: "", is_half_day: false, half_day_period: "first_half", auto_approve: false });
   const [createLoading, setCreateLoading] = useState(false);
@@ -541,7 +541,8 @@ function LeaveRequestsTab() {
   const { data: requests, isLoading } = useQuery<LeaveRequest[]>({
     queryKey: ["/api/hrms/leave-requests", statusFilter],
     queryFn: async () => {
-      const res = await fetch(`/api/hrms/leave-requests?status=${statusFilter}`, { credentials: "include" });
+      const url = statusFilter === "all" ? '/api/hrms/leave-requests' : `/api/hrms/leave-requests?status=${statusFilter}`;
+      const res = await fetch(url, { credentials: "include" });
       if (!res.ok) throw new Error("Failed to fetch");
       return res.json();
     },
@@ -633,7 +634,7 @@ function LeaveRequestsTab() {
       <div className="flex justify-between items-center">
         <h3 className="text-lg font-semibold">Leave Requests</h3>
         <div className="flex gap-2 flex-wrap items-center">
-          {["pending", "approved", "rejected", "cancelled", "cancel_requested"].map(s => (
+          {["all", "pending", "approved", "rejected", "cancelled", "cancel_requested"].map(s => (
             <Button key={s} variant={statusFilter === s ? "default" : "outline"} size="sm" onClick={() => setStatusFilter(s)} data-testid={`button-filter-${s}`}>
               {s === "cancel_requested" ? "Cancel Requested" : s.charAt(0).toUpperCase() + s.slice(1)}
             </Button>
@@ -702,7 +703,7 @@ function LeaveRequestsTab() {
               </TableRow>
             ))}
             {(!requests || requests.length === 0) && (
-              <TableRow><TableCell colSpan={10} className="text-center text-muted-foreground py-8">No {statusFilter === "cancel_requested" ? "cancel requested" : statusFilter} leave requests</TableCell></TableRow>
+              <TableRow><TableCell colSpan={10} className="text-center text-muted-foreground py-8">No {statusFilter === "all" ? "" : statusFilter === "cancel_requested" ? "cancel requested " : statusFilter + " "}leave requests</TableCell></TableRow>
             )}
           </TableBody>
         </Table>
@@ -2723,14 +2724,15 @@ function RemoteCheckInPermissionsTab() {
 function HRPoliciesTab() {
   const { toast } = useToast();
   const { data: orgs } = useQuery<Organization[]>({ queryKey: ["/api/hrms/organizations"] });
-  const orgId = orgs?.[0]?.id || "";
+  const [selectedOrg, setSelectedOrg] = useState("");
+  const orgId = selectedOrg || orgs?.[0]?.id || "";
   const { data: policies, isLoading } = useQuery<any[]>({
     queryKey: ["/api/hrms/hr-policies", orgId],
     queryFn: async () => {
-      const res = await fetch(`/api/hrms/hr-policies?organization_id=${orgId}`, { credentials: "include" });
+      const url = orgId ? `/api/hrms/hr-policies?organization_id=${orgId}` : '/api/hrms/hr-policies';
+      const res = await fetch(url, { credentials: "include" });
       return res.json();
     },
-    enabled: !!orgId,
   });
   const { data: departments } = useQuery<any[]>({ queryKey: ["/api/hrms/departments"] });
   const orgDepts = (departments || []).filter((d: any) => d.organization_id === orgId);
@@ -2784,7 +2786,15 @@ function HRPoliciesTab() {
     <div className="space-y-4">
       <div className="flex justify-between items-center">
         <h3 className="text-lg font-semibold" data-testid="text-hr-policies-title">HR Policies</h3>
-        <Button size="sm" onClick={openAdd} data-testid="button-add-policy"><Plus className="h-4 w-4 mr-1" /> Add Policy</Button>
+        <div className="flex items-center gap-2">
+          {orgs && orgs.length > 1 && (
+            <Select value={orgId} onValueChange={setSelectedOrg}>
+              <SelectTrigger className="w-[200px]" data-testid="select-policy-org"><SelectValue placeholder="Organization" /></SelectTrigger>
+              <SelectContent>{orgs.map(o => <SelectItem key={o.id} value={o.id}>{o.name}</SelectItem>)}</SelectContent>
+            </Select>
+          )}
+          <Button size="sm" onClick={openAdd} data-testid="button-add-policy"><Plus className="h-4 w-4 mr-1" /> Add Policy</Button>
+        </div>
       </div>
       {isLoading ? <Skeleton className="h-40 w-full" /> : (
         <Table>
@@ -2895,14 +2905,15 @@ function HRPoliciesTab() {
 function DocTemplatesTab() {
   const { toast } = useToast();
   const { data: orgs } = useQuery<Organization[]>({ queryKey: ["/api/hrms/organizations"] });
-  const orgId = orgs?.[0]?.id || "";
+  const [selectedOrg, setSelectedOrg] = useState("");
+  const orgId = selectedOrg || orgs?.[0]?.id || "";
   const { data: templates, isLoading } = useQuery<any[]>({
     queryKey: ["/api/hrms/document-templates", orgId],
     queryFn: async () => {
-      const res = await fetch(`/api/hrms/document-templates?organization_id=${orgId}`, { credentials: "include" });
+      const url = orgId ? `/api/hrms/document-templates?organization_id=${orgId}` : '/api/hrms/document-templates';
+      const res = await fetch(url, { credentials: "include" });
       return res.json();
     },
-    enabled: !!orgId,
   });
   const [showForm, setShowForm] = useState(false);
   const [editTemplate, setEditTemplate] = useState<any>(null);
@@ -2961,7 +2972,15 @@ This letter is issued for official purposes as requested by the employee.`,
           <h3 className="text-lg font-semibold" data-testid="text-doc-templates-title">Document Templates</h3>
           <p className="text-sm text-muted-foreground">Templates for Experience Letters and CIT Release documents</p>
         </div>
-        <Button size="sm" onClick={openAdd} data-testid="button-add-template"><Plus className="h-4 w-4 mr-1" /> Add Template</Button>
+        <div className="flex items-center gap-2">
+          {orgs && orgs.length > 1 && (
+            <Select value={orgId} onValueChange={setSelectedOrg}>
+              <SelectTrigger className="w-[200px]" data-testid="select-template-org"><SelectValue placeholder="Organization" /></SelectTrigger>
+              <SelectContent>{orgs.map(o => <SelectItem key={o.id} value={o.id}>{o.name}</SelectItem>)}</SelectContent>
+            </Select>
+          )}
+          <Button size="sm" onClick={openAdd} data-testid="button-add-template"><Plus className="h-4 w-4 mr-1" /> Add Template</Button>
+        </div>
       </div>
       <div className="bg-muted/30 border rounded-md p-3 text-xs text-muted-foreground">
         <p className="font-medium mb-1">Available Placeholders:</p>
