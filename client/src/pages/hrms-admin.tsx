@@ -2635,19 +2635,30 @@ function HRPoliciesTab() {
   const [form, setForm] = useState({ title: "", content: "", department_id: "", effective_date: "", is_active: true });
   const [saving, setSaving] = useState(false);
   const [viewPolicy, setViewPolicy] = useState<any>(null);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [removeFile, setRemoveFile] = useState(false);
 
-  const openAdd = () => { setEditPolicy(null); setForm({ title: "", content: "", department_id: "", effective_date: "", is_active: true }); setShowForm(true); };
-  const openEdit = (p: any) => { setEditPolicy(p); setForm({ title: p.title, content: p.content, department_id: p.department_id || "", effective_date: p.effective_date || "", is_active: p.is_active }); setShowForm(true); };
+  const openAdd = () => { setEditPolicy(null); setForm({ title: "", content: "", department_id: "", effective_date: "", is_active: true }); setSelectedFile(null); setRemoveFile(false); setShowForm(true); };
+  const openEdit = (p: any) => { setEditPolicy(p); setForm({ title: p.title, content: p.content || "", department_id: p.department_id || "", effective_date: p.effective_date || "", is_active: p.is_active }); setSelectedFile(null); setRemoveFile(false); setShowForm(true); };
 
   const savePolicy = async () => {
     setSaving(true);
     try {
-      const body = { ...form, organization_id: orgId };
+      const formData = new FormData();
+      formData.append('title', form.title);
+      formData.append('content', form.content);
+      formData.append('organization_id', orgId || '');
+      formData.append('department_id', form.department_id);
+      formData.append('effective_date', form.effective_date);
+      formData.append('is_active', String(form.is_active));
+      if (selectedFile) formData.append('file', selectedFile);
+      if (removeFile) formData.append('remove_file', 'true');
+
       if (editPolicy) {
-        await apiRequest("PUT", `/api/hrms/hr-policies/${editPolicy.id}`, body);
+        await fetch(`/api/hrms/hr-policies/${editPolicy.id}`, { method: 'PUT', credentials: 'include', body: formData });
         toast({ title: "Policy updated" });
       } else {
-        await apiRequest("POST", "/api/hrms/hr-policies", body);
+        await fetch('/api/hrms/hr-policies', { method: 'POST', credentials: 'include', body: formData });
         toast({ title: "Policy created" });
       }
       queryClient.refetchQueries({ queryKey: ["/api/hrms/hr-policies"] });
@@ -2677,6 +2688,7 @@ function HRPoliciesTab() {
               <TableHead>Title</TableHead>
               <TableHead>Department</TableHead>
               <TableHead>Effective Date</TableHead>
+              <TableHead>Attachment</TableHead>
               <TableHead>Acknowledged</TableHead>
               <TableHead>Status</TableHead>
               <TableHead>Actions</TableHead>
@@ -2688,6 +2700,13 @@ function HRPoliciesTab() {
                 <TableCell className="font-medium">{p.title}</TableCell>
                 <TableCell>{p.department_name}</TableCell>
                 <TableCell>{p.effective_date || "—"}</TableCell>
+                <TableCell>
+                  {p.file_url ? (
+                    <a href={p.file_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-primary hover:underline text-xs" data-testid={`link-policy-file-${p.id}`}>
+                      <Paperclip className="h-3 w-3" /> View File
+                    </a>
+                  ) : "—"}
+                </TableCell>
                 <TableCell>{p.acknowledgment_count}/{p.employee_count}</TableCell>
                 <TableCell><Badge variant={p.is_active ? "default" : "secondary"}>{p.is_active ? "Active" : "Inactive"}</Badge></TableCell>
                 <TableCell>
@@ -2700,7 +2719,7 @@ function HRPoliciesTab() {
               </TableRow>
             ))}
             {(!policies || policies.length === 0) && (
-              <TableRow><TableCell colSpan={6} className="text-center text-muted-foreground py-8">No policies yet</TableCell></TableRow>
+              <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground py-8">No policies yet</TableCell></TableRow>
             )}
           </TableBody>
         </Table>
@@ -2721,11 +2740,23 @@ function HRPoliciesTab() {
               </Select>
             </div>
             <div><Label>Effective Date</Label><input type="date" className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm" value={form.effective_date} onChange={e => setForm({ ...form, effective_date: e.target.value })} /></div>
-            <div><Label>Policy Content</Label><Textarea className="min-h-[200px]" value={form.content} onChange={e => setForm({ ...form, content: e.target.value })} data-testid="input-policy-content" /></div>
+            <div>
+              <Label>Attachment (PDF, DOC, etc.)</Label>
+              <div className="flex items-center gap-2 mt-1">
+                <input type="file" accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.jpg,.png" onChange={e => { setSelectedFile(e.target.files?.[0] || null); setRemoveFile(false); }} className="text-sm" data-testid="input-policy-file" />
+                {editPolicy?.file_url && !removeFile && !selectedFile && (
+                  <Button variant="outline" size="sm" className="text-red-500 text-xs" onClick={() => setRemoveFile(true)}>
+                    <Trash2 className="h-3 w-3 mr-1" /> Remove File
+                  </Button>
+                )}
+                {removeFile && <span className="text-xs text-red-500">File will be removed on save</span>}
+              </div>
+            </div>
+            <div><Label>Policy Content (optional if file attached)</Label><Textarea className="min-h-[200px]" value={form.content} onChange={e => setForm({ ...form, content: e.target.value })} data-testid="input-policy-content" /></div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowForm(false)}>Cancel</Button>
-            <Button onClick={savePolicy} disabled={saving || !form.title || !form.content} data-testid="button-save-policy">
+            <Button onClick={savePolicy} disabled={saving || !form.title || (!form.content && !selectedFile && !editPolicy?.file_url)} data-testid="button-save-policy">
               {saving && <Loader2 className="h-4 w-4 animate-spin mr-1" />} {editPolicy ? "Update" : "Create"}
             </Button>
           </DialogFooter>
@@ -2741,7 +2772,14 @@ function HRPoliciesTab() {
               {viewPolicy?.effective_date && <span>Effective: {viewPolicy.effective_date}</span>}
               <span>{viewPolicy?.acknowledgment_count}/{viewPolicy?.employee_count} acknowledged</span>
             </div>
-            <div className="prose prose-sm dark:prose-invert max-w-none whitespace-pre-wrap border rounded-md p-4 bg-muted/20">{viewPolicy?.content}</div>
+            {viewPolicy?.file_url && (
+              <a href={viewPolicy.file_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-primary hover:underline text-sm" data-testid="link-view-policy-file">
+                <Paperclip className="h-4 w-4" /> Download Attached File
+              </a>
+            )}
+            {viewPolicy?.content && (
+              <div className="prose prose-sm dark:prose-invert max-w-none whitespace-pre-wrap border rounded-md p-4 bg-muted/20">{viewPolicy.content}</div>
+            )}
           </div>
         </DialogContent>
       </Dialog>
@@ -2763,7 +2801,7 @@ function DocTemplatesTab() {
   });
   const [showForm, setShowForm] = useState(false);
   const [editTemplate, setEditTemplate] = useState<any>(null);
-  const [form, setForm] = useState({ name: "", doc_type: "experience_letter", content: "", is_active: true });
+  const [form, setForm] = useState({ name: "", doc_type: "experience_letter", content: "", eligibility: "any", is_active: true });
   const [saving, setSaving] = useState(false);
 
   const defaultContent: Record<string, string> = {
@@ -2783,8 +2821,8 @@ We hereby request the release of CIT (Contribution to Insurance Tax) records for
 This letter is issued for official purposes as requested by the employee.`,
   };
 
-  const openAdd = () => { setEditTemplate(null); setForm({ name: "", doc_type: "experience_letter", content: defaultContent["experience_letter"], is_active: true }); setShowForm(true); };
-  const openEdit = (t: any) => { setEditTemplate(t); setForm({ name: t.name, doc_type: t.doc_type, content: t.content, is_active: t.is_active }); setShowForm(true); };
+  const openAdd = () => { setEditTemplate(null); setForm({ name: "", doc_type: "experience_letter", content: defaultContent["experience_letter"], eligibility: "any", is_active: true }); setShowForm(true); };
+  const openEdit = (t: any) => { setEditTemplate(t); setForm({ name: t.name, doc_type: t.doc_type, content: t.content, eligibility: t.eligibility || "any", is_active: t.is_active }); setShowForm(true); };
 
   const saveTemplate = async () => {
     setSaving(true);
@@ -2830,6 +2868,7 @@ This letter is issued for official purposes as requested by the employee.`,
             <TableRow>
               <TableHead>Name</TableHead>
               <TableHead>Type</TableHead>
+              <TableHead>Eligibility</TableHead>
               <TableHead>Status</TableHead>
               <TableHead>Actions</TableHead>
             </TableRow>
@@ -2839,6 +2878,7 @@ This letter is issued for official purposes as requested by the employee.`,
               <TableRow key={t.id}>
                 <TableCell className="font-medium">{t.name}</TableCell>
                 <TableCell><Badge variant="outline">{t.doc_type_display}</Badge></TableCell>
+                <TableCell className="text-sm">{t.eligibility_display || "Any Employee"}</TableCell>
                 <TableCell><Badge variant={t.is_active ? "default" : "secondary"}>{t.is_active ? "Active" : "Inactive"}</Badge></TableCell>
                 <TableCell>
                   <div className="flex gap-1">
@@ -2849,7 +2889,7 @@ This letter is issued for official purposes as requested by the employee.`,
               </TableRow>
             ))}
             {(!templates || templates.length === 0) && (
-              <TableRow><TableCell colSpan={4} className="text-center text-muted-foreground py-8">No templates yet. Add a template to get started.</TableCell></TableRow>
+              <TableRow><TableCell colSpan={5} className="text-center text-muted-foreground py-8">No templates yet. Add a template to get started.</TableCell></TableRow>
             )}
           </TableBody>
         </Table>
@@ -2868,6 +2908,17 @@ This letter is issued for official purposes as requested by the employee.`,
                   <SelectItem value="cit_release">CIT Release</SelectItem>
                 </SelectContent>
               </Select>
+            </div>
+            <div><Label>Eligibility Condition</Label>
+              <Select value={form.eligibility} onValueChange={v => setForm({ ...form, eligibility: v })}>
+                <SelectTrigger data-testid="select-eligibility"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="any">Any Employee</SelectItem>
+                  <SelectItem value="terminated">Terminated/Resigned Only</SelectItem>
+                  <SelectItem value="active">Active Employees Only</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground mt-1">Controls which employees can request this document type</p>
             </div>
             <div><Label>Content</Label><Textarea className="min-h-[250px] font-mono text-sm" value={form.content} onChange={e => setForm({ ...form, content: e.target.value })} data-testid="input-template-content" /></div>
           </div>
@@ -3090,6 +3141,33 @@ function DocRequestsTab() {
   );
 }
 
+function DocumentsTab() {
+  const [subTab, setSubTab] = useState<"templates" | "requests">("templates");
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center gap-2 border-b pb-2">
+        <Button variant={subTab === "templates" ? "default" : "outline"} size="sm" onClick={() => setSubTab("templates")} data-testid="button-doc-subtab-templates">
+          <FileText className="h-4 w-4 mr-1" /> Document Templates
+        </Button>
+        <Button variant={subTab === "requests" ? "default" : "outline"} size="sm" onClick={() => setSubTab("requests")} data-testid="button-doc-subtab-requests">
+          <Download className="h-4 w-4 mr-1" /> Document Requests
+        </Button>
+        <div className="ml-auto flex items-center gap-2">
+          <a href="/templates?type=agreement" className="text-xs text-primary hover:underline flex items-center gap-1" data-testid="link-agreement-templates">
+            <FileText className="h-3 w-3" /> Agreement Templates
+          </a>
+          <span className="text-muted-foreground">|</span>
+          <a href="/templates?type=offer_letter" className="text-xs text-primary hover:underline flex items-center gap-1" data-testid="link-offer-letter-templates">
+            <FileText className="h-3 w-3" /> Offer Letter Templates
+          </a>
+        </div>
+      </div>
+      {subTab === "templates" ? <DocTemplatesTab /> : <DocRequestsTab />}
+    </div>
+  );
+}
+
 const SIDEBAR_ITEMS = [
   { key: "dashboard", label: "Dashboard", icon: BarChart3, group: "Overview", permissions: [] },
   { key: "staff-profiles", label: "Staff & Salary", icon: UserCog, group: "People", permissions: ["hrms.staff.read", "hrms.salary.read", "employee.view"] },
@@ -3110,8 +3188,7 @@ const SIDEBAR_ITEMS = [
   { key: "organizations", label: "Organizations", icon: Building2, group: "Settings", permissions: ["hrms.organization.read"] },
   { key: "departments", label: "Departments", icon: Users, group: "Settings", permissions: ["hrms.department.read"] },
   { key: "hr-policies", label: "HR Policies", icon: ShieldCheck, group: "People", permissions: ["hrms.leave_request.read"] },
-  { key: "doc-templates", label: "Doc Templates", icon: FileText, group: "People", permissions: ["hrms.leave_request.read"] },
-  { key: "doc-requests", label: "Doc Requests", icon: Download, group: "People", permissions: ["hrms.leave_request.read"] },
+  { key: "documents", label: "Documents", icon: FileText, group: "People", permissions: ["hrms.leave_request.read"] },
   { key: "notifications", label: "Notifications", icon: Bell, group: "Settings", permissions: ["hrms.notification.read", "hrms.notification.update"] },
 ];
 
@@ -3136,8 +3213,7 @@ const CONTENT_MAP: Record<string, React.ComponentType> = {
   "fiscal-years": FiscalYearsTab,
   "notifications": NotificationSettingsTab,
   "hr-policies": HRPoliciesTab,
-  "doc-templates": DocTemplatesTab,
-  "doc-requests": DocRequestsTab,
+  "documents": DocumentsTab,
 };
 
 export default function HRMSAdminPage() {

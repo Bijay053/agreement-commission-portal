@@ -1820,6 +1820,11 @@ function HRPoliciesTab() {
                 <Button variant="outline" size="sm" onClick={() => setViewPolicy(p)} data-testid={`button-view-policy-${p.id}`}>
                   <Eye className="h-3.5 w-3.5 mr-1" /> View Policy
                 </Button>
+                {p.file_url && (
+                  <a href={p.file_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-primary hover:underline text-xs" data-testid={`link-policy-file-${p.id}`}>
+                    <Paperclip className="h-3 w-3" /> Attachment
+                  </a>
+                )}
                 {!p.acknowledged && (
                   <Button size="sm" onClick={() => acknowledgePolicy(p.id)} disabled={acknowledging === p.id} data-testid={`button-ack-policy-${p.id}`}>
                     {acknowledging === p.id ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" /> : <CheckCircle className="h-3.5 w-3.5 mr-1" />}
@@ -1843,7 +1848,14 @@ function HRPoliciesTab() {
               <span>{viewPolicy?.department_name}</span>
               {viewPolicy?.effective_date && <span>Effective: {viewPolicy.effective_date}</span>}
             </div>
-            <div className="prose prose-sm dark:prose-invert max-w-none whitespace-pre-wrap border rounded-md p-4 bg-muted/20">{viewPolicy?.content}</div>
+            {viewPolicy?.file_url && (
+              <a href={viewPolicy.file_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-primary hover:underline text-sm" data-testid="link-policy-file">
+                <Paperclip className="h-4 w-4" /> Download Attached File
+              </a>
+            )}
+            {viewPolicy?.content && (
+              <div className="prose prose-sm dark:prose-invert max-w-none whitespace-pre-wrap border rounded-md p-4 bg-muted/20">{viewPolicy.content}</div>
+            )}
             {viewPolicy && !viewPolicy.acknowledged && (
               <div className="flex justify-end pt-2">
                 <Button onClick={() => { acknowledgePolicy(viewPolicy.id); setViewPolicy(null); }} data-testid="button-ack-policy-dialog">
@@ -1863,58 +1875,73 @@ function HRPoliciesTab() {
 
 function DocumentsTab() {
   const { toast } = useToast();
-  const { data: requests, isLoading } = useQuery<any[]>({ queryKey: ["/api/hrms/my/document-requests"] });
+  const { data: docData, isLoading } = useQuery<any>({ queryKey: ["/api/hrms/my/document-requests"] });
+  const requests = docData?.requests || [];
+  const availableTypes = docData?.available_types || [];
   const [requesting, setRequesting] = useState(false);
+  const [selectedDocType, setSelectedDocType] = useState("");
 
-  const requestDocument = async (docType: string) => {
+  const requestDocument = async () => {
+    if (!selectedDocType) return;
     setRequesting(true);
     try {
       const res = await fetch('/api/hrms/my/document-requests', {
         method: 'POST', credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ doc_type: docType }),
+        body: JSON.stringify({ doc_type: selectedDocType }),
       });
       if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error(err.message || 'Failed'); }
       queryClient.refetchQueries({ queryKey: ['/api/hrms/my/document-requests'] });
       toast({ title: 'Document request submitted' });
+      setSelectedDocType("");
     } catch (err: any) { toast({ title: err.message, variant: 'destructive' }); }
     setRequesting(false);
   };
+
+  const selectedType = availableTypes.find((t: any) => t.doc_type === selectedDocType);
 
   return (
     <div className="space-y-4">
       <h3 className="text-lg font-semibold" data-testid="text-my-documents-title">Document Requests</h3>
       <p className="text-sm text-muted-foreground">Request official documents from HR</p>
 
-      <div className="grid grid-cols-2 gap-3">
-        <div className="border rounded-lg p-4 space-y-2">
-          <div className="flex items-center gap-2">
-            <FileText className="h-5 w-5 text-primary" />
-            <h4 className="font-medium">Experience Letter</h4>
-          </div>
-          <p className="text-xs text-muted-foreground">Request a formal experience letter for your employment tenure</p>
-          <Button size="sm" onClick={() => requestDocument('experience_letter')} disabled={requesting} data-testid="button-request-experience-letter">
+      <div className="border rounded-lg p-4 space-y-3">
+        <Label>Select Document Type</Label>
+        <div className="flex items-center gap-2">
+          <Select value={selectedDocType} onValueChange={setSelectedDocType}>
+            <SelectTrigger className="w-[280px]" data-testid="select-doc-type">
+              <SelectValue placeholder="Choose a document..." />
+            </SelectTrigger>
+            <SelectContent>
+              {availableTypes.map((t: any) => (
+                <SelectItem key={t.doc_type} value={t.doc_type} disabled={!t.eligible || t.has_pending}>
+                  {t.doc_type_display}
+                  {!t.eligible && " (Not eligible)"}
+                  {t.has_pending && " (Pending)"}
+                </SelectItem>
+              ))}
+              {availableTypes.length === 0 && (
+                <SelectItem value="_none" disabled>No document types available</SelectItem>
+              )}
+            </SelectContent>
+          </Select>
+          <Button size="sm" onClick={requestDocument} disabled={requesting || !selectedDocType || !selectedType?.eligible || selectedType?.has_pending} data-testid="button-request-document">
             {requesting && <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" />}
             <Send className="h-3.5 w-3.5 mr-1" /> Request
           </Button>
         </div>
-        <div className="border rounded-lg p-4 space-y-2">
-          <div className="flex items-center gap-2">
-            <Building2 className="h-5 w-5 text-primary" />
-            <h4 className="font-medium">CIT Release</h4>
-          </div>
-          <p className="text-xs text-muted-foreground">Request CIT (Contribution to Insurance Tax) release letter</p>
-          <Button size="sm" onClick={() => requestDocument('cit_release')} disabled={requesting} data-testid="button-request-cit-release">
-            {requesting && <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" />}
-            <Send className="h-3.5 w-3.5 mr-1" /> Request
-          </Button>
-        </div>
+        {selectedType && !selectedType.eligible && selectedType.reason && (
+          <p className="text-xs text-amber-600 flex items-center gap-1"><AlertCircle className="h-3 w-3" /> {selectedType.reason}</p>
+        )}
+        {selectedType?.has_pending && (
+          <p className="text-xs text-amber-600 flex items-center gap-1"><AlertCircle className="h-3 w-3" /> You already have a pending request for this document</p>
+        )}
       </div>
 
       <h4 className="font-medium text-sm mt-4">My Requests</h4>
       {isLoading ? <Skeleton className="h-32 w-full" /> : (
         <div className="space-y-2">
-          {requests?.map(r => (
+          {requests?.map((r: any) => (
             <div key={r.id} className="border rounded-lg p-3 flex items-center justify-between" data-testid={`doc-request-${r.id}`}>
               <div>
                 <div className="flex items-center gap-2">

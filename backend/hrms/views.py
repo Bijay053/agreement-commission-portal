@@ -6214,6 +6214,7 @@ class HRPolicyListView(APIView):
                 'id': str(p.id),
                 'title': p.title,
                 'content': p.content,
+                'file_url': get_presigned_url(p.file_url) if p.file_url else None,
                 'organization_id': str(p.organization_id),
                 'department_id': str(p.department_id) if p.department_id else None,
                 'department_name': dept_name,
@@ -6228,15 +6229,32 @@ class HRPolicyListView(APIView):
     @require_permission('hrms.leave_request.add')
     def post(self, request):
         data = request.data
+        file_url = None
+        file = request.FILES.get('file')
+        if file:
+            file_url = self._upload_policy_file(file, data.get('organization_id'))
         p = HRPolicy.objects.create(
             organization_id=data['organization_id'],
             title=data['title'],
-            content=data['content'],
+            content=data.get('content', ''),
+            file_url=file_url,
             department_id=data.get('department_id') or None,
             is_active=data.get('is_active', True),
             effective_date=data.get('effective_date') or None,
         )
         return Response({'id': str(p.id), 'message': 'Policy created'}, status=201)
+
+    def _upload_policy_file(self, file, org_id):
+        import boto3
+        s3 = boto3.client('s3',
+                          aws_access_key_id=settings.AWS_ACCESS_KEY_ID,
+                          aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY,
+                          region_name=settings.AWS_S3_REGION_NAME)
+        ext = file.name.rsplit('.', 1)[-1] if '.' in file.name else 'pdf'
+        key = f'hr-policies/{org_id}/{uuid.uuid4()}.{ext}'
+        s3.upload_fileobj(file, settings.AWS_S3_BUCKET_NAME, key,
+                          ExtraArgs={'ContentType': file.content_type or 'application/octet-stream'})
+        return f'https://{settings.AWS_S3_BUCKET_NAME}.s3.{settings.AWS_S3_REGION_NAME}.amazonaws.com/{key}'
 
 
 class HRPolicyDetailView(APIView):
@@ -6254,6 +6272,11 @@ class HRPolicyDetailView(APIView):
             p.department_id = data['department_id'] or None
         if 'effective_date' in data:
             p.effective_date = data['effective_date'] or None
+        file = request.FILES.get('file')
+        if file:
+            p.file_url = HRPolicyListView()._upload_policy_file(file, str(p.organization_id))
+        if data.get('remove_file') == 'true':
+            p.file_url = None
         p.save()
         return Response({'message': 'Policy updated'})
 
@@ -6294,6 +6317,7 @@ class MyHRPoliciesView(APIView):
                 'id': str(p.id),
                 'title': p.title,
                 'content': p.content,
+                'file_url': get_presigned_url(p.file_url) if p.file_url else None,
                 'department_name': dept_name,
                 'effective_date': p.effective_date.isoformat() if p.effective_date else None,
                 'acknowledged': ack is not None,
@@ -6334,6 +6358,8 @@ class DocumentTemplateListView(APIView):
             'doc_type': t.doc_type,
             'doc_type_display': t.get_doc_type_display(),
             'content': t.content,
+            'eligibility': t.eligibility,
+            'eligibility_display': t.get_eligibility_display(),
             'is_active': t.is_active,
             'organization_id': str(t.organization_id),
         } for t in qs])
@@ -6346,6 +6372,7 @@ class DocumentTemplateListView(APIView):
             name=data['name'],
             doc_type=data['doc_type'],
             content=data['content'],
+            eligibility=data.get('eligibility', 'any'),
             is_active=data.get('is_active', True),
         )
         return Response({'id': str(t.id), 'message': 'Template created'}, status=201)
@@ -6359,7 +6386,7 @@ class DocumentTemplateDetailView(APIView):
         except DocumentTemplate.DoesNotExist:
             return Response({'message': 'Not found'}, status=404)
         data = request.data
-        for f in ['name', 'doc_type', 'content', 'is_active']:
+        for f in ['name', 'doc_type', 'content', 'is_active', 'eligibility']:
             if f in data:
                 setattr(t, f, data[f])
         t.save()
@@ -6591,12 +6618,12 @@ class MyDocumentRequestsView(APIView):
         user_id = request.session.get('userId')
         emp = get_employee_for_user(user_id)
         if not emp:
-            return Response([])
+            return Response({'requests': [], 'available_types': []})
         qs = DocumentRequest.objects.filter(employee_id=emp.id)
-        result = []
+        requests_list = []
         for dr in qs:
             tmpl = DocumentTemplate.objects.filter(id=dr.template_id).first() if dr.template_id else None
-            result.append({
+            requests_list.append({
                 'id': str(dr.id),
                 'doc_type': dr.doc_type,
                 'doc_type_display': dict(DocumentTemplate.DOC_TYPES).get(dr.doc_type, dr.doc_type),
@@ -6607,7 +6634,35 @@ class MyDocumentRequestsView(APIView):
                 'requested_at': dr.requested_at.isoformat() if dr.requested_at else None,
                 'completed_at': dr.completed_at.isoformat() if dr.completed_at else None,
             })
-        return Response(result)
+        available_types = []
+        templates = DocumentTemplate.objects.filter(
+            organization_id=emp.organization_id, is_active=True
+        )
+        seen_types = set()
+        emp_status = (emp.status or '').lower()
+        for t in templates:
+            if t.doc_type in seen_types:
+                continue
+            eligible = True
+            reason = None
+            if t.eligibility == 'terminated' and emp_status not in ('terminated', 'resigned', 'inactive'):
+                eligible = False
+                reason = 'Only available after termination/resignation and handover'
+            elif t.eligibility == 'active' and emp_status != 'active':
+                eligible = False
+                reason = 'Only available for active employees'
+            has_pending = DocumentRequest.objects.filter(
+                employee_id=emp.id, doc_type=t.doc_type, status__in=['pending', 'processing']
+            ).exists()
+            available_types.append({
+                'doc_type': t.doc_type,
+                'doc_type_display': t.get_doc_type_display(),
+                'eligible': eligible,
+                'reason': reason,
+                'has_pending': has_pending,
+            })
+            seen_types.add(t.doc_type)
+        return Response({'requests': requests_list, 'available_types': available_types})
 
     @require_auth
     def post(self, request):
@@ -6624,6 +6679,12 @@ class MyDocumentRequestsView(APIView):
         template = DocumentTemplate.objects.filter(
             organization_id=emp.organization_id, doc_type=doc_type, is_active=True
         ).first()
+        if template:
+            emp_status = (emp.status or '').lower()
+            if template.eligibility == 'terminated' and emp_status not in ('terminated', 'resigned', 'inactive'):
+                return Response({'message': 'This document is only available after termination/resignation and handover completion'}, status=400)
+            if template.eligibility == 'active' and emp_status != 'active':
+                return Response({'message': 'This document is only available for active employees'}, status=400)
         dr = DocumentRequest.objects.create(
             employee_id=emp.id,
             organization_id=emp.organization_id,

@@ -555,7 +555,8 @@ class HRPolicy(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     organization = models.ForeignKey(Organization, on_delete=models.CASCADE, related_name='hr_policies')
     title = models.CharField(max_length=255)
-    content = models.TextField()
+    content = models.TextField(blank=True, default='')
+    file_url = models.TextField(null=True, blank=True)
     department = models.ForeignKey('Department', on_delete=models.SET_NULL, null=True, blank=True, related_name='hr_policies')
     is_active = models.BooleanField(default=True)
     effective_date = models.DateField(null=True, blank=True)
@@ -583,11 +584,17 @@ class DocumentTemplate(models.Model):
         ('experience_letter', 'Experience Letter'),
         ('cit_release', 'CIT Release'),
     ]
+    ELIGIBILITY_CHOICES = [
+        ('any', 'Any Employee'),
+        ('terminated', 'Terminated/Resigned Only'),
+        ('active', 'Active Employees Only'),
+    ]
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     organization = models.ForeignKey(Organization, on_delete=models.CASCADE, related_name='document_templates')
     name = models.CharField(max_length=255)
     doc_type = models.CharField(max_length=32, choices=DOC_TYPES)
     content = models.TextField(help_text='Template content with placeholders like [Employee Name], [Position], [Join Date], [Department]')
+    eligibility = models.CharField(max_length=16, choices=ELIGIBILITY_CHOICES, default='any')
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
