@@ -1,21 +1,23 @@
 #!/usr/bin/env python3
 """
 ZKT K40 Biometric Device → HRMS Portal Attendance Sync
-EC2 + VPN Version
 
-Runs on your EC2 server, connects to the K40 through a WireGuard VPN
-tunnel to your office network.
+Works in two modes:
+  1. LOCAL MODE (office PC) — connects to K40 on the same LAN, no VPN needed
+     Set VPN_CHECK_ENABLED=false in .env
+  2. EC2 + VPN MODE — connects through WireGuard VPN tunnel
+     Set VPN_CHECK_ENABLED=true in .env
 
-Schedule (handled by cron):
-  - Every 5 minutes from 8:00 AM to 10:15 AM
-  - Every 5 minutes from 3:00 PM to 6:30 PM
+Schedule:
+  - Windows: Task Scheduler every 5 min during office hours
+  - Linux:   cron every 5 min during office hours
 
 Usage:
-  python3 k40_sync.py                  # Normal sync
-  python3 k40_sync.py --dry-run        # Preview without pushing
-  python3 k40_sync.py --diagnose       # Test connectivity
-  python3 k40_sync.py --clear-tracker  # Reset duplicate tracker
-  python3 k40_sync.py --check-vpn      # Test VPN tunnel only
+  python k40_sync.py                  # Normal sync
+  python k40_sync.py --dry-run        # Preview without pushing
+  python k40_sync.py --diagnose       # Test connectivity
+  python k40_sync.py --clear-tracker  # Reset duplicate tracker
+  python k40_sync.py --check-vpn      # Test VPN tunnel only (EC2 mode)
 """
 
 import os
@@ -50,7 +52,7 @@ except ImportError:
     pass
 
 CONFIG = {
-    "device_ip": os.getenv("K40_DEVICE_IP", "192.168.1.201"),
+    "device_ip": os.getenv("K40_DEVICE_IP", "192.168.16.201"),
     "device_port": int(os.getenv("K40_DEVICE_PORT", "4370")),
     "device_timeout": int(os.getenv("K40_TIMEOUT", "10")),
     "portal_url": os.getenv("PORTAL_URL", "https://portal.studyinfocentre.com"),
@@ -61,7 +63,7 @@ CONFIG = {
     "retry_delay": int(os.getenv("RETRY_DELAY", "5")),
     "lookback_days": int(os.getenv("LOOKBACK_DAYS", "7")),
     "vpn_interface": os.getenv("VPN_INTERFACE", "wg0"),
-    "vpn_check_enabled": os.getenv("VPN_CHECK_ENABLED", "true").lower() == "true",
+    "vpn_check_enabled": os.getenv("VPN_CHECK_ENABLED", "false").lower() == "true",
     "log_level": os.getenv("LOG_LEVEL", "INFO"),
     "log_file": os.getenv("LOG_FILE", "k40_sync.log"),
     "tracker_db": os.getenv("TRACKER_DB", "sync_tracker.db"),
@@ -412,31 +414,37 @@ def push_to_portal(records, tracker: SyncTracker, config: dict,
 
 def run_diagnostics(config: dict):
     print("=" * 60)
-    print("  K40 Sync — EC2 + VPN Diagnostics")
+    print("  K40 Sync — Diagnostics")
     print("=" * 60)
 
     iface = config["vpn_interface"]
-    print(f"\n[1] VPN Tunnel ({iface})")
-    print("-" * 40)
+    if config["vpn_check_enabled"]:
+        print(f"\n[1] VPN Tunnel ({iface})")
+        print("-" * 40)
 
-    vpn = check_vpn_status(iface)
-    if vpn["interface_up"]:
-        print(f"  ✓ Interface {iface} is UP")
-        if vpn["has_handshake"]:
-            print(f"  ✓ Peer handshake: {vpn['latest_handshake']}")
+        vpn = check_vpn_status(iface)
+        if vpn["interface_up"]:
+            print(f"  ✓ Interface {iface} is UP")
+            if vpn["has_handshake"]:
+                print(f"  ✓ Peer handshake: {vpn['latest_handshake']}")
+            else:
+                print(f"  ✗ No peer handshake — tunnel may not be active")
+            if vpn["peer_endpoint"]:
+                print(f"    Peer endpoint: {vpn['peer_endpoint']}")
+            if vpn["transfer"]:
+                print(f"    Transfer: {vpn['transfer']}")
         else:
-            print(f"  ✗ No peer handshake — tunnel may not be active")
-        if vpn["peer_endpoint"]:
-            print(f"    Peer endpoint: {vpn['peer_endpoint']}")
-        if vpn["transfer"]:
-            print(f"    Transfer: {vpn['transfer']}")
+            print(f"  ✗ Interface {iface} is DOWN")
+            print(f"    Try:  sudo wg-quick up {iface}")
     else:
-        print(f"  ✗ Interface {iface} is DOWN")
-        print(f"    Try:  sudo wg-quick up {iface}")
+        print(f"\n[1] VPN — Disabled (local/direct mode)")
+        print("-" * 40)
+        print(f"  Connecting directly to K40 on local network")
 
     ip = config["device_ip"]
     port = config["device_port"]
-    print(f"\n[2] K40 Device ({ip}:{port} via VPN)")
+    mode = "via VPN" if config["vpn_check_enabled"] else "direct LAN"
+    print(f"\n[2] K40 Device ({ip}:{port} — {mode})")
     print("-" * 40)
 
     reachable = check_network_reachable(ip, port)
@@ -493,27 +501,32 @@ def run_diagnostics(config: dict):
     else:
         print("  ⚠ PORTAL_SESSION_ID not set")
 
-    print(f"\n[4] EC2 Environment")
+    print(f"\n[4] Environment")
     print("-" * 40)
     print(f"  Python     : {sys.version.split()[0]}")
+    print(f"  Platform   : {sys.platform}")
     print(f"  Timezone   : {time.strftime('%Z')}")
-    print(f"  Server time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    print(f"  Local time : {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     print(f"  Script dir : {SCRIPT_DIR}")
     print(f"  Lookback   : {config['lookback_days']} days")
+    print(f"  VPN check  : {'enabled' if config['vpn_check_enabled'] else 'disabled (local mode)'}")
 
-    try:
-        cron_out = subprocess.run(
-            ["crontab", "-l"], capture_output=True, text=True, timeout=5
-        )
-        if "k40_sync" in cron_out.stdout:
-            print(f"  ✓ Cron job found")
-            for line in cron_out.stdout.split("\n"):
-                if "k40_sync" in line:
-                    print(f"    {line.strip()}")
-        else:
-            print(f"  ⚠ No cron job for k40_sync found")
-    except Exception:
-        pass
+    if sys.platform != "win32":
+        try:
+            cron_out = subprocess.run(
+                ["crontab", "-l"], capture_output=True, text=True, timeout=5
+            )
+            if "k40_sync" in cron_out.stdout:
+                print(f"  ✓ Cron job found")
+                for line in cron_out.stdout.split("\n"):
+                    if "k40_sync" in line:
+                        print(f"    {line.strip()}")
+            else:
+                print(f"  ⚠ No cron job for k40_sync found")
+        except Exception:
+            pass
+    else:
+        print(f"  ⚠ Windows — use Task Scheduler for automatic runs")
 
     print("\n" + "=" * 60)
 
