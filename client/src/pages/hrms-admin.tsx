@@ -2921,7 +2921,7 @@ This letter is being issued at the request of the employee for whatever purpose 
 
 This is to confirm that [Employee Name], Employee ID: [Employee ID], has been employed with [Organization Name] as [Position] in the [Department] department from [Join Date].
 
-We hereby request the release of CIT (Contribution to Insurance Tax) records for the above-mentioned employee.
+We hereby request the release of CIT records for the above-mentioned employee.
 
 This letter is issued for official purposes as requested by the employee.`,
   };
