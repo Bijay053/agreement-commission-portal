@@ -167,6 +167,7 @@ LEAVE_REQUEST_STATUS = [
     ('approved', 'Approved'),
     ('rejected', 'Rejected'),
     ('cancelled', 'Cancelled'),
+    ('cancel_requested', 'Cancel Requested'),
 ]
 
 
@@ -184,6 +185,7 @@ class LeaveRequest(models.Model):
     approved_by = models.UUIDField(null=True, blank=True)
     approved_at = models.DateTimeField(null=True, blank=True)
     rejection_reason = models.TextField(null=True, blank=True)
+    cancellation_reason = models.TextField(null=True, blank=True)
     document_url = models.URLField(null=True, blank=True)
     cover_person_id = models.UUIDField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)

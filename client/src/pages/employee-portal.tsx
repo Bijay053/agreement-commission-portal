@@ -1193,6 +1193,10 @@ function LeaveTab() {
   const [documentFile, setDocumentFile] = useState<globalThis.File | null>(null);
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [showCancelDialog, setShowCancelDialog] = useState(false);
+  const [cancelRequestId, setCancelRequestId] = useState<string | null>(null);
+  const [cancelReason, setCancelReason] = useState("");
+  const [cancelSubmitting, setCancelSubmitting] = useState(false);
 
   const { data: balance, isLoading: balLoading } = useQuery<any[]>({
     queryKey: ["/api/hrms/my/leave-balance"],
@@ -1362,14 +1366,14 @@ function LeaveTab() {
                       ) : "—"}
                     </TableCell>
                     <TableCell>
-                      {(r.status === 'pending' || r.status === 'approved') && (
+                      {r.status === 'pending' && (
                         <Button
                           variant="ghost"
                           size="sm"
                           className="text-red-500 hover:text-red-700 h-7 text-xs"
                           data-testid={`button-cancel-leave-${r.id}`}
                           onClick={async () => {
-                            if (!confirm('Are you sure you want to cancel this leave request?')) return;
+                            if (!confirm('Are you sure you want to cancel this pending leave request?')) return;
                             try {
                               const res = await fetch(`/api/hrms/my/leave-requests/${r.id}/cancel`, { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' } });
                               if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error(err.message || 'Failed'); }
@@ -1381,6 +1385,23 @@ function LeaveTab() {
                         >
                           Cancel
                         </Button>
+                      )}
+                      {r.status === 'approved' && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="text-amber-600 hover:text-amber-800 h-7 text-xs"
+                          data-testid={`button-request-cancel-${r.id}`}
+                          onClick={() => { setCancelRequestId(r.id); setCancelReason(""); setShowCancelDialog(true); }}
+                        >
+                          Request Cancel
+                        </Button>
+                      )}
+                      {r.status === 'cancel_requested' && (
+                        <span className="text-xs text-amber-600">Cancel Pending</span>
+                      )}
+                      {r.rejection_reason && r.status === 'rejected' && (
+                        <span className="text-xs text-red-500" title={r.rejection_reason}>Reason: {r.rejection_reason.length > 30 ? r.rejection_reason.substring(0, 30) + '...' : r.rejection_reason}</span>
                       )}
                     </TableCell>
                   </TableRow>
@@ -1514,6 +1535,58 @@ function LeaveTab() {
             <Button onClick={submitLeave} disabled={uploading || !!advanceNoticeWarning} data-testid="button-submit-leave">
               {uploading && <Loader2 className="h-4 w-4 animate-spin mr-1" />}
               {uploading ? "Submitting..." : "Submit"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showCancelDialog} onOpenChange={v => { if (!v) { setShowCancelDialog(false); setCancelRequestId(null); } }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Request Leave Cancellation</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <p className="text-sm text-muted-foreground">
+              This approved leave requires admin approval to cancel. Please provide a reason.
+            </p>
+            <div>
+              <Label>Reason for Cancellation</Label>
+              <textarea
+                className="flex min-h-[80px] w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm mt-1"
+                value={cancelReason}
+                onChange={e => setCancelReason(e.target.value)}
+                placeholder="Why do you need to cancel this leave?"
+                data-testid="input-cancel-reason"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setShowCancelDialog(false); setCancelRequestId(null); }}>Close</Button>
+            <Button
+              variant="destructive"
+              disabled={!cancelReason.trim() || cancelSubmitting}
+              data-testid="button-submit-cancel-request"
+              onClick={async () => {
+                if (!cancelRequestId || !cancelReason.trim()) return;
+                setCancelSubmitting(true);
+                try {
+                  const res = await fetch(`/api/hrms/my/leave-requests/${cancelRequestId}/cancel`, {
+                    method: 'POST', credentials: 'include',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ cancellation_reason: cancelReason }),
+                  });
+                  if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error(err.message || 'Failed'); }
+                  queryClient.refetchQueries({ queryKey: ['/api/hrms/my/leave-requests'] });
+                  queryClient.refetchQueries({ queryKey: ['/api/hrms/my/leave-balance'] });
+                  toast({ title: 'Cancellation request submitted for admin approval' });
+                  setShowCancelDialog(false);
+                  setCancelRequestId(null);
+                } catch (err: any) { toast({ title: err.message, variant: 'destructive' }); }
+                setCancelSubmitting(false);
+              }}
+            >
+              {cancelSubmitting && <Loader2 className="h-4 w-4 animate-spin mr-1" />}
+              Submit Request
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -543,24 +543,66 @@ function LeaveRequestsTab() {
     },
   });
 
-  const approveMutation = useMutation({
-    mutationFn: (id: string) => apiRequest("POST", `/api/hrms/leave-requests/${id}/approve`),
-    onSuccess: () => { queryClient.refetchQueries({ queryKey: ["/api/hrms/leave-requests"] }); toast({ title: "Leave request approved" }); },
-  });
+  const [approveConfirmId, setApproveConfirmId] = useState<string | null>(null);
+  const [rejectConfirmId, setRejectConfirmId] = useState<string | null>(null);
+  const [rejectReason, setRejectReason] = useState("");
+  const [adminCancelId, setAdminCancelId] = useState<string | null>(null);
+  const [actionLoading, setActionLoading] = useState(false);
 
-  const rejectMutation = useMutation({
-    mutationFn: (id: string) => apiRequest("POST", `/api/hrms/leave-requests/${id}/reject`, { rejection_reason: "Rejected by admin" }),
-    onSuccess: () => { queryClient.refetchQueries({ queryKey: ["/api/hrms/leave-requests"] }); toast({ title: "Leave request rejected" }); },
-  });
+  const handleApprove = async () => {
+    if (!approveConfirmId) return;
+    setActionLoading(true);
+    try {
+      await apiRequest("POST", `/api/hrms/leave-requests/${approveConfirmId}/approve`);
+      queryClient.refetchQueries({ queryKey: ["/api/hrms/leave-requests"] });
+      toast({ title: "Leave request approved" });
+      setApproveConfirmId(null);
+    } catch (err: any) {
+      const msg = err?.message || "Failed to approve";
+      toast({ title: msg, variant: "destructive" });
+    }
+    setActionLoading(false);
+  };
+
+  const handleReject = async () => {
+    if (!rejectConfirmId || !rejectReason.trim()) return;
+    setActionLoading(true);
+    try {
+      await apiRequest("POST", `/api/hrms/leave-requests/${rejectConfirmId}/reject`, { rejection_reason: rejectReason });
+      queryClient.refetchQueries({ queryKey: ["/api/hrms/leave-requests"] });
+      toast({ title: "Leave request rejected" });
+      setRejectConfirmId(null);
+      setRejectReason("");
+    } catch (err: any) {
+      const msg = err?.message || "Failed to reject";
+      toast({ title: msg, variant: "destructive" });
+    }
+    setActionLoading(false);
+  };
+
+  const handleAdminCancel = async () => {
+    if (!adminCancelId) return;
+    setActionLoading(true);
+    try {
+      await apiRequest("POST", `/api/hrms/leave-requests/${adminCancelId}/cancel`);
+      queryClient.refetchQueries({ queryKey: ["/api/hrms/leave-requests"] });
+      toast({ title: "Leave cancelled and balance restored" });
+      setAdminCancelId(null);
+    } catch (err: any) {
+      const msg = err?.message || "Failed to cancel leave";
+      toast({ title: msg, variant: "destructive" });
+    }
+    setActionLoading(false);
+  };
 
   return (
     <div className="space-y-4">
       <div className="flex justify-between items-center">
         <h3 className="text-lg font-semibold">Leave Requests</h3>
-        <div className="flex gap-2">
-          {["pending", "approved", "rejected", "cancelled"].map(s => (
+        <div className="flex gap-2 flex-wrap">
+          {["pending", "approved", "rejected", "cancelled", "cancel_requested"].map(s => (
             <Button key={s} variant={statusFilter === s ? "default" : "outline"} size="sm" onClick={() => setStatusFilter(s)} data-testid={`button-filter-${s}`}>
-              {s.charAt(0).toUpperCase() + s.slice(1)}
+              {s === "cancel_requested" ? "Cancel Requested" : s.charAt(0).toUpperCase() + s.slice(1)}
             </Button>
           ))}
         </div>
@@ -579,7 +621,7 @@ function LeaveRequestsTab() {
               <TableHead>Cover Person</TableHead>
               <TableHead>Document</TableHead>
               <TableHead>Status</TableHead>
-              {statusFilter === "pending" && <TableHead>Actions</TableHead>}
+              <TableHead>Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -599,23 +641,89 @@ function LeaveRequestsTab() {
                     </a>
                   ) : "—"}
                 </TableCell>
-                <TableCell><Badge variant={r.status === "approved" ? "default" : r.status === "rejected" ? "destructive" : "secondary"}>{r.status}</Badge></TableCell>
-                {statusFilter === "pending" && (
-                  <TableCell>
-                    <div className="flex gap-1">
-                      <Button variant="ghost" size="sm" className="text-green-600" onClick={() => approveMutation.mutate(r.id)} data-testid={`button-approve-${r.id}`}><Check className="h-4 w-4" /></Button>
-                      <Button variant="ghost" size="sm" className="text-red-500" onClick={() => rejectMutation.mutate(r.id)} data-testid={`button-reject-${r.id}`}><X className="h-4 w-4" /></Button>
-                    </div>
-                  </TableCell>
-                )}
+                <TableCell>
+                  <Badge variant={r.status === "approved" ? "default" : r.status === "rejected" ? "destructive" : r.status === "cancel_requested" ? "outline" : "secondary"}>
+                    {r.status === "cancel_requested" ? "Cancel Requested" : r.status}
+                  </Badge>
+                  {r.status === "rejected" && r.rejection_reason && (
+                    <p className="text-[10px] text-red-500 mt-0.5 max-w-[120px] truncate" title={r.rejection_reason}>{r.rejection_reason}</p>
+                  )}
+                  {r.status === "cancel_requested" && r.cancellation_reason && (
+                    <p className="text-[10px] text-amber-600 mt-0.5 max-w-[120px] truncate" title={r.cancellation_reason}>{r.cancellation_reason}</p>
+                  )}
+                </TableCell>
+                <TableCell>
+                  <div className="flex gap-1">
+                    {r.status === "pending" && (
+                      <>
+                        <Button variant="ghost" size="sm" className="text-green-600" onClick={() => setApproveConfirmId(r.id)} data-testid={`button-approve-${r.id}`}><Check className="h-4 w-4" /></Button>
+                        <Button variant="ghost" size="sm" className="text-red-500" onClick={() => { setRejectConfirmId(r.id); setRejectReason(""); }} data-testid={`button-reject-${r.id}`}><X className="h-4 w-4" /></Button>
+                      </>
+                    )}
+                    {(r.status === "approved" || r.status === "cancel_requested") && (
+                      <Button variant="ghost" size="sm" className="text-red-500 text-xs" onClick={() => setAdminCancelId(r.id)} data-testid={`button-admin-cancel-${r.id}`}>Cancel</Button>
+                    )}
+                  </div>
+                </TableCell>
               </TableRow>
             ))}
             {(!requests || requests.length === 0) && (
-              <TableRow><TableCell colSpan={10} className="text-center text-muted-foreground py-8">No {statusFilter} leave requests</TableCell></TableRow>
+              <TableRow><TableCell colSpan={10} className="text-center text-muted-foreground py-8">No {statusFilter === "cancel_requested" ? "cancel requested" : statusFilter} leave requests</TableCell></TableRow>
             )}
           </TableBody>
         </Table>
       )}
+
+      <Dialog open={!!approveConfirmId} onOpenChange={v => { if (!v) setApproveConfirmId(null); }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader><DialogTitle>Approve Leave Request</DialogTitle></DialogHeader>
+          <p className="text-sm text-muted-foreground">Are you sure you want to approve this leave request? The employee's leave balance will be deducted and attendance records will be created.</p>
+          <DialogFooter>
+            <Button variant="outline" size="sm" onClick={() => setApproveConfirmId(null)}>Cancel</Button>
+            <Button size="sm" className="bg-green-600 hover:bg-green-700" onClick={handleApprove} disabled={actionLoading} data-testid="button-confirm-approve">
+              {actionLoading && <Loader2 className="h-3 w-3 animate-spin mr-1" />} Approve
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!rejectConfirmId} onOpenChange={v => { if (!v) { setRejectConfirmId(null); setRejectReason(""); } }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader><DialogTitle>Reject Leave Request</DialogTitle></DialogHeader>
+          <div className="space-y-3">
+            <p className="text-sm text-muted-foreground">Please provide a reason for rejecting this leave request. The employee will be notified with this reason.</p>
+            <div>
+              <Label>Rejection Reason</Label>
+              <textarea
+                className="flex min-h-[80px] w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm mt-1"
+                value={rejectReason}
+                onChange={e => setRejectReason(e.target.value)}
+                placeholder="Reason for rejection..."
+                data-testid="input-rejection-reason"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" size="sm" onClick={() => { setRejectConfirmId(null); setRejectReason(""); }}>Cancel</Button>
+            <Button variant="destructive" size="sm" onClick={handleReject} disabled={actionLoading || !rejectReason.trim()} data-testid="button-confirm-reject">
+              {actionLoading && <Loader2 className="h-3 w-3 animate-spin mr-1" />} Reject
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!adminCancelId} onOpenChange={v => { if (!v) setAdminCancelId(null); }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader><DialogTitle>Cancel Leave</DialogTitle></DialogHeader>
+          <p className="text-sm text-muted-foreground">Are you sure you want to cancel this leave? The employee's leave balance will be restored, attendance records will be removed, and the employee will be notified.</p>
+          <DialogFooter>
+            <Button variant="outline" size="sm" onClick={() => setAdminCancelId(null)}>No, Keep</Button>
+            <Button variant="destructive" size="sm" onClick={handleAdminCancel} disabled={actionLoading} data-testid="button-confirm-admin-cancel">
+              {actionLoading && <Loader2 className="h-3 w-3 animate-spin mr-1" />} Yes, Cancel Leave
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

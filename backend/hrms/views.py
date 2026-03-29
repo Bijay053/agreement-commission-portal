@@ -280,6 +280,7 @@ def serialize_leave_request(lr):
         'approver_name': approver_name,
         'approved_at': lr.approved_at.isoformat() if lr.approved_at else None,
         'rejection_reason': lr.rejection_reason,
+        'cancellation_reason': lr.cancellation_reason,
         'document_url': get_presigned_url(lr.document_url) if lr.document_url else None,
         'cover_person_id': str(lr.cover_person_id) if lr.cover_person_id else None,
         'cover_person_name': _get_cover_person_name(lr.cover_person_id),
@@ -1405,6 +1406,47 @@ def _notify_leave_request_submitted(lr):
         pass
 
 
+def _notify_leave_cancellation(lr, cancelled_by='employee'):
+    try:
+        emp = Employee.objects.get(id=lr.employee_id)
+        leave_type_name = lr.leave_type.name if lr.leave_type else 'Leave'
+        org = Organization.objects.get(id=emp.organization_id) if emp.organization_id else None
+
+        if cancelled_by == 'employee':
+            if org and org.email:
+                ns = NotificationSetting.objects.filter(organization_id=org.id).first()
+                extra_cc = [e.strip() for e in (ns.cc_emails.split(',') if ns and ns.cc_emails else []) if e.strip()]
+                html = _build_leave_email_html(
+                    emp.full_name, leave_type_name,
+                    lr.start_date.isoformat(), lr.end_date.isoformat(),
+                    lr.days_count, lr.reason, 'cancelled',
+                    f'This pending leave request has been cancelled by the employee.'
+                )
+                _send_leave_email(org.email, f'Leave Cancelled: {emp.full_name} - {leave_type_name}', html, extra_cc)
+        elif cancelled_by == 'employee_request':
+            if org and org.email:
+                ns = NotificationSetting.objects.filter(organization_id=org.id).first()
+                extra_cc = [e.strip() for e in (ns.cc_emails.split(',') if ns and ns.cc_emails else []) if e.strip()]
+                html = _build_leave_email_html(
+                    emp.full_name, leave_type_name,
+                    lr.start_date.isoformat(), lr.end_date.isoformat(),
+                    lr.days_count, lr.reason, 'cancel requested',
+                    f'Employee has requested cancellation of approved leave. Reason: {lr.cancellation_reason}'
+                )
+                _send_leave_email(org.email, f'Leave Cancel Request: {emp.full_name} - {leave_type_name}', html, extra_cc)
+        elif cancelled_by == 'admin':
+            if emp.email:
+                html = _build_leave_email_html(
+                    emp.full_name, leave_type_name,
+                    lr.start_date.isoformat(), lr.end_date.isoformat(),
+                    lr.days_count, lr.reason, 'cancelled',
+                    'Your approved leave has been cancelled by the admin. Your leave balance has been restored.'
+                )
+                _send_leave_email(emp.email, f'Leave Cancelled: {leave_type_name} ({lr.start_date.isoformat()} to {lr.end_date.isoformat()})', html)
+    except Exception:
+        pass
+
+
 def _notify_leave_status_change(lr, status):
     try:
         emp = Employee.objects.get(id=lr.employee_id)
@@ -1501,32 +1543,60 @@ class LeaveRequestCancelView(APIView):
         if str(lr.employee_id) != str(employee.id) if employee else True:
             return Response({'message': 'You can only cancel your own leave requests'}, status=403)
 
-        if lr.status not in ('pending', 'approved'):
-            return Response({'message': 'Only pending or approved requests can be cancelled'}, status=400)
+        if lr.status == 'pending':
+            lr.status = 'cancelled'
+            lr.cancellation_reason = request.data.get('cancellation_reason', '')
+            lr.save()
+            _notify_leave_cancellation(lr, cancelled_by='employee')
+            return Response(serialize_leave_request(lr))
+        elif lr.status == 'approved':
+            reason = request.data.get('cancellation_reason', '')
+            if not reason:
+                return Response({'message': 'Please provide a reason for cancellation request'}, status=400)
+            lr.status = 'cancel_requested'
+            lr.cancellation_reason = reason
+            lr.save()
+            _notify_leave_cancellation(lr, cancelled_by='employee_request')
+            return Response(serialize_leave_request(lr))
+        else:
+            return Response({'message': 'This leave request cannot be cancelled'}, status=400)
 
-        was_approved = lr.status == 'approved'
+
+class AdminLeaveRequestCancelView(APIView):
+    @require_permission('hrms.leave_request.approve')
+    def post(self, request, lr_id):
+        try:
+            lr = LeaveRequest.objects.select_related('leave_type').get(id=lr_id)
+        except LeaveRequest.DoesNotExist:
+            return Response({'message': 'Leave request not found'}, status=404)
+
+        if lr.status not in ('approved', 'cancel_requested'):
+            return Response({'message': 'Only approved or cancel-requested leave can be cancelled by admin'}, status=400)
+
         lr.status = 'cancelled'
+        if not lr.cancellation_reason:
+            lr.cancellation_reason = request.data.get('cancellation_reason', 'Cancelled by admin')
         lr.save()
 
-        if was_approved:
-            current_fy = FiscalYear.objects.filter(is_current=True).first()
-            if current_fy:
-                balance = LeaveBalance.objects.filter(
-                    employee_id=lr.employee_id,
-                    leave_type=lr.leave_type,
-                    fiscal_year=current_fy,
-                ).first()
-                if balance:
-                    balance.used_days = max(Decimal('0'), balance.used_days - lr.days_count)
-                    balance.save()
-
-            AttendanceRecord.objects.filter(
+        current_fy = FiscalYear.objects.filter(is_current=True).first()
+        if current_fy:
+            balance = LeaveBalance.objects.filter(
                 employee_id=lr.employee_id,
-                date__gte=lr.start_date,
-                date__lte=lr.end_date,
-                status='on_leave',
-            ).delete()
+                leave_type=lr.leave_type,
+                fiscal_year=current_fy,
+            ).first()
+            if balance:
+                balance.used_days = max(Decimal('0'), balance.used_days - lr.days_count)
+                balance.save()
 
+        AttendanceRecord.objects.filter(
+            employee_id=lr.employee_id,
+            date__gte=lr.start_date,
+            date__lte=lr.end_date,
+            status='on_leave',
+        ).delete()
+
+        _notify_leave_cancellation(lr, cancelled_by='admin')
         return Response(serialize_leave_request(lr))
 
 
@@ -4146,14 +4216,16 @@ class MyLeavePolicyView(APIView):
             return Response({'message': 'No employee profile linked'}, status=404)
         if not employee.organization_id:
             return Response({})
-        policy = LeavePolicy.objects.filter(organization_id=employee.organization_id).first()
-        if not policy:
-            return Response({})
 
         colleagues = Employee.objects.filter(
             organization_id=employee.organization_id,
             status='active',
         ).exclude(id=employee.id).values('id', 'full_name', 'department_id')
+        colleagues_list = [{'id': str(c['id']), 'full_name': c['full_name']} for c in colleagues]
+
+        policy = LeavePolicy.objects.filter(organization_id=employee.organization_id).first()
+        if not policy:
+            return Response({'colleagues': colleagues_list})
 
         return Response({
             'advance_notice_rules': policy.advance_notice_rules or [],
@@ -4163,7 +4235,7 @@ class MyLeavePolicyView(APIView):
             'require_cover_person': policy.require_cover_person,
             'require_cover_after_days': policy.require_cover_after_days,
             'allow_half_day': policy.allow_half_day,
-            'colleagues': [{'id': str(c['id']), 'full_name': c['full_name']} for c in colleagues],
+            'colleagues': colleagues_list,
         })
 
 
