@@ -1697,15 +1697,17 @@ class DeviceSyncView(APIView):
                     continue
 
             try:
+                import zoneinfo
+                nepal_tz = zoneinfo.ZoneInfo('Asia/Kathmandu')
                 punch_time = datetime.fromisoformat(punch_time_str)
                 if timezone.is_naive(punch_time):
-                    punch_time = timezone.make_aware(punch_time)
+                    punch_time = punch_time.replace(tzinfo=nepal_tz)
             except (ValueError, TypeError):
                 errors.append(f'Invalid punch_time: {punch_time_str}')
                 continue
 
-            punch_date = punch_time.date()
-            att, _ = AttendanceRecord.objects.get_or_create(
+            punch_date = punch_time.astimezone(nepal_tz).date()
+            att, created = AttendanceRecord.objects.get_or_create(
                 employee_id=mapping.employee_id,
                 date=punch_date,
                 defaults={'device_user_id': device_user_id}
@@ -1714,13 +1716,23 @@ class DeviceSyncView(APIView):
             employee = Employee.objects.filter(id=mapping.employee_id).first()
             dept = Department.objects.filter(id=employee.department_id).first() if employee and employee.department_id else None
 
-            if punch_type == 'in' and not att.check_in:
+            is_checkin = False
+            is_checkout = False
+
+            if punch_type == 'out':
+                is_checkout = True
+            elif not att.check_in:
+                is_checkin = True
+            elif att.check_in and punch_time > att.check_in:
+                is_checkout = True
+
+            if is_checkin:
                 att.check_in = punch_time
                 att.check_in_method = 'device'
                 att.status = 'present'
                 if dept:
                     work_start = datetime.combine(punch_date, dept.work_start_time)
-                    work_start = timezone.make_aware(work_start)
+                    work_start = work_start.replace(tzinfo=nepal_tz)
                     diff = (punch_time - work_start).total_seconds() / 60
                     if diff > dept.late_threshold_minutes:
                         att.is_late = True
@@ -1728,14 +1740,15 @@ class DeviceSyncView(APIView):
                 att.save()
                 if att.is_late and employee:
                     send_late_notification(employee, att, dept)
-            elif punch_type == 'out':
-                att.check_out = punch_time
-                att.check_out_method = 'device'
+            elif is_checkout:
+                if not att.check_out or punch_time > att.check_out:
+                    att.check_out = punch_time
+                    att.check_out_method = 'device'
                 if att.check_in:
-                    att.work_hours = Decimal(str(round((punch_time - att.check_in).total_seconds() / 3600, 2)))
+                    att.work_hours = Decimal(str(round((att.check_out - att.check_in).total_seconds() / 3600, 2)))
                 if dept:
                     work_end = datetime.combine(punch_date, dept.work_end_time)
-                    work_end = timezone.make_aware(work_end)
+                    work_end = work_end.replace(tzinfo=nepal_tz)
                     diff = (work_end - punch_time).total_seconds() / 60
                     if diff > dept.early_leave_threshold_minutes:
                         att.is_early_leave = True
