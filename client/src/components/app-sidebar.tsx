@@ -53,6 +53,7 @@ export function AppSidebar() {
     "hrms.holiday.read", "hrms.bonus.read", "hrms.expense.read", "hrms.advance.read",
     "hrms.payroll.read", "hrms.tax.read", "hrms.department.read", "hrms.fiscal_year.read",
     "hrms.notification.read", "hrms.notification.update", "hrms.staff.read", "hrms.salary.read",
+    "hrms.hr_policy.read", "hrms.doc_template.read", "hrms.doc_request.read",
   ];
   const hasAnyHrms = hrmsPermissions.some(p => hasPermission(p));
 

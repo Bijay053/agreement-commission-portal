@@ -6224,7 +6224,7 @@ class StaffBulkUploadView(APIView):
 # ─── HR Policies ────────────────────────────────────────────────
 
 class HRPolicyListView(APIView):
-    @require_permission('hrms.leave_request.read')
+    @require_permission('hrms.hr_policy.read')
     def get(self, request):
         org_id = request.GET.get('organization_id')
         dept_id = request.GET.get('department_id')
@@ -6263,7 +6263,7 @@ class HRPolicyListView(APIView):
             })
         return Response(result)
 
-    @require_permission('hrms.leave_request.add')
+    @require_permission('hrms.hr_policy.add')
     def post(self, request):
         data = request.data
         file_url = None
@@ -6295,7 +6295,7 @@ class HRPolicyListView(APIView):
 
 
 class HRPolicyDetailView(APIView):
-    @require_permission('hrms.leave_request.add')
+    @require_permission('hrms.hr_policy.update')
     def put(self, request, policy_id):
         try:
             p = HRPolicy.objects.get(id=policy_id)
@@ -6317,7 +6317,7 @@ class HRPolicyDetailView(APIView):
         p.save()
         return Response({'message': 'Policy updated'})
 
-    @require_permission('hrms.leave_request.add')
+    @require_permission('hrms.hr_policy.delete')
     def delete(self, request, policy_id):
         try:
             p = HRPolicy.objects.get(id=policy_id)
@@ -6383,7 +6383,7 @@ class MyHRPolicyAcknowledgeView(APIView):
 # ─── Document Templates & Requests ──────────────────────────────
 
 class DocumentTemplateListView(APIView):
-    @require_permission('hrms.leave_request.read')
+    @require_permission('hrms.doc_template.read')
     def get(self, request):
         org_id = request.GET.get('organization_id')
         qs = DocumentTemplate.objects.all()
@@ -6401,7 +6401,7 @@ class DocumentTemplateListView(APIView):
             'organization_id': str(t.organization_id),
         } for t in qs])
 
-    @require_permission('hrms.leave_request.add')
+    @require_permission('hrms.doc_template.add')
     def post(self, request):
         data = request.data
         t = DocumentTemplate.objects.create(
@@ -6416,7 +6416,7 @@ class DocumentTemplateListView(APIView):
 
 
 class DocumentTemplateDetailView(APIView):
-    @require_permission('hrms.leave_request.add')
+    @require_permission('hrms.doc_template.update')
     def put(self, request, template_id):
         try:
             t = DocumentTemplate.objects.get(id=template_id)
@@ -6429,7 +6429,7 @@ class DocumentTemplateDetailView(APIView):
         t.save()
         return Response({'message': 'Template updated'})
 
-    @require_permission('hrms.leave_request.add')
+    @require_permission('hrms.doc_template.delete')
     def delete(self, request, template_id):
         try:
             t = DocumentTemplate.objects.get(id=template_id)
@@ -6440,7 +6440,7 @@ class DocumentTemplateDetailView(APIView):
 
 
 class DocumentRequestListView(APIView):
-    @require_permission('hrms.leave_request.read')
+    @require_permission('hrms.doc_request.read')
     def get(self, request):
         org_id = request.GET.get('organization_id')
         status_filter = request.GET.get('status')
@@ -6470,7 +6470,7 @@ class DocumentRequestListView(APIView):
 
 
 class DocumentRequestProcessView(APIView):
-    @require_permission('hrms.leave_request.add')
+    @require_permission('hrms.doc_request.process')
     def post(self, request, request_id):
         try:
             dr = DocumentRequest.objects.get(id=request_id)

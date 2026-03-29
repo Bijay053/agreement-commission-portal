@@ -132,6 +132,19 @@ EMPLOYEE_PERMISSIONS = [
     ('hrms.notification.update', 'HRMS - Settings', 'notification', 'update', 'Update notification settings'),
 
     ('hrms.dashboard.read', 'HRMS - Dashboard', 'dashboard', 'read', 'View HRMS dashboard'),
+
+    ('hrms.hr_policy.read', 'HRMS - HR Policies', 'hr_policy', 'read', 'View HR policies'),
+    ('hrms.hr_policy.add', 'HRMS - HR Policies', 'hr_policy', 'add', 'Create HR policies'),
+    ('hrms.hr_policy.update', 'HRMS - HR Policies', 'hr_policy', 'update', 'Update HR policies'),
+    ('hrms.hr_policy.delete', 'HRMS - HR Policies', 'hr_policy', 'delete', 'Delete HR policies'),
+
+    ('hrms.doc_template.read', 'HRMS - Documents', 'doc_template', 'read', 'View document templates'),
+    ('hrms.doc_template.add', 'HRMS - Documents', 'doc_template', 'add', 'Create document templates'),
+    ('hrms.doc_template.update', 'HRMS - Documents', 'doc_template', 'update', 'Update document templates'),
+    ('hrms.doc_template.delete', 'HRMS - Documents', 'doc_template', 'delete', 'Delete document templates'),
+
+    ('hrms.doc_request.read', 'HRMS - Documents', 'doc_request', 'read', 'View document requests'),
+    ('hrms.doc_request.process', 'HRMS - Documents', 'doc_request', 'process', 'Process document requests (approve/reject/generate)'),
 ]
 
 

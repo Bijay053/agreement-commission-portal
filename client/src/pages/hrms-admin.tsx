@@ -898,8 +898,7 @@ function AttendanceTab() {
 
   const scheduleUpdateMutation = useMutation({
     mutationFn: async ({ id, data }: { id: string; data: any }) => {
-      const res = await apiRequest("PATCH", `/api/hrms/departments/${id}`, data);
-      return res.json();
+      return apiRequest("PUT", `/api/hrms/departments/${id}`, data);
     },
     onSuccess: () => {
       queryClient.refetchQueries({ queryKey: ["/api/hrms/departments"] });
@@ -3277,15 +3276,6 @@ function DocumentsTab() {
         <Button variant={subTab === "requests" ? "default" : "outline"} size="sm" onClick={() => setSubTab("requests")} data-testid="button-doc-subtab-requests">
           <Download className="h-4 w-4 mr-1" /> Document Requests
         </Button>
-        <div className="ml-auto flex items-center gap-2">
-          <a href="/templates?type=agreement" className="text-xs text-primary hover:underline flex items-center gap-1" data-testid="link-agreement-templates">
-            <FileText className="h-3 w-3" /> Agreement Templates
-          </a>
-          <span className="text-muted-foreground">|</span>
-          <a href="/templates?type=offer_letter" className="text-xs text-primary hover:underline flex items-center gap-1" data-testid="link-offer-letter-templates">
-            <FileText className="h-3 w-3" /> Offer Letter Templates
-          </a>
-        </div>
       </div>
       {subTab === "templates" ? <DocTemplatesTab /> : <DocRequestsTab />}
     </div>
@@ -3311,8 +3301,8 @@ const SIDEBAR_ITEMS = [
   { key: "countries", label: "Countries", icon: Globe, group: "Settings", permissions: ["hrms.organization.read"] },
   { key: "organizations", label: "Organizations", icon: Building2, group: "Settings", permissions: ["hrms.organization.read"] },
   { key: "departments", label: "Departments", icon: Users, group: "Settings", permissions: ["hrms.department.read"] },
-  { key: "hr-policies", label: "HR Policies", icon: ShieldCheck, group: "People", permissions: ["hrms.leave_request.read"] },
-  { key: "documents", label: "Documents", icon: FileText, group: "People", permissions: ["hrms.leave_request.read"] },
+  { key: "hr-policies", label: "HR Policies", icon: ShieldCheck, group: "People", permissions: ["hrms.hr_policy.read"] },
+  { key: "documents", label: "Documents", icon: FileText, group: "People", permissions: ["hrms.doc_template.read", "hrms.doc_request.read"] },
   { key: "notifications", label: "Notifications", icon: Bell, group: "Settings", permissions: ["hrms.notification.read", "hrms.notification.update"] },
 ];
 
