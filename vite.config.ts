@@ -30,20 +30,7 @@ export default defineConfig({
   build: {
     outDir: path.resolve(import.meta.dirname, "dist/public"),
     emptyOutDir: true,
-    rollupOptions: {
-      output: {
-        manualChunks(id) {
-          if (id.includes("node_modules")) {
-            if (id.includes("@tanstack") || id.includes("react-query")) return "vendor-query";
-            if (id.includes("recharts") || id.includes("d3-")) return "vendor-charts";
-            if (id.includes("@radix-ui")) return "vendor-radix";
-            if (id.includes("lucide-react")) return "vendor-icons";
-            return "vendor";
-          }
-        },
-      },
-    },
-    chunkSizeWarningLimit: 1500,
+    chunkSizeWarningLimit: 2000,
   },
   server: {
     allowedHosts: true,
