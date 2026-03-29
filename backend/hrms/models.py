@@ -231,6 +231,7 @@ class AttendanceRecord(models.Model):
     overtime_hours = models.DecimalField(max_digits=5, decimal_places=2, default=0)
     notes = models.TextField(null=True, blank=True)
     device_user_id = models.CharField(max_length=64, null=True, blank=True)
+    check_in_timezone = models.CharField(max_length=64, null=True, blank=True, help_text='IANA timezone e.g. Asia/Kathmandu, Australia/Sydney')
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

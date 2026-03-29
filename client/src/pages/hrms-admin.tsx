@@ -738,14 +738,25 @@ function AttendanceTab() {
     });
   };
 
-  const statusColors: Record<string, string> = {
+  const gridStatusColors: Record<string, string> = {
     present: "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400",
+    partial: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400",
     absent: "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400",
-    on_leave: "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400",
+    leave: "bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400",
+    half_leave: "bg-violet-100 text-violet-800 dark:bg-violet-900/30 dark:text-violet-400",
+    holiday: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400",
+    day_off: "bg-gray-100 text-gray-500 dark:bg-gray-800/30 dark:text-gray-400",
+    on_leave: "bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400",
     half_day: "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400",
   };
 
-  const statusLabel = (s: string) => ({ present: "P", absent: "A", on_leave: "L", half_day: "H" }[s] || "-");
+  const gridStatusLabel = (gs: string) => ({
+    present: "P", partial: "P*", absent: "A", leave: "L",
+    half_leave: "HL", holiday: "H", day_off: "D", on_leave: "L", half_day: "H",
+  }[gs] || "-");
+
+  const statusColors = gridStatusColors;
+  const statusLabel = (s: string) => gridStatusLabel(s);
 
   const formatDay = (d: string) => {
     const dt = new Date(d + "T00:00:00");
@@ -778,10 +789,14 @@ function AttendanceTab() {
       const latestDay = days.filter((d: string) => d <= todayStr).pop();
       if (latestDay) {
         const entry = emp.attendance[latestDay];
-        const empStatus = entry?.status || "absent";
+        const gs = entry?.grid_status || entry?.status || "absent";
         if (filterStatus === "late") {
           if (!entry?.is_late) return false;
-        } else if (empStatus !== filterStatus) return false;
+        } else if (filterStatus === "present") {
+          if (gs !== "present" && gs !== "partial" && gs !== "half_leave") return false;
+        } else if (filterStatus === "on_leave") {
+          if (gs !== "leave" && gs !== "on_leave") return false;
+        } else if (gs !== filterStatus) return false;
       }
     }
     return true;
@@ -800,11 +815,13 @@ function AttendanceTab() {
   const totalStaff = allEmployees.length;
   const todayStr = new Date().toISOString().split("T")[0];
   const hasTodayInGrid = grid?.days?.includes(todayStr);
-  const todayPresent = hasTodayInGrid ? allEmployees.filter((e: any) => e.attendance[todayStr]?.status === 'present').length : 0;
-  const todayAbsent = hasTodayInGrid ? allEmployees.filter((e: any) => !e.attendance[todayStr] || e.attendance[todayStr]?.status === 'absent').length : 0;
+  const getGridStatus = (e: any, day: string) => e.attendance[day]?.grid_status || e.attendance[day]?.status || null;
+  const todayPresent = hasTodayInGrid ? allEmployees.filter((e: any) => { const gs = getGridStatus(e, todayStr); return gs === 'present' || gs === 'partial' || gs === 'half_leave'; }).length : 0;
+  const todayAbsent = hasTodayInGrid ? allEmployees.filter((e: any) => { const gs = getGridStatus(e, todayStr); return gs === 'absent'; }).length : 0;
   const todayLate = hasTodayInGrid ? allEmployees.filter((e: any) => e.attendance[todayStr]?.is_late).length : 0;
-  const todayOnLeave = hasTodayInGrid ? allEmployees.filter((e: any) => e.attendance[todayStr]?.status === 'on_leave').length : 0;
-  const attendanceRate = totalStaff > 0 && hasTodayInGrid ? Math.round((todayPresent / totalStaff) * 100) : 0;
+  const todayOnLeave = hasTodayInGrid ? allEmployees.filter((e: any) => { const gs = getGridStatus(e, todayStr); return gs === 'leave' || gs === 'on_leave'; }).length : 0;
+  const workingStaff = hasTodayInGrid ? allEmployees.filter((e: any) => { const gs = getGridStatus(e, todayStr); return gs !== 'holiday' && gs !== 'day_off'; }).length : totalStaff;
+  const attendanceRate = workingStaff > 0 && hasTodayInGrid ? Math.round((todayPresent / workingStaff) * 100) : 0;
 
   const topAbsentees = [...allEmployees]
     .sort((a: any, b: any) => b.summary.absent - a.summary.absent)
@@ -1200,24 +1217,25 @@ function AttendanceTab() {
                         const isFuture = day > new Date().toISOString().split("T")[0];
                         return (
                           <td key={day}
-                            className={`p-0 text-center border-r cursor-pointer group ${isWeekend ? "bg-muted/30" : ""}`}
-                            onClick={() => !isFuture && openEdit(emp.employee_id, day, entry)}
+                            className={`p-0 text-center border-r ${isWeekend ? "bg-muted/30" : ""} ${!isFuture && entry?.grid_status !== 'holiday' && entry?.grid_status !== 'day_off' ? "cursor-pointer group" : ""}`}
+                            onClick={() => { if (isFuture) return; const gs = entry?.grid_status; if (gs === 'holiday' || gs === 'day_off') return; openEdit(emp.employee_id, day, entry); }}
                             data-testid={`cell-${emp.employee_id}-${day}`}
                           >
                             {isFuture ? (
                               <span className="text-muted-foreground">-</span>
                             ) : entry ? (
                               <div className="relative">
-                                <span className={`inline-block px-1 py-0.5 rounded text-[10px] font-medium ${statusColors[entry.status] || ""}`}>
-                                  {statusLabel(entry.status)}
+                                <span className={`inline-block px-1 py-0.5 rounded text-[10px] font-medium ${gridStatusColors[entry.grid_status || entry.status] || ""}`}>
+                                  {gridStatusLabel(entry.grid_status || entry.status)}
                                 </span>
                                 {entry.is_late && <span className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 bg-amber-500 rounded-full" />}
-                                <Pencil className="h-2.5 w-2.5 absolute top-0 right-0 opacity-0 group-hover:opacity-50 text-muted-foreground" />
+                                {entry.grid_status !== 'holiday' && entry.grid_status !== 'day_off' && (
+                                  <Pencil className="h-2.5 w-2.5 absolute top-0 right-0 opacity-0 group-hover:opacity-50 text-muted-foreground" />
+                                )}
                               </div>
                             ) : (
                               <div className="relative">
-                                <span className="text-red-400 text-[10px] font-medium">A</span>
-                                <Pencil className="h-2.5 w-2.5 absolute top-0 right-0 opacity-0 group-hover:opacity-50 text-muted-foreground" />
+                                <span className="text-muted-foreground text-[10px] font-medium">-</span>
                               </div>
                             )}
                           </td>
@@ -1238,6 +1256,20 @@ function AttendanceTab() {
             </div>
           </CardContent>
         </Card>
+      )}
+
+      {grid && (
+        <div className="flex flex-wrap items-center gap-3 px-1 py-2 text-[11px]">
+          <span className="text-muted-foreground font-medium mr-1">INDEX:</span>
+          <span className="inline-flex items-center gap-1"><span className="px-1.5 py-0.5 rounded bg-red-100 text-red-800 font-medium">A</span> Absent</span>
+          <span className="inline-flex items-center gap-1"><span className="px-1.5 py-0.5 rounded bg-gray-100 text-gray-500 font-medium">D</span> Day Off</span>
+          <span className="inline-flex items-center gap-1"><span className="px-1.5 py-0.5 rounded bg-green-100 text-green-700 font-medium">H</span> Holiday</span>
+          <span className="inline-flex items-center gap-1"><span className="px-1.5 py-0.5 rounded bg-purple-100 text-purple-800 font-medium">L</span> Leave</span>
+          <span className="inline-flex items-center gap-1"><span className="px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 font-medium">P*</span> Partial</span>
+          <span className="inline-flex items-center gap-1"><span className="px-1.5 py-0.5 rounded bg-green-100 text-green-800 font-medium">P</span> Present</span>
+          <span className="inline-flex items-center gap-1"><span className="px-1.5 py-0.5 rounded bg-violet-100 text-violet-800 font-medium">HL</span> Half Leave</span>
+          <span className="inline-flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-amber-500 inline-block" /> Late</span>
+        </div>
       )}
 
       <Dialog open={!!editingCell} onOpenChange={open => { if (!open) setEditingCell(null); }}>

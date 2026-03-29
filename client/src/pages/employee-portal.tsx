@@ -1027,6 +1027,7 @@ function RemoteCheckInDialog({
       const body: any = {};
       if (location) body.location = { lat: location.lat, lng: location.lng };
       if (photoUrl) body.photo_url = photoUrl;
+      try { body.timezone = Intl.DateTimeFormat().resolvedOptions().timeZone; } catch {};
 
       const res = await fetch(endpoint, {
         method: "POST",

@@ -314,6 +314,8 @@ def serialize_attendance(att):
         'work_hours': float(att.work_hours),
         'overtime_hours': float(att.overtime_hours),
         'notes': att.notes,
+        'check_in_timezone': att.check_in_timezone,
+        'is_partial': bool(att.check_in and not att.check_out) or bool(att.check_out and not att.check_in),
     }
 
 
@@ -1510,6 +1512,7 @@ class OnlineCheckInView(APIView):
                 'check_in_method': 'online',
                 'check_in_location': data.get('location'),
                 'check_in_photo_url': data.get('photo_url'),
+                'check_in_timezone': data.get('timezone', 'Asia/Kathmandu'),
                 'is_late': is_late,
                 'late_minutes': late_mins,
                 'status': 'present',
@@ -2112,36 +2115,126 @@ class AttendanceGridView(APIView):
                 'check_in_photo_url': get_presigned_url(r.check_in_photo_url) if r.check_in_photo_url else None,
                 'check_out_photo_url': get_presigned_url(r.check_out_photo_url) if r.check_out_photo_url else None,
                 'check_in_location': r.check_in_location or None,
+                'check_in_timezone': r.check_in_timezone,
                 'notes': r.notes or '',
+                'is_partial': bool(r.check_in and not r.check_out) or bool(r.check_out and not r.check_in),
             }
+
+        org_ids = set(str(e.organization_id) for e in employees if e.organization_id)
+        holidays_by_org = {}
+        if org_ids:
+            hols = Holiday.objects.filter(
+                organization_id__in=org_ids,
+                date__gte=date_from,
+                date__lte=date_to,
+                is_optional=False,
+            )
+            for h in hols:
+                holidays_by_org.setdefault(str(h.organization_id), set()).add(h.date)
+
+        leave_requests = LeaveRequest.objects.filter(
+            employee_id__in=emp_ids,
+            status='approved',
+            start_date__lte=date_to,
+            end_date__gte=date_from,
+        ).select_related('leave_type')
+        leave_map = {}
+        for lr in leave_requests:
+            leave_map.setdefault(str(lr.employee_id), []).append(lr)
+
+        dept_cache = {}
+        org_cache = {}
 
         rows = []
         for emp in employees:
+            dept = None
             dept_name = ''
             if emp.department_id:
-                try:
-                    dept_name = Department.objects.get(id=emp.department_id).name
-                except Department.DoesNotExist:
-                    pass
+                if str(emp.department_id) not in dept_cache:
+                    try:
+                        dept_cache[str(emp.department_id)] = Department.objects.get(id=emp.department_id)
+                    except Department.DoesNotExist:
+                        dept_cache[str(emp.department_id)] = None
+                dept = dept_cache[str(emp.department_id)]
+                dept_name = dept.name if dept else ''
+
+            org_obj = None
+            if emp.organization_id:
+                if str(emp.organization_id) not in org_cache:
+                    try:
+                        org_cache[str(emp.organization_id)] = Organization.objects.get(id=emp.organization_id)
+                    except Organization.DoesNotExist:
+                        org_cache[str(emp.organization_id)] = None
+                org_obj = org_cache[str(emp.organization_id)]
+
+            schedule = _get_employee_schedule(emp, dept, org_obj)
+            off_days = schedule['week_off_days']
+            org_holidays = holidays_by_org.get(str(emp.organization_id), set()) if emp.organization_id else set()
+            emp_leaves = leave_map.get(str(emp.id), [])
+
             attendance_data = {}
-            summary = {'present': 0, 'absent': 0, 'on_leave': 0, 'late': 0}
-            for day in days:
-                key = f"{emp.id}_{day}"
+            summary = {'present': 0, 'absent': 0, 'on_leave': 0, 'late': 0, 'half_leave': 0, 'partial': 0}
+            today = date.today()
+            for day_str in days:
+                day_date = date.fromisoformat(day_str)
+                key = f"{emp.id}_{day_str}"
                 entry = att_map.get(key)
+
+                is_holiday = day_date in org_holidays
+                is_off_day = day_date.weekday() in off_days
+
+                leave_info = None
+                for lr in emp_leaves:
+                    if lr.start_date <= day_date <= lr.end_date:
+                        leave_info = lr
+                        break
+
                 if entry:
-                    attendance_data[day] = entry
-                    if entry['status'] == 'on_leave':
-                        summary['on_leave'] += 1
-                    elif entry['status'] in ('present', 'half_day'):
+                    entry_copy = dict(entry)
+                    if is_holiday:
+                        entry_copy['grid_status'] = 'holiday'
+                    elif leave_info and leave_info.is_half_day:
+                        entry_copy['grid_status'] = 'half_leave'
+                        summary['half_leave'] += 1
                         summary['present'] += 1
-                        if entry['is_late']:
-                            summary['late'] += 1
+                    elif leave_info:
+                        entry_copy['grid_status'] = 'leave'
+                        summary['on_leave'] += 1
+                    elif entry['is_partial']:
+                        entry_copy['grid_status'] = 'partial'
+                        summary['partial'] += 1
+                        summary['present'] += 1
+                    elif entry['status'] in ('present', 'half_day'):
+                        entry_copy['grid_status'] = 'present'
+                        summary['present'] += 1
+                    elif entry['status'] == 'on_leave':
+                        entry_copy['grid_status'] = 'leave'
+                        summary['on_leave'] += 1
                     elif entry['status'] == 'absent':
+                        entry_copy['grid_status'] = 'absent'
                         summary['absent'] += 1
+                    else:
+                        entry_copy['grid_status'] = entry['status']
+
+                    if entry['is_late']:
+                        summary['late'] += 1
+                    attendance_data[day_str] = entry_copy
                 else:
-                    attendance_data[day] = None
-                    if date.fromisoformat(day) <= date.today():
+                    if is_holiday:
+                        attendance_data[day_str] = {'grid_status': 'holiday'}
+                    elif is_off_day:
+                        attendance_data[day_str] = {'grid_status': 'day_off'}
+                    elif leave_info and leave_info.is_half_day:
+                        attendance_data[day_str] = {'grid_status': 'half_leave'}
+                        summary['half_leave'] += 1
+                    elif leave_info:
+                        attendance_data[day_str] = {'grid_status': 'leave'}
+                        summary['on_leave'] += 1
+                    elif day_date <= today:
+                        attendance_data[day_str] = {'grid_status': 'absent'}
                         summary['absent'] += 1
+                    else:
+                        attendance_data[day_str] = None
 
             rows.append({
                 'employee_id': str(emp.id),
