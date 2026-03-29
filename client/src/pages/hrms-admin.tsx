@@ -619,6 +619,9 @@ function AttendanceTab() {
   const [filterOrg, setFilterOrg] = useState("");
   const [filterDept, setFilterDept] = useState("");
   const [filterStatus, setFilterStatus] = useState("");
+  const [showScheduleSettings, setShowScheduleSettings] = useState(false);
+  const [scheduleEditDept, setScheduleEditDept] = useState<Department | null>(null);
+  const [scheduleForm, setScheduleForm] = useState({ working_days_per_week: 6, work_start_time: "10:00", work_end_time: "18:00", late_threshold_minutes: 15, early_leave_threshold_minutes: 15 });
 
   const { data: organizations } = useQuery<any[]>({
     queryKey: ["/api/hrms/organizations"],
@@ -661,6 +664,35 @@ function AttendanceTab() {
     },
     onError: () => toast({ title: "Failed to save", variant: "destructive" }),
   });
+
+  const scheduleUpdateMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: string; data: any }) => {
+      const res = await apiRequest("PATCH", `/api/hrms/departments/${id}`, data);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.refetchQueries({ queryKey: ["/api/hrms/departments"] });
+      setScheduleEditDept(null);
+      toast({ title: "Work schedule updated" });
+    },
+    onError: () => toast({ title: "Failed to update schedule", variant: "destructive" }),
+  });
+
+  const openScheduleEdit = (dept: Department) => {
+    setScheduleEditDept(dept);
+    setScheduleForm({
+      working_days_per_week: dept.working_days_per_week,
+      work_start_time: dept.work_start_time || "10:00",
+      work_end_time: dept.work_end_time || "18:00",
+      late_threshold_minutes: dept.late_threshold_minutes,
+      early_leave_threshold_minutes: dept.early_leave_threshold_minutes,
+    });
+  };
+
+  const saveSchedule = () => {
+    if (!scheduleEditDept) return;
+    scheduleUpdateMutation.mutate({ id: scheduleEditDept.id, data: scheduleForm });
+  };
 
   const navDate = (dir: number) => {
     const d = new Date(currentDate);
