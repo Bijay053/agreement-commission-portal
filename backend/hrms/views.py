@@ -1656,8 +1656,19 @@ class ExpenseReceiptUploadView(APIView):
 
 
 class DeviceSyncView(APIView):
-    @require_permission('hrms.attendance.add')
     def post(self, request):
+        api_key = request.headers.get('X-Sync-Key', '')
+        sync_secret = os.getenv('DEVICE_SYNC_KEY', '')
+        if api_key and sync_secret and api_key == sync_secret:
+            pass
+        else:
+            user_id = request.session.get('userId')
+            if not user_id:
+                return Response({'message': 'Authentication required'}, status=401)
+            user_perms = request.session.get('userPermissions', [])
+            if 'hrms.attendance.add' not in user_perms:
+                return Response({'message': 'Insufficient permissions'}, status=403)
+
         records = request.data.get('records', [])
         synced = 0
         errors = []

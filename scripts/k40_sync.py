@@ -290,15 +290,19 @@ def push_to_portal(records, tracker: SyncTracker, config: dict,
     endpoint = config["portal_url"].rstrip("/") + config["sync_endpoint"]
     session_id = config["portal_session_id"]
 
-    if not session_id:
+    sync_key = os.getenv("DEVICE_SYNC_KEY", "")
+    cookies = {}
+    headers = {"Content-Type": "application/json"}
+    if sync_key:
+        headers["X-Sync-Key"] = sync_key
+    elif session_id:
+        cookies = {"connect.sid": session_id}
+    else:
         logger.error(
-            "PORTAL_SESSION_ID is not set. "
-            "Log in to the portal, grab your session cookie, and set it."
+            "Neither DEVICE_SYNC_KEY nor PORTAL_SESSION_ID is set. "
+            "Set DEVICE_SYNC_KEY in .env for permanent auth."
         )
         return 0, len(records)
-
-    cookies = {"connect.sid": session_id}
-    headers = {"Content-Type": "application/json"}
 
     synced = 0
     failed = 0
