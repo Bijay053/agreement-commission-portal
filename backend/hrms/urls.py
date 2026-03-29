@@ -28,6 +28,7 @@ urlpatterns = [
     path('hrms/leave-requests/<uuid:lr_id>', views.LeaveRequestDetailView.as_view()),
     path('hrms/leave-requests/<uuid:lr_id>/approve', views.LeaveRequestApproveView.as_view()),
     path('hrms/leave-requests/<uuid:lr_id>/reject', views.LeaveRequestRejectView.as_view()),
+    path('hrms/my/leave-requests/<uuid:lr_id>/cancel', views.LeaveRequestCancelView.as_view()),
 
     path('hrms/attendance', views.AttendanceListView.as_view()),
     path('hrms/attendance/online-checkin', views.OnlineCheckInView.as_view()),

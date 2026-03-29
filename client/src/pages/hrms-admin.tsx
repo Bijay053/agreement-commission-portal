@@ -33,7 +33,7 @@ import {
   ChevronLeft, ChevronRight, Save, ArrowLeft, CheckCircle,
   CreditCard, RotateCcw, Loader2, AlertTriangle, FileText,
   Download, Search, BarChart3, UserX, Timer, Globe, Wifi,
-  ShieldCheck, ToggleLeft, ToggleRight, Upload, Sheet,
+  ShieldCheck, ToggleLeft, ToggleRight, Upload, Sheet, Paperclip,
 } from "lucide-react";
 import { StaffProfilesTab } from "./hrms-staff-profiles";
 import { BonusesTab } from "./hrms-bonuses";
@@ -107,6 +107,8 @@ interface LeaveRequest {
   days_count: number; is_half_day: boolean; reason: string | null;
   status: string; approver_name: string | null;
   approved_at: string | null; rejection_reason: string | null;
+  cover_person_id: string | null; cover_person_name: string | null;
+  document_url: string | null;
   created_at: string | null;
 }
 
@@ -574,6 +576,8 @@ function LeaveRequestsTab() {
               <TableHead>To</TableHead>
               <TableHead>Days</TableHead>
               <TableHead>Reason</TableHead>
+              <TableHead>Cover Person</TableHead>
+              <TableHead>Document</TableHead>
               <TableHead>Status</TableHead>
               {statusFilter === "pending" && <TableHead>Actions</TableHead>}
             </TableRow>
@@ -587,6 +591,14 @@ function LeaveRequestsTab() {
                 <TableCell>{r.end_date}</TableCell>
                 <TableCell>{r.days_count}{r.is_half_day ? " (Half)" : ""}</TableCell>
                 <TableCell className="max-w-[200px] truncate">{r.reason}</TableCell>
+                <TableCell className="text-sm">{r.cover_person_name || "—"}</TableCell>
+                <TableCell>
+                  {r.document_url ? (
+                    <a href={r.document_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-primary hover:underline text-xs" data-testid={`link-admin-doc-${r.id}`}>
+                      <Paperclip className="h-3 w-3" /> View
+                    </a>
+                  ) : "—"}
+                </TableCell>
                 <TableCell><Badge variant={r.status === "approved" ? "default" : r.status === "rejected" ? "destructive" : "secondary"}>{r.status}</Badge></TableCell>
                 {statusFilter === "pending" && (
                   <TableCell>
@@ -599,7 +611,7 @@ function LeaveRequestsTab() {
               </TableRow>
             ))}
             {(!requests || requests.length === 0) && (
-              <TableRow><TableCell colSpan={8} className="text-center text-muted-foreground py-8">No {statusFilter} leave requests</TableCell></TableRow>
+              <TableRow><TableCell colSpan={10} className="text-center text-muted-foreground py-8">No {statusFilter} leave requests</TableCell></TableRow>
             )}
           </TableBody>
         </Table>

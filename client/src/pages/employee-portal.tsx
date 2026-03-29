@@ -1311,8 +1311,8 @@ function LeaveTab() {
               <Card key={b.leave_type_id || b.leave_type}>
                 <CardContent className="p-4">
                   <p className="text-xs text-muted-foreground">{b.leave_type_name || b.leave_type}</p>
-                  <p className="text-lg font-bold" data-testid={`text-balance-${b.leave_type_name || b.leave_type}`}>{b.remaining ?? b.balance ?? 0}</p>
-                  <p className="text-[10px] text-muted-foreground">of {b.allocated ?? b.total ?? 0}</p>
+                  <p className="text-lg font-bold" data-testid={`text-balance-${b.leave_type_name || b.leave_type}`}>{b.remaining_days ?? b.remaining ?? b.balance ?? 0}</p>
+                  <p className="text-[10px] text-muted-foreground">of {b.allocated_days ?? b.allocated ?? b.total ?? 0}</p>
                 </CardContent>
               </Card>
             ))}
@@ -1335,11 +1335,12 @@ function LeaveTab() {
                   <TableHead>Reason</TableHead>
                   <TableHead>Cover Person</TableHead>
                   <TableHead>Document</TableHead>
+                  <TableHead></TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {(!requests || requests.length === 0) ? (
-                  <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground py-8">No leave requests</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={8} className="text-center text-muted-foreground py-8">No leave requests</TableCell></TableRow>
                 ) : requests.map((r: any) => (
                   <TableRow key={r.id}>
                     <TableCell className="font-medium">{r.leave_type_name || r.leave_type}</TableCell>
@@ -1359,6 +1360,28 @@ function LeaveTab() {
                           <Paperclip className="h-3 w-3" /> View
                         </a>
                       ) : "—"}
+                    </TableCell>
+                    <TableCell>
+                      {(r.status === 'pending' || r.status === 'approved') && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="text-red-500 hover:text-red-700 h-7 text-xs"
+                          data-testid={`button-cancel-leave-${r.id}`}
+                          onClick={async () => {
+                            if (!confirm('Are you sure you want to cancel this leave request?')) return;
+                            try {
+                              const res = await fetch(`/api/hrms/my/leave-requests/${r.id}/cancel`, { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' } });
+                              if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error(err.message || 'Failed'); }
+                              queryClient.refetchQueries({ queryKey: ['/api/hrms/my/leave-requests'] });
+                              queryClient.refetchQueries({ queryKey: ['/api/hrms/my/leave-balance'] });
+                              toast({ title: 'Leave request cancelled' });
+                            } catch (err: any) { toast({ title: err.message, variant: 'destructive' }); }
+                          }}
+                        >
+                          Cancel
+                        </Button>
+                      )}
                     </TableCell>
                   </TableRow>
                 ))}
@@ -1407,6 +1430,15 @@ function LeaveTab() {
                 {policy?.max_consecutive_days && leaveDays > policy.max_consecutive_days && (
                   <Badge variant="destructive" className="text-[10px] ml-auto">Exceeds max {policy.max_consecutive_days} days</Badge>
                 )}
+                {(() => {
+                  const sel = balance?.find((b: any) => b.leave_type_id === leaveForm.leave_type_id);
+                  if (sel) {
+                    const rem = sel.remaining_days ?? sel.remaining ?? sel.balance ?? 0;
+                    if (rem <= 0) return <Badge variant="destructive" className="text-[10px] ml-auto">Balance: 0 days</Badge>;
+                    if (rem < leaveDays) return <Badge variant="destructive" className="text-[10px] ml-auto">Only {rem} day{rem !== 1 ? 's' : ''} available</Badge>;
+                  }
+                  return null;
+                })()}
               </div>
             )}
 
@@ -1415,33 +1447,29 @@ function LeaveTab() {
               <Textarea value={leaveForm.reason} onChange={e => setLeaveForm({ ...leaveForm, reason: e.target.value })} placeholder="Reason for leave..." data-testid="input-leave-reason" />
             </div>
 
-            {(needsCoverPerson || policy?.require_cover_person) && (
-              <div>
-                <Label className="flex items-center gap-1.5 mb-1">
-                  Cover Person During Leave
-                  {needsCoverPerson && <Badge variant="destructive" className="text-[10px]">Required</Badge>}
-                </Label>
-                <p className="text-[10px] text-muted-foreground mb-2">
-                  Select a colleague who will cover your responsibilities
-                </p>
-                <Select value={leaveForm.cover_person_id} onValueChange={v => setLeaveForm({ ...leaveForm, cover_person_id: v })}>
-                  <SelectTrigger data-testid="select-cover-person"><SelectValue placeholder="Select cover person" /></SelectTrigger>
-                  <SelectContent>
-                    {(policy?.colleagues || []).map((c: any) => (
-                      <SelectItem key={c.id} value={c.id}>{c.full_name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
+            <div>
+              <Label className="flex items-center gap-1.5 mb-1">
+                Cover Person During Leave
+                {needsCoverPerson && <Badge variant="destructive" className="text-[10px]">Required</Badge>}
+              </Label>
+              <p className="text-[10px] text-muted-foreground mb-2">
+                Select a colleague who will cover your responsibilities
+              </p>
+              <Select value={leaveForm.cover_person_id} onValueChange={v => setLeaveForm({ ...leaveForm, cover_person_id: v })}>
+                <SelectTrigger data-testid="select-cover-person"><SelectValue placeholder="Select cover person" /></SelectTrigger>
+                <SelectContent>
+                  {(policy?.colleagues || []).map((c: any) => (
+                    <SelectItem key={c.id} value={c.id}>{c.full_name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
 
             <div>
               <Label className="flex items-center gap-1.5 mb-2">
                 <Paperclip className="h-3.5 w-3.5" /> Evidence / Medical Report
-                {needsDocument ? (
+                {needsDocument && (
                   <Badge variant="destructive" className="text-[10px]">Required for {policy.require_document_after_days}+ days</Badge>
-                ) : (
-                  <span className="text-xs text-muted-foreground font-normal ml-1">(optional)</span>
                 )}
               </Label>
               <input

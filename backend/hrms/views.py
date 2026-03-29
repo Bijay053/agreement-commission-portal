@@ -278,7 +278,7 @@ def serialize_leave_request(lr):
         'approver_name': approver_name,
         'approved_at': lr.approved_at.isoformat() if lr.approved_at else None,
         'rejection_reason': lr.rejection_reason,
-        'document_url': lr.document_url,
+        'document_url': get_presigned_url(lr.document_url) if lr.document_url else None,
         'cover_person_id': str(lr.cover_person_id) if lr.cover_person_id else None,
         'cover_person_name': _get_cover_person_name(lr.cover_person_id),
         'created_at': lr.created_at.isoformat() if lr.created_at else None,
@@ -1342,11 +1342,94 @@ class LeaveRequestDetailView(APIView):
         return Response({'message': 'Leave request deleted'})
 
 
+def _send_leave_email(to_email, subject, html_body, cc_list=None):
+    from django.core.mail import EmailMessage
+    msg = EmailMessage(
+        subject=subject,
+        body=html_body,
+        from_email=f'"{settings.FROM_NAME}" <{settings.DEFAULT_FROM_EMAIL}>',
+        to=[to_email],
+        cc=cc_list or [],
+    )
+    msg.content_subtype = 'html'
+    msg.send(fail_silently=True)
+
+
+def _build_leave_email_html(emp_name, leave_type, start_date, end_date, days_count, reason, status, extra_msg=''):
+    status_colors = {'pending': '#f59e0b', 'approved': '#22c55e', 'rejected': '#ef4444', 'cancelled': '#6b7280'}
+    color = status_colors.get(status, '#6b7280')
+    return f"""
+    <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;border:1px solid #e5e7eb;border-radius:12px;overflow:hidden">
+      <div style="background:linear-gradient(135deg,#0d9488,#0891b2);padding:20px;text-align:center">
+        <h2 style="color:#fff;margin:0">Leave Request {status.capitalize()}</h2>
+      </div>
+      <div style="padding:24px">
+        <table style="width:100%;border-collapse:collapse">
+          <tr><td style="padding:8px 0;color:#6b7280;width:140px">Employee</td><td style="padding:8px 0;font-weight:600">{emp_name}</td></tr>
+          <tr><td style="padding:8px 0;color:#6b7280">Leave Type</td><td style="padding:8px 0">{leave_type}</td></tr>
+          <tr><td style="padding:8px 0;color:#6b7280">Period</td><td style="padding:8px 0">{start_date} to {end_date} ({days_count} day{'s' if float(days_count) != 1 else ''})</td></tr>
+          <tr><td style="padding:8px 0;color:#6b7280">Reason</td><td style="padding:8px 0">{reason or '—'}</td></tr>
+          <tr><td style="padding:8px 0;color:#6b7280">Status</td><td style="padding:8px 0"><span style="background:{color};color:#fff;padding:3px 10px;border-radius:12px;font-size:13px">{status.capitalize()}</span></td></tr>
+        </table>
+        {f'<p style="margin-top:16px;color:#374151">{extra_msg}</p>' if extra_msg else ''}
+      </div>
+      <div style="background:#f9fafb;padding:16px;text-align:center;font-size:12px;color:#9ca3af">
+        Study Info Centre — HRMS Portal
+      </div>
+    </div>
+    """
+
+
+def _notify_leave_request_submitted(lr):
+    try:
+        emp = Employee.objects.get(id=lr.employee_id)
+        org = Organization.objects.filter(id=emp.organization_id).first() if emp.organization_id else None
+        org_email = org.email if org and org.email else None
+        ns = NotificationSetting.objects.filter(organization_id=emp.organization_id).first() if emp.organization_id else None
+        extra_cc = [e.strip() for e in (ns.cc_emails.split(',') if ns and ns.cc_emails else []) if e.strip()]
+        cc_list = list(set([e for e in [org_email] + extra_cc if e]))
+        leave_type_name = lr.leave_type.name if lr.leave_type else 'Leave'
+        html = _build_leave_email_html(
+            emp.full_name, leave_type_name,
+            lr.start_date.isoformat(), lr.end_date.isoformat(),
+            lr.days_count, lr.reason, 'pending',
+            'A new leave request has been submitted and requires your review.'
+        )
+        if org_email:
+            _send_leave_email(org_email, f'Leave Request: {emp.full_name} — {leave_type_name}', html, cc_list=[c for c in cc_list if c != org_email])
+        elif cc_list:
+            _send_leave_email(cc_list[0], f'Leave Request: {emp.full_name} — {leave_type_name}', html, cc_list=cc_list[1:])
+    except Exception:
+        pass
+
+
+def _notify_leave_status_change(lr, status):
+    try:
+        emp = Employee.objects.get(id=lr.employee_id)
+        if not emp.email:
+            return
+        to_email = emp.email
+        leave_type_name = lr.leave_type.name if lr.leave_type else 'Leave'
+        extra = ''
+        if status == 'approved':
+            extra = 'Your leave has been approved. Please ensure your responsibilities are covered during your absence.'
+        elif status == 'rejected':
+            extra = f'Reason: {lr.rejection_reason}' if lr.rejection_reason else 'Your leave request has been rejected. Please contact your manager for details.'
+        html = _build_leave_email_html(
+            emp.full_name, leave_type_name,
+            lr.start_date.isoformat(), lr.end_date.isoformat(),
+            lr.days_count, lr.reason, status, extra
+        )
+        _send_leave_email(to_email, f'Leave {status.capitalize()}: {leave_type_name} ({lr.start_date.isoformat()} to {lr.end_date.isoformat()})', html)
+    except Exception:
+        pass
+
+
 class LeaveRequestApproveView(APIView):
     @require_permission('hrms.leave_request.approve')
     def post(self, request, lr_id):
         try:
-            lr = LeaveRequest.objects.get(id=lr_id)
+            lr = LeaveRequest.objects.select_related('leave_type').get(id=lr_id)
         except LeaveRequest.DoesNotExist:
             return Response({'message': 'Leave request not found'}, status=404)
         if lr.status != 'pending':
@@ -1380,6 +1463,7 @@ class LeaveRequestApproveView(APIView):
             )
             current_d += timedelta(days=1)
 
+        _notify_leave_status_change(lr, 'approved')
         return Response(serialize_leave_request(lr))
 
 
@@ -1387,7 +1471,7 @@ class LeaveRequestRejectView(APIView):
     @require_permission('hrms.leave_request.approve')
     def post(self, request, lr_id):
         try:
-            lr = LeaveRequest.objects.get(id=lr_id)
+            lr = LeaveRequest.objects.select_related('leave_type').get(id=lr_id)
         except LeaveRequest.DoesNotExist:
             return Response({'message': 'Leave request not found'}, status=404)
         if lr.status != 'pending':
@@ -1398,6 +1482,49 @@ class LeaveRequestRejectView(APIView):
         lr.approved_by = request.session.get('userId')
         lr.approved_at = timezone.now()
         lr.save()
+        _notify_leave_status_change(lr, 'rejected')
+        return Response(serialize_leave_request(lr))
+
+
+class LeaveRequestCancelView(APIView):
+    @require_auth
+    def post(self, request, lr_id):
+        user_id = request.session.get('userId')
+        employee = get_employee_for_user(user_id)
+        try:
+            lr = LeaveRequest.objects.select_related('leave_type').get(id=lr_id)
+        except LeaveRequest.DoesNotExist:
+            return Response({'message': 'Leave request not found'}, status=404)
+
+        if str(lr.employee_id) != str(employee.id) if employee else True:
+            return Response({'message': 'You can only cancel your own leave requests'}, status=403)
+
+        if lr.status not in ('pending', 'approved'):
+            return Response({'message': 'Only pending or approved requests can be cancelled'}, status=400)
+
+        was_approved = lr.status == 'approved'
+        lr.status = 'cancelled'
+        lr.save()
+
+        if was_approved:
+            current_fy = FiscalYear.objects.filter(is_current=True).first()
+            if current_fy:
+                balance = LeaveBalance.objects.filter(
+                    employee_id=lr.employee_id,
+                    leave_type=lr.leave_type,
+                    fiscal_year=current_fy,
+                ).first()
+                if balance:
+                    balance.used_days = max(Decimal('0'), balance.used_days - lr.days_count)
+                    balance.save()
+
+            AttendanceRecord.objects.filter(
+                employee_id=lr.employee_id,
+                date__gte=lr.start_date,
+                date__lte=lr.end_date,
+                status='on_leave',
+            ).delete()
+
         return Response(serialize_leave_request(lr))
 
 
@@ -4130,14 +4257,17 @@ class MyLeaveRequestsView(APIView):
 
                 if not policy.allow_negative_balance:
                     current_fy = FiscalYear.objects.filter(is_current=True).first()
-                    if current_fy:
-                        balance = LeaveBalance.objects.filter(
-                            employee_id=employee.id,
-                            leave_type_id=leave_type_id,
-                            fiscal_year=current_fy,
-                        ).first()
-                        if balance and balance.remaining_days < days_count:
-                            return Response({'message': f'Insufficient leave balance. Available: {float(balance.remaining_days)} days'}, status=400)
+                    if not current_fy:
+                        return Response({'message': 'No active fiscal year configured. Please contact your manager.'}, status=400)
+                    balance = LeaveBalance.objects.filter(
+                        employee_id=employee.id,
+                        leave_type_id=leave_type_id,
+                        fiscal_year=current_fy,
+                    ).first()
+                    if not balance:
+                        return Response({'message': 'No leave balance allocated for this leave type. Please contact your manager.'}, status=400)
+                    if balance.remaining_days < days_count:
+                        return Response({'message': f'Insufficient leave balance. Available: {float(balance.remaining_days)} days'}, status=400)
 
         lr = LeaveRequest.objects.create(
             employee_id=employee.id,
@@ -4151,6 +4281,8 @@ class MyLeaveRequestsView(APIView):
             document_url=data.get('document_url'),
             cover_person_id=data.get('cover_person_id') or None,
         )
+        lr.leave_type = lt_obj
+        _notify_leave_request_submitted(lr)
         return Response(serialize_leave_request(lr), status=201)
 
 
