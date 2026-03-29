@@ -110,4 +110,15 @@ urlpatterns = [
     path('hrms/expense-receipt-upload', views.ExpenseReceiptUploadView.as_view()),
 
     path('hrms/leave-types/<uuid:leave_type_id>/department-allocations', views.DepartmentLeaveAllocationView.as_view()),
+
+    path('hrms/hr-policies', views.HRPolicyListView.as_view()),
+    path('hrms/hr-policies/<uuid:policy_id>', views.HRPolicyDetailView.as_view()),
+    path('hrms/my/hr-policies', views.MyHRPoliciesView.as_view()),
+    path('hrms/my/hr-policies/<uuid:policy_id>/acknowledge', views.MyHRPolicyAcknowledgeView.as_view()),
+
+    path('hrms/document-templates', views.DocumentTemplateListView.as_view()),
+    path('hrms/document-templates/<uuid:template_id>', views.DocumentTemplateDetailView.as_view()),
+    path('hrms/document-requests', views.DocumentRequestListView.as_view()),
+    path('hrms/document-requests/<uuid:request_id>/process', views.DocumentRequestProcessView.as_view()),
+    path('hrms/my/document-requests', views.MyDocumentRequestsView.as_view()),
 ]

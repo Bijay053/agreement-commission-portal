@@ -19,6 +19,7 @@ from .models import (
     PayrollRun, Payslip, NotificationSetting,
     Bonus, TravelExpense, AdvancePayment, TaxSlab,
     CountryTaxLabel, BONUS_TYPE_CHOICES,
+    HRPolicy, HRPolicyAcknowledgment, DocumentTemplate, DocumentRequest,
 )
 
 
@@ -1267,6 +1268,8 @@ class LeaveRequestListView(APIView):
         end = datetime.strptime(end_date, '%Y-%m-%d').date()
         if end < start:
             return Response({'message': 'End date cannot be before start date'}, status=400)
+        if is_half_day:
+            end = start
 
         days_count = Decimal('0.5') if is_half_day else Decimal(str((end - start).days + 1))
 
@@ -4283,6 +4286,8 @@ class MyLeaveRequestsView(APIView):
         end = datetime.strptime(end_date, '%Y-%m-%d').date()
         if end < start:
             return Response({'message': 'End date cannot be before start date'}, status=400)
+        if is_half_day:
+            end = start
 
         if lt_obj.min_advance_days > 0:
             days_ahead_lt = (start - date.today()).days
@@ -6177,3 +6182,452 @@ class StaffBulkUploadView(APIView):
             'updated': updated,
             'errors': errors,
         })
+
+
+# ─── HR Policies ────────────────────────────────────────────────
+
+class HRPolicyListView(APIView):
+    @require_permission('hrms.leave_request.read')
+    def get(self, request):
+        org_id = request.GET.get('organization_id')
+        dept_id = request.GET.get('department_id')
+        qs = HRPolicy.objects.all()
+        if org_id:
+            qs = qs.filter(organization_id=org_id)
+        if dept_id:
+            qs = qs.filter(department_id=dept_id)
+        result = []
+        dept_cache = {}
+        for p in qs:
+            ack_count = HRPolicyAcknowledgment.objects.filter(policy=p).count()
+            emp_qs = Employee.objects.filter(organization_id=p.organization_id, status='active')
+            if p.department_id:
+                emp_qs = emp_qs.filter(department_id=p.department_id)
+            emp_count = emp_qs.count()
+            dept_name = 'All Departments'
+            if p.department_id:
+                if p.department_id not in dept_cache:
+                    dept = Department.objects.filter(id=p.department_id).first()
+                    dept_cache[p.department_id] = dept.name if dept else 'Unknown'
+                dept_name = dept_cache[p.department_id]
+            result.append({
+                'id': str(p.id),
+                'title': p.title,
+                'content': p.content,
+                'organization_id': str(p.organization_id),
+                'department_id': str(p.department_id) if p.department_id else None,
+                'department_name': dept_name,
+                'is_active': p.is_active,
+                'effective_date': p.effective_date.isoformat() if p.effective_date else None,
+                'acknowledgment_count': ack_count,
+                'employee_count': emp_count,
+                'created_at': p.created_at.isoformat() if p.created_at else None,
+            })
+        return Response(result)
+
+    @require_permission('hrms.leave_request.add')
+    def post(self, request):
+        data = request.data
+        p = HRPolicy.objects.create(
+            organization_id=data['organization_id'],
+            title=data['title'],
+            content=data['content'],
+            department_id=data.get('department_id') or None,
+            is_active=data.get('is_active', True),
+            effective_date=data.get('effective_date') or None,
+        )
+        return Response({'id': str(p.id), 'message': 'Policy created'}, status=201)
+
+
+class HRPolicyDetailView(APIView):
+    @require_permission('hrms.leave_request.add')
+    def put(self, request, policy_id):
+        try:
+            p = HRPolicy.objects.get(id=policy_id)
+        except HRPolicy.DoesNotExist:
+            return Response({'message': 'Not found'}, status=404)
+        data = request.data
+        for f in ['title', 'content', 'is_active']:
+            if f in data:
+                setattr(p, f, data[f])
+        if 'department_id' in data:
+            p.department_id = data['department_id'] or None
+        if 'effective_date' in data:
+            p.effective_date = data['effective_date'] or None
+        p.save()
+        return Response({'message': 'Policy updated'})
+
+    @require_permission('hrms.leave_request.add')
+    def delete(self, request, policy_id):
+        try:
+            p = HRPolicy.objects.get(id=policy_id)
+            p.delete()
+            return Response({'message': 'Policy deleted'})
+        except HRPolicy.DoesNotExist:
+            return Response({'message': 'Not found'}, status=404)
+
+
+class MyHRPoliciesView(APIView):
+    @require_auth
+    def get(self, request):
+        user_id = request.session.get('userId')
+        emp = get_employee_for_user(user_id)
+        if not emp:
+            return Response([])
+        qs = HRPolicy.objects.filter(
+            organization_id=emp.organization_id,
+            is_active=True,
+        ).filter(
+            Q(department_id__isnull=True) | Q(department_id=emp.department_id)
+        )
+        dept_cache = {}
+        result = []
+        for p in qs:
+            ack = HRPolicyAcknowledgment.objects.filter(policy=p, employee=emp).first()
+            dept_name = 'All Departments'
+            if p.department_id:
+                if p.department_id not in dept_cache:
+                    dept = Department.objects.filter(id=p.department_id).first()
+                    dept_cache[p.department_id] = dept.name if dept else 'Unknown'
+                dept_name = dept_cache[p.department_id]
+            result.append({
+                'id': str(p.id),
+                'title': p.title,
+                'content': p.content,
+                'department_name': dept_name,
+                'effective_date': p.effective_date.isoformat() if p.effective_date else None,
+                'acknowledged': ack is not None,
+                'acknowledged_at': ack.acknowledged_at.isoformat() if ack else None,
+            })
+        return Response(result)
+
+
+class MyHRPolicyAcknowledgeView(APIView):
+    @require_auth
+    def post(self, request, policy_id):
+        user_id = request.session.get('userId')
+        emp = get_employee_for_user(user_id)
+        if not emp:
+            return Response({'message': 'Employee not found'}, status=404)
+        try:
+            policy = HRPolicy.objects.get(id=policy_id, is_active=True, organization_id=emp.organization_id)
+        except HRPolicy.DoesNotExist:
+            return Response({'message': 'Policy not found'}, status=404)
+        if policy.department_id and policy.department_id != emp.department_id:
+            return Response({'message': 'Policy not applicable'}, status=403)
+        _, created = HRPolicyAcknowledgment.objects.get_or_create(policy=policy, employee=emp)
+        return Response({'message': 'Policy acknowledged' if created else 'Already acknowledged'})
+
+
+# ─── Document Templates & Requests ──────────────────────────────
+
+class DocumentTemplateListView(APIView):
+    @require_permission('hrms.leave_request.read')
+    def get(self, request):
+        org_id = request.GET.get('organization_id')
+        qs = DocumentTemplate.objects.all()
+        if org_id:
+            qs = qs.filter(organization_id=org_id)
+        return Response([{
+            'id': str(t.id),
+            'name': t.name,
+            'doc_type': t.doc_type,
+            'doc_type_display': t.get_doc_type_display(),
+            'content': t.content,
+            'is_active': t.is_active,
+            'organization_id': str(t.organization_id),
+        } for t in qs])
+
+    @require_permission('hrms.leave_request.add')
+    def post(self, request):
+        data = request.data
+        t = DocumentTemplate.objects.create(
+            organization_id=data['organization_id'],
+            name=data['name'],
+            doc_type=data['doc_type'],
+            content=data['content'],
+            is_active=data.get('is_active', True),
+        )
+        return Response({'id': str(t.id), 'message': 'Template created'}, status=201)
+
+
+class DocumentTemplateDetailView(APIView):
+    @require_permission('hrms.leave_request.add')
+    def put(self, request, template_id):
+        try:
+            t = DocumentTemplate.objects.get(id=template_id)
+        except DocumentTemplate.DoesNotExist:
+            return Response({'message': 'Not found'}, status=404)
+        data = request.data
+        for f in ['name', 'doc_type', 'content', 'is_active']:
+            if f in data:
+                setattr(t, f, data[f])
+        t.save()
+        return Response({'message': 'Template updated'})
+
+    @require_permission('hrms.leave_request.add')
+    def delete(self, request, template_id):
+        try:
+            t = DocumentTemplate.objects.get(id=template_id)
+            t.delete()
+            return Response({'message': 'Template deleted'})
+        except DocumentTemplate.DoesNotExist:
+            return Response({'message': 'Not found'}, status=404)
+
+
+class DocumentRequestListView(APIView):
+    @require_permission('hrms.leave_request.read')
+    def get(self, request):
+        org_id = request.GET.get('organization_id')
+        status_filter = request.GET.get('status')
+        qs = DocumentRequest.objects.select_related('template', 'employee').all()
+        if org_id:
+            qs = qs.filter(organization_id=org_id)
+        if status_filter:
+            qs = qs.filter(status=status_filter)
+        result = []
+        for dr in qs:
+            result.append({
+                'id': str(dr.id),
+                'employee_id': str(dr.employee_id),
+                'employee_name': dr.employee.full_name if dr.employee else None,
+                'doc_type': dr.doc_type,
+                'doc_type_display': dict(DocumentTemplate.DOC_TYPES).get(dr.doc_type, dr.doc_type),
+                'template_name': dr.template.name if dr.template else None,
+                'status': dr.status,
+                'document_url': get_presigned_url(dr.document_url) if dr.document_url else None,
+                'rejection_reason': dr.rejection_reason,
+                'signed_by_name': dr.signed_by_name,
+                'signed_at': dr.signed_at.isoformat() if dr.signed_at else None,
+                'requested_at': dr.requested_at.isoformat() if dr.requested_at else None,
+                'completed_at': dr.completed_at.isoformat() if dr.completed_at else None,
+            })
+        return Response(result)
+
+
+class DocumentRequestProcessView(APIView):
+    @require_permission('hrms.leave_request.add')
+    def post(self, request, request_id):
+        try:
+            dr = DocumentRequest.objects.get(id=request_id)
+        except DocumentRequest.DoesNotExist:
+            return Response({'message': 'Not found'}, status=404)
+
+        if dr.status not in ('pending', 'processing'):
+            return Response({'message': f'Cannot process a {dr.status} request'}, status=400)
+
+        action = request.data.get('action')
+
+        if action == 'reject':
+            dr.status = 'rejected'
+            dr.rejection_reason = request.data.get('rejection_reason', '')
+            dr.save()
+            return Response({'message': 'Request rejected'})
+
+        if action == 'complete':
+            company_signature = request.data.get('company_signature')
+            signed_by_name = request.data.get('signed_by_name', '')
+            if not company_signature:
+                return Response({'message': 'Company signature is required'}, status=400)
+
+            dr.company_signature = company_signature
+            dr.signed_by_name = signed_by_name
+
+            emp = Employee.objects.filter(id=dr.employee_id).first()
+            if not emp:
+                return Response({'message': 'Employee not found'}, status=404)
+            template = DocumentTemplate.objects.filter(id=dr.template_id).first() if dr.template_id else None
+
+            content = template.content if template else ''
+            org = Organization.objects.filter(id=emp.organization_id).first()
+            dept = Department.objects.filter(id=emp.department_id).first() if emp.department_id else None
+            placeholders = {
+                '[Employee Name]': emp.full_name or '',
+                '[Position]': emp.position or '',
+                '[Department]': dept.name if dept else (emp.department or ''),
+                '[Join Date]': emp.join_date.strftime('%B %d, %Y') if emp.join_date else '',
+                '[Organization Name]': org.name if org else '',
+                '[Date]': datetime.now().strftime('%B %d, %Y'),
+                '[Employee ID]': str(emp.employee_id_number or ''),
+            }
+            for placeholder, value in placeholders.items():
+                content = content.replace(placeholder, value)
+
+            try:
+                pdf_url = self._generate_document_pdf(dr, content, company_signature, signed_by_name, emp, org)
+                dr.document_url = pdf_url
+            except Exception as e:
+                return Response({'message': 'PDF generation failed. Please try again.'}, status=500)
+
+            dr.status = 'completed'
+            dr.signed_at = timezone.now()
+            dr.completed_at = timezone.now()
+            dr.save()
+
+            try:
+                self._send_document_email(dr, emp)
+            except Exception:
+                pass
+
+            return Response({'message': 'Document generated and sent to employee'})
+
+        return Response({'message': 'Invalid action'}, status=400)
+
+    def _generate_document_pdf(self, dr, content, signature_data, signed_by_name, emp, org=None):
+        import boto3
+        from io import BytesIO
+        from reportlab.lib.pagesizes import A4
+        from reportlab.lib.units import mm
+        from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image as RLImage
+        from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+        from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_JUSTIFY
+        import base64
+
+        buffer = BytesIO()
+        doc = SimpleDocTemplate(buffer, pagesize=A4,
+                                leftMargin=25*mm, rightMargin=25*mm,
+                                topMargin=25*mm, bottomMargin=25*mm)
+
+        styles = getSampleStyleSheet()
+        title_style = ParagraphStyle('DocTitle', parent=styles['Heading1'],
+                                      fontSize=16, alignment=TA_CENTER, spaceAfter=20)
+        body_style = ParagraphStyle('DocBody', parent=styles['Normal'],
+                                     fontSize=11, leading=16, alignment=TA_JUSTIFY, spaceAfter=8)
+        sig_style = ParagraphStyle('Sig', parent=styles['Normal'],
+                                    fontSize=11, alignment=TA_LEFT, spaceAfter=4)
+
+        story = []
+        if org:
+            org_style = ParagraphStyle('OrgName', parent=styles['Heading2'],
+                                        fontSize=14, alignment=TA_CENTER, spaceAfter=4)
+            story.append(Paragraph(org.name, org_style))
+            if org.address:
+                addr_style = ParagraphStyle('Addr', parent=styles['Normal'],
+                                             fontSize=9, alignment=TA_CENTER, spaceAfter=15)
+                story.append(Paragraph(org.address, addr_style))
+            story.append(Spacer(1, 10))
+
+        doc_type_display = dict(DocumentTemplate.DOC_TYPES).get(dr.doc_type, dr.doc_type)
+        story.append(Paragraph(doc_type_display, title_style))
+        story.append(Spacer(1, 10))
+
+        date_style = ParagraphStyle('Date', parent=styles['Normal'],
+                                     fontSize=10, alignment=TA_LEFT, spaceAfter=15)
+        story.append(Paragraph(f"Date: {datetime.now().strftime('%B %d, %Y')}", date_style))
+        story.append(Spacer(1, 5))
+
+        for para in content.split('\n'):
+            para = para.strip()
+            if para:
+                story.append(Paragraph(para, body_style))
+            else:
+                story.append(Spacer(1, 8))
+
+        story.append(Spacer(1, 30))
+        story.append(Paragraph("Authorized Signatory", sig_style))
+
+        if signature_data and ',' in signature_data:
+            try:
+                sig_bytes = base64.b64decode(signature_data.split(',')[1])
+                sig_io = BytesIO(sig_bytes)
+                sig_img = RLImage(sig_io, width=150, height=60)
+                story.append(sig_img)
+            except Exception:
+                pass
+
+        if signed_by_name:
+            story.append(Paragraph(signed_by_name, sig_style))
+
+        doc.build(story)
+        buffer.seek(0)
+
+        s3 = boto3.client('s3',
+                          region_name=settings.AWS_S3_REGION_NAME,
+                          aws_access_key_id=settings.AWS_ACCESS_KEY_ID,
+                          aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY)
+        key = f'document-requests/{dr.id}/{dr.doc_type}.pdf'
+        s3.upload_fileobj(buffer, settings.AWS_S3_BUCKET_NAME, key,
+                          ExtraArgs={'ContentType': 'application/pdf'})
+        return f'https://{settings.AWS_S3_BUCKET_NAME}.s3.{settings.AWS_S3_REGION_NAME}.amazonaws.com/{key}'
+
+    def _send_document_email(self, dr, emp):
+        import smtplib
+        from email.mime.text import MIMEText
+        user_email = emp.email
+        if not user_email:
+            return
+        org = Organization.objects.filter(id=emp.organization_id).first()
+        from_email = settings.FROM_EMAIL if hasattr(settings, 'FROM_EMAIL') else os.environ.get('FROM_EMAIL', '')
+        doc_type_display = dict(DocumentTemplate.DOC_TYPES).get(dr.doc_type, dr.doc_type)
+        subject = f'Your {doc_type_display} is Ready'
+        body = f"""Dear {emp.full_name},
+
+Your {doc_type_display} has been processed and is now available in your portal.
+
+You can view and download it from the Documents section of your employee portal.
+
+Best regards,
+{org.name if org else 'HR Department'}"""
+        msg = MIMEText(body)
+        msg['Subject'] = subject
+        msg['From'] = from_email
+        msg['To'] = user_email
+        try:
+            smtp_host = os.environ.get('SMTP_HOST', '')
+            smtp_port = int(os.environ.get('SMTP_PORT', 587))
+            smtp_user = os.environ.get('SMTP_USER', '')
+            smtp_pass = os.environ.get('SMTP_PASS', '')
+            with smtplib.SMTP(smtp_host, smtp_port) as server:
+                server.starttls()
+                server.login(smtp_user, smtp_pass)
+                server.send_message(msg)
+        except Exception:
+            pass
+
+
+class MyDocumentRequestsView(APIView):
+    @require_auth
+    def get(self, request):
+        user_id = request.session.get('userId')
+        emp = get_employee_for_user(user_id)
+        if not emp:
+            return Response([])
+        qs = DocumentRequest.objects.filter(employee_id=emp.id)
+        result = []
+        for dr in qs:
+            tmpl = DocumentTemplate.objects.filter(id=dr.template_id).first() if dr.template_id else None
+            result.append({
+                'id': str(dr.id),
+                'doc_type': dr.doc_type,
+                'doc_type_display': dict(DocumentTemplate.DOC_TYPES).get(dr.doc_type, dr.doc_type),
+                'template_name': tmpl.name if tmpl else None,
+                'status': dr.status,
+                'document_url': get_presigned_url(dr.document_url) if dr.document_url else None,
+                'rejection_reason': dr.rejection_reason,
+                'requested_at': dr.requested_at.isoformat() if dr.requested_at else None,
+                'completed_at': dr.completed_at.isoformat() if dr.completed_at else None,
+            })
+        return Response(result)
+
+    @require_auth
+    def post(self, request):
+        user_id = request.session.get('userId')
+        emp = get_employee_for_user(user_id)
+        if not emp:
+            return Response({'message': 'Employee not found'}, status=404)
+        doc_type = request.data.get('doc_type')
+        if doc_type not in dict(DocumentTemplate.DOC_TYPES):
+            return Response({'message': 'Invalid document type'}, status=400)
+        pending = DocumentRequest.objects.filter(employee_id=emp.id, doc_type=doc_type, status__in=['pending', 'processing']).exists()
+        if pending:
+            return Response({'message': f'You already have a pending {dict(DocumentTemplate.DOC_TYPES).get(doc_type)} request'}, status=400)
+        template = DocumentTemplate.objects.filter(
+            organization_id=emp.organization_id, doc_type=doc_type, is_active=True
+        ).first()
+        dr = DocumentRequest.objects.create(
+            employee_id=emp.id,
+            organization_id=emp.organization_id,
+            template=template,
+            doc_type=doc_type,
+        )
+        return Response({'id': str(dr.id), 'message': 'Request submitted'}, status=201)

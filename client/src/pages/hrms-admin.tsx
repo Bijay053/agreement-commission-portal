@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useAuth } from "@/lib/auth";
@@ -2615,6 +2615,481 @@ function RemoteCheckInPermissionsTab() {
   );
 }
 
+function HRPoliciesTab() {
+  const { toast } = useToast();
+  const { selectedOrg } = useAuth();
+  const orgId = selectedOrg?.id;
+  const { data: policies, isLoading } = useQuery<any[]>({
+    queryKey: ["/api/hrms/hr-policies", orgId],
+    queryFn: async () => {
+      const res = await fetch(`/api/hrms/hr-policies?organization_id=${orgId}`, { credentials: "include" });
+      return res.json();
+    },
+    enabled: !!orgId,
+  });
+  const { data: departments } = useQuery<any[]>({ queryKey: ["/api/hrms/departments"] });
+  const orgDepts = (departments || []).filter((d: any) => d.organization_id === orgId);
+
+  const [showForm, setShowForm] = useState(false);
+  const [editPolicy, setEditPolicy] = useState<any>(null);
+  const [form, setForm] = useState({ title: "", content: "", department_id: "", effective_date: "", is_active: true });
+  const [saving, setSaving] = useState(false);
+  const [viewPolicy, setViewPolicy] = useState<any>(null);
+
+  const openAdd = () => { setEditPolicy(null); setForm({ title: "", content: "", department_id: "", effective_date: "", is_active: true }); setShowForm(true); };
+  const openEdit = (p: any) => { setEditPolicy(p); setForm({ title: p.title, content: p.content, department_id: p.department_id || "", effective_date: p.effective_date || "", is_active: p.is_active }); setShowForm(true); };
+
+  const savePolicy = async () => {
+    setSaving(true);
+    try {
+      const body = { ...form, organization_id: orgId };
+      if (editPolicy) {
+        await apiRequest("PUT", `/api/hrms/hr-policies/${editPolicy.id}`, body);
+        toast({ title: "Policy updated" });
+      } else {
+        await apiRequest("POST", "/api/hrms/hr-policies", body);
+        toast({ title: "Policy created" });
+      }
+      queryClient.refetchQueries({ queryKey: ["/api/hrms/hr-policies"] });
+      setShowForm(false);
+    } catch (err: any) { toast({ title: err.message || "Failed", variant: "destructive" }); }
+    setSaving(false);
+  };
+
+  const deletePolicy = async (id: string) => {
+    try {
+      await apiRequest("DELETE", `/api/hrms/hr-policies/${id}`);
+      queryClient.refetchQueries({ queryKey: ["/api/hrms/hr-policies"] });
+      toast({ title: "Policy deleted" });
+    } catch (err: any) { toast({ title: "Failed to delete", variant: "destructive" }); }
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="flex justify-between items-center">
+        <h3 className="text-lg font-semibold" data-testid="text-hr-policies-title">HR Policies</h3>
+        <Button size="sm" onClick={openAdd} data-testid="button-add-policy"><Plus className="h-4 w-4 mr-1" /> Add Policy</Button>
+      </div>
+      {isLoading ? <Skeleton className="h-40 w-full" /> : (
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Title</TableHead>
+              <TableHead>Department</TableHead>
+              <TableHead>Effective Date</TableHead>
+              <TableHead>Acknowledged</TableHead>
+              <TableHead>Status</TableHead>
+              <TableHead>Actions</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {policies?.map(p => (
+              <TableRow key={p.id}>
+                <TableCell className="font-medium">{p.title}</TableCell>
+                <TableCell>{p.department_name}</TableCell>
+                <TableCell>{p.effective_date || "—"}</TableCell>
+                <TableCell>{p.acknowledgment_count}/{p.employee_count}</TableCell>
+                <TableCell><Badge variant={p.is_active ? "default" : "secondary"}>{p.is_active ? "Active" : "Inactive"}</Badge></TableCell>
+                <TableCell>
+                  <div className="flex gap-1">
+                    <Button variant="ghost" size="sm" onClick={() => setViewPolicy(p)} data-testid={`button-view-policy-${p.id}`}><Eye className="h-4 w-4" /></Button>
+                    <Button variant="ghost" size="sm" onClick={() => openEdit(p)} data-testid={`button-edit-policy-${p.id}`}><Pencil className="h-4 w-4" /></Button>
+                    <Button variant="ghost" size="sm" className="text-red-500" onClick={() => deletePolicy(p.id)} data-testid={`button-delete-policy-${p.id}`}><Trash2 className="h-4 w-4" /></Button>
+                  </div>
+                </TableCell>
+              </TableRow>
+            ))}
+            {(!policies || policies.length === 0) && (
+              <TableRow><TableCell colSpan={6} className="text-center text-muted-foreground py-8">No policies yet</TableCell></TableRow>
+            )}
+          </TableBody>
+        </Table>
+      )}
+
+      <Dialog open={showForm} onOpenChange={setShowForm}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader><DialogTitle>{editPolicy ? "Edit Policy" : "Add Policy"}</DialogTitle></DialogHeader>
+          <div className="grid gap-3">
+            <div><Label>Title</Label><input className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm" value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} data-testid="input-policy-title" /></div>
+            <div><Label>Department (leave empty for all)</Label>
+              <Select value={form.department_id} onValueChange={v => setForm({ ...form, department_id: v === "_all" ? "" : v })}>
+                <SelectTrigger><SelectValue placeholder="All Departments" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="_all">All Departments</SelectItem>
+                  {orgDepts.map((d: any) => <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div><Label>Effective Date</Label><input type="date" className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm" value={form.effective_date} onChange={e => setForm({ ...form, effective_date: e.target.value })} /></div>
+            <div><Label>Policy Content</Label><Textarea className="min-h-[200px]" value={form.content} onChange={e => setForm({ ...form, content: e.target.value })} data-testid="input-policy-content" /></div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowForm(false)}>Cancel</Button>
+            <Button onClick={savePolicy} disabled={saving || !form.title || !form.content} data-testid="button-save-policy">
+              {saving && <Loader2 className="h-4 w-4 animate-spin mr-1" />} {editPolicy ? "Update" : "Create"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!viewPolicy} onOpenChange={v => { if (!v) setViewPolicy(null); }}>
+        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader><DialogTitle>{viewPolicy?.title}</DialogTitle></DialogHeader>
+          <div className="space-y-2">
+            <div className="flex gap-4 text-sm text-muted-foreground">
+              <span>Department: {viewPolicy?.department_name}</span>
+              {viewPolicy?.effective_date && <span>Effective: {viewPolicy.effective_date}</span>}
+              <span>{viewPolicy?.acknowledgment_count}/{viewPolicy?.employee_count} acknowledged</span>
+            </div>
+            <div className="prose prose-sm dark:prose-invert max-w-none whitespace-pre-wrap border rounded-md p-4 bg-muted/20">{viewPolicy?.content}</div>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
+function DocTemplatesTab() {
+  const { toast } = useToast();
+  const { selectedOrg } = useAuth();
+  const orgId = selectedOrg?.id;
+  const { data: templates, isLoading } = useQuery<any[]>({
+    queryKey: ["/api/hrms/document-templates", orgId],
+    queryFn: async () => {
+      const res = await fetch(`/api/hrms/document-templates?organization_id=${orgId}`, { credentials: "include" });
+      return res.json();
+    },
+    enabled: !!orgId,
+  });
+  const [showForm, setShowForm] = useState(false);
+  const [editTemplate, setEditTemplate] = useState<any>(null);
+  const [form, setForm] = useState({ name: "", doc_type: "experience_letter", content: "", is_active: true });
+  const [saving, setSaving] = useState(false);
+
+  const defaultContent: Record<string, string> = {
+    experience_letter: `To Whom It May Concern,
+
+This is to certify that [Employee Name] has been employed with [Organization Name] as [Position] in the [Department] department from [Join Date] to [Date].
+
+During their tenure, they have demonstrated professionalism, dedication, and a strong work ethic. We wish them all the best in their future endeavors.
+
+This letter is being issued at the request of the employee for whatever purpose it may serve.`,
+    cit_release: `To Whom It May Concern,
+
+This is to confirm that [Employee Name], Employee ID: [Employee ID], has been employed with [Organization Name] as [Position] in the [Department] department from [Join Date].
+
+We hereby request the release of CIT (Contribution to Insurance Tax) records for the above-mentioned employee.
+
+This letter is issued for official purposes as requested by the employee.`,
+  };
+
+  const openAdd = () => { setEditTemplate(null); setForm({ name: "", doc_type: "experience_letter", content: defaultContent["experience_letter"], is_active: true }); setShowForm(true); };
+  const openEdit = (t: any) => { setEditTemplate(t); setForm({ name: t.name, doc_type: t.doc_type, content: t.content, is_active: t.is_active }); setShowForm(true); };
+
+  const saveTemplate = async () => {
+    setSaving(true);
+    try {
+      const body = { ...form, organization_id: orgId };
+      if (editTemplate) {
+        await apiRequest("PUT", `/api/hrms/document-templates/${editTemplate.id}`, body);
+        toast({ title: "Template updated" });
+      } else {
+        await apiRequest("POST", "/api/hrms/document-templates", body);
+        toast({ title: "Template created" });
+      }
+      queryClient.refetchQueries({ queryKey: ["/api/hrms/document-templates"] });
+      setShowForm(false);
+    } catch (err: any) { toast({ title: err.message || "Failed", variant: "destructive" }); }
+    setSaving(false);
+  };
+
+  const deleteTemplate = async (id: string) => {
+    try {
+      await apiRequest("DELETE", `/api/hrms/document-templates/${id}`);
+      queryClient.refetchQueries({ queryKey: ["/api/hrms/document-templates"] });
+      toast({ title: "Template deleted" });
+    } catch (err: any) { toast({ title: "Failed to delete", variant: "destructive" }); }
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="flex justify-between items-center">
+        <div>
+          <h3 className="text-lg font-semibold" data-testid="text-doc-templates-title">Document Templates</h3>
+          <p className="text-sm text-muted-foreground">Templates for Experience Letters and CIT Release documents</p>
+        </div>
+        <Button size="sm" onClick={openAdd} data-testid="button-add-template"><Plus className="h-4 w-4 mr-1" /> Add Template</Button>
+      </div>
+      <div className="bg-muted/30 border rounded-md p-3 text-xs text-muted-foreground">
+        <p className="font-medium mb-1">Available Placeholders:</p>
+        <p>[Employee Name], [Position], [Department], [Join Date], [Organization Name], [Date], [Employee ID]</p>
+      </div>
+      {isLoading ? <Skeleton className="h-40 w-full" /> : (
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Name</TableHead>
+              <TableHead>Type</TableHead>
+              <TableHead>Status</TableHead>
+              <TableHead>Actions</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {templates?.map(t => (
+              <TableRow key={t.id}>
+                <TableCell className="font-medium">{t.name}</TableCell>
+                <TableCell><Badge variant="outline">{t.doc_type_display}</Badge></TableCell>
+                <TableCell><Badge variant={t.is_active ? "default" : "secondary"}>{t.is_active ? "Active" : "Inactive"}</Badge></TableCell>
+                <TableCell>
+                  <div className="flex gap-1">
+                    <Button variant="ghost" size="sm" onClick={() => openEdit(t)} data-testid={`button-edit-template-${t.id}`}><Pencil className="h-4 w-4" /></Button>
+                    <Button variant="ghost" size="sm" className="text-red-500" onClick={() => deleteTemplate(t.id)} data-testid={`button-delete-template-${t.id}`}><Trash2 className="h-4 w-4" /></Button>
+                  </div>
+                </TableCell>
+              </TableRow>
+            ))}
+            {(!templates || templates.length === 0) && (
+              <TableRow><TableCell colSpan={4} className="text-center text-muted-foreground py-8">No templates yet. Add a template to get started.</TableCell></TableRow>
+            )}
+          </TableBody>
+        </Table>
+      )}
+
+      <Dialog open={showForm} onOpenChange={setShowForm}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader><DialogTitle>{editTemplate ? "Edit Template" : "Add Template"}</DialogTitle></DialogHeader>
+          <div className="grid gap-3">
+            <div><Label>Template Name</Label><input className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="e.g. Standard Experience Letter" data-testid="input-template-name" /></div>
+            <div><Label>Document Type</Label>
+              <Select value={form.doc_type} onValueChange={v => setForm({ ...form, doc_type: v, content: form.content || defaultContent[v] || "" })}>
+                <SelectTrigger data-testid="select-doc-type"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="experience_letter">Experience Letter</SelectItem>
+                  <SelectItem value="cit_release">CIT Release</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div><Label>Content</Label><Textarea className="min-h-[250px] font-mono text-sm" value={form.content} onChange={e => setForm({ ...form, content: e.target.value })} data-testid="input-template-content" /></div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowForm(false)}>Cancel</Button>
+            <Button onClick={saveTemplate} disabled={saving || !form.name || !form.content} data-testid="button-save-template">
+              {saving && <Loader2 className="h-4 w-4 animate-spin mr-1" />} {editTemplate ? "Update" : "Create"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
+function DocRequestsTab() {
+  const { toast } = useToast();
+  const { selectedOrg } = useAuth();
+  const orgId = selectedOrg?.id;
+  const [statusFilter, setStatusFilter] = useState("pending");
+  const { data: requests, isLoading } = useQuery<any[]>({
+    queryKey: ["/api/hrms/document-requests", orgId, statusFilter],
+    queryFn: async () => {
+      const res = await fetch(`/api/hrms/document-requests?organization_id=${orgId}&status=${statusFilter}`, { credentials: "include" });
+      return res.json();
+    },
+    enabled: !!orgId,
+  });
+  const [signDialog, setSignDialog] = useState<any>(null);
+  const [signaturePad, setSignaturePad] = useState<string>("");
+  const [signerName, setSignerName] = useState("");
+  const [processing, setProcessing] = useState(false);
+  const [rejectDialog, setRejectDialog] = useState<any>(null);
+  const [rejectReason, setRejectReason] = useState("");
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [isDrawing, setIsDrawing] = useState(false);
+
+  const startDraw = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    setIsDrawing(true);
+    const rect = canvas.getBoundingClientRect();
+    ctx.beginPath();
+    ctx.moveTo(e.clientX - rect.left, e.clientY - rect.top);
+  };
+  const draw = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    if (!isDrawing) return;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    const rect = canvas.getBoundingClientRect();
+    ctx.lineWidth = 2;
+    ctx.lineCap = 'round';
+    ctx.strokeStyle = '#000';
+    ctx.lineTo(e.clientX - rect.left, e.clientY - rect.top);
+    ctx.stroke();
+  };
+  const endDraw = () => {
+    setIsDrawing(false);
+    if (canvasRef.current) setSignaturePad(canvasRef.current.toDataURL());
+  };
+  const clearSignature = () => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    setSignaturePad("");
+  };
+
+  const completeRequest = async () => {
+    if (!signDialog || !signaturePad) return;
+    setProcessing(true);
+    try {
+      await apiRequest("POST", `/api/hrms/document-requests/${signDialog.id}/process`, {
+        action: "complete",
+        company_signature: signaturePad,
+        signed_by_name: signerName,
+      });
+      queryClient.refetchQueries({ queryKey: ["/api/hrms/document-requests"] });
+      toast({ title: "Document generated and sent to employee" });
+      setSignDialog(null);
+      clearSignature();
+    } catch (err: any) { toast({ title: err.message || "Failed", variant: "destructive" }); }
+    setProcessing(false);
+  };
+
+  const rejectRequest = async () => {
+    if (!rejectDialog) return;
+    setProcessing(true);
+    try {
+      await apiRequest("POST", `/api/hrms/document-requests/${rejectDialog.id}/process`, {
+        action: "reject",
+        rejection_reason: rejectReason,
+      });
+      queryClient.refetchQueries({ queryKey: ["/api/hrms/document-requests"] });
+      toast({ title: "Request rejected" });
+      setRejectDialog(null);
+      setRejectReason("");
+    } catch (err: any) { toast({ title: err.message || "Failed", variant: "destructive" }); }
+    setProcessing(false);
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="flex justify-between items-center">
+        <h3 className="text-lg font-semibold" data-testid="text-doc-requests-title">Document Requests</h3>
+        <div className="flex gap-2">
+          {["pending", "processing", "completed", "rejected"].map(s => (
+            <Button key={s} variant={statusFilter === s ? "default" : "outline"} size="sm" onClick={() => setStatusFilter(s)} data-testid={`button-doc-filter-${s}`}>
+              {s.charAt(0).toUpperCase() + s.slice(1)}
+            </Button>
+          ))}
+        </div>
+      </div>
+      {isLoading ? <Skeleton className="h-40 w-full" /> : (
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Employee</TableHead>
+              <TableHead>Document Type</TableHead>
+              <TableHead>Template</TableHead>
+              <TableHead>Requested</TableHead>
+              <TableHead>Status</TableHead>
+              <TableHead>Actions</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {requests?.map(r => (
+              <TableRow key={r.id}>
+                <TableCell className="font-medium">{r.employee_name}</TableCell>
+                <TableCell><Badge variant="outline">{r.doc_type_display}</Badge></TableCell>
+                <TableCell>{r.template_name || "—"}</TableCell>
+                <TableCell className="text-sm">{r.requested_at ? new Date(r.requested_at).toLocaleDateString() : "—"}</TableCell>
+                <TableCell>
+                  <Badge variant={r.status === "completed" ? "default" : r.status === "rejected" ? "destructive" : "secondary"}>{r.status}</Badge>
+                  {r.status === "completed" && r.signed_by_name && <p className="text-[10px] text-muted-foreground mt-0.5">Signed by: {r.signed_by_name}</p>}
+                </TableCell>
+                <TableCell>
+                  <div className="flex gap-1">
+                    {r.status === "pending" && (
+                      <>
+                        <Button variant="ghost" size="sm" className="text-green-600 text-xs" onClick={() => { setSignDialog(r); setSignerName(""); clearSignature(); }} data-testid={`button-sign-doc-${r.id}`}>Sign & Complete</Button>
+                        <Button variant="ghost" size="sm" className="text-red-500 text-xs" onClick={() => { setRejectDialog(r); setRejectReason(""); }} data-testid={`button-reject-doc-${r.id}`}>Reject</Button>
+                      </>
+                    )}
+                    {r.status === "completed" && r.document_url && (
+                      <a href={r.document_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-primary hover:underline text-xs" data-testid={`link-doc-download-${r.id}`}>
+                        <Download className="h-3 w-3" /> Download
+                      </a>
+                    )}
+                  </div>
+                </TableCell>
+              </TableRow>
+            ))}
+            {(!requests || requests.length === 0) && (
+              <TableRow><TableCell colSpan={6} className="text-center text-muted-foreground py-8">No {statusFilter} document requests</TableCell></TableRow>
+            )}
+          </TableBody>
+        </Table>
+      )}
+
+      <Dialog open={!!signDialog} onOpenChange={v => { if (!v) setSignDialog(null); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader><DialogTitle>Sign & Complete Document</DialogTitle></DialogHeader>
+          <div className="space-y-3">
+            <p className="text-sm text-muted-foreground">
+              Generating <strong>{signDialog?.doc_type_display}</strong> for <strong>{signDialog?.employee_name}</strong>.
+              Please draw your signature below and enter the signatory name.
+            </p>
+            <div>
+              <Label>Signatory Name</Label>
+              <input className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm" value={signerName} onChange={e => setSignerName(e.target.value)} placeholder="e.g. HR Manager Name" data-testid="input-signer-name" />
+            </div>
+            <div>
+              <Label>Signature</Label>
+              <div className="border rounded-md bg-white mt-1">
+                <canvas
+                  ref={canvasRef}
+                  width={380} height={120}
+                  className="cursor-crosshair w-full"
+                  onMouseDown={startDraw}
+                  onMouseMove={draw}
+                  onMouseUp={endDraw}
+                  onMouseLeave={endDraw}
+                  data-testid="canvas-signature"
+                />
+              </div>
+              <Button variant="link" size="sm" className="text-xs p-0 h-auto mt-1" onClick={clearSignature}>Clear Signature</Button>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setSignDialog(null)}>Cancel</Button>
+            <Button onClick={completeRequest} disabled={processing || !signaturePad || !signerName.trim()} data-testid="button-complete-doc">
+              {processing && <Loader2 className="h-4 w-4 animate-spin mr-1" />} Generate & Send
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!rejectDialog} onOpenChange={v => { if (!v) setRejectDialog(null); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader><DialogTitle>Reject Document Request</DialogTitle></DialogHeader>
+          <div>
+            <Label>Rejection Reason</Label>
+            <Textarea value={rejectReason} onChange={e => setRejectReason(e.target.value)} placeholder="Reason for rejection..." data-testid="input-doc-reject-reason" />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setRejectDialog(null)}>Cancel</Button>
+            <Button variant="destructive" onClick={rejectRequest} disabled={processing || !rejectReason.trim()} data-testid="button-confirm-doc-reject">
+              {processing && <Loader2 className="h-4 w-4 animate-spin mr-1" />} Reject
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
 const SIDEBAR_ITEMS = [
   { key: "dashboard", label: "Dashboard", icon: BarChart3, group: "Overview", permissions: [] },
   { key: "staff-profiles", label: "Staff & Salary", icon: UserCog, group: "People", permissions: ["hrms.staff.read", "hrms.salary.read", "employee.view"] },
@@ -2634,6 +3109,9 @@ const SIDEBAR_ITEMS = [
   { key: "countries", label: "Countries", icon: Globe, group: "Settings", permissions: ["hrms.organization.read"] },
   { key: "organizations", label: "Organizations", icon: Building2, group: "Settings", permissions: ["hrms.organization.read"] },
   { key: "departments", label: "Departments", icon: Users, group: "Settings", permissions: ["hrms.department.read"] },
+  { key: "hr-policies", label: "HR Policies", icon: ShieldCheck, group: "People", permissions: ["hrms.leave_request.read"] },
+  { key: "doc-templates", label: "Doc Templates", icon: FileText, group: "People", permissions: ["hrms.leave_request.read"] },
+  { key: "doc-requests", label: "Doc Requests", icon: Download, group: "People", permissions: ["hrms.leave_request.read"] },
   { key: "notifications", label: "Notifications", icon: Bell, group: "Settings", permissions: ["hrms.notification.read", "hrms.notification.update"] },
 ];
 
@@ -2657,6 +3135,9 @@ const CONTENT_MAP: Record<string, React.ComponentType> = {
   "countries": CountriesTab,
   "fiscal-years": FiscalYearsTab,
   "notifications": NotificationSettingsTab,
+  "hr-policies": HRPoliciesTab,
+  "doc-templates": DocTemplatesTab,
+  "doc-requests": DocRequestsTab,
 };
 
 export default function HRMSAdminPage() {

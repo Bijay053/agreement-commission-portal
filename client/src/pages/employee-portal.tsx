@@ -26,7 +26,7 @@ import {
   DollarSign, Eye, EyeOff, Building2, Receipt, Lock, Send, Plus, KeyRound,
 } from "lucide-react";
 
-type Tab = "profile" | "attendance" | "leave" | "payslips" | "change-password";
+type Tab = "profile" | "attendance" | "leave" | "payslips" | "hr-policies" | "documents" | "change-password";
 
 export default function EmployeePortal() {
   const { user, logout } = useAuth();
@@ -38,6 +38,8 @@ export default function EmployeePortal() {
     { key: "attendance", label: "Attendance", icon: Clock },
     { key: "leave", label: "Leave", icon: Calendar },
     { key: "payslips", label: "Payslips", icon: FileText },
+    { key: "hr-policies", label: "HR Policies", icon: Shield },
+    { key: "documents", label: "Documents", icon: Download },
     { key: "change-password", label: "Change Password", icon: KeyRound },
   ];
 
@@ -101,6 +103,8 @@ export default function EmployeePortal() {
         {activeTab === "attendance" && <AttendanceTab />}
         {activeTab === "leave" && <LeaveTab />}
         {activeTab === "payslips" && <PayslipsTab showSalary={showSalary} setShowSalary={setShowSalary} />}
+        {activeTab === "hr-policies" && <HRPoliciesTab />}
+        {activeTab === "documents" && <DocumentsTab />}
         {activeTab === "change-password" && <ChangePasswordTab />}
       </main>
     </div>
@@ -1189,7 +1193,7 @@ function RemoteCheckInDialog({
 function LeaveTab() {
   const { toast } = useToast();
   const [showRequestForm, setShowRequestForm] = useState(false);
-  const [leaveForm, setLeaveForm] = useState({ leave_type_id: "", start_date: "", end_date: "", reason: "", cover_person_id: "" });
+  const [leaveForm, setLeaveForm] = useState({ leave_type_id: "", start_date: "", end_date: "", reason: "", cover_person_id: "", is_half_day: false, half_day_period: "morning" });
   const [documentFile, setDocumentFile] = useState<globalThis.File | null>(null);
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -1211,6 +1215,7 @@ function LeaveTab() {
   });
 
   const leaveDays = (() => {
+    if (leaveForm.is_half_day) return 0.5;
     if (!leaveForm.start_date || !leaveForm.end_date) return 0;
     const s = new Date(leaveForm.start_date);
     const e = new Date(leaveForm.end_date);
@@ -1281,7 +1286,7 @@ function LeaveTab() {
       queryClient.refetchQueries({ queryKey: ["/api/hrms/my/leave-requests"] });
       queryClient.refetchQueries({ queryKey: ["/api/hrms/my/leave-balance"] });
       setShowRequestForm(false);
-      setLeaveForm({ leave_type_id: "", start_date: "", end_date: "", reason: "", cover_person_id: "" });
+      setLeaveForm({ leave_type_id: "", start_date: "", end_date: "", reason: "", cover_person_id: "", is_half_day: false, half_day_period: "morning" });
       setDocumentFile(null);
       toast({ title: "Leave request submitted" });
     } catch (err: any) {
@@ -1427,15 +1432,54 @@ function LeaveTab() {
                 </SelectContent>
               </Select>
             </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label>Start Date</Label>
-                <input type="date" className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm" value={leaveForm.start_date} onChange={e => setLeaveForm({ ...leaveForm, start_date: e.target.value })} data-testid="input-leave-start" />
+            <div>
+              <Label>Duration</Label>
+              <div className="flex gap-2 mt-1">
+                <Button
+                  type="button"
+                  variant={!leaveForm.is_half_day ? "default" : "outline"}
+                  size="sm"
+                  className="flex-1"
+                  onClick={() => setLeaveForm({ ...leaveForm, is_half_day: false })}
+                  data-testid="button-full-day"
+                >
+                  Full Day
+                </Button>
+                <Button
+                  type="button"
+                  variant={leaveForm.is_half_day ? "default" : "outline"}
+                  size="sm"
+                  className="flex-1"
+                  onClick={() => setLeaveForm({ ...leaveForm, is_half_day: true, end_date: leaveForm.start_date || "" })}
+                  data-testid="button-half-day"
+                >
+                  Half Day (50%)
+                </Button>
               </div>
+            </div>
+            {leaveForm.is_half_day && (
               <div>
-                <Label>End Date</Label>
-                <input type="date" className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm" value={leaveForm.end_date} onChange={e => setLeaveForm({ ...leaveForm, end_date: e.target.value })} data-testid="input-leave-end" />
+                <Label>Half Day Period</Label>
+                <Select value={leaveForm.half_day_period} onValueChange={v => setLeaveForm({ ...leaveForm, half_day_period: v })}>
+                  <SelectTrigger data-testid="select-half-day-period"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="morning">First Half (Morning)</SelectItem>
+                    <SelectItem value="afternoon">Second Half (Afternoon)</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
+            )}
+            <div className={leaveForm.is_half_day ? "" : "grid grid-cols-2 gap-3"}>
+              <div>
+                <Label>{leaveForm.is_half_day ? "Date" : "Start Date"}</Label>
+                <input type="date" className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm" value={leaveForm.start_date} onChange={e => setLeaveForm({ ...leaveForm, start_date: e.target.value, ...(leaveForm.is_half_day ? { end_date: e.target.value } : {}) })} data-testid="input-leave-start" />
+              </div>
+              {!leaveForm.is_half_day && (
+                <div>
+                  <Label>End Date</Label>
+                  <input type="date" className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm" value={leaveForm.end_date} onChange={e => setLeaveForm({ ...leaveForm, end_date: e.target.value })} data-testid="input-leave-end" />
+                </div>
+              )}
             </div>
             {advanceNoticeWarning && (
               <div className="flex items-center gap-2 p-3 rounded-md bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900">
@@ -1723,6 +1767,181 @@ function PayslipsTab({ showSalary, setShowSalary }: { showSalary: boolean; setSh
             </TableBody>
           </Table>
         </Card>
+      )}
+    </div>
+  );
+}
+
+function HRPoliciesTab() {
+  const { toast } = useToast();
+  const { data: policies, isLoading } = useQuery<any[]>({ queryKey: ["/api/hrms/my/hr-policies"] });
+  const [viewPolicy, setViewPolicy] = useState<any>(null);
+  const [acknowledging, setAcknowledging] = useState<string | null>(null);
+
+  const acknowledgePolicy = async (policyId: string) => {
+    setAcknowledging(policyId);
+    try {
+      const res = await fetch(`/api/hrms/my/hr-policies/${policyId}/acknowledge`, {
+        method: 'POST', credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      if (!res.ok) throw new Error('Failed');
+      queryClient.refetchQueries({ queryKey: ['/api/hrms/my/hr-policies'] });
+      toast({ title: 'Policy acknowledged' });
+    } catch (err: any) { toast({ title: 'Failed to acknowledge', variant: 'destructive' }); }
+    setAcknowledging(null);
+  };
+
+  return (
+    <div className="space-y-4">
+      <h3 className="text-lg font-semibold" data-testid="text-my-policies-title">HR Policies</h3>
+      <p className="text-sm text-muted-foreground">Review company policies and acknowledge them</p>
+      {isLoading ? <Skeleton className="h-40 w-full" /> : (
+        <div className="space-y-3">
+          {policies?.map(p => (
+            <div key={p.id} className="border rounded-lg p-4 space-y-2" data-testid={`policy-card-${p.id}`}>
+              <div className="flex items-start justify-between">
+                <div>
+                  <h4 className="font-medium">{p.title}</h4>
+                  <div className="flex gap-3 text-xs text-muted-foreground mt-0.5">
+                    <span>{p.department_name}</span>
+                    {p.effective_date && <span>Effective: {p.effective_date}</span>}
+                  </div>
+                </div>
+                <div className="flex gap-2 items-center">
+                  {p.acknowledged ? (
+                    <Badge variant="default" className="bg-green-600"><CheckCircle className="h-3 w-3 mr-1" /> Acknowledged</Badge>
+                  ) : (
+                    <Badge variant="destructive">Not Acknowledged</Badge>
+                  )}
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <Button variant="outline" size="sm" onClick={() => setViewPolicy(p)} data-testid={`button-view-policy-${p.id}`}>
+                  <Eye className="h-3.5 w-3.5 mr-1" /> View Policy
+                </Button>
+                {!p.acknowledged && (
+                  <Button size="sm" onClick={() => acknowledgePolicy(p.id)} disabled={acknowledging === p.id} data-testid={`button-ack-policy-${p.id}`}>
+                    {acknowledging === p.id ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" /> : <CheckCircle className="h-3.5 w-3.5 mr-1" />}
+                    Acknowledge
+                  </Button>
+                )}
+              </div>
+            </div>
+          ))}
+          {(!policies || policies.length === 0) && (
+            <div className="text-center text-muted-foreground py-8">No policies to review</div>
+          )}
+        </div>
+      )}
+
+      <Dialog open={!!viewPolicy} onOpenChange={v => { if (!v) setViewPolicy(null); }}>
+        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader><DialogTitle>{viewPolicy?.title}</DialogTitle></DialogHeader>
+          <div className="space-y-2">
+            <div className="flex gap-4 text-sm text-muted-foreground">
+              <span>{viewPolicy?.department_name}</span>
+              {viewPolicy?.effective_date && <span>Effective: {viewPolicy.effective_date}</span>}
+            </div>
+            <div className="prose prose-sm dark:prose-invert max-w-none whitespace-pre-wrap border rounded-md p-4 bg-muted/20">{viewPolicy?.content}</div>
+            {viewPolicy && !viewPolicy.acknowledged && (
+              <div className="flex justify-end pt-2">
+                <Button onClick={() => { acknowledgePolicy(viewPolicy.id); setViewPolicy(null); }} data-testid="button-ack-policy-dialog">
+                  <CheckCircle className="h-4 w-4 mr-1" /> I Acknowledge This Policy
+                </Button>
+              </div>
+            )}
+            {viewPolicy?.acknowledged && (
+              <p className="text-sm text-green-600 flex items-center gap-1"><CheckCircle className="h-4 w-4" /> Acknowledged on {new Date(viewPolicy.acknowledged_at).toLocaleDateString()}</p>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
+function DocumentsTab() {
+  const { toast } = useToast();
+  const { data: requests, isLoading } = useQuery<any[]>({ queryKey: ["/api/hrms/my/document-requests"] });
+  const [requesting, setRequesting] = useState(false);
+
+  const requestDocument = async (docType: string) => {
+    setRequesting(true);
+    try {
+      const res = await fetch('/api/hrms/my/document-requests', {
+        method: 'POST', credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ doc_type: docType }),
+      });
+      if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error(err.message || 'Failed'); }
+      queryClient.refetchQueries({ queryKey: ['/api/hrms/my/document-requests'] });
+      toast({ title: 'Document request submitted' });
+    } catch (err: any) { toast({ title: err.message, variant: 'destructive' }); }
+    setRequesting(false);
+  };
+
+  return (
+    <div className="space-y-4">
+      <h3 className="text-lg font-semibold" data-testid="text-my-documents-title">Document Requests</h3>
+      <p className="text-sm text-muted-foreground">Request official documents from HR</p>
+
+      <div className="grid grid-cols-2 gap-3">
+        <div className="border rounded-lg p-4 space-y-2">
+          <div className="flex items-center gap-2">
+            <FileText className="h-5 w-5 text-primary" />
+            <h4 className="font-medium">Experience Letter</h4>
+          </div>
+          <p className="text-xs text-muted-foreground">Request a formal experience letter for your employment tenure</p>
+          <Button size="sm" onClick={() => requestDocument('experience_letter')} disabled={requesting} data-testid="button-request-experience-letter">
+            {requesting && <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" />}
+            <Send className="h-3.5 w-3.5 mr-1" /> Request
+          </Button>
+        </div>
+        <div className="border rounded-lg p-4 space-y-2">
+          <div className="flex items-center gap-2">
+            <Building2 className="h-5 w-5 text-primary" />
+            <h4 className="font-medium">CIT Release</h4>
+          </div>
+          <p className="text-xs text-muted-foreground">Request CIT (Contribution to Insurance Tax) release letter</p>
+          <Button size="sm" onClick={() => requestDocument('cit_release')} disabled={requesting} data-testid="button-request-cit-release">
+            {requesting && <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" />}
+            <Send className="h-3.5 w-3.5 mr-1" /> Request
+          </Button>
+        </div>
+      </div>
+
+      <h4 className="font-medium text-sm mt-4">My Requests</h4>
+      {isLoading ? <Skeleton className="h-32 w-full" /> : (
+        <div className="space-y-2">
+          {requests?.map(r => (
+            <div key={r.id} className="border rounded-lg p-3 flex items-center justify-between" data-testid={`doc-request-${r.id}`}>
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="font-medium text-sm">{r.doc_type_display}</span>
+                  <Badge variant={r.status === "completed" ? "default" : r.status === "rejected" ? "destructive" : "secondary"} className="text-xs">
+                    {r.status}
+                  </Badge>
+                </div>
+                <p className="text-xs text-muted-foreground">Requested: {r.requested_at ? new Date(r.requested_at).toLocaleDateString() : ""}</p>
+                {r.status === "rejected" && r.rejection_reason && (
+                  <p className="text-xs text-red-500 mt-0.5">Reason: {r.rejection_reason}</p>
+                )}
+                {r.status === "completed" && r.completed_at && (
+                  <p className="text-xs text-green-600 mt-0.5">Completed: {new Date(r.completed_at).toLocaleDateString()}</p>
+                )}
+              </div>
+              {r.status === "completed" && r.document_url && (
+                <a href={r.document_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-primary hover:underline text-sm" data-testid={`link-download-doc-${r.id}`}>
+                  <Download className="h-4 w-4" /> Download
+                </a>
+              )}
+            </div>
+          ))}
+          {(!requests || requests.length === 0) && (
+            <div className="text-center text-muted-foreground py-8">No document requests yet</div>
+          )}
+        </div>
       )}
     </div>
   );

@@ -549,3 +549,75 @@ class TaxSlab(models.Model):
     class Meta:
         db_table = 'hrms_tax_slabs'
         ordering = ['marital_status', 'slab_order']
+
+
+class HRPolicy(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    organization = models.ForeignKey(Organization, on_delete=models.CASCADE, related_name='hr_policies')
+    title = models.CharField(max_length=255)
+    content = models.TextField()
+    department = models.ForeignKey('Department', on_delete=models.SET_NULL, null=True, blank=True, related_name='hr_policies')
+    is_active = models.BooleanField(default=True)
+    effective_date = models.DateField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'hrms_hr_policies'
+        ordering = ['-created_at']
+
+
+class HRPolicyAcknowledgment(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    policy = models.ForeignKey(HRPolicy, on_delete=models.CASCADE, related_name='acknowledgments')
+    employee = models.ForeignKey('employees.Employee', on_delete=models.CASCADE, related_name='policy_acknowledgments')
+    acknowledged_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'hrms_hr_policy_acknowledgments'
+        unique_together = ['policy', 'employee']
+
+
+class DocumentTemplate(models.Model):
+    DOC_TYPES = [
+        ('experience_letter', 'Experience Letter'),
+        ('cit_release', 'CIT Release'),
+    ]
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    organization = models.ForeignKey(Organization, on_delete=models.CASCADE, related_name='document_templates')
+    name = models.CharField(max_length=255)
+    doc_type = models.CharField(max_length=32, choices=DOC_TYPES)
+    content = models.TextField(help_text='Template content with placeholders like [Employee Name], [Position], [Join Date], [Department]')
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'hrms_document_templates'
+        ordering = ['doc_type', 'name']
+
+
+class DocumentRequest(models.Model):
+    STATUS_CHOICES = [
+        ('pending', 'Pending'),
+        ('processing', 'Processing'),
+        ('completed', 'Completed'),
+        ('rejected', 'Rejected'),
+    ]
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    employee = models.ForeignKey('employees.Employee', on_delete=models.CASCADE, related_name='document_requests')
+    organization = models.ForeignKey(Organization, on_delete=models.CASCADE, related_name='document_requests')
+    template = models.ForeignKey(DocumentTemplate, on_delete=models.SET_NULL, null=True, blank=True)
+    doc_type = models.CharField(max_length=32)
+    status = models.CharField(max_length=16, choices=STATUS_CHOICES, default='pending')
+    document_url = models.TextField(null=True, blank=True)
+    rejection_reason = models.TextField(null=True, blank=True)
+    company_signature = models.TextField(null=True, blank=True)
+    signed_by_name = models.CharField(max_length=255, null=True, blank=True)
+    signed_at = models.DateTimeField(null=True, blank=True)
+    requested_at = models.DateTimeField(auto_now_add=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        db_table = 'hrms_document_requests'
+        ordering = ['-requested_at']
