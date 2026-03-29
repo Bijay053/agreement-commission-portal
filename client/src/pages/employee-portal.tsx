@@ -1307,7 +1307,7 @@ function LeaveTab() {
         <h3 className="text-sm font-semibold mb-3">Leave Balance</h3>
         {balLoading ? <Skeleton className="h-20" /> : (
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            {(balance || []).map((b: any) => (
+            {(balance || []).filter((b: any) => b.is_paid !== false).map((b: any) => (
               <Card key={b.leave_type_id || b.leave_type}>
                 <CardContent className="p-4">
                   <p className="text-xs text-muted-foreground">{b.leave_type_name || b.leave_type}</p>
@@ -1316,7 +1316,7 @@ function LeaveTab() {
                 </CardContent>
               </Card>
             ))}
-            {(!balance || balance.length === 0) && <p className="text-sm text-muted-foreground col-span-4">No leave balance configured</p>}
+            {(!balance || balance.filter((b: any) => b.is_paid !== false).length === 0) && <p className="text-sm text-muted-foreground col-span-4">No leave balance configured</p>}
           </div>
         )}
       </div>
@@ -1401,7 +1401,7 @@ function LeaveTab() {
                 <SelectTrigger data-testid="select-leave-type"><SelectValue placeholder="Select type" /></SelectTrigger>
                 <SelectContent>
                   {(balance || []).map((b: any) => (
-                    <SelectItem key={b.leave_type_id || b.id} value={b.leave_type_id || b.id}>{b.leave_type_name || b.leave_type}</SelectItem>
+                    <SelectItem key={b.leave_type_id || b.id} value={b.leave_type_id || b.id}>{b.leave_type_name || b.leave_type}{b.is_paid === false ? ' (Unpaid)' : ''}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -1432,10 +1432,13 @@ function LeaveTab() {
                 )}
                 {(() => {
                   const sel = balance?.find((b: any) => b.leave_type_id === leaveForm.leave_type_id);
-                  if (sel) {
+                  if (sel && sel.is_paid !== false) {
                     const rem = sel.remaining_days ?? sel.remaining ?? sel.balance ?? 0;
                     if (rem <= 0) return <Badge variant="destructive" className="text-[10px] ml-auto">Balance: 0 days</Badge>;
                     if (rem < leaveDays) return <Badge variant="destructive" className="text-[10px] ml-auto">Only {rem} day{rem !== 1 ? 's' : ''} available</Badge>;
+                  }
+                  if (sel && sel.is_paid === false) {
+                    return <Badge variant="outline" className="text-[10px] ml-auto">Unpaid Leave</Badge>;
                   }
                   return null;
                 })()}

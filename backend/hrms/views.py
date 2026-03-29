@@ -217,19 +217,21 @@ def serialize_holiday(h):
 
 
 def serialize_leave_balance(lb):
+    is_paid = lb.leave_type.is_paid if lb.leave_type else True
     return {
         'id': str(lb.id),
         'employee_id': str(lb.employee_id),
         'leave_type_id': str(lb.leave_type_id),
         'leave_type_name': lb.leave_type.name if lb.leave_type else None,
         'leave_type_code': lb.leave_type.code if lb.leave_type else None,
+        'is_paid': is_paid,
         'min_advance_days': lb.leave_type.min_advance_days if lb.leave_type else 0,
         'fiscal_year_id': str(lb.fiscal_year_id),
         'fiscal_year_name': lb.fiscal_year.name if lb.fiscal_year else None,
-        'allocated_days': float(lb.allocated_days),
+        'allocated_days': float(lb.allocated_days) if is_paid else None,
         'used_days': float(lb.used_days),
         'carried_forward_days': float(lb.carried_forward_days),
-        'remaining_days': float(lb.remaining_days),
+        'remaining_days': float(lb.remaining_days) if is_paid else None,
     }
 
 
@@ -4122,13 +4124,14 @@ class MyLeaveBalanceView(APIView):
                         'leave_type_id': str(lt.id),
                         'leave_type_name': lt.name,
                         'leave_type_code': lt.code,
+                        'is_paid': lt.is_paid,
                         'min_advance_days': lt.min_advance_days,
                         'fiscal_year_id': str(current_fy.id) if current_fy else None,
                         'fiscal_year_name': current_fy.name if current_fy else None,
-                        'allocated_days': float(lt.default_days),
+                        'allocated_days': float(lt.default_days) if lt.is_paid else None,
                         'used_days': 0,
                         'carried_forward_days': 0,
-                        'remaining_days': float(lt.default_days),
+                        'remaining_days': float(lt.default_days) if lt.is_paid else None,
                     })
 
         return Response(result)
@@ -4255,7 +4258,7 @@ class MyLeaveRequestsView(APIView):
                     if not data.get('cover_person_id'):
                         return Response({'message': f'A cover person is required for leave of {policy.require_cover_after_days}+ days'}, status=400)
 
-                if not policy.allow_negative_balance:
+                if lt_obj.is_paid and not policy.allow_negative_balance:
                     current_fy = FiscalYear.objects.filter(is_current=True).first()
                     if not current_fy:
                         return Response({'message': 'No active fiscal year configured. Please contact your manager.'}, status=400)
