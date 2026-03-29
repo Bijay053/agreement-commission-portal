@@ -59,6 +59,10 @@ def _serialize_employee(e):
         'dateOfBirth': _safe_iso(e.date_of_birth),
         'probationEndDate': _safe_iso(e.probation_end_date),
         'contractEndDate': _safe_iso(e.contract_end_date),
+        'workingDaysPerWeek': e.working_days_per_week,
+        'weekOffDays': e.week_off_days,
+        'workStartTime': e.work_start_time.strftime('%H:%M') if e.work_start_time else None,
+        'workEndTime': e.work_end_time.strftime('%H:%M') if e.work_end_time else None,
         'status': e.status,
         'createdAt': _safe_iso(e.created_at),
         'updatedAt': _safe_iso(e.updated_at),
@@ -134,6 +138,9 @@ class EmployeeListView(APIView):
             probation_end_date=data.get('probationEndDate') or data.get('probation_end_date') or None,
             contract_end_date=data.get('contractEndDate') or data.get('contract_end_date') or None,
             working_days_per_week=data.get('workingDaysPerWeek') or data.get('working_days_per_week') or None,
+            week_off_days=data.get('weekOffDays') or data.get('week_off_days') or None,
+            work_start_time=data.get('workStartTime') or data.get('work_start_time') or None,
+            work_end_time=data.get('workEndTime') or data.get('work_end_time') or None,
             status=data.get('status', 'active'),
         )
         return Response(_serialize_employee(employee), status=201)
@@ -220,6 +227,15 @@ class EmployeeDetailView(APIView):
         wdpw = data.get('workingDaysPerWeek') or data.get('working_days_per_week')
         if wdpw is not None:
             employee.working_days_per_week = int(wdpw) if wdpw else None
+        if 'week_off_days' in data or 'weekOffDays' in data:
+            val = data.get('weekOffDays', data.get('week_off_days'))
+            employee.week_off_days = val if val else None
+        if 'work_start_time' in data or 'workStartTime' in data:
+            val = data.get('workStartTime', data.get('work_start_time'))
+            employee.work_start_time = val if val else None
+        if 'work_end_time' in data or 'workEndTime' in data:
+            val = data.get('workEndTime', data.get('work_end_time'))
+            employee.work_end_time = val if val else None
         employee.save()
         return Response(_serialize_employee(employee))
 

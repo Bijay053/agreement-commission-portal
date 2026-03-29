@@ -604,6 +604,48 @@ def _to_nepal_time(dt_val):
     return dt_val.astimezone(nepal_tz)
 
 
+def _get_employee_schedule(emp, dept=None, org=None):
+    if dept is None and emp.department_id:
+        try:
+            dept = Department.objects.get(id=emp.department_id)
+        except Department.DoesNotExist:
+            pass
+    if org is None and emp.organization_id:
+        try:
+            org = Organization.objects.get(id=emp.organization_id)
+        except Organization.DoesNotExist:
+            pass
+
+    work_start = emp.work_start_time or (dept.work_start_time if dept else None)
+    work_end = emp.work_end_time or (dept.work_end_time if dept else None)
+    wdpw = emp.working_days_per_week or (dept.working_days_per_week if dept else 6)
+
+    if emp.week_off_days is not None and isinstance(emp.week_off_days, list):
+        off_days = emp.week_off_days
+    else:
+        primary_off = getattr(org, 'week_off_day', 6) if org else 6
+        if wdpw == 5:
+            second_off = 5 if primary_off != 5 else 4
+            off_days = sorted(set([primary_off, second_off]))
+        else:
+            off_days = [primary_off]
+
+    return {
+        'work_start_time': work_start,
+        'work_end_time': work_end,
+        'working_days_per_week': wdpw,
+        'week_off_days': off_days,
+    }
+
+
+def _is_day_off(day_date, off_days, org_holidays=None):
+    if day_date.weekday() in off_days:
+        return True
+    if org_holidays and day_date in org_holidays:
+        return True
+    return False
+
+
 def send_late_notification(employee, attendance_record, department):
     try:
         org = Organization.objects.get(id=employee.organization_id) if employee.organization_id else None
@@ -1450,13 +1492,15 @@ class OnlineCheckInView(APIView):
         late_mins = 0
         if employee.department_id:
             dept = Department.objects.filter(id=employee.department_id).first()
-            if dept:
-                work_start = datetime.combine(today, dept.work_start_time)
-                work_start = timezone.make_aware(work_start)
-                diff = (now - work_start).total_seconds() / 60
-                if diff > dept.late_threshold_minutes:
-                    is_late = True
-                    late_mins = int(diff)
+        schedule = _get_employee_schedule(employee, dept)
+        eff_start = schedule['work_start_time']
+        if eff_start and dept:
+            work_start = datetime.combine(today, eff_start)
+            work_start = timezone.make_aware(work_start)
+            diff = (now - work_start).total_seconds() / 60
+            if diff > dept.late_threshold_minutes:
+                is_late = True
+                late_mins = int(diff)
 
         att, _ = AttendanceRecord.objects.update_or_create(
             employee_id=employee.id,
@@ -1505,13 +1549,15 @@ class OnlineCheckOutView(APIView):
         early_mins = 0
         if employee.department_id:
             dept = Department.objects.filter(id=employee.department_id).first()
-            if dept:
-                work_end = datetime.combine(today, dept.work_end_time)
-                work_end = timezone.make_aware(work_end)
-                diff = (work_end - now).total_seconds() / 60
-                if diff > dept.early_leave_threshold_minutes:
-                    is_early = True
-                    early_mins = int(diff)
+        schedule = _get_employee_schedule(employee, dept)
+        eff_end = schedule['work_end_time']
+        if eff_end and dept:
+            work_end = datetime.combine(today, eff_end)
+            work_end = timezone.make_aware(work_end)
+            diff = (work_end - now).total_seconds() / 60
+            if diff > dept.early_leave_threshold_minutes:
+                is_early = True
+                early_mins = int(diff)
 
         if att.check_in:
             work_seconds = (now - att.check_in).total_seconds()
@@ -1741,8 +1787,10 @@ class DeviceSyncView(APIView):
                 att.check_in = punch_time
                 att.check_in_method = 'device'
                 att.status = 'present'
-                if dept:
-                    work_start = datetime.combine(punch_date, dept.work_start_time)
+                emp_schedule = _get_employee_schedule(employee, dept) if employee else None
+                eff_start = emp_schedule['work_start_time'] if emp_schedule else (dept.work_start_time if dept else None)
+                if eff_start and dept:
+                    work_start = datetime.combine(punch_date, eff_start)
                     work_start = work_start.replace(tzinfo=nepal_tz)
                     diff = (punch_time - work_start).total_seconds() / 60
                     if diff > dept.late_threshold_minutes:
@@ -1757,8 +1805,10 @@ class DeviceSyncView(APIView):
                     att.check_out_method = 'device'
                 if att.check_in:
                     att.work_hours = Decimal(str(round((att.check_out - att.check_in).total_seconds() / 3600, 2)))
-                if dept:
-                    work_end = datetime.combine(punch_date, dept.work_end_time)
+                emp_schedule = _get_employee_schedule(employee, dept) if employee else None
+                eff_end = emp_schedule['work_end_time'] if emp_schedule else (dept.work_end_time if dept else None)
+                if eff_end and dept:
+                    work_end = datetime.combine(punch_date, eff_end)
                     work_end = work_end.replace(tzinfo=nepal_tz)
                     diff = (work_end - punch_time).total_seconds() / 60
                     if diff > dept.early_leave_threshold_minutes:
@@ -2197,16 +2247,18 @@ class AttendanceSummaryView(APIView):
         rows = []
         for idx, emp in enumerate(employees):
             dept = dept_cache.get(str(emp.department_id)) if emp.department_id else None
-            emp_wdpw = emp.working_days_per_week if emp.working_days_per_week else (dept.working_days_per_week if dept else 6)
             org_obj = org_cache.get(str(emp.organization_id)) if emp.organization_id else None
-            week_off_day = getattr(org_obj, 'week_off_day', 6) if org_obj else 6
+            schedule = _get_employee_schedule(emp, dept, org_obj)
+            off_days = schedule['week_off_days']
             org_holidays = holidays_by_org.get(str(emp.organization_id), set()) if emp.organization_id else set()
 
             std_work_hours_per_day = 0
-            if dept and dept.work_start_time and dept.work_end_time:
+            eff_start = schedule['work_start_time']
+            eff_end = schedule['work_end_time']
+            if eff_start and eff_end:
                 from datetime import datetime as dt_mod
-                start_dt = dt_mod.combine(date_from, dept.work_start_time)
-                end_dt = dt_mod.combine(date_from, dept.work_end_time)
+                start_dt = dt_mod.combine(date_from, eff_start)
+                end_dt = dt_mod.combine(date_from, eff_end)
                 std_work_hours_per_day = (end_dt - start_dt).total_seconds() / 3600
             if std_work_hours_per_day <= 0:
                 std_work_hours_per_day = 8
@@ -2215,15 +2267,11 @@ class AttendanceSummaryView(APIView):
             public_holiday_count = 0
             total_working_days = 0
 
-            second_off_day = 5 if emp_wdpw == 5 else None
-
             d = date_from
             while d <= date_to:
                 if d in org_holidays:
                     public_holiday_count += 1
-                elif d.weekday() == week_off_day:
-                    week_off_count += 1
-                elif second_off_day is not None and d.weekday() == second_off_day:
+                elif d.weekday() in off_days:
                     week_off_count += 1
                 else:
                     total_working_days += 1
@@ -2253,9 +2301,8 @@ class AttendanceSummaryView(APIView):
 
             d = date_from
             while d <= effective_to:
-                if d not in att_dates_with_status and d not in org_holidays and d.weekday() != week_off_day:
-                    if second_off_day is None or d.weekday() != second_off_day:
-                        absent_days += 1
+                if d not in att_dates_with_status and d not in org_holidays and d.weekday() not in off_days:
+                    absent_days += 1
                 d += timedelta(days=1)
 
             emp_leaves = leave_map.get(str(emp.id), [])
@@ -2884,22 +2931,19 @@ class PayrollRunProcessView(APIView):
                     dept = Department.objects.get(id=emp.department_id)
                 except Department.DoesNotExist:
                     pass
-            emp_wdpw = emp.working_days_per_week if emp.working_days_per_week else (dept.working_days_per_week if dept else 6)
             org_obj = None
             if emp.organization_id:
                 try:
                     org_obj = Organization.objects.get(id=emp.organization_id)
                 except Organization.DoesNotExist:
                     pass
-            week_off_day = getattr(org_obj, 'week_off_day', 6) if org_obj else 6
-            second_off_day = 5 if emp_wdpw == 5 else None
+            schedule = _get_employee_schedule(emp, dept, org_obj)
+            off_days = schedule['week_off_days']
             total_calendar_days = (month_end - month_start).days + 1
             working_days = 0
             for d in range(total_calendar_days):
                 day = month_start + timedelta(days=d)
-                if day.weekday() == week_off_day:
-                    continue
-                if second_off_day is not None and day.weekday() == second_off_day:
+                if day.weekday() in off_days:
                     continue
                 working_days += 1
             holidays_in_month = Holiday.objects.filter(
@@ -4712,6 +4756,9 @@ class StaffProfileListView(APIView):
                 'probation_end_date': emp.probation_end_date.isoformat() if emp.probation_end_date else None,
                 'contract_end_date': emp.contract_end_date.isoformat() if emp.contract_end_date else None,
                 'working_days_per_week': emp.working_days_per_week,
+                'week_off_days': emp.week_off_days,
+                'work_start_time': emp.work_start_time.strftime('%H:%M') if emp.work_start_time else None,
+                'work_end_time': emp.work_end_time.strftime('%H:%M') if emp.work_end_time else None,
                 'salary_amount': float(emp.salary_amount) if emp.salary_amount else None,
                 'salary_currency': emp.salary_currency,
                 'profile_photo_url': emp.profile_photo_url,
@@ -4946,6 +4993,9 @@ class Employee360View(APIView):
             'probation_end_date': emp.probation_end_date.isoformat() if emp.probation_end_date else None,
             'contract_end_date': emp.contract_end_date.isoformat() if emp.contract_end_date else None,
             'working_days_per_week': emp.working_days_per_week,
+            'week_off_days': emp.week_off_days,
+            'work_start_time': emp.work_start_time.strftime('%H:%M') if emp.work_start_time else None,
+            'work_end_time': emp.work_end_time.strftime('%H:%M') if emp.work_end_time else None,
             'emergency_contact_name': emp.emergency_contact_name,
             'emergency_contact_phone': emp.emergency_contact_phone,
         }

@@ -824,6 +824,9 @@ function AttendanceTab() {
           <Button variant={showDashboard ? "default" : "outline"} size="sm" className="h-7 text-xs" onClick={() => setShowDashboard(!showDashboard)} data-testid="btn-toggle-dashboard">
             <BarChart3 className="w-3.5 h-3.5 mr-1" /> Dashboard
           </Button>
+          <Button variant={showScheduleSettings ? "default" : "outline"} size="sm" className="h-7 text-xs" onClick={() => setShowScheduleSettings(!showScheduleSettings)} data-testid="btn-toggle-schedule">
+            <Settings className="w-3.5 h-3.5 mr-1" /> Work Schedule
+          </Button>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
           <Select value={filterOrg} onValueChange={v => { setFilterOrg(v === "__all__" ? "" : v); setFilterDept(""); }}>
@@ -953,6 +956,77 @@ function AttendanceTab() {
             <Card><CardContent className="pt-3 pb-3"><div className="text-xl font-bold text-amber-600" data-testid="text-late-count">{totalSummary.late}</div><p className="text-xs text-muted-foreground">Total Late ({periodLabel()})</p></CardContent></Card>
           </div>
         </>
+      )}
+
+      {showScheduleSettings && (
+        <Card>
+          <CardHeader className="pb-2 pt-3 px-4">
+            <CardTitle className="text-sm font-medium flex items-center gap-2">
+              <Settings className="w-4 h-4" /> Work Schedule Settings (per Department)
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="px-4 pb-3">
+            <div className="overflow-auto max-h-80">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="text-xs">Department</TableHead>
+                    <TableHead className="text-xs">Working Days/Week</TableHead>
+                    <TableHead className="text-xs">Start Time</TableHead>
+                    <TableHead className="text-xs">End Time</TableHead>
+                    <TableHead className="text-xs">Late Threshold</TableHead>
+                    <TableHead className="text-xs">Early Leave Threshold</TableHead>
+                    <TableHead className="text-xs w-16"></TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {(departments || []).filter((d: any) => !filterOrg || d.organization_id === filterOrg).map((d: any) => (
+                    <TableRow key={d.id}>
+                      <TableCell className="text-xs font-medium">{d.name}</TableCell>
+                      <TableCell className="text-xs">{d.working_days_per_week} days</TableCell>
+                      <TableCell className="text-xs">{d.work_start_time || "—"}</TableCell>
+                      <TableCell className="text-xs">{d.work_end_time || "—"}</TableCell>
+                      <TableCell className="text-xs">{d.late_threshold_minutes} min</TableCell>
+                      <TableCell className="text-xs">{d.early_leave_threshold_minutes} min</TableCell>
+                      <TableCell>
+                        <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => openScheduleEdit(d)} data-testid={`btn-edit-schedule-${d.id}`}>
+                          <Pencil className="h-3 w-3" />
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+            <p className="text-[11px] text-muted-foreground mt-2">These are default schedules per department. You can also override per employee in Staff Profiles → Edit Employee → Work Schedule.</p>
+          </CardContent>
+        </Card>
+      )}
+
+      {scheduleEditDept && (
+        <Dialog open={!!scheduleEditDept} onOpenChange={v => { if (!v) setScheduleEditDept(null); }}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle className="text-base">Edit Schedule — {scheduleEditDept.name}</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-3">
+              <div className="grid grid-cols-2 gap-3">
+                <div><Label className="text-xs">Working Days/Week</Label><Input type="number" min={1} max={7} value={scheduleForm.working_days_per_week} onChange={e => setScheduleForm({ ...scheduleForm, working_days_per_week: parseInt(e.target.value) || 6 })} data-testid="input-sched-wdpw" /></div>
+                <div></div>
+                <div><Label className="text-xs">Start Time</Label><Input type="time" value={scheduleForm.work_start_time} onChange={e => setScheduleForm({ ...scheduleForm, work_start_time: e.target.value })} data-testid="input-sched-start" /></div>
+                <div><Label className="text-xs">End Time</Label><Input type="time" value={scheduleForm.work_end_time} onChange={e => setScheduleForm({ ...scheduleForm, work_end_time: e.target.value })} data-testid="input-sched-end" /></div>
+                <div><Label className="text-xs">Late Threshold (min)</Label><Input type="number" value={scheduleForm.late_threshold_minutes} onChange={e => setScheduleForm({ ...scheduleForm, late_threshold_minutes: parseInt(e.target.value) || 0 })} data-testid="input-sched-late" /></div>
+                <div><Label className="text-xs">Early Leave Threshold (min)</Label><Input type="number" value={scheduleForm.early_leave_threshold_minutes} onChange={e => setScheduleForm({ ...scheduleForm, early_leave_threshold_minutes: parseInt(e.target.value) || 0 })} data-testid="input-sched-early" /></div>
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" size="sm" onClick={() => setScheduleEditDept(null)}>Cancel</Button>
+              <Button size="sm" onClick={saveSchedule} disabled={scheduleUpdateMutation.isPending} data-testid="btn-save-schedule">
+                {scheduleUpdateMutation.isPending ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : <Save className="h-3 w-3 mr-1" />} Save
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       )}
 
       {isLoading ? <Skeleton className="h-60 w-full" /> : grid && viewMode === "daily" ? (

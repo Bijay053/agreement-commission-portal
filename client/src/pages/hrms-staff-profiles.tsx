@@ -62,6 +62,9 @@ interface StaffProfile {
   probation_end_date: string | null;
   contract_end_date: string | null;
   working_days_per_week: number | null;
+  week_off_days: number[] | null;
+  work_start_time: string | null;
+  work_end_time: string | null;
   salary_amount: number | null;
   salary_currency: string;
   profile_photo_url: string | null;
@@ -144,6 +147,7 @@ export function StaffProfilesTab() {
     organization_id: "", department_id: "", gender: "", country: "", marital_status: "",
     date_of_birth: "", join_date: new Date().toISOString().split("T")[0], employment_type: "full_time",
     probation_end_date: "", contract_end_date: "", working_days_per_week: "",
+    week_off_days: "" as string, work_start_time: "", work_end_time: "",
     citizenship_no: "", pan_no: "", passport_number: "", employee_id_number: "",
     bank_name: "", bank_account_number: "",
     bank_branch: "", permanent_address: "", temporary_address: "",
@@ -283,6 +287,7 @@ export function StaffProfilesTab() {
       department_id: s.department_id || "", gender: s.gender || "", country: s.country || "", marital_status: s.marital_status || "",
       date_of_birth: s.date_of_birth || "", join_date: s.join_date || "", employment_type: s.employment_type || "full_time",
       probation_end_date: s.probation_end_date || "", contract_end_date: s.contract_end_date || "", working_days_per_week: s.working_days_per_week != null ? String(s.working_days_per_week) : "",
+      week_off_days: s.week_off_days ? s.week_off_days.join(",") : "", work_start_time: s.work_start_time || "", work_end_time: s.work_end_time || "",
       citizenship_no: s.citizenship_no || "", pan_no: s.pan_no || "", passport_number: s.passport_number || "", employee_id_number: s.employee_id_number || "",
       bank_name: s.bank_name || "", bank_account_number: s.bank_account_number || "",
       bank_branch: s.bank_branch || "", permanent_address: s.permanent_address || "", temporary_address: s.temporary_address || "",
@@ -392,6 +397,9 @@ export function StaffProfilesTab() {
     if (empForm.probation_end_date) payload.probationEndDate = empForm.probation_end_date;
     if (empForm.contract_end_date) payload.contractEndDate = empForm.contract_end_date;
     if (empForm.working_days_per_week) payload.workingDaysPerWeek = parseInt(empForm.working_days_per_week);
+    if (empForm.week_off_days) payload.weekOffDays = empForm.week_off_days.split(",").map((v: string) => parseInt(v.trim())).filter((v: number) => !isNaN(v));
+    if (empForm.work_start_time) payload.workStartTime = empForm.work_start_time;
+    if (empForm.work_end_time) payload.workEndTime = empForm.work_end_time;
 
     createEmployeeMutation.mutate(payload);
   };
@@ -713,17 +721,39 @@ export function StaffProfilesTab() {
               <div><Label>Probation End</Label><Input type="date" value={empForm.probation_end_date} onChange={e => setEmpForm({ ...empForm, probation_end_date: e.target.value })} data-testid="input-emp-probation-end" /></div>
               <div><Label>Contract End</Label><Input type="date" value={empForm.contract_end_date} onChange={e => setEmpForm({ ...empForm, contract_end_date: e.target.value })} data-testid="input-emp-contract-end" /></div>
             </div>
-            <div className="grid grid-cols-3 gap-4">
+            <hr className="border-border" />
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Work Schedule (leave blank to use department defaults)</p>
+            <div className="grid grid-cols-4 gap-4">
               <div>
                 <Label>Working Days/Week</Label>
                 <Select value={empForm.working_days_per_week || ""} onValueChange={v => setEmpForm({ ...empForm, working_days_per_week: v })}>
-                  <SelectTrigger data-testid="select-emp-working-days"><SelectValue placeholder="Use department default" /></SelectTrigger>
+                  <SelectTrigger data-testid="select-emp-working-days"><SelectValue placeholder="Dept default" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="5">5 days</SelectItem>
                     <SelectItem value="6">6 days</SelectItem>
+                    <SelectItem value="7">7 days</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
+              <div>
+                <Label>Week Off Days</Label>
+                <Select value={empForm.week_off_days || ""} onValueChange={v => setEmpForm({ ...empForm, week_off_days: v })}>
+                  <SelectTrigger data-testid="select-emp-week-off"><SelectValue placeholder="Dept default" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="6">Sat only</SelectItem>
+                    <SelectItem value="5,6">Fri + Sat</SelectItem>
+                    <SelectItem value="0,6">Sun + Sat</SelectItem>
+                    <SelectItem value="4">Fri only</SelectItem>
+                    <SelectItem value="0">Sun only</SelectItem>
+                    <SelectItem value="4,6">Fri + Sat</SelectItem>
+                    <SelectItem value="0,5">Sun + Fri</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div><Label>Work Start Time</Label><Input type="time" value={empForm.work_start_time} onChange={e => setEmpForm({ ...empForm, work_start_time: e.target.value })} placeholder="Dept default" data-testid="input-emp-start-time" /></div>
+              <div><Label>Work End Time</Label><Input type="time" value={empForm.work_end_time} onChange={e => setEmpForm({ ...empForm, work_end_time: e.target.value })} placeholder="Dept default" data-testid="input-emp-end-time" /></div>
+            </div>
+            <div className="grid grid-cols-3 gap-4">
               <div><Label>Emergency Contact Name</Label><Input value={empForm.emergency_contact_name} onChange={e => setEmpForm({ ...empForm, emergency_contact_name: e.target.value })} data-testid="input-emp-emergency-name" /></div>
               <div><Label>Emergency Contact Phone</Label><Input value={empForm.emergency_contact_phone} onChange={e => setEmpForm({ ...empForm, emergency_contact_phone: e.target.value })} data-testid="input-emp-emergency-phone" /></div>
             </div>
@@ -856,17 +886,39 @@ export function StaffProfilesTab() {
               <div><Label>Probation End</Label><Input type="date" value={empForm.probation_end_date} onChange={e => setEmpForm({ ...empForm, probation_end_date: e.target.value })} /></div>
               <div><Label>Contract End</Label><Input type="date" value={empForm.contract_end_date} onChange={e => setEmpForm({ ...empForm, contract_end_date: e.target.value })} /></div>
             </div>
-            <div className="grid grid-cols-3 gap-4">
+            <hr className="border-border" />
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Work Schedule (leave blank to use department defaults)</p>
+            <div className="grid grid-cols-4 gap-4">
               <div>
                 <Label>Working Days/Week</Label>
                 <Select value={empForm.working_days_per_week || ""} onValueChange={v => setEmpForm({ ...empForm, working_days_per_week: v })}>
-                  <SelectTrigger data-testid="select-emp-working-days-edit"><SelectValue placeholder="Use department default" /></SelectTrigger>
+                  <SelectTrigger data-testid="select-emp-working-days-edit"><SelectValue placeholder="Dept default" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="5">5 days</SelectItem>
                     <SelectItem value="6">6 days</SelectItem>
+                    <SelectItem value="7">7 days</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
+              <div>
+                <Label>Week Off Days</Label>
+                <Select value={empForm.week_off_days || ""} onValueChange={v => setEmpForm({ ...empForm, week_off_days: v })}>
+                  <SelectTrigger data-testid="select-emp-week-off-edit"><SelectValue placeholder="Dept default" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="6">Sat only</SelectItem>
+                    <SelectItem value="5,6">Fri + Sat</SelectItem>
+                    <SelectItem value="0,6">Sun + Sat</SelectItem>
+                    <SelectItem value="4">Fri only</SelectItem>
+                    <SelectItem value="0">Sun only</SelectItem>
+                    <SelectItem value="4,6">Fri + Sat</SelectItem>
+                    <SelectItem value="0,5">Sun + Fri</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div><Label>Work Start Time</Label><Input type="time" value={empForm.work_start_time} onChange={e => setEmpForm({ ...empForm, work_start_time: e.target.value })} data-testid="input-emp-start-time-edit" /></div>
+              <div><Label>Work End Time</Label><Input type="time" value={empForm.work_end_time} onChange={e => setEmpForm({ ...empForm, work_end_time: e.target.value })} data-testid="input-emp-end-time-edit" /></div>
+            </div>
+            <div className="grid grid-cols-3 gap-4">
               <div><Label>Emergency Contact Name</Label><Input value={empForm.emergency_contact_name} onChange={e => setEmpForm({ ...empForm, emergency_contact_name: e.target.value })} /></div>
               <div><Label>Emergency Contact Phone</Label><Input value={empForm.emergency_contact_phone} onChange={e => setEmpForm({ ...empForm, emergency_contact_phone: e.target.value })} /></div>
             </div>
@@ -927,6 +979,9 @@ export function StaffProfilesTab() {
               payload.probationEndDate = empForm.probation_end_date || null;
               payload.contractEndDate = empForm.contract_end_date || null;
               payload.workingDaysPerWeek = empForm.working_days_per_week ? parseInt(empForm.working_days_per_week) : null;
+              payload.weekOffDays = empForm.week_off_days ? empForm.week_off_days.split(",").map((v: string) => parseInt(v.trim())).filter((v: number) => !isNaN(v)) : null;
+              payload.workStartTime = empForm.work_start_time || null;
+              payload.workEndTime = empForm.work_end_time || null;
               updateEmployeeMutation.mutate({ id: editingEmployee.id, data: payload });
             }} disabled={updateEmployeeMutation.isPending} data-testid="btn-update-employee">
               {updateEmployeeMutation.isPending ? "Saving..." : "Update Employee"}
