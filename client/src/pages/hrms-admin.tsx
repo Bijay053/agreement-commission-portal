@@ -533,6 +533,9 @@ function LeaveTypesTab() {
 function LeaveRequestsTab() {
   const { toast } = useToast();
   const [statusFilter, setStatusFilter] = useState("pending");
+  const [showCreateDialog, setShowCreateDialog] = useState(false);
+  const [createForm, setCreateForm] = useState({ employee_id: "", leave_type_id: "", start_date: "", end_date: "", reason: "", is_half_day: false, half_day_period: "first_half", auto_approve: false });
+  const [createLoading, setCreateLoading] = useState(false);
 
   const { data: requests, isLoading } = useQuery<LeaveRequest[]>({
     queryKey: ["/api/hrms/leave-requests", statusFilter],
@@ -542,6 +545,35 @@ function LeaveRequestsTab() {
       return res.json();
     },
   });
+
+  const { data: employees } = useQuery<any[]>({
+    queryKey: ["/api/hrms/staff-profiles"],
+    queryFn: async () => {
+      const res = await fetch("/api/hrms/staff-profiles", { credentials: "include" });
+      if (!res.ok) return [];
+      return res.json();
+    },
+  });
+
+  const { data: leaveTypes } = useQuery<LeaveType[]>({ queryKey: ["/api/hrms/leave-types"] });
+
+  const handleCreate = async () => {
+    if (!createForm.employee_id || !createForm.leave_type_id || !createForm.start_date || !createForm.end_date) {
+      toast({ title: "Please fill all required fields", variant: "destructive" });
+      return;
+    }
+    setCreateLoading(true);
+    try {
+      await apiRequest("POST", "/api/hrms/leave-requests", createForm);
+      queryClient.refetchQueries({ queryKey: ["/api/hrms/leave-requests"] });
+      toast({ title: createForm.auto_approve ? "Leave request created and approved" : "Leave request created" });
+      setShowCreateDialog(false);
+      setCreateForm({ employee_id: "", leave_type_id: "", start_date: "", end_date: "", reason: "", is_half_day: false, half_day_period: "first_half", auto_approve: false });
+    } catch (err: any) {
+      toast({ title: err?.message || "Failed to create", variant: "destructive" });
+    }
+    setCreateLoading(false);
+  };
 
   const [approveConfirmId, setApproveConfirmId] = useState<string | null>(null);
   const [rejectConfirmId, setRejectConfirmId] = useState<string | null>(null);
@@ -599,12 +631,13 @@ function LeaveRequestsTab() {
     <div className="space-y-4">
       <div className="flex justify-between items-center">
         <h3 className="text-lg font-semibold">Leave Requests</h3>
-        <div className="flex gap-2 flex-wrap">
+        <div className="flex gap-2 flex-wrap items-center">
           {["pending", "approved", "rejected", "cancelled", "cancel_requested"].map(s => (
             <Button key={s} variant={statusFilter === s ? "default" : "outline"} size="sm" onClick={() => setStatusFilter(s)} data-testid={`button-filter-${s}`}>
               {s === "cancel_requested" ? "Cancel Requested" : s.charAt(0).toUpperCase() + s.slice(1)}
             </Button>
           ))}
+          <Button size="sm" onClick={() => setShowCreateDialog(true)} data-testid="button-create-leave"><Plus className="h-4 w-4 mr-1" /> Create Leave</Button>
         </div>
       </div>
 
@@ -720,6 +753,77 @@ function LeaveRequestsTab() {
             <Button variant="outline" size="sm" onClick={() => setAdminCancelId(null)}>No, Keep</Button>
             <Button variant="destructive" size="sm" onClick={handleAdminCancel} disabled={actionLoading} data-testid="button-confirm-admin-cancel">
               {actionLoading && <Loader2 className="h-3 w-3 animate-spin mr-1" />} Yes, Cancel Leave
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showCreateDialog} onOpenChange={v => { if (!v) { setShowCreateDialog(false); setCreateForm({ employee_id: "", leave_type_id: "", start_date: "", end_date: "", reason: "", is_half_day: false, half_day_period: "first_half", auto_approve: false }); } }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader><DialogTitle>Create Leave Request</DialogTitle></DialogHeader>
+          <p className="text-xs text-muted-foreground">Create a leave request on behalf of an employee (e.g., for email requests). Enable "Auto Approve" to immediately approve it.</p>
+          <div className="space-y-3">
+            <div>
+              <Label>Employee *</Label>
+              <Select value={createForm.employee_id} onValueChange={v => setCreateForm(f => ({ ...f, employee_id: v }))}>
+                <SelectTrigger data-testid="select-create-employee"><SelectValue placeholder="Select employee" /></SelectTrigger>
+                <SelectContent>
+                  {employees?.filter((e: any) => e.status === "active").map((e: any) => (
+                    <SelectItem key={e.id} value={e.id}>{e.full_name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>Leave Type *</Label>
+              <Select value={createForm.leave_type_id} onValueChange={v => setCreateForm(f => ({ ...f, leave_type_id: v }))}>
+                <SelectTrigger data-testid="select-create-leave-type"><SelectValue placeholder="Select leave type" /></SelectTrigger>
+                <SelectContent>
+                  {leaveTypes?.filter(lt => lt.status === "active").map(lt => (
+                    <SelectItem key={lt.id} value={lt.id}>{lt.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label>Start Date *</Label>
+                <Input type="date" value={createForm.start_date} onChange={e => setCreateForm(f => ({ ...f, start_date: e.target.value }))} data-testid="input-create-start-date" />
+              </div>
+              <div>
+                <Label>End Date *</Label>
+                <Input type="date" value={createForm.end_date} onChange={e => setCreateForm(f => ({ ...f, end_date: e.target.value }))} data-testid="input-create-end-date" />
+              </div>
+            </div>
+            <div className="flex items-center gap-4">
+              <label className="flex items-center gap-2 text-sm">
+                <input type="checkbox" checked={createForm.is_half_day} onChange={e => setCreateForm(f => ({ ...f, is_half_day: e.target.checked, end_date: e.target.checked ? f.start_date : f.end_date }))} className="rounded" data-testid="checkbox-create-half-day" />
+                Half Day
+              </label>
+              {createForm.is_half_day && (
+                <Select value={createForm.half_day_period} onValueChange={v => setCreateForm(f => ({ ...f, half_day_period: v }))}>
+                  <SelectTrigger className="w-[130px]" data-testid="select-create-half-day-period"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="first_half">First Half</SelectItem>
+                    <SelectItem value="second_half">Second Half</SelectItem>
+                  </SelectContent>
+                </Select>
+              )}
+            </div>
+            <div>
+              <Label>Reason</Label>
+              <textarea className="flex min-h-[60px] w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm mt-1" value={createForm.reason} onChange={e => setCreateForm(f => ({ ...f, reason: e.target.value }))} placeholder="Reason for leave..." data-testid="input-create-reason" />
+            </div>
+            <div className="flex items-center gap-2 p-3 bg-blue-50 dark:bg-blue-950/30 rounded-md border border-blue-200 dark:border-blue-800">
+              <input type="checkbox" checked={createForm.auto_approve} onChange={e => setCreateForm(f => ({ ...f, auto_approve: e.target.checked }))} className="rounded" id="auto-approve-check" data-testid="checkbox-auto-approve" />
+              <label htmlFor="auto-approve-check" className="text-sm font-medium cursor-pointer">Auto Approve</label>
+              <span className="text-xs text-muted-foreground ml-1">— Immediately approve this leave request</span>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" size="sm" onClick={() => setShowCreateDialog(false)}>Cancel</Button>
+            <Button size="sm" onClick={handleCreate} disabled={createLoading} data-testid="button-confirm-create-leave">
+              {createLoading && <Loader2 className="h-3 w-3 animate-spin mr-1" />} {createForm.auto_approve ? "Create & Approve" : "Create"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -2617,8 +2721,8 @@ function RemoteCheckInPermissionsTab() {
 
 function HRPoliciesTab() {
   const { toast } = useToast();
-  const { selectedOrg } = useAuth();
-  const orgId = selectedOrg?.id;
+  const { data: orgs } = useQuery<Organization[]>({ queryKey: ["/api/hrms/organizations"] });
+  const orgId = orgs?.[0]?.id || "";
   const { data: policies, isLoading } = useQuery<any[]>({
     queryKey: ["/api/hrms/hr-policies", orgId],
     queryFn: async () => {
@@ -2789,8 +2893,8 @@ function HRPoliciesTab() {
 
 function DocTemplatesTab() {
   const { toast } = useToast();
-  const { selectedOrg } = useAuth();
-  const orgId = selectedOrg?.id;
+  const { data: orgs } = useQuery<Organization[]>({ queryKey: ["/api/hrms/organizations"] });
+  const orgId = orgs?.[0]?.id || "";
   const { data: templates, isLoading } = useQuery<any[]>({
     queryKey: ["/api/hrms/document-templates", orgId],
     queryFn: async () => {
@@ -2936,8 +3040,8 @@ This letter is issued for official purposes as requested by the employee.`,
 
 function DocRequestsTab() {
   const { toast } = useToast();
-  const { selectedOrg } = useAuth();
-  const orgId = selectedOrg?.id;
+  const { data: orgs } = useQuery<Organization[]>({ queryKey: ["/api/hrms/organizations"] });
+  const orgId = orgs?.[0]?.id || "";
   const [statusFilter, setStatusFilter] = useState("pending");
   const { data: requests, isLoading } = useQuery<any[]>({
     queryKey: ["/api/hrms/document-requests", orgId, statusFilter],

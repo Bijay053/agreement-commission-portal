@@ -1290,7 +1290,7 @@ class LeaveRequestListView(APIView):
                 if days_count > policy.max_consecutive_days:
                     return Response({'message': f'Cannot request more than {policy.max_consecutive_days} consecutive days'}, status=400)
 
-                if policy.min_days_advance_notice > 0:
+                if policy.min_days_advance_notice > 0 and not data.get('auto_approve'):
                     days_ahead = (start - date.today()).days
                     if days_ahead < policy.min_days_advance_notice:
                         return Response({'message': f'Leave must be requested at least {policy.min_days_advance_notice} days in advance'}, status=400)
@@ -1309,6 +1309,34 @@ class LeaveRequestListView(APIView):
             reason=data.get('reason'),
             document_url=data.get('document_url'),
         )
+        if data.get('auto_approve'):
+            lr.status = 'approved'
+            lr.approved_by = request.session.get('userId')
+            lr.approved_at = timezone.now()
+            lr.save()
+            current_fy = FiscalYear.objects.filter(is_current=True).first()
+            if current_fy:
+                balance = LeaveBalance.objects.filter(
+                    employee_id=lr.employee_id,
+                    leave_type_id=lr.leave_type_id,
+                    fiscal_year=current_fy,
+                ).first()
+                if balance:
+                    balance.used_days += lr.days_count
+                    balance.save()
+            current_d = lr.start_date
+            while current_d <= lr.end_date:
+                lt_name = ''
+                try:
+                    lt_name = LeaveType.objects.get(id=lr.leave_type_id).name
+                except Exception:
+                    pass
+                AttendanceRecord.objects.update_or_create(
+                    employee_id=lr.employee_id,
+                    date=current_d,
+                    defaults={'status': 'on_leave', 'notes': f'Leave: {lt_name}'},
+                )
+                current_d += timedelta(days=1)
         return Response(serialize_leave_request(lr), status=201)
 
 
@@ -5120,7 +5148,7 @@ class EmployeeWorkScheduleView(APIView):
             'effective_work_end_time': schedule['work_end_time'].strftime('%H:%M') if schedule['work_end_time'] else None,
         })
 
-    @require_permission('hrms.attendance.write')
+    @require_permission('hrms.attendance.update')
     def put(self, request, employee_id):
         try:
             emp = Employee.objects.get(id=employee_id)
