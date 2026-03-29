@@ -70,6 +70,7 @@ urlpatterns = [
     path('hrms/staff-profiles/bulk-upload', views.StaffBulkUploadView.as_view()),
     path('hrms/employees/<uuid:employee_id>/status', views.EmployeeStatusChangeView.as_view()),
     path('hrms/employees/<uuid:employee_id>/portal-access', views.EmployeePortalAccessView.as_view()),
+    path('hrms/employees/<uuid:employee_id>/work-schedule', views.EmployeeWorkScheduleView.as_view()),
     path('hrms/employee-360/<uuid:employee_id>', views.Employee360View.as_view()),
 
     path('hrms/bonuses', views.BonusListView.as_view()),

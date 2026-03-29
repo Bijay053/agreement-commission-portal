@@ -634,6 +634,11 @@ function AttendanceTab() {
   const [showScheduleSettings, setShowScheduleSettings] = useState(false);
   const [scheduleEditDept, setScheduleEditDept] = useState<Department | null>(null);
   const [scheduleForm, setScheduleForm] = useState({ working_days_per_week: 6, work_start_time: "10:00", work_end_time: "18:00", late_threshold_minutes: 15, early_leave_threshold_minutes: 15 });
+  const [empScheduleId, setEmpScheduleId] = useState<string | null>(null);
+  const [empScheduleData, setEmpScheduleData] = useState<any>(null);
+  const [empScheduleForm, setEmpScheduleForm] = useState({ working_days_per_week: "", week_off_days: "", work_start_time: "", work_end_time: "" });
+  const [empScheduleLoading, setEmpScheduleLoading] = useState(false);
+  const [empScheduleSaving, setEmpScheduleSaving] = useState(false);
 
   const { data: organizations } = useQuery<any[]>({
     queryKey: ["/api/hrms/organizations"],
@@ -705,6 +710,59 @@ function AttendanceTab() {
     if (!scheduleEditDept) return;
     scheduleUpdateMutation.mutate({ id: scheduleEditDept.id, data: scheduleForm });
   };
+
+  const openEmpSchedule = async (empId: string) => {
+    setEmpScheduleId(empId);
+    setEmpScheduleData(null);
+    setEmpScheduleLoading(true);
+    try {
+      const res = await fetch(`/api/hrms/employees/${empId}/work-schedule`, { credentials: "include" });
+      if (res.ok) {
+        const d = await res.json();
+        setEmpScheduleData(d);
+        setEmpScheduleForm({
+          working_days_per_week: d.working_days_per_week != null ? String(d.working_days_per_week) : "",
+          week_off_days: d.week_off_days ? d.week_off_days.join(",") : "",
+          work_start_time: d.work_start_time || "",
+          work_end_time: d.work_end_time || "",
+        });
+      }
+    } catch {}
+    setEmpScheduleLoading(false);
+  };
+
+  const saveEmpSchedule = async () => {
+    if (!empScheduleId) return;
+    setEmpScheduleSaving(true);
+    try {
+      const payload: any = {
+        working_days_per_week: empScheduleForm.working_days_per_week ? parseInt(empScheduleForm.working_days_per_week) : null,
+        week_off_days: empScheduleForm.week_off_days ? empScheduleForm.week_off_days.split(",").map((v: string) => parseInt(v.trim())).filter((v: number) => !isNaN(v)) : null,
+        work_start_time: empScheduleForm.work_start_time || null,
+        work_end_time: empScheduleForm.work_end_time || null,
+      };
+      const res = await fetch(`/api/hrms/employees/${empScheduleId}/work-schedule`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify(payload),
+      });
+      if (res.ok) {
+        toast({ title: "Work schedule updated" });
+        setEmpScheduleId(null);
+        queryClient.invalidateQueries({ queryKey: ["/api/hrms/attendance/grid"] });
+        queryClient.invalidateQueries({ queryKey: ["/api/hrms/staff-profiles"] });
+      } else {
+        const err = await res.json().catch(() => ({}));
+        toast({ title: "Error", description: err.message || "Failed to update", variant: "destructive" });
+      }
+    } catch {
+      toast({ title: "Error", description: "Failed to update", variant: "destructive" });
+    }
+    setEmpScheduleSaving(false);
+  };
+
+  const DAY_NAMES = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
   const navDate = (dir: number) => {
     const d = new Date(currentDate);
@@ -1058,6 +1116,82 @@ function AttendanceTab() {
         </Dialog>
       )}
 
+      {empScheduleId && (
+        <Dialog open={!!empScheduleId} onOpenChange={v => { if (!v) setEmpScheduleId(null); }}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle className="text-base flex items-center gap-2">
+                <Clock className="w-4 h-4" /> Work Schedule — {empScheduleData?.full_name || "Loading..."}
+              </DialogTitle>
+              {empScheduleData?.department && <p className="text-xs text-muted-foreground">{empScheduleData.department}</p>}
+            </DialogHeader>
+            {empScheduleLoading ? <div className="flex justify-center py-8"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div> : empScheduleData ? (
+              <div className="space-y-4">
+                <div className="bg-muted/50 rounded-lg p-3">
+                  <p className="text-xs font-semibold text-muted-foreground mb-2">EFFECTIVE SCHEDULE</p>
+                  <div className="grid grid-cols-2 gap-2 text-xs">
+                    <div><span className="text-muted-foreground">Working Days:</span> <span className="font-medium">{empScheduleData.effective_working_days_per_week} days/week</span></div>
+                    <div><span className="text-muted-foreground">Week Off:</span> <span className="font-medium">{(empScheduleData.effective_week_off_days || []).map((d: number) => DAY_NAMES[d]).join(", ") || "None"}</span></div>
+                    <div><span className="text-muted-foreground">Start Time:</span> <span className="font-medium">{empScheduleData.effective_work_start_time || "—"}</span></div>
+                    <div><span className="text-muted-foreground">End Time:</span> <span className="font-medium">{empScheduleData.effective_work_end_time || "—"}</span></div>
+                  </div>
+                  {empScheduleData.dept_working_days_per_week != null && (
+                    <p className="text-[10px] text-muted-foreground mt-2">Dept default: {empScheduleData.dept_working_days_per_week} days/week, {empScheduleData.dept_work_start_time || "—"} - {empScheduleData.dept_work_end_time || "—"}</p>
+                  )}
+                </div>
+                <div>
+                  <p className="text-xs font-semibold text-muted-foreground mb-2">OVERRIDE (LEAVE BLANK TO USE DEPARTMENT DEFAULTS)</p>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <Label className="text-xs">Working Days/Week</Label>
+                      <Select value={empScheduleForm.working_days_per_week || "dept"} onValueChange={v => setEmpScheduleForm({ ...empScheduleForm, working_days_per_week: v === "dept" ? "" : v })}>
+                        <SelectTrigger className="h-8 text-xs" data-testid="input-emp-sched-wdpw"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="dept">Dept default</SelectItem>
+                          <SelectItem value="5">5 days</SelectItem>
+                          <SelectItem value="6">6 days</SelectItem>
+                          <SelectItem value="7">7 days</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <Label className="text-xs">Week Off Days</Label>
+                      <Select value={empScheduleForm.week_off_days || "dept"} onValueChange={v => setEmpScheduleForm({ ...empScheduleForm, week_off_days: v === "dept" ? "" : v })}>
+                        <SelectTrigger className="h-8 text-xs" data-testid="input-emp-sched-wod"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="dept">Dept default</SelectItem>
+                          <SelectItem value="6">Sat</SelectItem>
+                          <SelectItem value="5,6">Fri, Sat</SelectItem>
+                          <SelectItem value="0,6">Mon, Sat</SelectItem>
+                          <SelectItem value="5">Fri</SelectItem>
+                          <SelectItem value="0">Mon</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <Label className="text-xs">Work Start Time</Label>
+                      <Input type="time" className="h-8 text-xs" value={empScheduleForm.work_start_time} onChange={e => setEmpScheduleForm({ ...empScheduleForm, work_start_time: e.target.value })} placeholder="Dept default" data-testid="input-emp-sched-start" />
+                      {!empScheduleForm.work_start_time && <p className="text-[10px] text-muted-foreground">Dept default</p>}
+                    </div>
+                    <div>
+                      <Label className="text-xs">Work End Time</Label>
+                      <Input type="time" className="h-8 text-xs" value={empScheduleForm.work_end_time} onChange={e => setEmpScheduleForm({ ...empScheduleForm, work_end_time: e.target.value })} placeholder="Dept default" data-testid="input-emp-sched-end" />
+                      {!empScheduleForm.work_end_time && <p className="text-[10px] text-muted-foreground">Dept default</p>}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ) : <p className="text-sm text-muted-foreground py-4">Failed to load schedule</p>}
+            <DialogFooter>
+              <Button variant="outline" size="sm" onClick={() => setEmpScheduleId(null)}>Cancel</Button>
+              <Button size="sm" onClick={saveEmpSchedule} disabled={empScheduleSaving || empScheduleLoading} data-testid="btn-save-emp-schedule">
+                {empScheduleSaving ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : <Save className="h-3 w-3 mr-1" />} Save
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
+
       {isLoading ? <Skeleton className="h-60 w-full" /> : grid && viewMode === "daily" ? (
         <Card>
           <CardContent className="p-0">
@@ -1113,8 +1247,8 @@ function AttendanceTab() {
                     const loc = entry?.check_in_location;
                     return (
                       <tr key={emp.employee_id} className="hover:bg-muted/30 border-b" data-testid={`daily-row-${emp.employee_id}`}>
-                        <td className="p-2 border-r">
-                          <p className="font-medium truncate max-w-[140px]">{emp.full_name}</p>
+                        <td className="p-2 border-r cursor-pointer hover:bg-muted/50" onClick={() => openEmpSchedule(emp.employee_id)}>
+                          <p className="font-medium truncate max-w-[140px] text-primary hover:underline">{emp.full_name}</p>
                           <p className="text-[10px] text-muted-foreground truncate max-w-[140px]">{emp.department || emp.position}</p>
                         </td>
                         <td className="p-2 text-center border-r">
@@ -1219,8 +1353,8 @@ function AttendanceTab() {
                 <tbody>
                   {filteredEmployees.map((emp: any) => (
                     <tr key={emp.employee_id} className="hover:bg-muted/30 border-b">
-                      <td className="p-2 sticky left-0 bg-background z-[5] border-r">
-                        <p className="font-medium truncate max-w-[140px]">{emp.full_name}</p>
+                      <td className="p-2 sticky left-0 bg-background z-[5] border-r cursor-pointer hover:bg-muted/50" onClick={() => openEmpSchedule(emp.employee_id)} data-testid={`emp-name-${emp.employee_id}`}>
+                        <p className="font-medium truncate max-w-[140px] text-primary hover:underline">{emp.full_name}</p>
                         <p className="text-[10px] text-muted-foreground truncate max-w-[140px]">{emp.department || emp.position}</p>
                       </td>
                       {grid.days.map((day: string) => {

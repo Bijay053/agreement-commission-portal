@@ -5011,6 +5011,79 @@ class StaffProfileListView(APIView):
         return Response(result)
 
 
+class EmployeeWorkScheduleView(APIView):
+    @require_permission('hrms.attendance.read')
+    def get(self, request, employee_id):
+        try:
+            emp = Employee.objects.get(id=employee_id)
+        except Employee.DoesNotExist:
+            return Response({'message': 'Employee not found'}, status=404)
+        dept = None
+        if emp.department_id:
+            try:
+                dept = Department.objects.get(id=emp.department_id)
+            except Department.DoesNotExist:
+                pass
+        schedule = _get_employee_schedule(emp, dept)
+        return Response({
+            'employee_id': str(emp.id),
+            'full_name': emp.full_name,
+            'department': emp.department,
+            'department_id': str(emp.department_id) if emp.department_id else None,
+            'dept_working_days_per_week': dept.working_days_per_week if dept else None,
+            'dept_work_start_time': dept.work_start_time.strftime('%H:%M') if dept and dept.work_start_time else None,
+            'dept_work_end_time': dept.work_end_time.strftime('%H:%M') if dept and dept.work_end_time else None,
+            'working_days_per_week': emp.working_days_per_week,
+            'week_off_days': emp.week_off_days,
+            'work_start_time': emp.work_start_time.strftime('%H:%M') if emp.work_start_time else None,
+            'work_end_time': emp.work_end_time.strftime('%H:%M') if emp.work_end_time else None,
+            'effective_working_days_per_week': schedule['working_days_per_week'],
+            'effective_week_off_days': schedule['week_off_days'],
+            'effective_work_start_time': schedule['work_start_time'].strftime('%H:%M') if schedule['work_start_time'] else None,
+            'effective_work_end_time': schedule['work_end_time'].strftime('%H:%M') if schedule['work_end_time'] else None,
+        })
+
+    @require_permission('hrms.attendance.write')
+    def put(self, request, employee_id):
+        try:
+            emp = Employee.objects.get(id=employee_id)
+        except Employee.DoesNotExist:
+            return Response({'message': 'Employee not found'}, status=404)
+        data = request.data
+        if 'working_days_per_week' in data:
+            val = data['working_days_per_week']
+            emp.working_days_per_week = int(val) if val not in (None, '', 'null') else None
+        if 'week_off_days' in data:
+            val = data['week_off_days']
+            emp.week_off_days = val if val not in (None, '', 'null') else None
+        if 'work_start_time' in data:
+            val = data['work_start_time']
+            emp.work_start_time = val if val not in (None, '', 'null') else None
+        if 'work_end_time' in data:
+            val = data['work_end_time']
+            emp.work_end_time = val if val not in (None, '', 'null') else None
+        emp.save()
+        dept = None
+        if emp.department_id:
+            try:
+                dept = Department.objects.get(id=emp.department_id)
+            except Department.DoesNotExist:
+                pass
+        schedule = _get_employee_schedule(emp, dept)
+        return Response({
+            'message': 'Work schedule updated',
+            'employee_id': str(emp.id),
+            'working_days_per_week': emp.working_days_per_week,
+            'week_off_days': emp.week_off_days,
+            'work_start_time': emp.work_start_time.strftime('%H:%M') if emp.work_start_time else None,
+            'work_end_time': emp.work_end_time.strftime('%H:%M') if emp.work_end_time else None,
+            'effective_working_days_per_week': schedule['working_days_per_week'],
+            'effective_week_off_days': schedule['week_off_days'],
+            'effective_work_start_time': schedule['work_start_time'].strftime('%H:%M') if schedule['work_start_time'] else None,
+            'effective_work_end_time': schedule['work_end_time'].strftime('%H:%M') if schedule['work_end_time'] else None,
+        })
+
+
 class Employee360View(APIView):
     @require_permission('hrms.staff.read')
     def get(self, request, employee_id):
