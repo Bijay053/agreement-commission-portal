@@ -360,7 +360,7 @@ function LeaveTypesTab() {
   const { toast } = useToast();
   const [showForm, setShowForm] = useState(false);
   const [editLT, setEditLT] = useState<LeaveType | null>(null);
-  const [form, setForm] = useState({ organization_id: "", name: "", code: "", default_days: 0, is_paid: true, is_carry_forward: false, max_carry_forward_days: 0, min_advance_days: 0, requires_document: false, document_required_after_days: 0, color: "#3B82F6" });
+  const [form, setForm] = useState({ organization_id: "", name: "", code: "", default_days: 0, is_paid: true, is_carry_forward: false, max_carry_forward_days: 0, min_advance_days: 0, requires_document: false, document_required_after_days: 0, color: "#3B82F6", hide_balance_from_employee: false });
   const [deptAllocLT, setDeptAllocLT] = useState<LeaveType | null>(null);
   const [deptAllocForm, setDeptAllocForm] = useState({ department_id: "", allocated_days: 0 });
 
@@ -393,7 +393,7 @@ function LeaveTypesTab() {
     onSuccess: () => { queryClient.refetchQueries({ queryKey: ["/api/hrms/leave-types"] }); toast({ title: "Department allocation removed" }); },
   });
 
-  const openCreate = () => { setForm({ organization_id: orgs?.[0]?.id || "", name: "", code: "", default_days: 0, is_paid: true, is_carry_forward: false, max_carry_forward_days: 0, min_advance_days: 0, requires_document: false, document_required_after_days: 0, color: "#3B82F6" }); setShowForm(true); };
+  const openCreate = () => { setForm({ organization_id: orgs?.[0]?.id || "", name: "", code: "", default_days: 0, is_paid: true, is_carry_forward: false, max_carry_forward_days: 0, min_advance_days: 0, requires_document: false, document_required_after_days: 0, color: "#3B82F6", hide_balance_from_employee: false }); setShowForm(true); };
 
   if (isLoading) return <Skeleton className="h-40 w-full" />;
 
@@ -437,7 +437,7 @@ function LeaveTypesTab() {
               <TableCell>{lt.is_carry_forward ? `Yes (max ${lt.max_carry_forward_days})` : "No"}</TableCell>
               <TableCell>
                 <div className="flex gap-1">
-                  <Button variant="ghost" size="sm" onClick={() => { setForm({ organization_id: lt.organization_id, name: lt.name, code: lt.code, default_days: lt.default_days, is_paid: lt.is_paid, is_carry_forward: lt.is_carry_forward, max_carry_forward_days: lt.max_carry_forward_days, min_advance_days: lt.min_advance_days || 0, requires_document: lt.requires_document, document_required_after_days: lt.document_required_after_days, color: lt.color }); setEditLT(lt); }}><Pencil className="h-3 w-3" /></Button>
+                  <Button variant="ghost" size="sm" onClick={() => { setForm({ organization_id: lt.organization_id, name: lt.name, code: lt.code, default_days: lt.default_days, is_paid: lt.is_paid, is_carry_forward: lt.is_carry_forward, max_carry_forward_days: lt.max_carry_forward_days, min_advance_days: lt.min_advance_days || 0, requires_document: lt.requires_document, document_required_after_days: lt.document_required_after_days, color: lt.color, hide_balance_from_employee: !!(lt as any).hide_balance_from_employee }); setEditLT(lt); }}><Pencil className="h-3 w-3" /></Button>
                   <Button variant="ghost" size="sm" title="Department allocations" onClick={() => setDeptAllocLT(lt)} data-testid={`btn-dept-alloc-${lt.id}`}><Building2 className="h-3 w-3" /></Button>
                   <Button variant="ghost" size="sm" className="text-red-500" onClick={() => deleteMutation.mutate(lt.id)}><Trash2 className="h-3 w-3" /></Button>
                 </div>
@@ -466,10 +466,11 @@ function LeaveTypesTab() {
               <div><Label>Default Days</Label><Input type="number" value={form.default_days} onChange={e => setForm({ ...form, default_days: parseFloat(e.target.value) || 0 })} /></div>
               <div><Label>Color</Label><Input type="color" value={form.color} onChange={e => setForm({ ...form, color: e.target.value })} /></div>
             </div>
-            <div className="flex gap-6">
+            <div className="flex gap-6 flex-wrap">
               <label className="flex items-center gap-2 text-sm"><Checkbox checked={form.is_paid} onCheckedChange={v => setForm({ ...form, is_paid: !!v })} /> Paid Leave</label>
               <label className="flex items-center gap-2 text-sm"><Checkbox checked={form.is_carry_forward} onCheckedChange={v => setForm({ ...form, is_carry_forward: !!v })} /> Carry Forward</label>
               <label className="flex items-center gap-2 text-sm"><Checkbox checked={form.requires_document} onCheckedChange={v => setForm({ ...form, requires_document: !!v })} /> Requires Document</label>
+              <label className="flex items-center gap-2 text-sm"><Checkbox checked={form.hide_balance_from_employee} onCheckedChange={v => setForm({ ...form, hide_balance_from_employee: !!v })} data-testid="checkbox-hide-balance" /> Hide Balance from Employee</label>
             </div>
             {form.is_carry_forward && <div><Label>Max Carry Forward Days</Label><Input type="number" value={form.max_carry_forward_days} onChange={e => setForm({ ...form, max_carry_forward_days: parseFloat(e.target.value) || 0 })} /></div>}
             <div><Label>Min Advance Days (Pre-Inform)</Label><Input type="number" min="0" value={form.min_advance_days} onChange={e => setForm({ ...form, min_advance_days: parseInt(e.target.value) || 0 })} data-testid="input-min-advance-days" /><p className="text-xs text-muted-foreground mt-0.5">How many days before the leave date must the employee apply (0 = no restriction)</p></div>

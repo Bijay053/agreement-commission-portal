@@ -83,6 +83,7 @@ class LeaveType(models.Model):
     requires_document = models.BooleanField(default=False)
     document_required_after_days = models.IntegerField(default=0)
     color = models.CharField(max_length=7, default='#3B82F6')
+    hide_balance_from_employee = models.BooleanField(default=False)
     status = models.CharField(max_length=24, default='active')
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

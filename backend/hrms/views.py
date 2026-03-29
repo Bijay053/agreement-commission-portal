@@ -182,6 +182,7 @@ def serialize_leave_type(lt):
         'requires_document': lt.requires_document,
         'document_required_after_days': lt.document_required_after_days,
         'color': lt.color,
+        'hide_balance_from_employee': lt.hide_balance_from_employee,
         'status': lt.status,
         'department_allocations': dept_allocations,
     }
@@ -227,6 +228,7 @@ def serialize_leave_balance(lb):
         'leave_type_code': lb.leave_type.code if lb.leave_type else None,
         'is_paid': is_paid,
         'min_advance_days': lb.leave_type.min_advance_days if lb.leave_type else 0,
+        'hide_balance_from_employee': lb.leave_type.hide_balance_from_employee if lb.leave_type else False,
         'fiscal_year_id': str(lb.fiscal_year_id),
         'fiscal_year_name': lb.fiscal_year.name if lb.fiscal_year else None,
         'allocated_days': float(lb.allocated_days) if is_paid else None,
@@ -1028,8 +1030,10 @@ class LeaveTypeDetailView(APIView):
             min_adv = data['min_advance_days']
             if not isinstance(min_adv, int) or min_adv < 0:
                 data['min_advance_days'] = max(0, int(min_adv or 0))
+        if 'organization_id' in data:
+            lt.organization_id = data['organization_id']
         for field in ['name', 'code', 'default_days', 'is_paid', 'is_carry_forward',
-                      'max_carry_forward_days', 'min_advance_days', 'requires_document', 'document_required_after_days', 'color', 'status']:
+                      'max_carry_forward_days', 'min_advance_days', 'requires_document', 'document_required_after_days', 'color', 'hide_balance_from_employee', 'status']:
             if field in data:
                 setattr(lt, field, data[field])
         lt.save()
@@ -4053,6 +4057,7 @@ class MyProfileView(APIView):
                 'leave_type': lb.leave_type.name,
                 'leave_type_code': lb.leave_type.code,
                 'color': lb.leave_type.color,
+                'hide_balance': lb.leave_type.hide_balance_from_employee,
                 'allocated': float(lb.allocated_days),
                 'used': float(lb.used_days),
                 'carried_forward': float(lb.carried_forward_days),
@@ -4227,6 +4232,7 @@ class MyLeaveBalanceView(APIView):
                         'leave_type_code': lt.code,
                         'is_paid': lt.is_paid,
                         'min_advance_days': lt.min_advance_days,
+                        'hide_balance_from_employee': lt.hide_balance_from_employee,
                         'fiscal_year_id': str(current_fy.id) if current_fy else None,
                         'fiscal_year_name': current_fy.name if current_fy else None,
                         'allocated_days': float(lt.default_days) if lt.is_paid else None,

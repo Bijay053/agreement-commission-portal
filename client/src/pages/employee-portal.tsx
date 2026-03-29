@@ -401,15 +401,23 @@ function ProfileTab({ showSalary, setShowSalary }: { showSalary: boolean; setSho
                   <div key={lb.leave_type_code} className="border rounded-lg p-3" data-testid={`leave-balance-${lb.leave_type_code}`}>
                     <div className="flex justify-between items-center mb-2">
                       <span className="text-sm font-medium">{lb.leave_type}</span>
-                      <Badge variant="outline" className="text-xs">{lb.remaining} remaining</Badge>
+                      {lb.hide_balance ? (
+                        <Badge variant="outline" className="text-xs">Available</Badge>
+                      ) : (
+                        <Badge variant="outline" className="text-xs">{lb.remaining} remaining</Badge>
+                      )}
                     </div>
-                    <div className="w-full bg-muted rounded-full h-2">
-                      <div className="bg-primary rounded-full h-2" style={{ width: `${Math.min(100, lb.allocated > 0 ? (lb.used / lb.allocated) * 100 : 0)}%` }} />
-                    </div>
-                    <div className="flex justify-between text-xs text-muted-foreground mt-1">
-                      <span>Used: {lb.used}</span>
-                      <span>Allocated: {lb.allocated}</span>
-                    </div>
+                    {!lb.hide_balance && (
+                      <>
+                        <div className="w-full bg-muted rounded-full h-2">
+                          <div className="bg-primary rounded-full h-2" style={{ width: `${Math.min(100, lb.allocated > 0 ? (lb.used / lb.allocated) * 100 : 0)}%` }} />
+                        </div>
+                        <div className="flex justify-between text-xs text-muted-foreground mt-1">
+                          <span>Used: {lb.used}</span>
+                          <span>Allocated: {lb.allocated}</span>
+                        </div>
+                      </>
+                    )}
                   </div>
                 ))}
               </div>
@@ -1320,8 +1328,14 @@ function LeaveTab() {
               <Card key={b.leave_type_id || b.leave_type}>
                 <CardContent className="p-4">
                   <p className="text-xs text-muted-foreground">{b.leave_type_name || b.leave_type}</p>
-                  <p className="text-lg font-bold" data-testid={`text-balance-${b.leave_type_name || b.leave_type}`}>{b.remaining_days ?? b.remaining ?? b.balance ?? 0}</p>
-                  <p className="text-[10px] text-muted-foreground">of {b.allocated_days ?? b.allocated ?? b.total ?? 0}</p>
+                  {b.hide_balance_from_employee ? (
+                    <p className="text-sm text-muted-foreground mt-1" data-testid={`text-balance-${b.leave_type_name || b.leave_type}`}>Available</p>
+                  ) : (
+                    <>
+                      <p className="text-lg font-bold" data-testid={`text-balance-${b.leave_type_name || b.leave_type}`}>{b.remaining_days ?? b.remaining ?? b.balance ?? 0}</p>
+                      <p className="text-[10px] text-muted-foreground">of {b.allocated_days ?? b.allocated ?? b.total ?? 0}</p>
+                    </>
+                  )}
                 </CardContent>
               </Card>
             ))}
