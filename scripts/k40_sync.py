@@ -297,7 +297,7 @@ def push_to_portal(records, tracker: SyncTracker, config: dict,
         )
         return 0, len(records)
 
-    cookies = {"sessionid": session_id}
+    cookies = {"connect.sid": session_id}
     headers = {"Content-Type": "application/json"}
 
     synced = 0
@@ -488,7 +488,7 @@ def run_diagnostics(config: dict):
         ep = portal.rstrip("/") + config["sync_endpoint"]
         try:
             resp = requests.get(
-                ep, cookies={"sessionid": session_id}, timeout=10
+                ep, cookies={"connect.sid": session_id}, timeout=10
             )
             if resp.status_code == 401:
                 print("  ✗ Session cookie expired — get a fresh one")
