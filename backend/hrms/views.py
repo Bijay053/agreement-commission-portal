@@ -596,6 +596,14 @@ def _send_attendance_email(to_email, subject, html_body, cc_list=None):
     msg.send(fail_silently=True)
 
 
+def _to_nepal_time(dt_val):
+    if dt_val is None:
+        return None
+    import zoneinfo
+    nepal_tz = zoneinfo.ZoneInfo('Asia/Kathmandu')
+    return dt_val.astimezone(nepal_tz)
+
+
 def send_late_notification(employee, attendance_record, department):
     try:
         org = Organization.objects.get(id=employee.organization_id) if employee.organization_id else None
@@ -605,7 +613,8 @@ def send_late_notification(employee, attendance_record, department):
         if not ns or not ns.late_arrival_notify_employee:
             return
 
-        check_in_time = attendance_record.check_in.strftime('%I:%M %p') if attendance_record.check_in else 'N/A'
+        ci_npt = _to_nepal_time(attendance_record.check_in)
+        check_in_time = ci_npt.strftime('%I:%M %p') if ci_npt else 'N/A'
         att_date = attendance_record.date.strftime('%B %d, %Y')
         start_time = department.work_start_time.strftime('%I:%M %p') if department else 'N/A'
         late_mins = attendance_record.late_minutes or 0
@@ -645,7 +654,8 @@ def send_early_leave_notification(employee, attendance_record, department):
         if not ns or not ns.early_leave_notify_employee:
             return
 
-        check_out_time = attendance_record.check_out.strftime('%I:%M %p') if attendance_record.check_out else 'N/A'
+        co_npt = _to_nepal_time(attendance_record.check_out)
+        check_out_time = co_npt.strftime('%I:%M %p') if co_npt else 'N/A'
         att_date = attendance_record.date.strftime('%B %d, %Y')
         end_time = department.work_end_time.strftime('%I:%M %p') if department else 'N/A'
         early_mins = attendance_record.early_leave_minutes or 0
@@ -685,7 +695,8 @@ def send_no_checkout_notification(employee, attendance_record, department):
         if not ns or not ns.no_checkout_notify_employee:
             return
 
-        check_in_time = attendance_record.check_in.strftime('%I:%M %p') if attendance_record.check_in else 'N/A'
+        ci_npt = _to_nepal_time(attendance_record.check_in)
+        check_in_time = ci_npt.strftime('%I:%M %p') if ci_npt else 'N/A'
         att_date = attendance_record.date.strftime('%B %d, %Y')
         end_time = department.work_end_time.strftime('%I:%M %p') if department else 'N/A'
 
