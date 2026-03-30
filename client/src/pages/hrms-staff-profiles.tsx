@@ -516,7 +516,6 @@ export function StaffProfilesTab() {
             <TableHead>Department</TableHead>
             <TableHead>Position</TableHead>
             <TableHead>Employment</TableHead>
-            <TableHead className="text-right">Salary</TableHead>
             <TableHead>Tax/CIT</TableHead>
             <TableHead>Advance Due</TableHead>
             <TableHead></TableHead>
@@ -560,9 +559,6 @@ export function StaffProfilesTab() {
               <TableCell className="text-sm">{s.position || "—"}</TableCell>
               <TableCell>
                 <Badge variant="outline" className="text-xs capitalize">{s.employment_type?.replace("_", " ")}</Badge>
-              </TableCell>
-              <TableCell className="text-right font-mono text-sm">
-                {s.salary_structure ? `${s.salary_currency} ${s.salary_structure.basic_salary.toLocaleString()}` : s.salary_amount ? `${s.salary_currency} ${s.salary_amount.toLocaleString()}` : "Not Set"}
               </TableCell>
               <TableCell>
                 {s.salary_structure ? (
