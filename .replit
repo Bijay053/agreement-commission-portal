@@ -63,3 +63,7 @@ integrations = ["github:1.0.0"]
 AWS_S3_REGION = "ap-south-1"
 AWS_S3_BUCKET = "studyinfocentre-portal-documents"
 DEVICE_SYNC_KEY = "k40sync2026studyinfo"
+
+[postMerge]
+path = "scripts/post-merge.sh"
+timeoutMs = 20000
