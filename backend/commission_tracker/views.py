@@ -59,6 +59,26 @@ def get_excluded_student_ids_for_year(target_year):
         if status not in TERMINAL_STATUSES:
             has_active_provider.add(sid)
 
+    target_year_str = str(target_year)
+    students_with_target_year_provider = set(
+        StudentProvider.objects.filter(
+            commission_student_id__in=prior_student_ids,
+            start_intake__icontains=target_year_str,
+        ).exclude(
+            status__in=['Withdrawn', 'Complete', 'withdrawn', 'complete'],
+        ).values_list('commission_student_id', flat=True).distinct()
+    )
+    students_with_target_year_main = set(
+        CommissionStudent.objects.filter(
+            id__in=prior_student_ids,
+            start_intake__icontains=target_year_str,
+        ).exclude(
+            status__in=['Withdrawn', 'Complete', 'withdrawn', 'complete'],
+        ).values_list('id', flat=True).distinct()
+    )
+    has_active_provider |= students_with_target_year_provider
+    has_active_provider |= students_with_target_year_main
+
     for sid in prior_student_ids:
         if sid not in has_active_provider:
             all_terminal_students.add(sid)
