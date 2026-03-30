@@ -134,7 +134,10 @@ def check_password_expiry_reminders():
     users = User.objects.filter(is_active=True).exclude(password_changed_at__isnull=True)
 
     for user in users:
-        password_age = (now - user.password_changed_at).days
+        changed_at = user.password_changed_at
+        if timezone.is_naive(changed_at):
+            changed_at = timezone.make_aware(changed_at)
+        password_age = (now - changed_at).days
         days_until_expiry = PASSWORD_MAX_AGE_DAYS - password_age
 
         if days_until_expiry not in REMINDER_DAYS_BEFORE:
