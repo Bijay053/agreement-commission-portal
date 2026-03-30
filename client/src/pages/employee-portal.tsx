@@ -116,7 +116,7 @@ function ProfileTab({ showSalary, setShowSalary }: { showSalary: boolean; setSho
     queryKey: ["/api/hrms/my/profile"],
   });
   const { toast } = useToast();
-  const [profileSubTab, setProfileSubTab] = useState<string>("salary");
+  const [profileSubTab, setProfileSubTab] = useState<string>("personal");
   const [otpStep, setOtpStep] = useState<'idle' | 'sending' | 'input' | 'verifying'>('idle');
   const [otpCode, setOtpCode] = useState('');
   const [otpMaskedEmail, setOtpMaskedEmail] = useState('');
@@ -205,11 +205,10 @@ function ProfileTab({ showSalary, setShowSalary }: { showSalary: boolean; setSho
   const empType = profile.employment_type?.replace(/_/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase());
 
   const subTabs: { key: string; label: string; icon: any }[] = [
-    { key: "salary", label: "Salary", icon: DollarSign },
+    { key: "personal", label: "Personal", icon: User },
     { key: "leaves", label: "Leaves", icon: Calendar },
     { key: "payslips", label: "Payslips", icon: FileText },
     ...(profile.can_expense ? [{ key: "expenses", label: "Expenses", icon: Receipt }] : []),
-    { key: "personal", label: "Personal", icon: User },
   ];
 
   return (
@@ -242,67 +241,11 @@ function ProfileTab({ showSalary, setShowSalary }: { showSalary: boolean; setSho
         </CardContent>
       </Card>
 
-      <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-        <Card className="bg-muted/30">
-          <CardContent className="p-4 text-center">
-            <p className="text-xs text-muted-foreground">Gross Salary</p>
-            <div className="flex items-center justify-center gap-1 mt-1">
-              {showSalary ? (
-                <>
-                  <p className="text-lg font-bold" data-testid="text-summary-gross">{fmtAmt(profile.gross_salary || 0)}</p>
-                  <button onClick={handleHideSalary} className="text-muted-foreground hover:text-foreground" data-testid="button-hide-salary">
-                    <EyeOff className="h-3.5 w-3.5" />
-                  </button>
-                </>
-              ) : otpStep === 'idle' ? (
-                <>
-                  <p className="text-lg font-bold">****</p>
-                  <button onClick={handleRequestOtp} className="text-muted-foreground hover:text-foreground" data-testid="button-request-otp" title="Verify with OTP to view salary">
-                    <Lock className="h-3.5 w-3.5" />
-                  </button>
-                </>
-              ) : otpStep === 'sending' ? (
-                <>
-                  <p className="text-lg font-bold">****</p>
-                  <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
-                </>
-              ) : (
-                <div className="flex items-center gap-1">
-                  <input
-                    type="text"
-                    maxLength={6}
-                    placeholder="Enter OTP"
-                    value={otpCode}
-                    onChange={e => setOtpCode(e.target.value.replace(/\D/g, ''))}
-                    onKeyDown={e => e.key === 'Enter' && handleVerifyOtp()}
-                    className="w-20 h-7 text-center text-sm border rounded bg-background px-1"
-                    data-testid="input-otp-code"
-                    autoFocus
-                  />
-                  <button onClick={handleVerifyOtp} disabled={otpStep === 'verifying' || otpCode.length !== 6} className="text-primary hover:text-primary/80 disabled:opacity-50" data-testid="button-verify-otp">
-                    {otpStep === 'verifying' ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle className="h-4 w-4" />}
-                  </button>
-                  <button onClick={() => { setOtpStep('idle'); setOtpCode(''); }} className="text-muted-foreground hover:text-foreground">
-                    <XCircle className="h-3.5 w-3.5" />
-                  </button>
-                </div>
-              )}
-            </div>
-            {otpStep === 'input' && otpMaskedEmail && (
-              <p className="text-[10px] text-muted-foreground mt-1">OTP sent to {otpMaskedEmail}</p>
-            )}
-          </CardContent>
-        </Card>
+      <div className="grid grid-cols-1 md:grid-cols-1 gap-3">
         <Card className="bg-muted/30">
           <CardContent className="p-4 text-center">
             <p className="text-xs text-muted-foreground">This Month Attendance</p>
             <p className="text-lg font-bold mt-1" data-testid="text-summary-attendance">{att.present || 0} / {att.total_records || 0} days</p>
-          </CardContent>
-        </Card>
-        <Card className="bg-muted/30">
-          <CardContent className="p-4 text-center">
-            <p className="text-xs text-muted-foreground">Tax Paid ({taxSum.year || new Date().getFullYear()})</p>
-            <p className="text-lg font-bold mt-1" data-testid="text-summary-tax">{showSalary ? fmtAmt(taxSum.total_tax || 0) : '****'}</p>
           </CardContent>
         </Card>
       </div>
@@ -322,74 +265,6 @@ function ProfileTab({ showSalary, setShowSalary }: { showSalary: boolean; setSho
           </button>
         ))}
       </div>
-
-      {profileSubTab === "salary" && (
-        <div className="grid md:grid-cols-2 gap-4">
-          <Card>
-            <CardContent className="p-5">
-              <h4 className="font-semibold mb-3">Earnings</h4>
-              {ss ? (
-                <div className="space-y-2">
-                  <div className="flex justify-between py-1.5 border-b">
-                    <span className="text-sm text-muted-foreground">Basic Salary</span>
-                    <span className="text-sm font-medium">{showSalary ? fmtAmt(ss.basic_salary) : '****'}</span>
-                  </div>
-                  {Object.entries(ss.allowances || {}).map(([key, val]: [string, any]) => (
-                    <div key={key} className="flex justify-between py-1.5 border-b">
-                      <span className="text-sm text-muted-foreground">{key.replace(/_/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase())}</span>
-                      <span className="text-sm font-medium">{showSalary ? fmtAmt(Number(val)) : '****'}</span>
-                    </div>
-                  ))}
-                  <div className="flex justify-between py-2 border-t-2 mt-1">
-                    <span className="text-sm font-semibold">Gross Salary</span>
-                    <span className="text-sm font-bold text-primary">{showSalary ? fmtAmt(ss.gross_salary) : '****'}</span>
-                  </div>
-                </div>
-              ) : (
-                <p className="text-sm text-muted-foreground">No salary structure configured</p>
-              )}
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="p-5">
-              <h4 className="font-semibold mb-3">Deductions & Statutory</h4>
-              {ss ? (
-                <div className="space-y-2">
-                  {ss.cit_type !== 'none' && (
-                    <div className="flex justify-between py-1.5 border-b">
-                      <span className="text-sm text-muted-foreground">CIT ({ss.cit_type === 'percentage' ? `${ss.cit_value}%` : 'Fixed'})</span>
-                      <span className="text-sm font-medium text-red-600">
-                        {showSalary ? `- ${ss.cit_type === 'percentage' ? fmtAmt(ss.basic_salary * ss.cit_value / 100) : fmtAmt(ss.cit_value)}` : '****'}
-                      </span>
-                    </div>
-                  )}
-                  {ss.ssf_applicable && (
-                    <div className="flex justify-between py-1.5 border-b">
-                      <span className="text-sm text-muted-foreground">SSF (Employee {ss.ssf_employee_percentage}%)</span>
-                      <span className="text-sm font-medium text-red-600">
-                        {showSalary ? `- ${fmtAmt(ss.basic_salary * ss.ssf_employee_percentage / 100)}` : '****'}
-                      </span>
-                    </div>
-                  )}
-                  {Object.entries(ss.deductions || {}).map(([key, val]: [string, any]) => (
-                    <div key={key} className="flex justify-between py-1.5 border-b">
-                      <span className="text-sm text-muted-foreground">{key.replace(/_/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase())}</span>
-                      <span className="text-sm font-medium text-red-600">{showSalary ? `- ${fmtAmt(Number(val))}` : '****'}</span>
-                    </div>
-                  ))}
-                  <div className="flex justify-between py-1.5">
-                    <span className="text-sm text-muted-foreground">Income Tax</span>
-                    <Badge variant={ss.tax_applicable ? "default" : "outline"} className="text-xs">{ss.tax_applicable ? 'Applicable' : 'N/A'}</Badge>
-                  </div>
-                  <p className="text-xs text-muted-foreground pt-2">Effective from: {ss.effective_from}</p>
-                </div>
-              ) : (
-                <p className="text-sm text-muted-foreground">No deductions configured</p>
-              )}
-            </CardContent>
-          </Card>
-        </div>
-      )}
 
       {profileSubTab === "leaves" && (
         <Card>
