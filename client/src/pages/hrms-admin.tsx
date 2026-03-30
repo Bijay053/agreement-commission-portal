@@ -1861,6 +1861,11 @@ function PayrollRunDetailView({ runId, onBack }: { runId: string; onBack: () => 
   const startEdit = (ps: PayrollPayslip) => {
     setEditingPayslip(ps.id);
     setEditValues({
+      total_days: ps.total_days || 0,
+      working_days: ps.working_days || 0,
+      present_days: ps.present_days || 0,
+      paid_leave_days: ps.paid_leave_days || 0,
+      unpaid_leave_days: ps.unpaid_leave_days || 0,
       basic_salary: ps.basic_salary,
       gross_salary: ps.gross_salary,
       cit_deduction: ps.cit_deduction,
@@ -2024,10 +2029,21 @@ function PayrollRunDetailView({ runId, onBack }: { runId: string; onBack: () => 
                     <TableCell className="text-xs text-center">{ps.employee_position || "—"}</TableCell>
                     <TableCell className="text-xs text-center">{ps.employee_join_date || "—"}</TableCell>
                     <TableCell className="text-xs text-center capitalize">{ps.employee_gender || "—"}</TableCell>
-                    <TableCell className="text-center text-xs">{ps.total_days || "—"}</TableCell>
-                    <TableCell className="text-center text-xs">{ps.present_days}/{ps.working_days}</TableCell>
-                    <TableCell className="text-center text-xs">{ps.paid_leave_days || 0}</TableCell>
-                    <TableCell className="text-center text-xs">{ps.unpaid_leave_days || 0}</TableCell>
+                    {isEditing ? (
+                      <>
+                        <TableCell className="text-center"><Input type="number" className="w-12 h-7 text-center text-xs" value={editValues.total_days} onChange={e => setEditValues(v => ({ ...v, total_days: parseInt(e.target.value) || 0 }))} data-testid="input-edit-total-days" /></TableCell>
+                        <TableCell className="text-center"><Input type="number" className="w-12 h-7 text-center text-xs" value={editValues.present_days} onChange={e => setEditValues(v => ({ ...v, present_days: parseInt(e.target.value) || 0 }))} data-testid="input-edit-worked-days" /></TableCell>
+                        <TableCell className="text-center"><Input type="number" className="w-12 h-7 text-center text-xs" value={editValues.paid_leave_days} onChange={e => setEditValues(v => ({ ...v, paid_leave_days: parseInt(e.target.value) || 0 }))} data-testid="input-edit-paid-leave" /></TableCell>
+                        <TableCell className="text-center"><Input type="number" className="w-12 h-7 text-center text-xs" value={editValues.unpaid_leave_days} onChange={e => setEditValues(v => ({ ...v, unpaid_leave_days: parseInt(e.target.value) || 0 }))} data-testid="input-edit-unpaid-leave" /></TableCell>
+                      </>
+                    ) : (
+                      <>
+                        <TableCell className="text-center text-xs">{ps.total_days || "—"}</TableCell>
+                        <TableCell className="text-center text-xs">{ps.present_days}/{ps.working_days}</TableCell>
+                        <TableCell className="text-center text-xs">{ps.paid_leave_days || 0}</TableCell>
+                        <TableCell className="text-center text-xs">{ps.unpaid_leave_days || 0}</TableCell>
+                      </>
+                    )}
                     {isEditing ? (
                       <>
                         <TableCell className="text-right text-xs bg-green-50/20">0</TableCell>

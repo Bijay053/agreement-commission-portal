@@ -371,34 +371,38 @@ def serialize_payslip(ps):
     except Employee.DoesNotExist:
         pass
 
-    paid_leave_days = 0
-    unpaid_leave_days_count = 0
-    from datetime import date as dt_date
-    month_start = dt_date(ps.year, ps.month, 1)
-    if ps.month == 12:
-        month_end = dt_date(ps.year, 12, 31)
+    if ps.paid_leave_days or ps.unpaid_leave_days or ps.total_days:
+        paid_leave_days = ps.paid_leave_days
+        unpaid_leave_days_count = ps.unpaid_leave_days
+        total_calendar_days = ps.total_days
     else:
-        month_end = dt_date(ps.year, ps.month + 1, 1) - timedelta(days=1)
-    approved_leaves = LeaveRequest.objects.filter(
-        employee_id=ps.employee_id,
-        status='approved',
-        start_date__lte=month_end,
-        end_date__gte=month_start,
-    ).select_related('leave_type').only(
-        'id', 'employee_id', 'start_date', 'end_date',
-        'days_count', 'status', 'is_half_day',
-        'leave_type__is_paid', 'leave_type__id', 'leave_type__name',
-    )
-    for lr in approved_leaves:
-        overlap_start = max(lr.start_date, month_start)
-        overlap_end = min(lr.end_date, month_end)
-        days = float(lr.days_count) if lr.is_half_day else (overlap_end - overlap_start).days + 1
-        if lr.leave_type and lr.leave_type.is_paid:
-            paid_leave_days += days
+        paid_leave_days = 0
+        unpaid_leave_days_count = 0
+        from datetime import date as dt_date
+        month_start = dt_date(ps.year, ps.month, 1)
+        if ps.month == 12:
+            month_end = dt_date(ps.year, 12, 31)
         else:
-            unpaid_leave_days_count += days
-
-    total_calendar_days = (month_end - month_start).days + 1
+            month_end = dt_date(ps.year, ps.month + 1, 1) - timedelta(days=1)
+        approved_leaves = LeaveRequest.objects.filter(
+            employee_id=ps.employee_id,
+            status='approved',
+            start_date__lte=month_end,
+            end_date__gte=month_start,
+        ).select_related('leave_type').only(
+            'id', 'employee_id', 'start_date', 'end_date',
+            'days_count', 'status', 'is_half_day',
+            'leave_type__is_paid', 'leave_type__id', 'leave_type__name',
+        )
+        for lr in approved_leaves:
+            overlap_start = max(lr.start_date, month_start)
+            overlap_end = min(lr.end_date, month_end)
+            days = float(lr.days_count) if lr.is_half_day else (overlap_end - overlap_start).days + 1
+            if lr.leave_type and lr.leave_type.is_paid:
+                paid_leave_days += days
+            else:
+                unpaid_leave_days_count += days
+        total_calendar_days = (month_end - month_start).days + 1
 
     total_income = float(ps.gross_salary)
     leave_amount = float(getattr(ps, 'unpaid_leave_deduction', 0) or 0)
@@ -3379,6 +3383,17 @@ class PayrollRunProcessView(APIView):
                 te.status = 'reimbursed'
                 te.save()
 
+            paid_leave_count = 0
+            unpaid_leave_count_final = 0
+            for lr in unpaid_leave_requests:
+                overlap_start = max(lr.start_date, month_start)
+                overlap_end = min(lr.end_date, month_end)
+                days = float(lr.days_count) if getattr(lr, 'is_half_day', False) else (overlap_end - overlap_start).days + 1
+                if lr.leave_type and lr.leave_type.is_paid:
+                    paid_leave_count += days
+                else:
+                    unpaid_leave_count_final += days
+
             Payslip.objects.update_or_create(
                 payroll_run=pr,
                 employee_id=emp.id,
@@ -3399,10 +3414,13 @@ class PayrollRunProcessView(APIView):
                     'other_deductions': other_deductions,
                     'total_deductions': total_ded,
                     'net_salary': net,
+                    'total_days': total_calendar_days,
                     'working_days': effective_working_days,
                     'present_days': present_count,
                     'absent_days': total_absent,
                     'leave_days': leave_count,
+                    'paid_leave_days': int(paid_leave_count),
+                    'unpaid_leave_days': int(unpaid_leave_count_final),
                     'late_count': late_count,
                     'early_leave_count': early_count,
                     'status': 'generated',
@@ -3486,9 +3504,15 @@ class PayslipUpdateView(APIView):
             'travel_reimbursement', 'advance_deduction', 'unpaid_leave_deduction',
             'total_deductions', 'net_salary',
         ]
+        int_editable_fields = [
+            'total_days', 'working_days', 'present_days', 'paid_leave_days', 'unpaid_leave_days',
+        ]
         for f in editable_fields:
             if f in data:
                 setattr(ps, f, Decimal(str(data[f])))
+        for f in int_editable_fields:
+            if f in data:
+                setattr(ps, f, int(data[f]))
         if 'allowances' in data:
             ps.allowances = data['allowances']
         if 'other_deductions' in data:
