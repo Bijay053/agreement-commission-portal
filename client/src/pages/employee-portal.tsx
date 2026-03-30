@@ -37,7 +37,6 @@ export default function EmployeePortal() {
     { key: "profile", label: "My Profile", icon: User },
     { key: "attendance", label: "Attendance", icon: Clock },
     { key: "leave", label: "Leave", icon: Calendar },
-    { key: "payslips", label: "Payslips", icon: FileText },
     { key: "hr-policies", label: "HR Policies", icon: Shield },
     { key: "documents", label: "Documents", icon: Download },
     { key: "change-password", label: "Change Password", icon: KeyRound },
@@ -102,7 +101,6 @@ export default function EmployeePortal() {
         {activeTab === "profile" && <ProfileTab showSalary={showSalary} setShowSalary={setShowSalary} />}
         {activeTab === "attendance" && <AttendanceTab />}
         {activeTab === "leave" && <LeaveTab />}
-        {activeTab === "payslips" && <PayslipsTab showSalary={showSalary} setShowSalary={setShowSalary} />}
         {activeTab === "hr-policies" && <HRPoliciesTab />}
         {activeTab === "documents" && <DocumentsTab />}
         {activeTab === "change-password" && <ChangePasswordTab />}
@@ -207,7 +205,6 @@ function ProfileTab({ showSalary, setShowSalary }: { showSalary: boolean; setSho
   const subTabs: { key: string; label: string; icon: any }[] = [
     { key: "personal", label: "Personal", icon: User },
     { key: "leaves", label: "Leaves", icon: Calendar },
-    { key: "payslips", label: "Payslips", icon: FileText },
     ...(profile.can_expense ? [{ key: "expenses", label: "Expenses", icon: Receipt }] : []),
   ];
 
@@ -298,48 +295,6 @@ function ProfileTab({ showSalary, setShowSalary }: { showSalary: boolean; setSho
               </div>
             ) : (
               <p className="text-sm text-muted-foreground">No leave balances allocated yet</p>
-            )}
-          </CardContent>
-        </Card>
-      )}
-
-      {profileSubTab === "payslips" && (
-        <Card>
-          <CardContent className="p-5">
-            <h4 className="font-semibold mb-3">Recent Payslips</h4>
-            {(profile.recent_payslips || []).length > 0 ? (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Period</TableHead>
-                    <TableHead className="text-right">Gross</TableHead>
-                    <TableHead className="text-right">Deductions</TableHead>
-                    <TableHead className="text-right">Net</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead className="text-right">PDF</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {profile.recent_payslips.map((ps: any) => (
-                    <TableRow key={ps.id} data-testid={`payslip-row-${ps.id}`}>
-                      <TableCell className="text-sm">{MONTHS[ps.month]} {ps.year}</TableCell>
-                      <TableCell className="text-sm text-right">{showSalary ? fmtAmt(ps.gross_salary) : '****'}</TableCell>
-                      <TableCell className="text-sm text-right text-red-600">{showSalary ? `- ${fmtAmt(ps.total_deductions)}` : '****'}</TableCell>
-                      <TableCell className="text-sm text-right font-semibold">{showSalary ? fmtAmt(ps.net_salary) : '****'}</TableCell>
-                      <TableCell><Badge variant={ps.status === 'paid' ? 'default' : 'outline'} className="text-xs">{ps.status}</Badge></TableCell>
-                      <TableCell className="text-right">
-                        {ps.view_token && (
-                          <a href={`/api/hrms/payslips/public/${ps.view_token}/pdf`} target="_blank" rel="noreferrer">
-                            <Button variant="ghost" size="sm"><Download className="h-3.5 w-3.5" /></Button>
-                          </a>
-                        )}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            ) : (
-              <p className="text-sm text-muted-foreground">No payslips generated yet</p>
             )}
           </CardContent>
         </Card>
