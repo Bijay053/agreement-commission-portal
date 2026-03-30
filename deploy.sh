@@ -14,10 +14,10 @@ echo "=== Step 2: Build frontend ==="
 rm -rf dist/public
 NODE_OPTIONS="--max-old-space-size=2048" npx vite build
 
-echo "=== Step 3: Build Docker image (backend only) ==="
-sudo docker compose build --no-cache app
+echo "=== Step 3: Build Docker image (backend + workers) ==="
+sudo docker compose build --no-cache app celery-worker celery-beat
 
-echo "=== Step 4: Start container ==="
-sudo docker compose up -d app
+echo "=== Step 4: Start all containers ==="
+sudo docker compose up -d app celery-worker celery-beat
 
 echo "=== Done! ==="
