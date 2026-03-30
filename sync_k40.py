@@ -1,10 +1,20 @@
 #!/usr/bin/env python3
 import os
 import sys
-import json
 import logging
 import requests
-from datetime import datetime
+from datetime import datetime, timedelta
+from pathlib import Path
+
+script_dir = Path(__file__).resolve().parent
+env_file = script_dir / '.env'
+if env_file.exists():
+    with open(env_file) as f:
+        for line in f:
+            line = line.strip()
+            if line and not line.startswith('#') and '=' in line:
+                key, val = line.split('=', 1)
+                os.environ.setdefault(key.strip(), val.strip())
 
 logging.basicConfig(
     level=logging.INFO,
@@ -14,15 +24,20 @@ logger = logging.getLogger('k40_sync')
 
 DEVICE_IP = os.getenv('ZK_DEVICE_IP', '192.168.16.201')
 DEVICE_PORT = int(os.getenv('ZK_DEVICE_PORT', '4370'))
-API_URL = os.getenv('SYNC_API_URL', 'http://127.0.0.1:5000/api/hrms/attendance/device-sync')
+API_URL = os.getenv('SYNC_API_URL', 'https://portal.studyinfocentre.com/api/hrms/attendance/device-sync')
 SYNC_KEY = os.getenv('DEVICE_SYNC_KEY', '')
+LOOKBACK_DAYS = int(os.getenv('SYNC_LOOKBACK_DAYS', '1'))
 
 
 def main():
     try:
         from zk import ZK
     except ImportError:
-        logger.error('pyzk not installed. Run: pip3 install pyzk')
+        logger.error('pyzk not installed. Run: pip install pyzk')
+        sys.exit(1)
+
+    if not SYNC_KEY:
+        logger.error('DEVICE_SYNC_KEY not set. Set it in .env or environment.')
         sys.exit(1)
 
     zk = ZK(DEVICE_IP, port=DEVICE_PORT, timeout=15)
@@ -39,16 +54,16 @@ def main():
             logger.info('No attendance records on device')
             return
 
-        today = datetime.now().date()
-        today_records = [a for a in attendances if a.timestamp.date() == today]
-        logger.info(f'Found {len(today_records)} records for today (total on device: {len(attendances)})')
+        cutoff_date = (datetime.now() - timedelta(days=LOOKBACK_DAYS)).date()
+        recent_records = [a for a in attendances if a.timestamp.date() >= cutoff_date]
+        logger.info(f'Found {len(recent_records)} records since {cutoff_date} (total on device: {len(attendances)})')
 
-        if not today_records:
-            logger.info('No records for today')
+        if not recent_records:
+            logger.info('No recent records to sync')
             return
 
         records = []
-        for att in today_records:
+        for att in recent_records:
             punch_type = 'in'
             if hasattr(att, 'punch') and att.punch == 1:
                 punch_type = 'out'
@@ -61,10 +76,12 @@ def main():
                 'punch_type': punch_type,
             })
 
-        headers = {'Content-Type': 'application/json'}
-        if SYNC_KEY:
-            headers['X-Sync-Key'] = SYNC_KEY
+        headers = {
+            'Content-Type': 'application/json',
+            'X-Sync-Key': SYNC_KEY,
+        }
 
+        logger.info(f'Sending {len(records)} records to {API_URL}...')
         resp = requests.post(API_URL, json={'records': records}, headers=headers, timeout=30)
 
         if resp.status_code == 200:
