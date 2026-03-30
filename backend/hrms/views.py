@@ -6271,13 +6271,16 @@ class HRPolicyListView(APIView):
         file = request.FILES.get('file')
         if file:
             file_url = self._upload_policy_file(file, data.get('organization_id'))
+        is_active_val = data.get('is_active', True)
+        if isinstance(is_active_val, str):
+            is_active_val = is_active_val.lower() in ('true', '1', 'yes')
         p = HRPolicy.objects.create(
             organization_id=data['organization_id'],
             title=data['title'],
             content=data.get('content', ''),
             file_url=file_url,
             department_id=data.get('department_id') or None,
-            is_active=data.get('is_active', True),
+            is_active=is_active_val,
             effective_date=data.get('effective_date') or None,
         )
         return Response({'id': str(p.id), 'message': 'Policy created'}, status=201)

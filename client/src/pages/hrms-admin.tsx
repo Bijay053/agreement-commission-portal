@@ -2761,13 +2761,16 @@ function HRPoliciesTab() {
       if (removeFile) formData.append('remove_file', 'true');
 
       if (editPolicy) {
-        await fetch(`/api/hrms/hr-policies/${editPolicy.id}`, { method: 'PUT', credentials: 'include', body: formData });
+        const res = await fetch(`/api/hrms/hr-policies/${editPolicy.id}`, { method: 'PUT', credentials: 'include', body: formData });
+        if (!res.ok) throw new Error('Failed to update policy');
         toast({ title: "Policy updated" });
       } else {
-        await fetch('/api/hrms/hr-policies', { method: 'POST', credentials: 'include', body: formData });
+        const res = await fetch('/api/hrms/hr-policies', { method: 'POST', credentials: 'include', body: formData });
+        if (!res.ok) throw new Error('Failed to create policy');
         toast({ title: "Policy created" });
       }
-      queryClient.refetchQueries({ queryKey: ["/api/hrms/hr-policies"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/hrms/hr-policies"] });
+      queryClient.refetchQueries({ queryKey: ["/api/hrms/hr-policies", orgId] });
       setShowForm(false);
     } catch (err: any) { toast({ title: err.message || "Failed", variant: "destructive" }); }
     setSaving(false);
@@ -2776,7 +2779,8 @@ function HRPoliciesTab() {
   const deletePolicy = async (id: string) => {
     try {
       await apiRequest("DELETE", `/api/hrms/hr-policies/${id}`);
-      queryClient.refetchQueries({ queryKey: ["/api/hrms/hr-policies"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/hrms/hr-policies"] });
+      queryClient.refetchQueries({ queryKey: ["/api/hrms/hr-policies", orgId] });
       toast({ title: "Policy deleted" });
     } catch (err: any) { toast({ title: "Failed to delete", variant: "destructive" }); }
   };
