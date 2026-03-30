@@ -22,8 +22,6 @@ services:
     command: redis-server --maxmemory 128mb --maxmemory-policy allkeys-lru
     volumes:
       - redisdata:/data
-    ports:
-      - "127.0.0.1:6379:6379"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
@@ -53,15 +51,19 @@ services:
   celery-worker:
     build: .
     restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     env_file:
       - .env
     environment:
-      DATABASE_URL: postgresql://portal_user:${DB_PASSWORD:-changeme_in_production}@127.0.0.1:5432/agreement_portal
+      DATABASE_URL: postgresql://portal_user:${DB_PASSWORD:-changeme_in_production}@db:5432/agreement_portal
       DJANGO_SETTINGS_MODULE: config.settings
       DEBUG: "False"
-      REDIS_URL: redis://127.0.0.1:6379/0
+      REDIS_URL: redis://redis:6379/0
     command: celery -A config worker --loglevel=info
-    network_mode: host
     volumes:
       - uploads:/app/uploads
 

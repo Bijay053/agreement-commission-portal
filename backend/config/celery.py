@@ -38,10 +38,6 @@ app.conf.beat_schedule = {
         'task': 'hrms.tasks.check_missing_checkouts',
         'schedule': crontab(hour=18, minute=30),
     },
-    'sync-attendance-from-k40-every-10min': {
-        'task': 'hrms.tasks.sync_attendance_from_device',
-        'schedule': crontab(minute='*/10'),
-    },
 }
 
 app.autodiscover_tasks()
