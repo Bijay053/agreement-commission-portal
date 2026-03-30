@@ -161,10 +161,11 @@ def get_term_order():
     return [t.term_name for t in terms]
 
 
-def sync_per_provider_notes(student, entries, term_order):
+def sync_per_provider_master(student, entries, term_order):
     main_entries = [e for e in entries if not e.student_provider_id]
     main_master = compute_master_from_entries(main_entries, term_order)
     student.notes = main_master['notes']
+    student.status = main_master['status']
 
     provider_entries = {}
     for e in entries:
@@ -176,7 +177,8 @@ def sync_per_provider_notes(student, entries, term_order):
         try:
             sp = StudentProvider.objects.get(id=prov_id)
             sp.notes = prov_master['notes']
-            sp.save(update_fields=['notes'])
+            sp.status = prov_master['status']
+            sp.save(update_fields=['notes', 'status'])
         except StudentProvider.DoesNotExist:
             pass
 
@@ -210,9 +212,8 @@ def recalculate_student(student, user_id=None):
     old_status = student.status
     entries = list(CommissionEntry.objects.filter(commission_student_id=student.id))
     master = compute_master_from_entries(entries, term_order)
-    student.status = master['status']
     student.total_received = master['totalReceived']
-    sync_per_provider_notes(student, entries, term_order)
+    sync_per_provider_master(student, entries, term_order)
     student.save(update_fields=['status', 'notes', 'total_received'])
     record_status_change('commission_student', student.id, old_status, student.status, user_id, notes='Recalculated from entries')
 
@@ -458,9 +459,8 @@ class RecalculateAllView(APIView):
                 all_entries = list(CommissionEntry.objects.filter(commission_student_id=student.id))
                 term_order = get_term_order()
                 master = compute_master_from_entries(all_entries, term_order)
-                student.status = master['status']
                 student.total_received = master['totalReceived']
-                sync_per_provider_notes(student, all_entries, term_order)
+                sync_per_provider_master(student, all_entries, term_order)
                 student.save(update_fields=['status', 'notes', 'total_received'])
 
             return Response({'message': f'Recalculated {recalculated} entries', 'recalculated': recalculated})
@@ -642,9 +642,8 @@ class StudentEntriesView(APIView):
             entries = list(CommissionEntry.objects.filter(commission_student_id=student_id))
             term_order = get_term_order()
             master = compute_master_from_entries(entries, term_order)
-            student.status = master['status']
             student.total_received = master['totalReceived']
-            sync_per_provider_notes(student, entries, term_order)
+            sync_per_provider_master(student, entries, term_order)
             student.save(update_fields=['status', 'notes', 'total_received'])
             record_status_change('commission_student', student.id, old_student_status, student.status, user_id, notes='Entry added')
 
@@ -723,9 +722,8 @@ class EntryDetailView(APIView):
             entries = list(CommissionEntry.objects.filter(commission_student_id=entry.commission_student_id))
             term_order = get_term_order()
             master = compute_master_from_entries(entries, term_order)
-            student.status = master['status']
             student.total_received = master['totalReceived']
-            sync_per_provider_notes(student, entries, term_order)
+            sync_per_provider_master(student, entries, term_order)
             student.save(update_fields=['status', 'notes', 'total_received'])
             record_status_change('commission_student', student.id, old_student_status, student.status, request.session.get('userId'), notes='Entry updated')
 
@@ -753,9 +751,8 @@ class EntryDetailView(APIView):
                 entries = list(CommissionEntry.objects.filter(commission_student_id=student_id))
                 term_order = get_term_order()
                 master = compute_master_from_entries(entries, term_order)
-                student.status = master['status']
                 student.total_received = master['totalReceived']
-                sync_per_provider_notes(student, entries, term_order)
+                sync_per_provider_master(student, entries, term_order)
                 student.save(update_fields=['status', 'notes', 'total_received'])
                 record_status_change('commission_student', student.id, old_student_status, student.status, request.session.get('userId'), notes='Entry deleted')
             except CommissionStudent.DoesNotExist:
