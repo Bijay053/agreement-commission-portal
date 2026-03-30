@@ -64,16 +64,12 @@ def get_excluded_student_ids_for_year(target_year):
         StudentProvider.objects.filter(
             commission_student_id__in=prior_student_ids,
             start_intake__icontains=target_year_str,
-        ).exclude(
-            status__in=['Withdrawn', 'Complete', 'withdrawn', 'complete'],
         ).values_list('commission_student_id', flat=True).distinct()
     )
     students_with_target_year_main = set(
         CommissionStudent.objects.filter(
             id__in=prior_student_ids,
             start_intake__icontains=target_year_str,
-        ).exclude(
-            status__in=['Withdrawn', 'Complete', 'withdrawn', 'complete'],
         ).values_list('id', flat=True).distinct()
     )
     has_active_provider |= students_with_target_year_provider
