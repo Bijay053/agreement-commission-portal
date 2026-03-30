@@ -36,6 +36,7 @@ INSTALLED_APPS = [
     'offer_letters',
     'provider_commission',
     'hrms',
+    'surveys',
 ]
 
 MIDDLEWARE = [

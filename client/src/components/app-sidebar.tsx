@@ -11,7 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
   LayoutDashboard, FileText, Users, Shield, LogOut, User, Building2,
-  ChevronDown, ChevronRight, Circle, KeyRound, Contact, DollarSign, Calculator, ShieldCheck, ArrowDownUp, ClipboardList, UserCheck, Share2, SlidersHorizontal, Briefcase,
+  ChevronDown, ChevronRight, Circle, KeyRound, Contact, DollarSign, Calculator, ShieldCheck, ArrowDownUp, ClipboardList, UserCheck, Share2, SlidersHorizontal, Briefcase, ClipboardCheck,
 } from "lucide-react";
 
 const STATUS_ITEMS = [
@@ -67,6 +67,7 @@ export function AppSidebar() {
     { title: "Users", url: "/users", icon: Users, show: hasPermission("security.user.manage") },
     { title: "Roles", url: "/roles", icon: KeyRound, show: hasPermission("security.role.manage") },
     { title: "Dropdown Settings", url: "/dropdown-settings", icon: SlidersHorizontal, show: hasPermission("dropdown_settings.option.read") || hasPermission("dropdown_settings.view") },
+    { title: "Surveys", url: "/surveys", icon: ClipboardCheck, show: hasPermission("survey.view") },
     { title: "Audit Logs", url: "/audit-logs", icon: Shield, show: hasPermission("audit.view") },
   ];
 

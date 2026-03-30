@@ -164,6 +164,13 @@ PERMISSION_REGISTRY = [
             {"resource": "tax", "label": "Tax Slabs & Records", "actions": ["read", "update"]},
         ],
     },
+    {
+        "module": "surveys",
+        "label": "Surveys",
+        "resources": [
+            {"resource": "survey", "label": "Surveys", "actions": ["read", "add", "update", "delete", "export"]},
+        ],
+    },
 ]
 
 

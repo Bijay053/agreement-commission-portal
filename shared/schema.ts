@@ -539,6 +539,13 @@ export const PERMISSION_REGISTRY = [
       { resource: "notification", label: "Notification Settings", actions: ["read", "update"] },
     ],
   },
+  {
+    module: "surveys",
+    label: "Surveys",
+    resources: [
+      { resource: "survey", label: "Surveys", actions: ["read", "add", "update", "delete", "export"] },
+    ],
+  },
 ] as const;
 
 export type PermissionModule = typeof PERMISSION_REGISTRY[number];
@@ -602,4 +609,9 @@ export const LEGACY_PERMISSION_MAP: Record<string, string> = {
   "dropdown_settings.create": "dropdown_settings.option.add",
   "dropdown_settings.edit": "dropdown_settings.option.update",
   "dropdown_settings.delete": "dropdown_settings.option.delete",
+  "survey.view": "surveys.survey.read",
+  "survey.create": "surveys.survey.add",
+  "survey.edit": "surveys.survey.update",
+  "survey.delete": "surveys.survey.delete",
+  "survey.export": "surveys.survey.export",
 };

@@ -102,6 +102,11 @@ LEGACY_PERMISSION_MAP = {
     "dropdown_settings.create": "dropdown_settings.option.add",
     "dropdown_settings.edit": "dropdown_settings.option.update",
     "dropdown_settings.delete": "dropdown_settings.option.delete",
+    "survey.view": "surveys.survey.read",
+    "survey.create": "surveys.survey.add",
+    "survey.edit": "surveys.survey.update",
+    "survey.delete": "surveys.survey.delete",
+    "survey.export": "surveys.survey.export",
 }
 
 

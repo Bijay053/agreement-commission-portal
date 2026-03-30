@@ -39,6 +39,9 @@ import SignOfferPage from "@/pages/sign-offer";
 import ProviderCommissionPage from "@/pages/provider-commission";
 import DropdownSettingsPage from "@/pages/dropdown-settings";
 import HRMSAdminPage from "@/pages/hrms-admin";
+import SurveysPage from "@/pages/surveys";
+import SurveyReportPage from "@/pages/survey-report";
+import PublicSurveyPage from "@/pages/public-survey";
 import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 
@@ -142,6 +145,16 @@ function Router() {
       <Route path="/hrms">
         <AccessGuard permission={["hrms.organization.read", "hrms.attendance.read", "hrms.staff.read", "hrms.salary.read", "hrms.leave_request.read", "hrms.leave_request.approve", "hrms.leave_type.read", "hrms.holiday.read", "hrms.bonus.read", "hrms.expense.read", "hrms.advance.read", "hrms.payroll.read", "hrms.tax.read", "hrms.department.read", "hrms.fiscal_year.read", "hrms.notification.read", "hrms.notification.update", "hrms.hr_policy.read", "hrms.doc_template.read", "hrms.doc_request.read", "employee.view"]}>
           <HRMSAdminPage />
+        </AccessGuard>
+      </Route>
+      <Route path="/surveys">
+        <AccessGuard permission="survey.view">
+          <SurveysPage />
+        </AccessGuard>
+      </Route>
+      <Route path="/surveys/:id/report">
+        <AccessGuard permission="survey.view">
+          <SurveyReportPage />
         </AccessGuard>
       </Route>
       <Route path="/account-security" component={AccountSecurityPage} />
@@ -272,6 +285,9 @@ function App() {
           </Route>
           <Route path="/sign-offer/:token">
             {(params: { token: string }) => <SignOfferPage params={params} />}
+          </Route>
+          <Route path="/survey/:slug">
+            <PublicSurveyPage />
           </Route>
           <Route>
             <AuthProvider>
