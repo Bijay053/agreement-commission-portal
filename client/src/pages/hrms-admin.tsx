@@ -3060,12 +3060,15 @@ This letter is issued for official purposes as requested by the employee.`,
 function DocRequestsTab() {
   const { toast } = useToast();
   const { data: orgs } = useQuery<Organization[]>({ queryKey: ["/api/hrms/organizations"] });
-  const orgId = orgs?.[0]?.id || "";
-  const [statusFilter, setStatusFilter] = useState("pending");
+  const [selectedOrg, setSelectedOrg] = useState("");
+  const orgId = selectedOrg || orgs?.[0]?.id || "";
+  const [statusFilter, setStatusFilter] = useState("");
   const { data: requests, isLoading } = useQuery<any[]>({
     queryKey: ["/api/hrms/document-requests", orgId, statusFilter],
     queryFn: async () => {
-      const res = await fetch(`/api/hrms/document-requests?organization_id=${orgId}&status=${statusFilter}`, { credentials: "include" });
+      let url = `/api/hrms/document-requests?organization_id=${orgId}`;
+      if (statusFilter) url += `&status=${statusFilter}`;
+      const res = await fetch(url, { credentials: "include" });
       return res.json();
     },
     enabled: !!orgId,
@@ -3151,8 +3154,17 @@ function DocRequestsTab() {
   return (
     <div className="space-y-4">
       <div className="flex justify-between items-center">
-        <h3 className="text-lg font-semibold" data-testid="text-doc-requests-title">Document Requests</h3>
+        <div className="flex items-center gap-2">
+          <h3 className="text-lg font-semibold" data-testid="text-doc-requests-title">Document Requests</h3>
+          {orgs && orgs.length > 1 && (
+            <Select value={orgId} onValueChange={setSelectedOrg}>
+              <SelectTrigger className="w-[200px]" data-testid="select-doc-requests-org"><SelectValue placeholder="Organization" /></SelectTrigger>
+              <SelectContent>{orgs.map(o => <SelectItem key={o.id} value={o.id}>{o.name}</SelectItem>)}</SelectContent>
+            </Select>
+          )}
+        </div>
         <div className="flex gap-2">
+          <Button variant={statusFilter === "" ? "default" : "outline"} size="sm" onClick={() => setStatusFilter("")} data-testid="button-doc-filter-all">All</Button>
           {["pending", "processing", "completed", "rejected"].map(s => (
             <Button key={s} variant={statusFilter === s ? "default" : "outline"} size="sm" onClick={() => setStatusFilter(s)} data-testid={`button-doc-filter-${s}`}>
               {s.charAt(0).toUpperCase() + s.slice(1)}
